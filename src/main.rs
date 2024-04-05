@@ -14,12 +14,23 @@ fn main() {
         }
     };
 
-    let duration = match sql_interface.get_duration_since_last_refill() {
+    let duration_refill = match sql_interface.get_duration_since_last_refill() {
         Ok(c) => c,
         Err(e) => {
-            panic!("Could not test maria DB: {e:?}");
+            panic!("Could not get duration since last refill event: {e:?}");
         }
     };
 
-    println!("Duration since last refill is {} seconds.", duration);
+    let duration_balling_dosing = match sql_interface.get_duration_since_last_balling_dosing() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not get duration since last Balling dosing event: {e:?}");
+        }
+    };
+
+    println!("Duration since last refill is {} seconds.", duration_refill);
+    println!(
+        "Duration since last Balling dosing is {} seconds.",
+        duration_balling_dosing
+    );
 }

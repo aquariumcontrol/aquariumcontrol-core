@@ -6,6 +6,8 @@ use serde_derive::Deserialize;
 mod sql_query_strings {
     pub const SQL_QUERY_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+    pub const SQL_QUERY_LAST_BALLING_DOSING_TIMESTAMP: &str =
+        "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
     pub const SQL_QUERY_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
 }
 /// This struct holds the configuration data for the SQL interface.
@@ -143,6 +145,16 @@ impl SqlInterface {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_LAST_REFILL_TIMESTAMP)
     }
 
+    /// The function retrieves the timestamp of the last Balling dosing event from SQL database.
+    fn get_last_balling_dosing_timestamp(
+        conn: &mut PooledConn,
+    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+        Self::get_timestamp(
+            conn,
+            sql_query_strings::SQL_QUERY_LAST_BALLING_DOSING_TIMESTAMP,
+        )
+    }
+
     /// The function request current timestamp and timestamp of last refill event and calculates the difference between them in seconds.
     pub fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
         let current_datetime = match Self::get_current_timestamp(&mut self.conn) {
@@ -160,6 +172,28 @@ impl SqlInterface {
         };
 
         let delta_time = current_datetime - last_refill_datetime;
+
+        Ok(delta_time.num_seconds())
+    }
+
+    /// The function request current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
+    pub fn get_duration_since_last_balling_dosing(&mut self) -> Result<i64, SqlInterfaceError> {
+        let current_datetime = match Self::get_current_timestamp(&mut self.conn) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let last_balling_dosing_datetime =
+            match Self::get_last_balling_dosing_timestamp(&mut self.conn) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+
+        let delta_time = current_datetime - last_balling_dosing_datetime;
 
         Ok(delta_time.num_seconds())
     }
