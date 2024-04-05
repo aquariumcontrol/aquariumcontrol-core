@@ -7,7 +7,19 @@ use crate::sql_interface::SqlInterface;
 fn main() {
     let config = read_config_file("/config/aquarium_control.toml".to_string());
 
-    let sql_interface = SqlInterface::new(config.sql_interface);
+    let mut sql_interface = match SqlInterface::new(config.sql_interface) {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not connect to SQL database: {e:?}");
+        }
+    };
 
-    SqlInterface::testmariadb();
+    let duration = match sql_interface.get_duration_since_last_refill() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not test maria DB: {e:?}");
+        }
+    };
+
+    println!("Duration since last refill is {} seconds.", duration);
 }
