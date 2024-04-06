@@ -34,11 +34,36 @@ fn main() {
             panic!("Could not get duration until midnight: {e:?}");
         }
     };
-    
+
+    let refill_volume_last_24h = match sql_interface.get_refill_volume_of_last_24h() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Coult not get refill volume of last 24 hours: {e:?}");
+        }
+    };
+
+    let refill_count_last_24h = match sql_interface.get_refill_count_of_last_24h() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Coult not get refill count of last 24 hours: {e:?}");
+        }
+    };
+
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
         "Duration since last Balling dosing is {} seconds.",
         duration_balling_dosing
     );
-    println!("Duration until midnight is {} seconds.", duration_until_midnight);
+    println!(
+        "Duration until midnight is {} seconds.",
+        duration_until_midnight
+    );
+    println!(
+        "Refill volume of last 24h is {} L.",
+        refill_volume_last_24h
+    );
+    println!(
+        "Refill count of last 24h is {}.",
+        refill_count_last_24h
+    );    
 }

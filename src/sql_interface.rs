@@ -11,6 +11,10 @@ mod sql_query_strings {
     pub const SQL_QUERY_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
     pub const SQL_QUERY_DURATION_UNTIL_MIDNIGHT: &str =
         "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
+    pub const SQL_QUERY_REFILL_VOLUME_LAST_24H: &str =
+        "SELECT SUM(Volume) from %s.refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+    pub const SQL_QUERY_REFILL_COUNT_LAST_24H: &str =
+        "SELECT COUNT(Volume) from %s.refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
 }
 /// This struct holds the configuration data for the SQL interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -50,6 +54,10 @@ struct SingleString {
     single_string: String,
 }
 
+struct SingleFloat {
+    single_float: f64,
+}
+
 #[derive(Debug)]
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
@@ -58,6 +66,8 @@ pub enum SqlInterfaceError {
     SingleStringRequestNoSingleResponse(String),
     SingleIntegerRequestFailed(String),
     SingleIntegerRequestNoSingleResponse(String),
+    SingleFloatRequestFailed(String),
+    SingleFloatRequestNoSingleResponse(String),
     TimestampConversionFailure(String),
 }
 
@@ -119,12 +129,15 @@ impl SqlInterface {
             }
         };
 
+        // check error case if there is no response
         if single_string_array.len() == 0 {
             return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
+
+        // check error case if there is more than one response
         if single_string_array.len() > 1 {
             return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -139,7 +152,7 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<i64, SqlInterfaceError> {
-        // Get single string value from database
+        // Get single integer value from database
         let single_integer_array = match conn.query_map(sql_query_string, |single_integer| {
             SingleInteger { single_integer }
         }) {
@@ -152,12 +165,15 @@ impl SqlInterface {
             }
         };
 
+        // check error case if there is no response
         if single_integer_array.len() == 0 {
             return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
+
+        // check error case if there is more than one response
         if single_integer_array.len() > 1 {
             return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -165,6 +181,42 @@ impl SqlInterface {
             ));
         }
         Ok(single_integer_array[0].single_integer)
+    }
+
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single float value.
+    fn get_single_float_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<f64, SqlInterfaceError> {
+        // Get single float value from database
+        let single_float_array = match conn.query_map(sql_query_string, |single_float| {
+            SingleFloat { single_float }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleFloatRequestFailed(
+                    "Could not get single float value from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
+
+        // check error case if there is no response
+        if single_float_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
+                "SQL database responded with empty response to query: ".to_string()
+                    + sql_query_string,
+            ));
+        }
+
+        // check error case if there is more than one response
+        if single_float_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
+                "SQL database responded with multiple responses to request to query:".to_string()
+                    + sql_query_string,
+            ));
+        }
+        Ok(single_float_array[0].single_float)
     }
 
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
@@ -264,4 +316,29 @@ impl SqlInterface {
             Err(e) => Err(e),
         }
     }
+
+    /// The function requests the number of water refill events in the last 24 hours
+    pub fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
+        match Self::get_single_integer_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_REFILL_COUNT_LAST_24H,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The function requests the water volume refilled in the last 24 hours
+    pub fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
+        match Self::get_single_float_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_REFILL_VOLUME_LAST_24H,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
+    }
+    
+    // todo: check of show tables
+    // todo: check of database version
 }
