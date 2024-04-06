@@ -28,9 +28,17 @@ fn main() {
         }
     };
 
+    let duration_until_midnight = match sql_interface.get_duration_until_midnight() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not get duration until midnight: {e:?}");
+        }
+    };
+    
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
         "Duration since last Balling dosing is {} seconds.",
         duration_balling_dosing
     );
+    println!("Duration until midnight is {} seconds.", duration_until_midnight);
 }

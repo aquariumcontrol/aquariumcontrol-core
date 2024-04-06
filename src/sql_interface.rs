@@ -9,6 +9,8 @@ mod sql_query_strings {
     pub const SQL_QUERY_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
     pub const SQL_QUERY_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
+    pub const SQL_QUERY_DURATION_UNTIL_MIDNIGHT: &str =
+        "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
 }
 /// This struct holds the configuration data for the SQL interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -40,16 +42,22 @@ struct Car {
 }
 */
 
-struct TimestampString {
-    timestamp: String,
+struct SingleInteger {
+    single_integer: i64,
+}
+
+struct SingleString {
+    single_string: String,
 }
 
 #[derive(Debug)]
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
     ConnectionPoolFailure(String),
-    TimestampRequestFailed(String),
-    TimestampNoSingleResponse(String),
+    SingleStringRequestFailed(String),
+    SingleStringRequestNoSingleResponse(String),
+    SingleIntegerRequestFailed(String),
+    SingleIntegerRequestNoSingleResponse(String),
     TimestampConversionFailure(String),
 }
 
@@ -93,42 +101,90 @@ impl SqlInterface {
         Ok(SqlInterface { config, pool, conn })
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single value.
-    /// If this is the case, the response string is converted into NaiveDateTime type.
-    fn get_timestamp(
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    fn get_single_string_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
-    ) -> Result<NaiveDateTime, SqlInterfaceError> {
-        // Get unique timestamp
-        let unique_timestamp_string_array =
-            match conn.query_map(sql_query_string, |timestamp| TimestampString { timestamp }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::TimestampRequestFailed(
-                        "Could not get unique timestamp from SQL database using query:".to_string()
-                            + sql_query_string,
-                    ));
-                }
-            };
+    ) -> Result<String, SqlInterfaceError> {
+        // Get single string value from database
+        let single_string_array = match conn.query_map(sql_query_string, |single_string| {
+            SingleString { single_string }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleStringRequestFailed(
+                    "Could not get single string from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
 
-        if unique_timestamp_string_array.len() == 0 {
-            return Err(SqlInterfaceError::TimestampNoSingleResponse(
+        if single_string_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
-        if unique_timestamp_string_array.len() > 1 {
-            return Err(SqlInterfaceError::TimestampNoSingleResponse(
+        if single_string_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
                     + sql_query_string,
             ));
         }
-        let unique_timestamp_string = &unique_timestamp_string_array[0].timestamp;
+        Ok(single_string_array[0].single_string.clone())
+    }
 
-        match NaiveDateTime::parse_from_str(&unique_timestamp_string, "%Y-%m-%d %H:%M:%S") {
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single integer value.
+    fn get_single_integer_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<i64, SqlInterfaceError> {
+        // Get single string value from database
+        let single_integer_array = match conn.query_map(sql_query_string, |single_integer| {
+            SingleInteger { single_integer }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleIntegerRequestFailed(
+                    "Could not get single integer from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
+
+        if single_integer_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+                "SQL database responded with empty response to query: ".to_string()
+                    + sql_query_string,
+            ));
+        }
+        if single_integer_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+                "SQL database responded with multiple responses to request to query:".to_string()
+                    + sql_query_string,
+            ));
+        }
+        Ok(single_integer_array[0].single_integer)
+    }
+
+    /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
+    fn get_timestamp(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+        // trigger SQL call
+        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        // convert data type
+        match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S") {
             Ok(c) => Ok(c),
             Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
-                "Error when converting unique timestamp: ".to_string() + unique_timestamp_string,
+                "Error when converting unique timestamp: ".to_string() + &timestamp_string,
             )),
         }
     }
@@ -196,5 +252,16 @@ impl SqlInterface {
         let delta_time = current_datetime - last_balling_dosing_datetime;
 
         Ok(delta_time.num_seconds())
+    }
+
+    /// The function requests the duration until midnight in seconds.
+    pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
+        match Self::get_single_integer_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_DURATION_UNTIL_MIDNIGHT,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
     }
 }
