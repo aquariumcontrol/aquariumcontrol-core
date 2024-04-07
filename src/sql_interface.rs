@@ -4,17 +4,24 @@ use mysql::*;
 use serde_derive::Deserialize;
 
 mod sql_query_strings {
-    pub const SQL_QUERY_LAST_REFILL_TIMESTAMP: &str =
+    pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
+    pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
+
+    pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
-    pub const SQL_QUERY_LAST_BALLING_DOSING_TIMESTAMP: &str =
+    pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
-    pub const SQL_QUERY_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
-    pub const SQL_QUERY_DURATION_UNTIL_MIDNIGHT: &str =
+    pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
         "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
-    pub const SQL_QUERY_REFILL_VOLUME_LAST_24H: &str =
+    pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
         "SELECT SUM(Volume) from %s.refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
-    pub const SQL_QUERY_REFILL_COUNT_LAST_24H: &str =
+    pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from %s.refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+
+    pub const SQL_QUERY_READ_HEATING_STATS: &str =
+        "SELECT * FROM %s.heatingstats WHERE Date=CURRENT_DATE();";
+    pub const SQL_QUERY_WRITE_HEATING_STATS: &str =
+        "insert into %s.heatingstats(Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) values (\'%s\', %lf, %lf, %d, %lf, %d, %d) ON DUPLICATE KEY Update Energy=%lf, AmbientTempAverage=%lf, AmbientTempCounter=%d, WaterTempAverage=%lf, WaterTempCounter=%d, HeatingControlRuntime=%d;";
 }
 /// This struct holds the configuration data for the SQL interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -37,14 +44,25 @@ pub struct SqlInterfaceConfig {
     pub db_name: String,
 }
 
-/*
-#[derive(Debug, PartialEq, Eq)]
-struct Car {
-    id: i32,
-    name: String,
-    price: i32,
+pub struct HeatingStatsEntry {
+    pub date: NaiveDate,
+    pub energy: f64,
+    pub ambient_temperature_average_value: f64,
+    pub ambient_temperature_average_counter: i64,
+    pub water_temperature_average_value: f64,
+    pub water_temperature_average_counter: i64,
+    pub heating_control_runtime: i64,
 }
-*/
+
+pub struct HeatingStatsStringEntry {
+    pub date: String,
+    pub energy: f64,
+    pub ambient_temperature_average_value: f64,
+    pub ambient_temperature_average_counter: i64,
+    pub water_temperature_average_value: f64,
+    pub water_temperature_average_counter: i64,
+    pub heating_control_runtime: i64,
+}
 
 struct SingleInteger {
     single_integer: i64,
@@ -62,13 +80,16 @@ struct SingleFloat {
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
     ConnectionPoolFailure(String),
-    SingleStringRequestFailed(String),
+    SingleStringRequestFailure(String),
     SingleStringRequestNoSingleResponse(String),
-    SingleIntegerRequestFailed(String),
+    SingleIntegerRequestFailure(String),
     SingleIntegerRequestNoSingleResponse(String),
-    SingleFloatRequestFailed(String),
+    SingleFloatRequestFailure(String),
     SingleFloatRequestNoSingleResponse(String),
+    SingleHeatingStatsRequestFailure(String),
+    SingleHeatingStatsRequestNoSingleResponse(String),
     TimestampConversionFailure(String),
+    InsertHeatingStatsEntryFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
@@ -122,7 +143,7 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleStringRequestFailed(
+                return Err(SqlInterfaceError::SingleStringRequestFailure(
                     "Could not get single string from SQL database using query:".to_string()
                         + sql_query_string,
                 ));
@@ -158,7 +179,7 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleIntegerRequestFailed(
+                return Err(SqlInterfaceError::SingleIntegerRequestFailure(
                     "Could not get single integer from SQL database using query:".to_string()
                         + sql_query_string,
                 ));
@@ -194,7 +215,7 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleFloatRequestFailed(
+                return Err(SqlInterfaceError::SingleFloatRequestFailure(
                     "Could not get single float value from SQL database using query:".to_string()
                         + sql_query_string,
                 ));
@@ -219,6 +240,90 @@ impl SqlInterface {
         Ok(single_float_array[0].single_float)
     }
 
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single heating stats entry.
+    pub fn get_single_heating_stats_from_database(
+        conn: &mut PooledConn,
+    ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
+        // Get single heating stats entry from database
+        let single_heating_stats_entry_array = match conn.query_map(
+            sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
+            |(
+                date,
+                energy,
+                ambient_temperature_average_value,
+                ambient_temperature_average_counter,
+                water_temperature_average_value,
+                water_temperature_average_counter,
+                heating_control_runtime,
+            )| HeatingStatsStringEntry {
+                date,
+                energy,
+                ambient_temperature_average_value,
+                ambient_temperature_average_counter,
+                water_temperature_average_value,
+                water_temperature_average_counter,
+                heating_control_runtime,
+            },
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleHeatingStatsRequestFailure(
+                    "Could not get single heating stats entry from SQL database.".to_string(),
+                ));
+            }
+        };
+
+        // check error case if there is no response
+        if single_heating_stats_entry_array.len() == 0 {
+            return Err(
+                SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
+                    "SQL database responded with empty response to query: ".to_string(),
+                ),
+            );
+        }
+
+        // check error case if there is more than one response
+        if single_heating_stats_entry_array.len() > 1 {
+            return Err(
+                SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
+                    "SQL database responded with multiple responses to request to query:"
+                        .to_string(),
+                ),
+            );
+        }
+
+        let single_heating_stats_string_entry = &single_heating_stats_entry_array[0];
+
+        // convert String to NaiveDate
+        let date = match NaiveDateTime::parse_from_str(
+            single_heating_stats_string_entry.date.as_str(),
+            "%Y-%m-%d",
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::TimestampConversionFailure(
+                    "Error when converting timestamp: ".to_string()
+                        + &single_heating_stats_string_entry.date,
+                ));
+            }
+        };
+
+        let single_heating_stats_entry = HeatingStatsEntry {
+            date: date.into(),
+            energy: single_heating_stats_string_entry.energy,
+            ambient_temperature_average_value: single_heating_stats_string_entry
+                .ambient_temperature_average_value,
+            ambient_temperature_average_counter: single_heating_stats_string_entry
+                .ambient_temperature_average_counter,
+            water_temperature_average_value: single_heating_stats_string_entry
+                .water_temperature_average_value,
+            water_temperature_average_counter: single_heating_stats_string_entry
+                .water_temperature_average_counter,
+            heating_control_runtime: single_heating_stats_string_entry.heating_control_runtime,
+        };
+        Ok(single_heating_stats_entry)
+    }
+
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
     fn get_timestamp(
         conn: &mut PooledConn,
@@ -236,21 +341,51 @@ impl SqlInterface {
         match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S") {
             Ok(c) => Ok(c),
             Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
-                "Error when converting unique timestamp: ".to_string() + &timestamp_string,
+                "Error when converting timestamp: ".to_string() + &timestamp_string,
             )),
         }
     }
 
     /// The function retrieves the current timestamp from SQL database.
     fn get_current_timestamp(conn: &mut PooledConn) -> Result<NaiveDateTime, SqlInterfaceError> {
-        Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_CURRENT_TIMESTAMP)
+        Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
+    }
+
+    /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type with modified formatting string.
+    fn get_date(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+        // trigger SQL call
+        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        // convert data type
+        match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
+            Ok(c) => Ok(c),
+            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
+                "Error when converting timestamp: ".to_string() + &timestamp_string,
+            )),
+        }
+    }
+
+    /// The function retrieves the current eq53 from SQL database.
+    pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDateTime, SqlInterfaceError> {
+        Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
     /// The function retrieves the timestamp of the last refill event from SQL database.
     fn get_last_refill_timestamp(
         conn: &mut PooledConn,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
-        Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_LAST_REFILL_TIMESTAMP)
+        Self::get_timestamp(
+            conn,
+            sql_query_strings::SQL_QUERY_READ_LAST_REFILL_TIMESTAMP,
+        )
     }
 
     /// The function retrieves the timestamp of the last Balling dosing event from SQL database.
@@ -259,7 +394,7 @@ impl SqlInterface {
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         Self::get_timestamp(
             conn,
-            sql_query_strings::SQL_QUERY_LAST_BALLING_DOSING_TIMESTAMP,
+            sql_query_strings::SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP,
         )
     }
 
@@ -310,7 +445,7 @@ impl SqlInterface {
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         match Self::get_single_integer_from_database(
             &mut self.conn,
-            sql_query_strings::SQL_QUERY_DURATION_UNTIL_MIDNIGHT,
+            sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
         ) {
             Ok(c) => Ok(c),
             Err(e) => Err(e),
@@ -321,7 +456,7 @@ impl SqlInterface {
     pub fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
         match Self::get_single_integer_from_database(
             &mut self.conn,
-            sql_query_strings::SQL_QUERY_REFILL_COUNT_LAST_24H,
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
         ) {
             Ok(c) => Ok(c),
             Err(e) => Err(e),
@@ -332,13 +467,36 @@ impl SqlInterface {
     pub fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         match Self::get_single_float_from_database(
             &mut self.conn,
-            sql_query_strings::SQL_QUERY_REFILL_VOLUME_LAST_24H,
+            sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
         ) {
             Ok(c) => Ok(c),
             Err(e) => Err(e),
         }
     }
-    
+
+    /// The function inserts one dataset of heating statistics into the database
+    // Now let's insert payments to the database
+    pub fn insert_heating_stats_entry(
+        &mut self,
+        heating_stats_entry: HeatingStatsEntry,
+    ) -> Result<(), SqlInterfaceError> {
+        match self.conn.exec::<bool, _, _>(
+            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS,
+            params! {
+            "Date" => heating_stats_entry.date.to_string(),
+            "Energy" => heating_stats_entry.energy,
+            "AmbientTempAverage" => heating_stats_entry.ambient_temperature_average_value,
+            "AmbientTempCounter" => heating_stats_entry.ambient_temperature_average_counter,
+            "WaterTempAverage" => heating_stats_entry.water_temperature_average_value,
+            "WaterTempCounter" => heating_stats_entry.water_temperature_average_counter,
+            "HeatingControlRuntime" => heating_stats_entry.heating_control_runtime},
+        ) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(
+                "Error when inserting heating stats into database.".to_string(),
+            )),
+        }
+    }
     // todo: check of show tables
     // todo: check of database version
 }

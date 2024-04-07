@@ -2,6 +2,7 @@ mod config;
 mod sql_interface;
 
 use crate::config::read_config_file;
+use crate::sql_interface::HeatingStatsEntry;
 use crate::sql_interface::SqlInterface;
 
 fn main() {
@@ -49,6 +50,31 @@ fn main() {
         }
     };
 
+    let today = match SqlInterface::get_current_date(&mut sql_interface.conn) {
+        Ok(c) => c,
+        Err(_) => panic!("Could not get current date."),
+    };
+
+    let heating_stats_entry = HeatingStatsEntry {
+        date: today.into(),
+        energy: 0.9,
+        ambient_temperature_average_value: 22.0,
+        ambient_temperature_average_counter: 72000,
+        water_temperature_average_value: 25.0,
+        water_temperature_average_counter: 78000,
+        heating_control_runtime: 64000,
+    };
+
+    match sql_interface.insert_heating_stats_entry(heating_stats_entry) {
+        Ok(_) => {}
+        Err(_) => panic!("Could not insert heating statistics into database."),
+    };
+
+    let heating_stats = match SqlInterface::get_single_heating_stats_from_database(&mut sql_interface.conn) {
+        Ok(c) => c,
+        Err(_) => panic!("Could not get heating stats from database."),
+    };
+
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
         "Duration since last Balling dosing is {} seconds.",
@@ -58,12 +84,16 @@ fn main() {
         "Duration until midnight is {} seconds.",
         duration_until_midnight
     );
-    println!(
-        "Refill volume of last 24h is {} L.",
-        refill_volume_last_24h
+    println!("Refill volume of last 24h is {} L.", refill_volume_last_24h);
+    println!("Refill count of last 24h is {}.", refill_count_last_24h);
+
+    println!("Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, Water Average={}, Water Counter={}, Control time = {}",
+        heating_stats.date.to_string(),
+        heating_stats.energy,
+        heating_stats.ambient_temperature_average_value,
+        heating_stats.ambient_temperature_average_counter,
+        heating_stats.water_temperature_average_value,
+        heating_stats.water_temperature_average_counter,
+        heating_stats.heating_control_runtime
     );
-    println!(
-        "Refill count of last 24h is {}.",
-        refill_count_last_24h
-    );    
 }
