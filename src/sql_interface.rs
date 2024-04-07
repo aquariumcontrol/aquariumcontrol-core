@@ -108,13 +108,22 @@ impl SqlInterface {
     /// The function creates an instance of SqlInterface.
     pub fn new(config: SqlInterfaceConfig) -> Result<SqlInterface, SqlInterfaceError> {
         // Create connection pool
-        let url = "mysql://aquarium:4w4umx7AzdAwCXi7@127.0.0.1:3306/aquarium";
-        let pool = match Pool::new(url) {
+        let url = "mysql://".to_owned()
+            + &config.db_user
+            + ":"
+            + &config.db_password
+            + "@"
+            + &config.db_host
+            + ":"
+            + &config.db_port.to_string()
+            + "/"
+            + config.db_name.as_str();
+        let pool = match Pool::new(url.as_str()) {
             Ok(c) => c,
             Err(e) => {
                 return Err(SqlInterfaceError::ConnectionPoolFailure(
                     "Could not establish connection pool with ".to_owned()
-                        + url
+                        + &url
                         + ": "
                         + &e.to_string(),
                 ));
@@ -355,26 +364,32 @@ impl SqlInterface {
     fn get_date(
         conn: &mut PooledConn,
         sql_query_string: &str,
-    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+    ) -> Result<NaiveDate, SqlInterfaceError> {
         // trigger SQL call
         let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
             Ok(c) => c,
             Err(e) => {
+                println!("Error when retrieving single string from database: {e:?}");
                 return Err(e);
             }
         };
-
         // convert data type
-        match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
+        match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
-                "Error when converting timestamp: ".to_string() + &timestamp_string,
-            )),
+            Err(e) => {
+                println!(
+                    "Error converting timestamp_string={} {e:?}",
+                    timestamp_string
+                );
+                Err(SqlInterfaceError::TimestampConversionFailure(
+                    "Error when converting timestamp: ".to_string() + &timestamp_string,
+                ))
+            }
         }
     }
 
-    /// The function retrieves the current eq53 from SQL database.
-    pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDateTime, SqlInterfaceError> {
+    /// The function retrieves the current date from SQL database.
+    pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
@@ -499,4 +514,27 @@ impl SqlInterface {
     }
     // todo: check of show tables
     // todo: check of database version
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::SqlInterface;
+    use chrono::Utc;
+
+    #[test]
+    pub fn test_current_date() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        let date = match SqlInterface::get_current_date(&mut sql_interface.conn) {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get current date from SQL database."),
+        };
+
+        assert_eq!(date, Utc::now().naive_utc().into());
+    }
 }

@@ -70,10 +70,11 @@ fn main() {
         Err(_) => panic!("Could not insert heating statistics into database."),
     };
 
-    let heating_stats = match SqlInterface::get_single_heating_stats_from_database(&mut sql_interface.conn) {
-        Ok(c) => c,
-        Err(_) => panic!("Could not get heating stats from database."),
-    };
+    let heating_stats =
+        match SqlInterface::get_single_heating_stats_from_database(&mut sql_interface.conn) {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get heating stats from database."),
+        };
 
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
