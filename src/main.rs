@@ -15,6 +15,13 @@ fn main() {
         }
     };
 
+    let tables = match sql_interface.get_tables() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not read list of tables from SQL database: {e:?}");
+        }
+    };
+
     let duration_refill = match sql_interface.get_duration_since_last_refill() {
         Ok(c) => c,
         Err(e) => {
@@ -39,18 +46,18 @@ fn main() {
     let refill_volume_last_24h = match sql_interface.get_refill_volume_of_last_24h() {
         Ok(c) => c,
         Err(e) => {
-            panic!("Coult not get refill volume of last 24 hours: {e:?}");
+            panic!("Could not get refill volume of last 24 hours: {e:?}");
         }
     };
 
     let refill_count_last_24h = match sql_interface.get_refill_count_of_last_24h() {
         Ok(c) => c,
         Err(e) => {
-            panic!("Coult not get refill count of last 24 hours: {e:?}");
+            panic!("Could not get refill count of last 24 hours: {e:?}");
         }
     };
 
-    let today = match SqlInterface::get_current_date(&mut sql_interface.conn) {
+    let today = match sql_interface.get_current_date() {
         Ok(c) => c,
         Err(_) => panic!("Could not get current date."),
     };
@@ -70,11 +77,15 @@ fn main() {
         Err(_) => panic!("Could not insert heating statistics into database."),
     };
 
-    let heating_stats =
-        match SqlInterface::get_single_heating_stats_from_database(&mut sql_interface.conn) {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get heating stats from database."),
-        };
+    let heating_stats = match sql_interface.get_single_heating_stats_from_database() {
+        Ok(c) => c,
+        Err(_) => panic!("Could not get heating stats from database."),
+    };
+
+    println!("Read the following tables from database:");
+    for table in tables {
+        println!("* {}", table);
+    }
 
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
