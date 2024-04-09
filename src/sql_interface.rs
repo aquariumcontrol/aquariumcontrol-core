@@ -363,7 +363,7 @@ impl SqlInterface {
         let single_heating_stats_string_entry = &single_heating_stats_entry_array[0];
 
         // convert String to NaiveDate
-        let date = match NaiveDateTime::parse_from_str(
+        let date = match NaiveDate::parse_from_str(
             single_heating_stats_string_entry.date.as_str(),
             "%Y-%m-%d",
         ) {

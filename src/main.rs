@@ -79,7 +79,7 @@ fn main() {
 
     let heating_stats = match sql_interface.get_single_heating_stats_from_database() {
         Ok(c) => c,
-        Err(_) => panic!("Could not get heating stats from database."),
+        Err(e) => panic!("Could not get heating stats from database:{e:?}"),
     };
 
     println!("Read the following tables from database:");
