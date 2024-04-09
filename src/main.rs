@@ -1,6 +1,8 @@
 mod config;
 mod sql_interface;
 
+use chrono::Utc;
+
 use crate::config::read_config_file;
 use crate::sql_interface::HeatingStatsEntry;
 use crate::sql_interface::SqlInterface;
@@ -72,10 +74,25 @@ fn main() {
         heating_control_runtime: 64000,
     };
 
-    match sql_interface.insert_heating_stats_entry(heating_stats_entry) {
-        Ok(_) => {}
-        Err(_) => panic!("Could not insert heating statistics into database."),
+    match sql_interface.insert_refill_event(Utc::now().naive_utc(), 3.6, 0.4, 0) {
+        Ok(_) => {},
+        Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
+
+    match sql_interface.insert_heating_stats_entry(heating_stats_entry) {
+        Ok(_) => {},
+        Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
+    };
+
+    match sql_interface.insert_feed_event(Utc::now().naive_utc(), 5.5, "Test".to_string(), 1) {
+        Ok(_) => {}
+        Err(e) => panic!("Could not insert feed event into database: {e:?}"),
+    }
+
+    match sql_interface.insert_balling_event(Utc::now().naive_utc(), 1, 0.5) {
+        Ok(_) => {}
+        Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
+    }
 
     let heating_stats = match sql_interface.get_single_heating_stats_from_database() {
         Ok(c) => c,

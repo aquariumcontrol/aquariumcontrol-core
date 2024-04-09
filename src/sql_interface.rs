@@ -4,21 +4,34 @@ use mysql::*;
 use serde_derive::Deserialize;
 
 mod sql_query_strings {
+    // Basic
     pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
     pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
     pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
 
+    // Feed
+    pub const SQL_QUERY_WRITE_FEED_EVENT: &str =
+        "INSERT into feedlog (Timestamp, FeederOnTime, ProfileName, ProfileIdx) values(:timestamp, :feeder_run_time, :profile_name, :profile_id)";
+
+    // Balling
     pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
-    pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
-        "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
+    pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
+        "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
+
+    // Refill
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
         "SELECT SUM(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
     pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+    pub const SQL_QUERY_WRITE_REFILL_EVENT: &str =
+        "INSERT into refill(Timestamp, Duration, Volume, ErrorCode) values(:timestamp, :duration, :volume, :error_code);";
 
+    // Heating stats
+    pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
+        "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
     pub const SQL_QUERY_WRITE_HEATING_STATS_PART0: &str = "insert into heatingstats(Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) values (:date, :energy, :ambient_temperature_average, :ambient_temperature_counter, :water_temperature_average, :water_temperature_counter, :heating_control_runtime)";
@@ -31,6 +44,7 @@ mod sql_query_strings {
     pub const SQL_QUERY_WRITE_HEATING_STATS_PART7: &str = ", HeatingControlRuntime=";
     pub const SQL_QUERY_WRITE_HEATING_STATS_PART8: &str = ";";
 }
+
 /// This struct holds the configuration data for the SQL interface.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -102,6 +116,9 @@ pub enum SqlInterfaceError {
     SingleHeatingStatsRequestNoSingleResponse(String),
     TimestampConversionFailure(String),
     InsertHeatingStatsEntryFailure(String),
+    InsertFeedEventFailure(String),
+    InsertRefillEventFailure(String),
+    InsertBallingEventFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
@@ -535,7 +552,6 @@ impl SqlInterface {
     }
 
     /// The function inserts one dataset of heating statistics into the database
-    // Now let's insert payments to the database
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: HeatingStatsEntry,
@@ -578,6 +594,88 @@ impl SqlInterface {
         }
     }
 
+    /// The function inserts one dataset of refill event into the database
+    pub fn insert_refill_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        duration: f64,
+        volume: f64,
+        error_code: i32,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "duration" => duration,
+            "volume" => volume,
+            "error_code" => error_code,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::InsertRefillEventFailure(
+                    "Error when inserting refill event into database.".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// The function inserts one dataset of feed event into the database
+    pub fn insert_feed_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        feeder_run_time: f64,
+        profile_name: String,
+        profile_id: i64,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "feeder_run_time" => feeder_run_time,
+            "profile_name" => profile_name,
+            "profile_id" => profile_id,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::InsertFeedEventFailure(
+                    "Error when inserting refill event into database.".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// The function inserts one dataset of Balling dosing event into the database
+    pub fn insert_balling_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        pump_id: i64,
+        dosing_volume: f64,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "pump_id" => pump_id,
+            "dosing_volume" => dosing_volume,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::InsertBallingEventFailure(
+                    "Error when inserting Balling dosing event into database.".to_string(),
+                ))
+            }
+        }
+    }
+
     /// Get all tables from database
     pub fn get_tables(&mut self) -> Result<Vec<String>, SqlInterfaceError> {
         match self.get_multiple_strings_from_database(sql_query_strings::SQL_QUERY_READ_TABLES) {
@@ -615,7 +713,7 @@ pub mod tests {
                 + ";",
         );
 
-        let date = match SqlInterface::get_current_date(&mut sql_interface.conn) {
+        let date = match sql_interface.get_current_date() {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
         };
