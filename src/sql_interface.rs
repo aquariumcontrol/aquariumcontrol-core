@@ -10,7 +10,7 @@ use crate::feedpattern::Feedpattern;
 mod sql_query_strings {
     /// This query is used to read all tables from the database.
     pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
-    
+
     /// This query is used to read the current date (without time) from the database.
     pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
 
@@ -20,11 +20,11 @@ mod sql_query_strings {
     /// This query is used to insert data of one feed event into the database.
     pub const SQL_QUERY_WRITE_FEED_EVENT: &str =
         "INSERT into feedlog (Timestamp, FeederOnTime, ProfileName, ProfileIdx) values(:timestamp, :feeder_run_time, :profile_name, :profile_id)";
-    
+
     /// This query is used to read the header of a feed pattern from the database.
     pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
         "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id;";
-        
+
     /// This query is used to read one phase of a feed pattern from the database.
     pub const SQL_QUERY_READ_FEED_PHASE: &str = "SELECT Pause#Duration, Pause#Skimmer, Pause#MPmp1, Pause#MPmp2, Pause#APmp1, Pause#APmp2, \
                 Feed#Duration, Feed#Skimmer, Feed#MPmp1, Feed#MPmp2, Feed#APmp1, Feed#APmp2 FROM feedpatterns WHERE ProfileID=profile_id;";
@@ -32,11 +32,11 @@ mod sql_query_strings {
     /// This query is used to read the timestamp of the last refill event from the database.
     pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
-        
+
     /// This query is used to read the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
-        
+
     /// This query is used to write the last Balling dosing event to the database.    
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
         "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
@@ -45,12 +45,12 @@ mod sql_query_strings {
     /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
         "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
-        
+
     /// This query is used to read the number of refill events of the last day from the data base.
     /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
     pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
-        
+
     /// This query is used to write the last refill event to the database.    
     pub const SQL_QUERY_WRITE_REFILL_EVENT: &str =
         "INSERT into refill(Timestamp, Duration, Volume, ErrorCode) values(:timestamp, :duration, :volume, :error_code);";
@@ -58,19 +58,26 @@ mod sql_query_strings {
     /// This query is used to read the duration in seconds until midnight from the database.
     pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
         "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
-    
+
     /// This query is used to read the heating statistical data of the current day from the database.
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART0: &str = "insert into heatingstats(Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) values (:date, :energy, :ambient_temperature_average, :ambient_temperature_counter, :water_temperature_average, :water_temperature_counter, :heating_control_runtime)";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART1: &str = " ON DUPLICATE KEY Update ";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART2: &str = "Energy=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART3: &str = ", AmbientTempAverage=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART4: &str = ", AmbientTempCounter=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART5: &str = ", WaterTempAverage=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART6: &str = ", WaterTempCounter=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART7: &str = ", HeatingControlRuntime=";
-    pub const SQL_QUERY_WRITE_HEATING_STATS_PART8: &str = ";";
+
+    /// This query is used to write the heating statistical data into the database.
+    /// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
+    pub const SQL_QUERY_WRITE_HEATING_STATS: &str = "insert into heatingstats \
+        (Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) \
+        values (:date, :energy, \
+        :ambient_temperature_average, :ambient_temperature_counter, \
+        :water_temperature_average, :water_temperature_counter, \
+        :heating_control_runtime) \
+        ON DUPLICATE KEY Update \
+        Energy=#Energy, \
+        AmbientTempAverage=#AmbientTempAverage, \
+        AmbientTempCounter=#AmbientTempCounter, \
+        WaterTempAverage=#WaterTempAverage, \
+        WaterTempCounter=#WaterTempCounter, \
+        HeatingControlRuntime=#HeatingControlRuntime;";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -502,7 +509,8 @@ impl SqlInterface {
         // check error case if there is no response
         if single_feedpattern_entry_array.len() == 0 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string() + sql_query.as_str(),
+                "SQL database responded with empty response to query: ".to_string()
+                    + sql_query.as_str(),
             ));
         }
         // check error case if there is more than one response
@@ -564,7 +572,8 @@ impl SqlInterface {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                    "Could not get feed pattern phase from SQL database with query: ".to_string() + sql_query.as_str(),
+                    "Could not get feed pattern phase from SQL database with query: ".to_string()
+                        + sql_query.as_str(),
                 ));
             }
         };
@@ -572,13 +581,15 @@ impl SqlInterface {
         // check error case if there is no response
         if single_feedpattern_entry_array.len() == 0 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string() + sql_query.as_str(),
+                "SQL database responded with empty response to query: ".to_string()
+                    + sql_query.as_str(),
             ));
         }
         // check error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query: ".to_string() + sql_query.as_str(),
+                "SQL database responded with multiple responses to request to query: ".to_string()
+                    + sql_query.as_str(),
             ));
         }
         let feed_phase = &single_feedpattern_entry_array[0];
@@ -777,25 +788,48 @@ impl SqlInterface {
         &mut self,
         heating_stats_entry: HeatingStatsEntry,
     ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART0.to_owned() +
-            // ON DUPLICATE UPDATE
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART1 +
-            // Below content provides input for ON DUPLICATE UPDATE
-            // Energy (float)
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART2 + &heating_stats_entry.energy.to_string() +
-            // AmbientTempAverage (float)
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART3 + &heating_stats_entry.ambient_temperature_average_value.to_string() +
-            // AmbientTempCounter (int)    
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART4 + &heating_stats_entry.ambient_temperature_average_counter.to_string() +
-            // WaterTempAverage (float)    
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART5 + &heating_stats_entry.water_temperature_average_value.to_string() +
-            // WaterTempCounter (int)
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART6 + &heating_stats_entry.water_temperature_average_counter.to_string() +
-            // HeatingControlRuntime (int)
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART7 + &heating_stats_entry.heating_control_runtime.to_string() +
-            // ";"
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS_PART8;
-        match self.conn.exec_drop::<_, _>(sql_query_string, params!{
+        let sql_query_energy_replaced = str::replace(
+            sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS,
+            "#Energy",
+            &heating_stats_entry.energy.to_string(),
+        );
+        let sql_query_ambient_temperature_average_replaced = str::replace(
+            &sql_query_energy_replaced,
+            "#AmbientTempAverage",
+            &heating_stats_entry
+                .ambient_temperature_average_value
+                .to_string(),
+        );
+        let sql_query_ambient_temperature_counter_replaced = str::replace(
+            &sql_query_ambient_temperature_average_replaced,
+            "#AmbientTempCounter",
+            &heating_stats_entry
+                .ambient_temperature_average_counter
+                .to_string(),
+        );
+        let sql_query_water_temperature_average_replaced = str::replace(
+            &sql_query_ambient_temperature_counter_replaced,
+            "#WaterTempAverage",
+            &heating_stats_entry
+                .water_temperature_average_value
+                .to_string(),
+        );
+        let sql_query_water_temperature_counter_replaced = str::replace(
+            &sql_query_water_temperature_average_replaced,
+            "#WaterTempCounter",
+            &heating_stats_entry
+                .water_temperature_average_counter
+                .to_string(),
+        );
+        let sql_query_string = str::replace(
+            &sql_query_water_temperature_counter_replaced,
+            "#HeatingControlRuntime",
+            &heating_stats_entry
+                .water_temperature_average_counter
+                .to_string(),
+        );
+
+        match self.conn.exec_drop::<_, _>(sql_query_string.clone(), params!{
                 "date" => heating_stats_entry.date.format("%Y-%m-%d").to_string(),
                 "energy" => heating_stats_entry.energy,
                 "ambient_temperature_average" => heating_stats_entry.ambient_temperature_average_value,
@@ -809,7 +843,7 @@ impl SqlInterface {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(
-                    "Error when inserting heating stats into database.".to_string(),
+                    "Error when inserting heating stats into database using query: ".to_string() + sql_query_string.as_str(),
                 ))
             }
         }
