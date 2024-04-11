@@ -168,10 +168,11 @@ struct SingleFloat {
     single_float: f64,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
     ConnectionPoolFailure(String),
+    RequiredTablesNotExisting(String),
     ShowTablesWithoutProperResult(String),
     SingleStringRequestFailure(String),
     SingleStringRequestNoSingleResponse(String),
@@ -941,7 +942,40 @@ impl SqlInterface {
             )),
         }
     }
-    // todo: check of show tables
+
+    fn compare_required_tables_existing_tables(
+        required_tables: Vec<String>,
+        existing_tables: Vec<String>,
+    ) -> bool {
+        for required_table in required_tables {
+            if !existing_tables.contains(&required_table) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn check_required_tables_existing(&mut self) -> Result<(), SqlInterfaceError> {
+        let existing_tables = match self.get_tables() {
+            Ok(c) => c,
+            Err(e) => return Err(e),
+        };
+        if !Self::compare_required_tables_existing_tables(
+            self.config.db_tables.clone(),
+            existing_tables.clone(),
+        ) {
+            let required_tables_string = &self.config.db_tables.join(",");
+            let existing_tables_string = &existing_tables.join(",");
+            let error_message = "Required tables (".to_string()
+                + required_tables_string
+                + ") are not existing in database ("
+                + existing_tables_string
+                + ").";
+
+            return Err(SqlInterfaceError::RequiredTablesNotExisting(error_message));
+        }
+        Ok(())
+    }
     // todo: check of database version
 }
 
@@ -949,30 +983,55 @@ impl SqlInterface {
 pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::SqlInterface;
-    use chrono::Utc;
-    use mysql::prelude::Queryable;
-
-    pub const SQL_TEST_QUERY_DROP_TABLE_IF_EXISTS: &str = "DROP TABLE IF EXISTS";
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use chrono::{DateTime, Local, SubsecRound, TimeZone};
 
     #[test]
-    pub fn test_current_date() {
+    pub fn test_sql_interface() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
 
-        let _ = sql_interface.conn.query_drop(
-            SQL_TEST_QUERY_DROP_TABLE_IF_EXISTS.to_owned()
-                + sql_interface.config.db_tables[0].as_str()
-                + ";",
-        );
+        // check if required tables are existing - PASS
+        assert_eq!(sql_interface.check_required_tables_existing(), Ok(()));
+        println!("* checking required tables (PASS) succeeded.");
 
-        let date = match sql_interface.get_current_date() {
+        // check if required tables are existing - FAIL
+        sql_interface.config.db_tables.push("dummy".to_string());
+        assert_eq!(
+            sql_interface.check_required_tables_existing(),
+            Err(SqlInterfaceError::RequiredTablesNotExisting(
+                "Required tables (ballingdosinglog,ballingsetvals,data,\
+                    feedlog,feedpatterns,feedschedule,heatingstats,refill,schedule,users,dummy) \
+                    are not existing in database \
+                    (ballingdosinglog,ballingsetvals,data,feedlog,feedpatterns,feedschedule\
+                        ,heatingstats,refill,schedule,users)."
+                    .to_string()
+            ))
+        );
+        println!("* checking required tables (FAIL) succeeded.");
+
+        // check if current date is local date - PASS
+        let sql_date = match sql_interface.get_current_date() {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
         };
+        let sql_date_string = sql_date.format("%Y-%m-%d").to_string();
+        let local_date_string = chrono::offset::Local::now()
+            .trunc_subsecs(0)
+            .format("%Y-%m-%d")
+            .to_string();
+        assert_eq!(sql_date_string, local_date_string);
+        println!("* checking current date (PASS) succeeded.");
 
-        assert_eq!(date, Utc::now().naive_utc().into());
+        // check if current timestamp is local timestamp - PASS
+        let sql_timestamp = match sql_interface.get_current_timestamp() {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get current timestamp from SQL database."),
+        };
+        let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
+        assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
+        println!("* checking current timestamp (PASS) succeeded.");
     }
 }

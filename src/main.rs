@@ -77,6 +77,13 @@ fn main() {
         heating_control_runtime: 64000,
     };
 
+    match sql_interface.check_required_tables_existing() {
+        Ok(_) => {
+            println!("Required tables are existing in database.")
+        }
+        Err(e) => panic!("{e:?}"),
+    }
+
     match sql_interface.insert_refill_event(Utc::now().naive_utc(), 3.6, 0.4, 0) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
