@@ -1,13 +1,16 @@
 mod config;
+mod feedpattern;
 mod sql_interface;
 
 use chrono::Utc;
+//use std::env;
 
 use crate::config::read_config_file;
 use crate::sql_interface::HeatingStatsEntry;
 use crate::sql_interface::SqlInterface;
 
 fn main() {
+    //env::set_var("RUST_BACKTRACE", "1");
     let config = read_config_file("/config/aquarium_control.toml".to_string());
 
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
@@ -75,12 +78,12 @@ fn main() {
     };
 
     match sql_interface.insert_refill_event(Utc::now().naive_utc(), 3.6, 0.4, 0) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
 
     match sql_interface.insert_heating_stats_entry(heating_stats_entry) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
     };
 
@@ -97,6 +100,11 @@ fn main() {
     let heating_stats = match sql_interface.get_single_heating_stats_from_database() {
         Ok(c) => c,
         Err(e) => panic!("Could not get heating stats from database:{e:?}"),
+    };
+
+    let feedpattern = match sql_interface.get_single_feedpattern_from_database(1) {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
     };
 
     println!("Read the following tables from database:");
@@ -124,5 +132,10 @@ fn main() {
         heating_stats.water_temperature_average_value,
         heating_stats.water_temperature_average_counter,
         heating_stats.heating_control_runtime
+    );
+
+    println!(
+        "Feed pattern: profile ID={} profile name={}",
+        feedpattern.profile_id, feedpattern.profile_name
     );
 }

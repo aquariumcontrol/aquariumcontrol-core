@@ -3,35 +3,63 @@ use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
 
+use crate::feedpattern::FeedPhase;
+use crate::feedpattern::Feedpattern;
+
+/// This module contains constants of all SQL queries.
 mod sql_query_strings {
-    // Basic
+    /// This query is used to read all tables from the database.
     pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
+    
+    /// This query is used to read the current date (without time) from the database.
     pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
+
+    /// This query is used to read the current timestamp from the database.
     pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
 
-    // Feed
+    /// This query is used to insert data of one feed event into the database.
     pub const SQL_QUERY_WRITE_FEED_EVENT: &str =
         "INSERT into feedlog (Timestamp, FeederOnTime, ProfileName, ProfileIdx) values(:timestamp, :feeder_run_time, :profile_name, :profile_id)";
+    
+    /// This query is used to read the header of a feed pattern from the database.
+    pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
+        "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id;";
+        
+    /// This query is used to read one phase of a feed pattern from the database.
+    pub const SQL_QUERY_READ_FEED_PHASE: &str = "SELECT Pause#Duration, Pause#Skimmer, Pause#MPmp1, Pause#MPmp2, Pause#APmp1, Pause#APmp2, \
+                Feed#Duration, Feed#Skimmer, Feed#MPmp1, Feed#MPmp2, Feed#APmp1, Feed#APmp2 FROM feedpatterns WHERE ProfileID=profile_id;";
 
-    // Balling
+    /// This query is used to read the timestamp of the last refill event from the database.
     pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+        
+    /// This query is used to read the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+        
+    /// This query is used to write the last Balling dosing event to the database.    
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
         "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
 
-    // Refill
+    /// This query is used to read the refill volume of the last day from the data base.
+    /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
-        "SELECT SUM(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+        "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+        
+    /// This query is used to read the number of refill events of the last day from the data base.
+    /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
     pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
+        
+    /// This query is used to write the last refill event to the database.    
     pub const SQL_QUERY_WRITE_REFILL_EVENT: &str =
         "INSERT into refill(Timestamp, Duration, Volume, ErrorCode) values(:timestamp, :duration, :volume, :error_code);";
 
-    // Heating stats
+    /// This query is used to read the duration in seconds until midnight from the database.
     pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
         "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
+    
+    /// This query is used to read the heating statistical data of the current day from the database.
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
     pub const SQL_QUERY_WRITE_HEATING_STATS_PART0: &str = "insert into heatingstats(Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) values (:date, :energy, :ambient_temperature_average, :ambient_temperature_counter, :water_temperature_average, :water_temperature_counter, :heating_control_runtime)";
@@ -69,6 +97,8 @@ pub struct SqlInterfaceConfig {
     pub db_tables: Vec<String>,
 }
 
+/// This struct holds the statistical data of heating for one day.
+/// It is filled with post-processed data from SQL query which is then updated by the control application.
 pub struct HeatingStatsEntry {
     pub date: NaiveDate,
     pub energy: f64,
@@ -79,6 +109,8 @@ pub struct HeatingStatsEntry {
     pub heating_control_runtime: i64,
 }
 
+/// This struct holds the statistical data of heating for one day as retrieved from SQL database.
+/// In next step, date is postprocessed to NaiveData type.
 pub struct HeatingStatsStringEntry {
     pub date: String,
     pub energy: f64,
@@ -89,14 +121,42 @@ pub struct HeatingStatsStringEntry {
     pub heating_control_runtime: i64,
 }
 
+#[derive(Clone)]
+/// This struct holds the header information of a feed pattern.
+pub struct SqlFeedpatternHeader {
+    pub profile_id: i32,
+    pub profile_name: String,
+}
+
+#[derive(Clone)]
+/// This struct holds the data of one phase of a feed pattern as retrieved from SQL data base.
+/// The numeric data is post-processed to boolean in a subsequent step.
+pub struct SqlFeedPhase {
+    pub pause_duration: i16,
+    pub pause_skimmer: i16,
+    pub pause_main_pump_1: i16,
+    pub pause_main_pump_2: i16,
+    pub pause_aux_pump_1: i16,
+    pub pause_aux_pump_2: i16,
+    pub feed_duration: i16,
+    pub feed_skimmer: i16,
+    pub feed_main_pump_1: i16,
+    pub feed_main_pump_2: i16,
+    pub feed_aux_pump_1: i16,
+    pub feed_aux_pump_2: i16,
+}
+
+/// Struct is used to retrieve a single integer value from SQL database.
 struct SingleInteger {
     single_integer: i64,
 }
 
+/// Struct is used to retrieve a single string value from SQL database.
 struct SingleString {
     single_string: String,
 }
 
+/// Struct is used to retrieve a single float value from SQL database.
 struct SingleFloat {
     single_float: f64,
 }
@@ -114,6 +174,8 @@ pub enum SqlInterfaceError {
     SingleFloatRequestNoSingleResponse(String),
     SingleHeatingStatsRequestFailure(String),
     SingleHeatingStatsRequestNoSingleResponse(String),
+    SingleFeedpatternRequestFailure(String),
+    SingleFeedpatternRequestNoSingleResponse(String),
     TimestampConversionFailure(String),
     InsertHeatingStatsEntryFailure(String),
     InsertFeedEventFailure(String),
@@ -366,7 +428,6 @@ impl SqlInterface {
                 ),
             );
         }
-
         // check error case if there is more than one response
         if single_heating_stats_entry_array.len() > 1 {
             return Err(
@@ -376,7 +437,6 @@ impl SqlInterface {
                 ),
             );
         }
-
         let single_heating_stats_string_entry = &single_heating_stats_entry_array[0];
 
         // convert String to NaiveDate
@@ -409,6 +469,166 @@ impl SqlInterface {
         Ok(single_heating_stats_entry)
     }
 
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single feed pattern header
+    pub fn get_feedpattern_header_from_database(
+        &mut self,
+        profile_id: i32,
+    ) -> Result<SqlFeedpatternHeader, SqlInterfaceError> {
+        // prepare query for header
+        let sql_query = str::replace(
+            sql_query_strings::SQL_QUERY_READ_FEEDPATTERN_HEADER,
+            "profile_id",
+            &profile_id.to_string(),
+        );
+        let single_feedpattern_entry_array =
+            match self
+                .conn
+                .query_map(sql_query.clone(), |(profile_id, profile_name)| {
+                    SqlFeedpatternHeader {
+                        profile_id,
+                        profile_name,
+                    }
+                }) {
+                Ok(c) => c,
+                Err(_) => {
+                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
+                        "Could not get feed pattern header from SQL database with query:"
+                            .to_string()
+                            + sql_query.as_str(),
+                    ));
+                }
+            };
+
+        // check error case if there is no response
+        if single_feedpattern_entry_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                "SQL database responded with empty response to query: ".to_string() + sql_query.as_str(),
+            ));
+        }
+        // check error case if there is more than one response
+        if single_feedpattern_entry_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                "SQL database responded with multiple responses to request to query:".to_string()
+                    + sql_query.as_str(),
+            ));
+        }
+        let feedpattern_header = &single_feedpattern_entry_array[0];
+
+        Ok(feedpattern_header.clone())
+    }
+
+    /// The function executes an SQL statement given as parameter and evaluates if the response is a single feed pattern phase
+    pub fn get_feed_phase_from_database(
+        &mut self,
+        profile_id: i32,
+        phase_nr: i32,
+    ) -> Result<SqlFeedPhase, SqlInterfaceError> {
+        // prepare query for header
+        let sql_query_pre = str::replace(
+            sql_query_strings::SQL_QUERY_READ_FEED_PHASE,
+            "profile_id",
+            &profile_id.to_string(),
+        );
+        let sql_query = str::replace(&sql_query_pre, "#", format!("{:02}", phase_nr).as_str());
+
+        let single_feedpattern_entry_array = match self.conn.query_map(
+            sql_query.clone(),
+            |(
+                pause_duration,
+                pause_skimmer,
+                pause_main_pump_1,
+                pause_main_pump_2,
+                pause_aux_pump_1,
+                pause_aux_pump_2,
+                feed_duration,
+                feed_skimmer,
+                feed_main_pump_1,
+                feed_main_pump_2,
+                feed_aux_pump_1,
+                feed_aux_pump_2,
+            )| SqlFeedPhase {
+                pause_duration,
+                pause_skimmer,
+                pause_main_pump_1,
+                pause_main_pump_2,
+                pause_aux_pump_1,
+                pause_aux_pump_2,
+                feed_duration,
+                feed_skimmer,
+                feed_main_pump_1,
+                feed_main_pump_2,
+                feed_aux_pump_1,
+                feed_aux_pump_2,
+            },
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
+                    "Could not get feed pattern phase from SQL database with query: ".to_string() + sql_query.as_str(),
+                ));
+            }
+        };
+
+        // check error case if there is no response
+        if single_feedpattern_entry_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                "SQL database responded with empty response to query: ".to_string() + sql_query.as_str(),
+            ));
+        }
+        // check error case if there is more than one response
+        if single_feedpattern_entry_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                "SQL database responded with multiple responses to request to query: ".to_string() + sql_query.as_str(),
+            ));
+        }
+        let feed_phase = &single_feedpattern_entry_array[0];
+
+        Ok(feed_phase.clone())
+    }
+
+    /// The function retries the header and all phases of a feed pattern from the SQL database.
+    pub fn get_single_feedpattern_from_database(
+        &mut self,
+        profile_id: i32,
+    ) -> Result<Feedpattern, SqlInterfaceError> {
+        let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("{e:?}");
+                return Err(e);
+            }
+        };
+        let mut feed_phases = Vec::new();
+        for nr in 1..10 {
+            let sql_feed_phase = match self.get_feed_phase_from_database(profile_id, nr) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+            let feed_phase = FeedPhase {
+                pause_duration: sql_feed_phase.pause_duration,
+                pause_skimmer: sql_feed_phase.pause_skimmer > 0,
+                pause_main_pump_1: sql_feed_phase.pause_main_pump_1 > 0,
+                pause_main_pump_2: sql_feed_phase.pause_main_pump_2 > 0,
+                pause_aux_pump_1: sql_feed_phase.pause_aux_pump_1 > 0,
+                pause_aux_pump_2: sql_feed_phase.pause_aux_pump_2 > 0,
+                feed_duration: sql_feed_phase.feed_duration,
+                feed_skimmer: sql_feed_phase.feed_skimmer > 0,
+                feed_main_pump_1: sql_feed_phase.feed_main_pump_1 > 0,
+                feed_main_pump_2: sql_feed_phase.feed_main_pump_2 > 0,
+                feed_aux_pump_1: sql_feed_phase.feed_aux_pump_1 > 0,
+                feed_aux_pump_2: sql_feed_phase.feed_aux_pump_2 > 0,
+            };
+            feed_phases.push(feed_phase);
+        }
+        Ok(Feedpattern {
+            profile_id: sql_feedpattern_header.profile_id,
+            profile_name: sql_feedpattern_header.profile_name,
+            feedphases: feed_phases,
+        })
+    }
+
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
     fn get_timestamp(
         &mut self,
@@ -418,6 +638,7 @@ impl SqlInterface {
         let timestamp_string = match self.get_single_string_from_database(sql_query_string) {
             Ok(c) => c,
             Err(e) => {
+                println!("{e:?}");
                 return Err(e);
             }
         };
