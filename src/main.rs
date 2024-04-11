@@ -2,7 +2,7 @@ mod config;
 mod feedpattern;
 mod sql_interface;
 
-use chrono::Utc;
+use chrono::NaiveDateTime;
 //use std::env;
 
 use crate::config::read_config_file;
@@ -77,6 +77,12 @@ fn main() {
         heating_control_runtime: 64000,
     };
 
+    let database = match sql_interface.get_database() {
+        Ok(c) => c,
+        Err(e) => panic!("Could not get database name: {e:?}"),
+    };
+    println!("Current database name is {}", database);
+
     match sql_interface.check_required_tables_existing() {
         Ok(_) => {
             println!("Required tables are existing in database.")
@@ -84,7 +90,9 @@ fn main() {
         Err(e) => panic!("{e:?}"),
     }
 
-    match sql_interface.insert_refill_event(Utc::now().naive_utc(), 3.6, 0.4, 0) {
+    let refill_timestamp =
+        NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    match sql_interface.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
@@ -94,12 +102,16 @@ fn main() {
         Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
     };
 
-    match sql_interface.insert_feed_event(Utc::now().naive_utc(), 5.5, "Test".to_string(), 1) {
+    let feed_timestamp =
+        NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    match sql_interface.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert feed event into database: {e:?}"),
     }
 
-    match sql_interface.insert_balling_event(Utc::now().naive_utc(), 1, 0.5) {
+    let balling_timestamp =
+        NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    match sql_interface.insert_balling_event(balling_timestamp, 1, 0.5) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
     }

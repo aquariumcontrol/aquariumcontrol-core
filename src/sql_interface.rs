@@ -8,6 +8,9 @@ use crate::feedpattern::Feedpattern;
 
 /// This module contains constants of all SQL queries.
 mod sql_query_strings {
+    /// This query provides the current data base name.
+    pub const SQL_QUERY_DATABASE: &str = "select database();";
+
     /// This query is used to read all tables from the database.
     pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
 
@@ -31,11 +34,11 @@ mod sql_query_strings {
 
     /// This query is used to read the timestamp of the last refill event from the database.
     pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
-        "SELECT Timestamp from aquarium.refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+        "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
     /// This query is used to read the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
-        "SELECT Timestamp from aquarium.ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+        "SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
     /// This query is used to write the last Balling dosing event to the database.    
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
@@ -77,7 +80,7 @@ mod sql_query_strings {
         AmbientTempCounter=#AmbientTempCounter, \
         WaterTempAverage=#WaterTempAverage, \
         WaterTempCounter=#WaterTempCounter, \
-        HeatingControlRuntime=#HeatingControlRuntime;";        
+        HeatingControlRuntime=#HeatingControlRuntime;";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -189,7 +192,6 @@ pub enum SqlInterfaceError {
     InsertFeedEventFailure(String),
     InsertRefillEventFailure(String),
     InsertBallingEventFailure(String),
-    TruncateTableFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
@@ -642,6 +644,18 @@ impl SqlInterface {
         })
     }
 
+    /// The function triggers SQL call for a single value for retrieving the current database name.
+    pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
+        // trigger SQL call
+        match self.get_single_string_from_database(sql_query_strings::SQL_QUERY_DATABASE) {
+            Ok(c) => Ok(c),
+            Err(e) => {
+                println!("{e:?}");
+                Err(e)
+            }
+        }
+    }
+
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
     fn get_timestamp(
         &mut self,
@@ -651,7 +665,9 @@ impl SqlInterface {
         let timestamp_string = match self.get_single_string_from_database(sql_query_string) {
             Ok(c) => c,
             Err(e) => {
-                println!("{e:?}");
+                if !cfg!(test) {
+                    println!("{e:?}");
+                }
                 return Err(e);
             }
         };
@@ -982,30 +998,35 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
-    use mysql::{PooledConn};
     use mysql::prelude::Queryable;
 
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
-    use chrono::{DateTime, Local, SubsecRound, TimeZone};
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError, SqlInterfaceError::SingleStringRequestNoSingleResponse};
+    use chrono::{DateTime, Local, SubsecRound, TimeZone, NaiveDateTime};
 
     const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
-    
+    #[derive(PartialEq, Debug)]
+    /// Enum codifies additional errors which the program may encounter in communication with the DB during testing
+    pub enum SqlInterfaceTestError {
+        TruncateTableFailure(String),
+    }
+
     /// the function empties the table
-    pub fn truncate_table(mut conn: PooledConn, sql_table_name: String) -> Result<(), SqlInterfaceError> {
+    pub fn truncate_table(
+        sql_interface: &mut SqlInterface,
+        sql_table_name: String,
+    ) -> Result<(), SqlInterfaceTestError> {
         let sql_query_string = str::replace(SQL_QUERY_TRUNCATE_TABLE, "#table", &sql_table_name);
-        match conn.query_drop(
-            sql_query_string,
-        ) {
+        match sql_interface.conn.query_drop(sql_query_string) {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
-                Err(SqlInterfaceError::TruncateTableFailure(
+                Err(SqlInterfaceTestError::TruncateTableFailure(
                     "Error when truncating table: ".to_string() + &sql_table_name,
                 ))
             }
-        }        
+        }
     }
 
     #[test]
@@ -1013,8 +1034,20 @@ pub mod tests {
     pub fn test_sql_interface() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let database_name_from_config = config.sql_interface.db_name.clone();
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
+
+        let database_name_from_db = match sql_interface.get_database() {
+            Ok(c) => c,
+            Err(e) => panic!("Could not get database name: {e:?}"),
+        };
+        assert_eq!(database_name_from_db, database_name_from_config);
+        println!(
+            "* checking database name (PASS) succeeded. database_name_from_db={}",
+            database_name_from_db
+        );
 
         // check if required tables are existing - PASS
         assert_eq!(sql_interface.check_required_tables_existing(), Ok(()));
@@ -1056,12 +1089,63 @@ pub mod tests {
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
-        
-        // check duration since last refill - FAIL
-        match truncate_table(sql_interface.conn, "refill".to_string()) {
-            Ok(_) => {},
-            Err(e) => { panic!("Could not prepare test case: {e:?}")}
+
+        // check timestamp of last refill - FAIL
+        match truncate_table(&mut sql_interface, "refill".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
         }
-        assert_eq!(sql_interface.get_last_refill_timestamp(), Ok(()));        
+        assert_eq!(
+            sql_interface.get_last_refill_timestamp(),
+            Err(SingleStringRequestNoSingleResponse(
+                "SQL database responded with empty response to query: \
+            SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;".to_string()
+            ))
+        );
+        println!("* checking timestamp of last refill (FAIL) succeeded.");
+        
+        // check timestamp of last refill - PASS
+        let refill_timestamp =
+            NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        match sql_interface.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert refill event into database: {e:?}"),
+        };
+        assert_eq!(
+            sql_interface.get_last_refill_timestamp(),
+            Ok(refill_timestamp)
+        );
+        println!("* checking timestamp of last refill (PASS) succeeded.");
+        
+        // check timestamp of last Balling dosing - FAIL
+        match truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+        assert_eq!(
+            sql_interface.get_last_balling_dosing_timestamp(),
+            Err(SingleStringRequestNoSingleResponse(
+                "SQL database responded with empty response to query: \
+            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;".to_string()
+            ))
+        );
+        println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
+        
+        // check timestamp of last Balling dosing - PASS
+        let balling_timestamp =
+            NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        match sql_interface.insert_balling_event(balling_timestamp, 1, 0.5) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
+        };
+        assert_eq!(
+            sql_interface.get_last_balling_dosing_timestamp(),
+            Ok(balling_timestamp)
+        );
+        println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
     }
 }
