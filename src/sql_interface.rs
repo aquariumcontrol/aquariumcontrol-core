@@ -1057,10 +1057,11 @@ pub mod tests {
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
         
-        // check duration since last refill
+        // check duration since last refill - FAIL
         match truncate_table(sql_interface.conn, "refill".to_string()) {
             Ok(_) => {},
             Err(e) => { panic!("Could not prepare test case: {e:?}")}
         }
+        assert_eq!(sql_interface.get_last_refill_timestamp(), Ok(()));        
     }
 }
