@@ -77,7 +77,7 @@ mod sql_query_strings {
         AmbientTempCounter=#AmbientTempCounter, \
         WaterTempAverage=#WaterTempAverage, \
         WaterTempCounter=#WaterTempCounter, \
-        HeatingControlRuntime=#HeatingControlRuntime;";
+        HeatingControlRuntime=#HeatingControlRuntime;";        
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -189,6 +189,7 @@ pub enum SqlInterfaceError {
     InsertFeedEventFailure(String),
     InsertRefillEventFailure(String),
     InsertBallingEventFailure(String),
+    TruncateTableFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
@@ -981,12 +982,34 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
+    use mysql::{PooledConn};
+    use mysql::prelude::Queryable;
+
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use chrono::{DateTime, Local, SubsecRound, TimeZone};
 
+    const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
+    
+    /// the function empties the table
+    pub fn truncate_table(mut conn: PooledConn, sql_table_name: String) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = str::replace(SQL_QUERY_TRUNCATE_TABLE, "#table", &sql_table_name);
+        match conn.query_drop(
+            sql_query_string,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::TruncateTableFailure(
+                    "Error when truncating table: ".to_string() + &sql_table_name,
+                ))
+            }
+        }        
+    }
+
     #[test]
+    /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
@@ -1033,5 +1056,11 @@ pub mod tests {
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
+        
+        // check duration since last refill
+        match truncate_table(sql_interface.conn, "refill".to_string()) {
+            Ok(_) => {},
+            Err(e) => { panic!("Could not prepare test case: {e:?}")}
+        }
     }
 }
