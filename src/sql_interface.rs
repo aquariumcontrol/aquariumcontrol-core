@@ -960,6 +960,7 @@ impl SqlInterface {
         }
     }
 
+    /// Compare two vectors of strings and check if all of the strings of the first vector are contained within the second vector.
     fn compare_required_tables_existing_tables(
         required_tables: Vec<String>,
         existing_tables: Vec<String>,
@@ -972,6 +973,7 @@ impl SqlInterface {
         true
     }
 
+    /// Read all tables from the data base and check if all required tables are there.
     pub fn check_required_tables_existing(&mut self) -> Result<(), SqlInterfaceError> {
         let existing_tables = match self.get_tables() {
             Ok(c) => c,
@@ -1002,8 +1004,10 @@ pub mod tests {
 
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError, SqlInterfaceError::SingleStringRequestNoSingleResponse};
-    use chrono::{DateTime, Local, SubsecRound, TimeZone, NaiveDateTime};
+    use crate::sql_interface::{
+        SqlInterface, SqlInterfaceError, SqlInterfaceError::SingleStringRequestNoSingleResponse,
+    };
+    use chrono::{DateTime, Local, NaiveDateTime, SubsecRound, TimeZone};
 
     const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
     #[derive(PartialEq, Debug)]
@@ -1029,6 +1033,15 @@ pub mod tests {
         }
     }
 
+    /// calculates the time difference between a given timestamp of type NaiveDateTime
+    /// to the current local time in seconds
+    fn get_duration_from_naive_timestamp_to_local_now(timestamp_naive: NaiveDateTime) -> i64 {
+        let reference_current_timestamp = chrono::Local::now();
+        let timestamp_dt: DateTime<Local> = Local.from_local_datetime(&timestamp_naive).unwrap();
+                
+        reference_current_timestamp.signed_duration_since(timestamp_dt).num_seconds()
+    }
+    
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface() {
@@ -1049,11 +1062,12 @@ pub mod tests {
             database_name_from_db
         );
 
-        // check if required tables are existing - PASS
+        //*** check if required tables are existing - PASS *************************************
         assert_eq!(sql_interface.check_required_tables_existing(), Ok(()));
         println!("* checking required tables (PASS) succeeded.");
+        //**************************************************************************************
 
-        // check if required tables are existing - FAIL
+        //*** check if required tables are existing - FAIL *************************************
         sql_interface.config.db_tables.push("dummy".to_string());
         assert_eq!(
             sql_interface.check_required_tables_existing(),
@@ -1067,8 +1081,9 @@ pub mod tests {
             ))
         );
         println!("* checking required tables (FAIL) succeeded.");
+        //**************************************************************************************
 
-        // check if current date is local date - PASS
+        //*** check if current date is local date - PASS ***************************************
         let sql_date = match sql_interface.get_current_date() {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
@@ -1080,8 +1095,9 @@ pub mod tests {
             .to_string();
         assert_eq!(sql_date_string, local_date_string);
         println!("* checking current date (PASS) succeeded.");
+        //**************************************************************************************
 
-        // check if current timestamp is local timestamp - PASS
+        //*** check if current timestamp is local timestamp - PASS *****************************
         let sql_timestamp = match sql_interface.get_current_timestamp() {
             Ok(c) => c,
             Err(_) => panic!("Could not get current timestamp from SQL database."),
@@ -1089,8 +1105,9 @@ pub mod tests {
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
+        //**************************************************************************************
 
-        // check timestamp of last refill - FAIL
+        //*** check timestamp of last refill - FAIL ********************************************
         match truncate_table(&mut sql_interface, "refill".to_string()) {
             Ok(_) => {}
             Err(e) => {
@@ -1101,12 +1118,14 @@ pub mod tests {
             sql_interface.get_last_refill_timestamp(),
             Err(SingleStringRequestNoSingleResponse(
                 "SQL database responded with empty response to query: \
-            SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;".to_string()
+            SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
+                    .to_string()
             ))
         );
         println!("* checking timestamp of last refill (FAIL) succeeded.");
-        
-        // check timestamp of last refill - PASS
+        //**************************************************************************************
+
+        //*** check timestamp of last refill - PASS ********************************************
         let refill_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
@@ -1118,24 +1137,37 @@ pub mod tests {
             Ok(refill_timestamp)
         );
         println!("* checking timestamp of last refill (PASS) succeeded.");
+        //**************************************************************************************
+
+        //*** check duration since last refill - PASS ******************************************
+        let duration_since_last_refill =
+            match sql_interface.get_duration_since_last_refill() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not calculate duration since last refill: {e:?}"),
+            };        
+        let reference_duration_since_last_refill =
+            get_duration_from_naive_timestamp_to_local_now(refill_timestamp);
+        assert_eq!(duration_since_last_refill, reference_duration_since_last_refill);
+        println!("* checking duration since last refill succeeded.");
+        //**************************************************************************************
         
-        // check timestamp of last Balling dosing - FAIL
+        //*** check timestamp of last Balling dosing - FAIL ************************************
         match truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
         assert_eq!(
             sql_interface.get_last_balling_dosing_timestamp(),
             Err(SingleStringRequestNoSingleResponse(
                 "SQL database responded with empty response to query: \
-            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;".to_string()
+            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
+                    .to_string()
             ))
         );
         println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
-        
-        // check timestamp of last Balling dosing - PASS
+        //**************************************************************************************
+
+        //*** check timestamp of last Balling dosing - PASS ************************************
         let balling_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface.insert_balling_event(balling_timestamp, 1, 0.5) {
@@ -1147,5 +1179,17 @@ pub mod tests {
             Ok(balling_timestamp)
         );
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
+        //**************************************************************************************
+
+        //*** check duration since last Balling dosing - PASS **********************************
+        let duration_since_last_balling_dosing =
+            match sql_interface.get_duration_since_last_balling_dosing() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
+            };        
+        let reference_duration_since_last_balling_dosing = get_duration_from_naive_timestamp_to_local_now(balling_timestamp);
+        assert_eq!(duration_since_last_balling_dosing, reference_duration_since_last_balling_dosing);
+        println!("* checking duration since last Balling dosing succeeded.");
+        //**************************************************************************************
     }
 }
