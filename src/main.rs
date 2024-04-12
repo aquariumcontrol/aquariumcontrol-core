@@ -54,7 +54,7 @@ fn main() {
             }
         };
 
-    let duration_until_midnight = match sql_interface.get_duration_until_midnight() {
+    let duration_until_midnight = match sql_interface_heating.get_duration_until_midnight() {
         Ok(c) => c,
         Err(e) => {
             panic!("Could not get duration until midnight: {e:?}");
@@ -110,7 +110,7 @@ fn main() {
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
 
-    match sql_interface_heating.insert_heating_stats_entry(heating_stats_entry) {
+    match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
     };

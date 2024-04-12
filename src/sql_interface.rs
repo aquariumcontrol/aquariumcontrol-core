@@ -620,17 +620,6 @@ impl SqlInterface {
         self.get_date(sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
-    /// The function requests the duration until midnight in seconds.
-    pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => Err(e),
-        }
-    }
-
     /// The function inserts one dataset of feed event into the database
     pub fn insert_feed_event(
         &mut self,

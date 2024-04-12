@@ -2,8 +2,7 @@ use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterfaceError;
+use crate::sql_interface::{sql_query_strings, SqlInterfaceError, SqlInterface};
 
 /// This struct holds the statistical data of heating for one day.
 /// It is filled with post-processed data from SQL query which is then updated by the control application.
@@ -128,7 +127,7 @@ impl SqlInterfaceHeating {
     /// The function inserts one dataset of heating statistics into the database
     pub fn insert_heating_stats_entry(
         &mut self,
-        heating_stats_entry: HeatingStatsEntry,
+        heating_stats_entry: &HeatingStatsEntry,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_energy_replaced = str::replace(
             sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS,
@@ -167,7 +166,7 @@ impl SqlInterfaceHeating {
             &sql_query_water_temperature_counter_replaced,
             "#HeatingControlRuntime",
             &heating_stats_entry
-                .water_temperature_average_counter
+                .heating_control_runtime
                 .to_string(),
         );
 
@@ -190,14 +189,26 @@ impl SqlInterfaceHeating {
             }
         }
     }
+    
+    /// The function requests the duration until midnight in seconds.
+    pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
+        match SqlInterface::get_single_integer_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use chrono::{Local, NaiveDateTime, NaiveDate, Datelike};
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_heating::SqlInterfaceHeating;
+    use crate::sql_interface_heating::{SqlInterfaceHeating, HeatingStatsEntry};
 
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
@@ -230,6 +241,90 @@ pub mod tests {
             }
         }
         println!("* checking retrieving heating stats (FAIL) succeeded.");
+        //**************************************************************************************
+        
+        //*** insert heating stats - PASS ******************************************************
+        // prepare data for inserting into database
+        let today = match sql_interface.get_current_date() {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get current date."),
+        };
+        let mut heating_stats_entry = HeatingStatsEntry {
+            date: today.into(),
+            energy: 0.9,
+            ambient_temperature_average_value: 22.0,
+            ambient_temperature_average_counter: 72000,
+            water_temperature_average_value: 25.0,
+            water_temperature_average_counter: 78000,
+            heating_control_runtime: 64000,
+        };
+        assert_eq!(sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry), Ok(()));
+        println!("* checking inserting heating stats (PASS) succeeded.");
+        //**************************************************************************************
+
+        //*** retrieve stats - PASS ************************************************************
+        match sql_interface_heating.get_single_heating_stats_from_database() {
+            Ok(c) => {
+                assert_eq!(c.date, today.into());
+                assert_eq!(c.energy, 0.9);
+                assert_eq!(c.ambient_temperature_average_value, 22.0);
+                assert_eq!(c.ambient_temperature_average_counter, 72000);
+                assert_eq!(c.water_temperature_average_value, 25.0);
+                assert_eq!(c.water_temperature_average_counter, 78000);
+                assert_eq!(c.heating_control_runtime, 64000);
+            }
+            Err(_) => {
+                panic!("Call to get_single_heating_stats_from_database has failed.");
+            }
+        }
+        println!("* checking retrieving heating stats (PASS) succeeded.");
+
+        //*** retrieve stats - PASS ************************************************************
+        // update data and trigger SQL statement (ON DUPLICATE UPDATE)
+        heating_stats_entry.energy += 0.1;
+        heating_stats_entry.ambient_temperature_average_value += 0.1;
+        heating_stats_entry.ambient_temperature_average_counter += 1;
+        heating_stats_entry.water_temperature_average_value += 0.1;
+        heating_stats_entry.water_temperature_average_counter += 1;
+        heating_stats_entry.heating_control_runtime += 1;
+        assert_eq!(sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry), Ok(()));
+        match sql_interface_heating.get_single_heating_stats_from_database() {
+            Ok(c) => {
+                assert_eq!(c.date, today.into());
+                assert_eq!(c.energy, 1.0);
+                assert_eq!(c.ambient_temperature_average_value, 22.1);
+                assert_eq!(c.ambient_temperature_average_counter, 72001);
+                assert_eq!(c.water_temperature_average_value, 25.1);
+                assert_eq!(c.water_temperature_average_counter, 78001);
+                assert_eq!(c.heating_control_runtime, 64001);
+            }
+            Err(_) => {
+                panic!("Call to get_single_heating_stats_from_database has failed.");
+            }
+        }        
+        println!("* checking retrieving updated heating stats (PASS) succeeded.");
+        //**************************************************************************************
+    
+        //*** calculate duration until midnight ************************************************
+        // reference calculation in Rust
+        // Get current date components
+        let now = Local::now();
+        let year = now.year();
+        let month = now.month();
+        let day = now.day();
+        
+        // Create NaiveDate from components
+        let today: NaiveDate = NaiveDate::from_ymd_opt(year, month, day).unwrap();
+        
+        // Create a NaiveDateTime for midnight
+        let midnight = NaiveDateTime::new(today, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+        // Calculate the difference
+        let duration_until_midnight = 24 * 3600 - SqlInterface::get_duration_from_naive_timestamp_to_local_now(midnight);
+        match sql_interface_heating.get_duration_until_midnight() {
+            Ok(c) => { assert_eq!(c, duration_until_midnight); },
+            Err(_) => { panic!("Call to get_duration_until_midnight failed."); }
+        }
+        println!("* checking duration until midnight in seconds (PASS) succeeded.");
         //**************************************************************************************
     }
 }
