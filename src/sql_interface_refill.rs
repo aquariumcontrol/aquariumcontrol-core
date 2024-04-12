@@ -103,12 +103,12 @@ impl SqlInterfaceRefill {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDateTime;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_refill::{SqlInterfaceRefill};
-    
+    use crate::sql_interface_refill::SqlInterfaceRefill;
+    use chrono::NaiveDateTime;
+
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_refill() {

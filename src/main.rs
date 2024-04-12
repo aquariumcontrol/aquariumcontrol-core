@@ -2,15 +2,17 @@ mod config;
 mod feedpattern;
 mod sql_interface;
 mod sql_interface_balling;
+mod sql_interface_heating;
 mod sql_interface_refill;
 
 use chrono::NaiveDateTime;
 //use std::env;
 
 use crate::config::read_config_file;
-use crate::sql_interface::HeatingStatsEntry;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_balling::SqlInterfaceBalling;
+use crate::sql_interface_heating::HeatingStatsEntry;
+use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 
 fn main() {
@@ -27,6 +29,8 @@ fn main() {
     let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
     let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+
+    let mut sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
 
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
@@ -106,7 +110,7 @@ fn main() {
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
 
-    match sql_interface.insert_heating_stats_entry(heating_stats_entry) {
+    match sql_interface_heating.insert_heating_stats_entry(heating_stats_entry) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
     };
@@ -125,7 +129,7 @@ fn main() {
         Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
     }
 
-    let heating_stats = match sql_interface.get_single_heating_stats_from_database() {
+    let heating_stats = match sql_interface_heating.get_single_heating_stats_from_database() {
         Ok(c) => c,
         Err(e) => panic!("Could not get heating stats from database:{e:?}"),
     };

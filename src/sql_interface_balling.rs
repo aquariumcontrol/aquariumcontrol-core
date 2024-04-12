@@ -76,11 +76,11 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDateTime;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_balling::{SqlInterfaceBalling};
+    use crate::sql_interface_balling::SqlInterfaceBalling;
+    use chrono::NaiveDateTime;
 
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
@@ -90,8 +90,7 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         //*** check timestamp of last Balling dosing - FAIL ************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
