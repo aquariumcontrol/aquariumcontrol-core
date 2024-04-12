@@ -1001,13 +1001,13 @@ impl SqlInterface {
 #[cfg(test)]
 pub mod tests {
     use mysql::prelude::Queryable;
-
+    
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{
         SqlInterface, SqlInterfaceError, SqlInterfaceError::SingleStringRequestNoSingleResponse,
     };
-    use chrono::{DateTime, Local, NaiveDateTime, SubsecRound, TimeZone};
+    use chrono::{Duration, DateTime, Local, NaiveDateTime, SubsecRound, TimeZone};
 
     const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
     #[derive(PartialEq, Debug)]
@@ -1040,6 +1040,13 @@ pub mod tests {
         let timestamp_dt: DateTime<Local> = Local.from_local_datetime(&timestamp_naive).unwrap();
                 
         reference_current_timestamp.signed_duration_since(timestamp_dt).num_seconds()
+    }
+    
+    /// calculate a timestamp of type NaiveDateTime which lies a defined period into the past
+    fn get_naive_timestamp_from_past(hours_in_past: i64, seconds_in_past: i64) -> NaiveDateTime {
+        let timestamp_from_past = chrono::Local::now()
+            - Duration::hours(hours_in_past) - Duration::seconds(seconds_in_past);
+        timestamp_from_past.naive_local()
     }
     
     #[test]
@@ -1150,7 +1157,54 @@ pub mod tests {
         assert_eq!(duration_since_last_refill, reference_duration_since_last_refill);
         println!("* checking duration since last refill succeeded.");
         //**************************************************************************************
+
+        //*** check refill count of last 24h (zero) - PASS *************************************
+        let refill_count_of_last_24h_zero =
+            match sql_interface.get_refill_count_of_last_24h() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill count from last 24h (target=0): {e:?}"),
+            };        
+        assert_eq!(refill_count_of_last_24h_zero, 0);
+        println!("* checking refill count (target zero) succeeded.");
+        //**************************************************************************************
+
+        //*** check refill volume of last 24h (zero) - PASS *************************************
+        let refill_volume_of_last_24h_zero =
+            match sql_interface.get_refill_volume_of_last_24h() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill volume from last 24h (target=0): {e:?}"),
+            };        
+        assert_eq!(refill_volume_of_last_24h_zero, 0.0);
+        println!("* checking refill volume (target zero) succeeded.");
+        //**************************************************************************************
         
+        //*** check refill count of last 24h (one) - PASS *************************************
+        let naive_datetime_12h_ago = get_naive_timestamp_from_past(12, 0);
+        match sql_interface.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, 0) {
+            Ok(_) => {},
+            Err(e) => {
+                panic!("Could not insert refill event in data base for test preparation: {e:?}")
+                }
+        }
+        let refill_count_of_last_24h_one =
+            match sql_interface.get_refill_count_of_last_24h() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill count from last 24h (target=1): {e:?}"),
+            };        
+        assert_eq!(refill_count_of_last_24h_one, 1);
+        println!("* checking refill count (target non-zero) succeeded.");
+        //**************************************************************************************
+
+        //*** check refill volume of last 24h (one) - PASS *************************************
+        let refill_volume_of_last_24h_one =
+            match sql_interface.get_refill_volume_of_last_24h() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill volue from last 24h (target=0.25): {e:?}"),
+            };        
+        assert_eq!(refill_volume_of_last_24h_one, 0.25);
+        println!("* checking refill volume (target non-zero) succeeded.");
+        //**************************************************************************************
+
         //*** check timestamp of last Balling dosing - FAIL ************************************
         match truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
@@ -1181,7 +1235,7 @@ pub mod tests {
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
         //**************************************************************************************
 
-        //*** check duration since last Balling dosing - PASS **********************************
+         //*** check duration since last Balling dosing - PASS **********************************
         let duration_since_last_balling_dosing =
             match sql_interface.get_duration_since_last_balling_dosing() {
                 Ok(c) => c,
