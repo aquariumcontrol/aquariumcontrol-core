@@ -1,0 +1,141 @@
+use chrono::*;
+use mysql::prelude::*;
+use mysql::*;
+
+use crate::sql_interface::sql_query_strings;
+use crate::sql_interface::SqlInterface;
+use crate::sql_interface::SqlInterfaceError;
+
+/// This struct contains the configuration and the implementation of the SQL interface for Balling.
+pub struct SqlInterfaceBalling {
+    /// Connection to database
+    pub conn: PooledConn,
+}
+
+impl SqlInterfaceBalling {
+    /// The function creates an instance of SqlInterfaceBalling.
+    pub fn new(conn: PooledConn) -> SqlInterfaceBalling {
+        SqlInterfaceBalling { conn }
+    }
+
+    /// The function retrieves the timestamp of the last Balling dosing event from SQL database.
+    fn get_last_balling_dosing_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
+        SqlInterface::get_timestamp(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP,
+        )
+    }
+
+    /// The function request current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
+    pub fn get_duration_since_last_balling_dosing(&mut self) -> Result<i64, SqlInterfaceError> {
+        let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let last_balling_dosing_datetime = match self.get_last_balling_dosing_timestamp() {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let delta_time = current_datetime - last_balling_dosing_datetime;
+
+        Ok(delta_time.num_seconds())
+    }
+
+    /// The function inserts one dataset of Balling dosing event into the database
+    pub fn insert_balling_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        pump_id: i64,
+        dosing_volume: f64,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "pump_id" => pump_id,
+            "dosing_volume" => dosing_volume,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::InsertBallingEventFailure(
+                    "Error when inserting Balling dosing event into database.".to_string(),
+                ))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use chrono::NaiveDateTime;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::sql_interface_balling::{SqlInterfaceBalling};
+
+    #[test]
+    /// all test cases for this crate combined in one function to avoid problems with multithreading
+    pub fn test_sql_interface_balling() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        //*** check timestamp of last Balling dosing - FAIL ************************************
+        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        assert_eq!(
+            sql_interface_balling.get_last_balling_dosing_timestamp(),
+            Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
+                "SQL database responded with empty response to query: \
+            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
+                    .to_string()
+            ))
+        );
+        println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
+        //**************************************************************************************
+
+        //*** check timestamp of last Balling dosing - PASS ************************************
+        let balling_timestamp =
+            NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
+        };
+        assert_eq!(
+            sql_interface_balling.get_last_balling_dosing_timestamp(),
+            Ok(balling_timestamp)
+        );
+        println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
+        //**************************************************************************************
+
+        //*** check duration since last Balling dosing - PASS **********************************
+        let duration_since_last_balling_dosing =
+            match sql_interface_balling.get_duration_since_last_balling_dosing() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
+            };
+        let reference_duration_since_last_balling_dosing =
+            SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp);
+        assert_eq!(
+            duration_since_last_balling_dosing,
+            reference_duration_since_last_balling_dosing
+        );
+        println!("* checking duration since last Balling dosing succeeded.");
+        //**************************************************************************************
+    }
+}

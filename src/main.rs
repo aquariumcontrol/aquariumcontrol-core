@@ -1,6 +1,8 @@
 mod config;
 mod feedpattern;
 mod sql_interface;
+mod sql_interface_balling;
+mod sql_interface_refill;
 
 use chrono::NaiveDateTime;
 //use std::env;
@@ -8,6 +10,8 @@ use chrono::NaiveDateTime;
 use crate::config::read_config_file;
 use crate::sql_interface::HeatingStatsEntry;
 use crate::sql_interface::SqlInterface;
+use crate::sql_interface_balling::SqlInterfaceBalling;
+use crate::sql_interface_refill::SqlInterfaceRefill;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -20,6 +24,10 @@ fn main() {
         }
     };
 
+    let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+    let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
         Err(e) => {
@@ -27,19 +35,20 @@ fn main() {
         }
     };
 
-    let duration_refill = match sql_interface.get_duration_since_last_refill() {
+    let duration_refill = match sql_interface_refill.get_duration_since_last_refill() {
         Ok(c) => c,
         Err(e) => {
             panic!("Could not get duration since last refill event: {e:?}");
         }
     };
 
-    let duration_balling_dosing = match sql_interface.get_duration_since_last_balling_dosing() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get duration since last Balling dosing event: {e:?}");
-        }
-    };
+    let duration_balling_dosing =
+        match sql_interface_balling.get_duration_since_last_balling_dosing() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get duration since last Balling dosing event: {e:?}");
+            }
+        };
 
     let duration_until_midnight = match sql_interface.get_duration_until_midnight() {
         Ok(c) => c,
@@ -48,14 +57,14 @@ fn main() {
         }
     };
 
-    let refill_volume_last_24h = match sql_interface.get_refill_volume_of_last_24h() {
+    let refill_volume_last_24h = match sql_interface_refill.get_refill_volume_of_last_24h() {
         Ok(c) => c,
         Err(e) => {
             panic!("Could not get refill volume of last 24 hours: {e:?}");
         }
     };
 
-    let refill_count_last_24h = match sql_interface.get_refill_count_of_last_24h() {
+    let refill_count_last_24h = match sql_interface_refill.get_refill_count_of_last_24h() {
         Ok(c) => c,
         Err(e) => {
             panic!("Could not get refill count of last 24 hours: {e:?}");
@@ -92,7 +101,7 @@ fn main() {
 
     let refill_timestamp =
         NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
+    match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
@@ -111,7 +120,7 @@ fn main() {
 
     let balling_timestamp =
         NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface.insert_balling_event(balling_timestamp, 1, 0.5) {
+    match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
     }
@@ -130,7 +139,6 @@ fn main() {
     for table in tables {
         println!("* {}", table);
     }
-
     println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
         "Duration since last Balling dosing is {} seconds.",
@@ -142,7 +150,6 @@ fn main() {
     );
     println!("Refill volume of last 24h is {} L.", refill_volume_last_24h);
     println!("Refill count of last 24h is {}.", refill_count_last_24h);
-
     println!("Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, Water Average={}, Water Counter={}, Control time = {}",
         heating_stats.date.to_string(),
         heating_stats.energy,
@@ -152,7 +159,6 @@ fn main() {
         heating_stats.water_temperature_average_counter,
         heating_stats.heating_control_runtime
     );
-
     println!(
         "Feed pattern: profile ID={} profile name={}",
         feedpattern.profile_id, feedpattern.profile_name

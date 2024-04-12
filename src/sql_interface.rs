@@ -7,7 +7,7 @@ use crate::feedpattern::FeedPhase;
 use crate::feedpattern::Feedpattern;
 
 /// This module contains constants of all SQL queries.
-mod sql_query_strings {
+pub mod sql_query_strings {
     /// This query provides the current data base name.
     pub const SQL_QUERY_DATABASE: &str = "select database();";
 
@@ -81,6 +81,10 @@ mod sql_query_strings {
         WaterTempAverage=#WaterTempAverage, \
         WaterTempCounter=#WaterTempCounter, \
         HeatingControlRuntime=#HeatingControlRuntime;";
+
+    // This query is used for testing. It is used also by tests of other crates, therefore it resides here and not in the test module.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -192,6 +196,7 @@ pub enum SqlInterfaceError {
     InsertFeedEventFailure(String),
     InsertRefillEventFailure(String),
     InsertBallingEventFailure(String),
+    TruncateTableFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
@@ -232,7 +237,7 @@ impl SqlInterface {
             }
         };
 
-        // Get connection
+        // Get connection for requests of main thread
         let conn = match pool.get_conn() {
             Ok(c) => c,
             Err(_) => {
@@ -243,26 +248,32 @@ impl SqlInterface {
         Ok(SqlInterface { config, pool, conn })
     }
 
+    pub fn get_connection(&self) -> PooledConn {
+        match self.pool.get_conn() {
+            Ok(c) => c,
+            Err(_) => {
+                panic!("Could not open SQL data base connection.");
+            }
+        }
+    }
+
     /// The function executes an SQL statement given as parameter and evaluates if the response is a single string value.
     fn get_single_string_from_database(
-        &mut self,
+        conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<String, SqlInterfaceError> {
         // Get single string value from database
-        let single_string_array =
-            match self
-                .conn
-                .query_map(sql_query_string, |single_string| SingleString {
-                    single_string,
-                }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleStringRequestFailure(
-                        "Could not get single string from SQL database using query:".to_string()
-                            + sql_query_string,
-                    ));
-                }
-            };
+        let single_string_array = match conn.query_map(sql_query_string, |single_string| {
+            SingleString { single_string }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleStringRequestFailure(
+                    "Could not get single string from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
 
         // check error case if there is no response
         if single_string_array.len() == 0 {
@@ -320,25 +331,22 @@ impl SqlInterface {
     }
 
     /// The function executes an SQL statement given as parameter and evaluates if the response is a single integer value.
-    fn get_single_integer_from_database(
-        &mut self,
+    pub fn get_single_integer_from_database(
+        conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<i64, SqlInterfaceError> {
         // Get single integer value from database
-        let single_integer_array =
-            match self
-                .conn
-                .query_map(sql_query_string, |single_integer| SingleInteger {
-                    single_integer,
-                }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleIntegerRequestFailure(
-                        "Could not get single integer from SQL database using query:".to_string()
-                            + sql_query_string,
-                    ));
-                }
-            };
+        let single_integer_array = match conn.query_map(sql_query_string, |single_integer| {
+            SingleInteger { single_integer }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleIntegerRequestFailure(
+                    "Could not get single integer from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
 
         // check error case if there is no response
         if single_integer_array.len() == 0 {
@@ -359,26 +367,22 @@ impl SqlInterface {
     }
 
     /// The function executes an SQL statement given as parameter and evaluates if the response is a single float value.
-    fn get_single_float_from_database(
-        &mut self,
+    pub fn get_single_float_from_database(
+        conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<f64, SqlInterfaceError> {
         // Get single float value from database
-        let single_float_array =
-            match self
-                .conn
-                .query_map(sql_query_string, |single_float| SingleFloat {
-                    single_float,
-                }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleFloatRequestFailure(
-                        "Could not get single float value from SQL database using query:"
-                            .to_string()
-                            + sql_query_string,
-                    ));
-                }
-            };
+        let single_float_array = match conn.query_map(sql_query_string, |single_float| {
+            SingleFloat { single_float }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleFloatRequestFailure(
+                    "Could not get single float value from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
 
         // check error case if there is no response
         if single_float_array.len() == 0 {
@@ -647,7 +651,10 @@ impl SqlInterface {
     /// The function triggers SQL call for a single value for retrieving the current database name.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
-        match self.get_single_string_from_database(sql_query_strings::SQL_QUERY_DATABASE) {
+        match Self::get_single_string_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_DATABASE,
+        ) {
             Ok(c) => Ok(c),
             Err(e) => {
                 println!("{e:?}");
@@ -657,12 +664,12 @@ impl SqlInterface {
     }
 
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
-    fn get_timestamp(
-        &mut self,
+    pub fn get_timestamp(
+        conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         // trigger SQL call
-        let timestamp_string = match self.get_single_string_from_database(sql_query_string) {
+        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
             Ok(c) => c,
             Err(e) => {
                 if !cfg!(test) {
@@ -682,20 +689,23 @@ impl SqlInterface {
     }
 
     /// The function retrieves the current timestamp from SQL database.
-    fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
-        self.get_timestamp(sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
+    pub fn get_current_timestamp(
+        conn: &mut PooledConn,
+    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+        Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
 
     /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type with modified formatting string.
     fn get_date(&mut self, sql_query_string: &str) -> Result<NaiveDate, SqlInterfaceError> {
         // trigger SQL call
-        let timestamp_string = match self.get_single_string_from_database(sql_query_string) {
-            Ok(c) => c,
-            Err(e) => {
-                println!("Error when retrieving single string from database: {e:?}");
-                return Err(e);
-            }
-        };
+        let timestamp_string =
+            match Self::get_single_string_from_database(&mut self.conn, sql_query_string) {
+                Ok(c) => c,
+                Err(e) => {
+                    println!("Error when retrieving single string from database: {e:?}");
+                    return Err(e);
+                }
+            };
         // convert data type
         match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
@@ -716,88 +726,14 @@ impl SqlInterface {
         self.get_date(sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
-    /// The function retrieves the timestamp of the last refill event from SQL database.
-    fn get_last_refill_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
-        self.get_timestamp(sql_query_strings::SQL_QUERY_READ_LAST_REFILL_TIMESTAMP)
-    }
-
-    /// The function retrieves the timestamp of the last Balling dosing event from SQL database.
-    fn get_last_balling_dosing_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
-        self.get_timestamp(sql_query_strings::SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP)
-    }
-
-    /// The function request current timestamp and timestamp of last refill event and calculates the difference between them in seconds.
-    pub fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
-        let current_datetime = match self.get_current_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let last_refill_datetime = match self.get_last_refill_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let delta_time = current_datetime - last_refill_datetime;
-
-        Ok(delta_time.num_seconds())
-    }
-
-    /// The function request current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
-    pub fn get_duration_since_last_balling_dosing(&mut self) -> Result<i64, SqlInterfaceError> {
-        let current_datetime = match self.get_current_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let last_balling_dosing_datetime = match self.get_last_balling_dosing_timestamp() {
-            Ok(c) => c,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let delta_time = current_datetime - last_balling_dosing_datetime;
-
-        Ok(delta_time.num_seconds())
-    }
-
     /// The function requests the duration until midnight in seconds.
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
-        match self.get_single_integer_from_database(
+        match SqlInterface::get_single_integer_from_database(
+            &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
         ) {
             Ok(c) => Ok(c),
             Err(e) => Err(e),
-        }
-    }
-
-    /// The function requests the number of water refill events in the last 24 hours
-    pub fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
-        match self.get_single_integer_from_database(
-            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => Err(e),
-        }
-    }
-
-    /// The function requests the water volume refilled in the last 24 hours
-    pub fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
-        match self.get_single_float_from_database(
-            sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                println!("{e:?}");
-                Err(e)
-            }
         }
     }
 
@@ -867,34 +803,6 @@ impl SqlInterface {
         }
     }
 
-    /// The function inserts one dataset of refill event into the database
-    pub fn insert_refill_event(
-        &mut self,
-        timestamp: NaiveDateTime,
-        duration: f64,
-        volume: f64,
-        error_code: i32,
-    ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "duration" => duration,
-            "volume" => volume,
-            "error_code" => error_code,
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::InsertRefillEventFailure(
-                    "Error when inserting refill event into database.".to_string(),
-                ))
-            }
-        }
-    }
-
     /// The function inserts one dataset of feed event into the database
     pub fn insert_feed_event(
         &mut self,
@@ -918,32 +826,6 @@ impl SqlInterface {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertFeedEventFailure(
                     "Error when inserting refill event into database.".to_string(),
-                ))
-            }
-        }
-    }
-
-    /// The function inserts one dataset of Balling dosing event into the database
-    pub fn insert_balling_event(
-        &mut self,
-        timestamp: NaiveDateTime,
-        pump_id: i64,
-        dosing_volume: f64,
-    ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_BALLING_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "pump_id" => pump_id,
-            "dosing_volume" => dosing_volume,
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::InsertBallingEventFailure(
-                    "Error when inserting Balling dosing event into database.".to_string(),
                 ))
             }
         }
@@ -995,60 +877,67 @@ impl SqlInterface {
         }
         Ok(())
     }
-    // todo: check of database version
-}
-
-#[cfg(test)]
-pub mod tests {
-    use mysql::prelude::Queryable;
-    
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::sql_interface::{
-        SqlInterface, SqlInterfaceError, SqlInterfaceError::SingleStringRequestNoSingleResponse,
-    };
-    use chrono::{Duration, DateTime, Local, NaiveDateTime, SubsecRound, TimeZone};
-
-    const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
-    #[derive(PartialEq, Debug)]
-    /// Enum codifies additional errors which the program may encounter in communication with the DB during testing
-    pub enum SqlInterfaceTestError {
-        TruncateTableFailure(String),
-    }
 
     /// the function empties the table
+    /// This function is used for testing purposes only across multiple crates.
+    #[allow(dead_code)]
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
         sql_table_name: String,
-    ) -> Result<(), SqlInterfaceTestError> {
-        let sql_query_string = str::replace(SQL_QUERY_TRUNCATE_TABLE, "#table", &sql_table_name);
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = str::replace(
+            sql_query_strings::SQL_QUERY_TRUNCATE_TABLE,
+            "#table",
+            &sql_table_name,
+        );
         match sql_interface.conn.query_drop(sql_query_string) {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
-                Err(SqlInterfaceTestError::TruncateTableFailure(
+                Err(SqlInterfaceError::TruncateTableFailure(
                     "Error when truncating table: ".to_string() + &sql_table_name,
                 ))
             }
         }
     }
 
-    /// calculates the time difference between a given timestamp of type NaiveDateTime
-    /// to the current local time in seconds
-    fn get_duration_from_naive_timestamp_to_local_now(timestamp_naive: NaiveDateTime) -> i64 {
-        let reference_current_timestamp = chrono::Local::now();
-        let timestamp_dt: DateTime<Local> = Local.from_local_datetime(&timestamp_naive).unwrap();
-                
-        reference_current_timestamp.signed_duration_since(timestamp_dt).num_seconds()
-    }
-    
     /// calculate a timestamp of type NaiveDateTime which lies a defined period into the past
-    fn get_naive_timestamp_from_past(hours_in_past: i64, seconds_in_past: i64) -> NaiveDateTime {
+    /// This function is used for testing purposes only across multiple crates.
+    #[allow(dead_code)]
+    pub fn get_naive_timestamp_from_past(
+        hours_in_past: i64,
+        seconds_in_past: i64,
+    ) -> NaiveDateTime {
         let timestamp_from_past = chrono::Local::now()
-            - Duration::hours(hours_in_past) - Duration::seconds(seconds_in_past);
+            - Duration::hours(hours_in_past)
+            - Duration::seconds(seconds_in_past);
         timestamp_from_past.naive_local()
     }
-    
+
+    /// calculates the time difference between a given timestamp of type NaiveDateTime
+    /// to the current local time in seconds
+    /// This function is used for testing purposes only across multiple crates.
+    #[allow(dead_code)]
+    pub fn get_duration_from_naive_timestamp_to_local_now(timestamp_naive: NaiveDateTime) -> i64 {
+        let reference_current_timestamp = chrono::Local::now();
+        let timestamp_dt: DateTime<Local> = Local.from_local_datetime(&timestamp_naive).unwrap();
+
+        reference_current_timestamp
+            .signed_duration_since(timestamp_dt)
+            .num_seconds()
+    }
+    // todo: check of database version
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::sql_interface::{
+        SqlInterface, SqlInterfaceError,
+    };
+    use chrono::{DateTime, Local, SubsecRound, TimeZone};
+
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface() {
@@ -1091,7 +980,7 @@ pub mod tests {
         //**************************************************************************************
 
         //*** check if current date is local date - PASS ***************************************
-        let sql_date = match sql_interface.get_current_date() {
+        let sql_date = match SqlInterface::get_current_date(&mut sql_interface) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
         };
@@ -1105,145 +994,13 @@ pub mod tests {
         //**************************************************************************************
 
         //*** check if current timestamp is local timestamp - PASS *****************************
-        let sql_timestamp = match sql_interface.get_current_timestamp() {
+        let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current timestamp from SQL database."),
         };
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
-        //**************************************************************************************
-
-        //*** check timestamp of last refill - FAIL ********************************************
-        match truncate_table(&mut sql_interface, "refill".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
-        }
-        assert_eq!(
-            sql_interface.get_last_refill_timestamp(),
-            Err(SingleStringRequestNoSingleResponse(
-                "SQL database responded with empty response to query: \
-            SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
-                    .to_string()
-            ))
-        );
-        println!("* checking timestamp of last refill (FAIL) succeeded.");
-        //**************************************************************************************
-
-        //*** check timestamp of last refill - PASS ********************************************
-        let refill_timestamp =
-            NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
-            Ok(_) => {}
-            Err(e) => panic!("Could not insert refill event into database: {e:?}"),
-        };
-        assert_eq!(
-            sql_interface.get_last_refill_timestamp(),
-            Ok(refill_timestamp)
-        );
-        println!("* checking timestamp of last refill (PASS) succeeded.");
-        //**************************************************************************************
-
-        //*** check duration since last refill - PASS ******************************************
-        let duration_since_last_refill =
-            match sql_interface.get_duration_since_last_refill() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not calculate duration since last refill: {e:?}"),
-            };        
-        let reference_duration_since_last_refill =
-            get_duration_from_naive_timestamp_to_local_now(refill_timestamp);
-        assert_eq!(duration_since_last_refill, reference_duration_since_last_refill);
-        println!("* checking duration since last refill succeeded.");
-        //**************************************************************************************
-
-        //*** check refill count of last 24h (zero) - PASS *************************************
-        let refill_count_of_last_24h_zero =
-            match sql_interface.get_refill_count_of_last_24h() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not get refill count from last 24h (target=0): {e:?}"),
-            };        
-        assert_eq!(refill_count_of_last_24h_zero, 0);
-        println!("* checking refill count (target zero) succeeded.");
-        //**************************************************************************************
-
-        //*** check refill volume of last 24h (zero) - PASS *************************************
-        let refill_volume_of_last_24h_zero =
-            match sql_interface.get_refill_volume_of_last_24h() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not get refill volume from last 24h (target=0): {e:?}"),
-            };        
-        assert_eq!(refill_volume_of_last_24h_zero, 0.0);
-        println!("* checking refill volume (target zero) succeeded.");
-        //**************************************************************************************
-        
-        //*** check refill count of last 24h (one) - PASS *************************************
-        let naive_datetime_12h_ago = get_naive_timestamp_from_past(12, 0);
-        match sql_interface.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, 0) {
-            Ok(_) => {},
-            Err(e) => {
-                panic!("Could not insert refill event in data base for test preparation: {e:?}")
-                }
-        }
-        let refill_count_of_last_24h_one =
-            match sql_interface.get_refill_count_of_last_24h() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not get refill count from last 24h (target=1): {e:?}"),
-            };        
-        assert_eq!(refill_count_of_last_24h_one, 1);
-        println!("* checking refill count (target non-zero) succeeded.");
-        //**************************************************************************************
-
-        //*** check refill volume of last 24h (one) - PASS *************************************
-        let refill_volume_of_last_24h_one =
-            match sql_interface.get_refill_volume_of_last_24h() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not get refill volue from last 24h (target=0.25): {e:?}"),
-            };        
-        assert_eq!(refill_volume_of_last_24h_one, 0.25);
-        println!("* checking refill volume (target non-zero) succeeded.");
-        //**************************************************************************************
-
-        //*** check timestamp of last Balling dosing - FAIL ************************************
-        match truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
-            Ok(_) => {}
-            Err(e) => panic!("Could not prepare test case: {e:?}"),
-        }
-        assert_eq!(
-            sql_interface.get_last_balling_dosing_timestamp(),
-            Err(SingleStringRequestNoSingleResponse(
-                "SQL database responded with empty response to query: \
-            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
-                    .to_string()
-            ))
-        );
-        println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
-        //**************************************************************************************
-
-        //*** check timestamp of last Balling dosing - PASS ************************************
-        let balling_timestamp =
-            NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface.insert_balling_event(balling_timestamp, 1, 0.5) {
-            Ok(_) => {}
-            Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
-        };
-        assert_eq!(
-            sql_interface.get_last_balling_dosing_timestamp(),
-            Ok(balling_timestamp)
-        );
-        println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
-        //**************************************************************************************
-
-         //*** check duration since last Balling dosing - PASS **********************************
-        let duration_since_last_balling_dosing =
-            match sql_interface.get_duration_since_last_balling_dosing() {
-                Ok(c) => c,
-                Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
-            };        
-        let reference_duration_since_last_balling_dosing = get_duration_from_naive_timestamp_to_local_now(balling_timestamp);
-        assert_eq!(duration_since_last_balling_dosing, reference_duration_since_last_balling_dosing);
-        println!("* checking duration since last Balling dosing succeeded.");
         //**************************************************************************************
     }
 }
