@@ -103,12 +103,28 @@ impl SqlInterfaceRefill {
 
 #[cfg(test)]
 pub mod tests {
+    use mysql::prelude::Queryable;
+
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError, sql_query_strings};
     use crate::sql_interface_refill::SqlInterfaceRefill;
-    use chrono::NaiveDateTime;
+    use chrono::{NaiveDateTime, SubsecRound};
 
+    pub struct SqlRefillEvent {
+        timestamp: String,
+        duration: f32,
+        volume: f32,
+        error_code: i32,
+    }
+    
+    pub struct RefillEvent {
+        timestamp: NaiveDateTime,
+        duration: f32,
+        volume: f32,
+        error_code: i32,
+    }
+    
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_refill() {
@@ -188,7 +204,7 @@ pub mod tests {
 
         //*** check refill count of last 24h (one) - PASS *************************************
         let naive_datetime_12h_ago = SqlInterface::get_naive_timestamp_from_past(12, 0);
-        match sql_interface_refill.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, 0) {
+        match sql_interface_refill.insert_refill_event(naive_datetime_12h_ago, 5.0, 0.25, -2) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not insert refill event in data base for test preparation: {e:?}")
@@ -211,6 +227,41 @@ pub mod tests {
             };
         assert_eq!(refill_volume_of_last_24h_one, 0.25);
         println!("* checking refill volume (target non-zero) succeeded.");
+        //**************************************************************************************
+        
+        //*** check content of last refill event - PASS ****************************************
+        // Read back refill event entry from data base
+        let single_refill_event_entry_array = match sql_interface_refill.conn.query_map(
+            sql_query_strings::SQL_QUERY_READ_REFILL_EVENT,
+            |(timestamp, duration, volume, error_code)| SqlRefillEvent {
+                timestamp,
+                duration,
+                volume,
+                error_code,
+            },
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not read refill event from data base: {e:?}");
+            }
+        };
+        // check if SQL response has right structure
+        assert_eq!(single_refill_event_entry_array.len(), 1);
+        // check if SQL response contains the correct data
+        let refill_event = RefillEvent {
+            timestamp: NaiveDateTime::parse_from_str(
+                single_refill_event_entry_array[0].timestamp.as_str(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .expect("conversion of timestamp to NaiveDate failed."),
+            duration: single_refill_event_entry_array[0].duration,
+            volume: single_refill_event_entry_array[0].volume,
+            error_code: single_refill_event_entry_array[0].error_code,
+        };
+        assert_eq!(refill_event.timestamp, naive_datetime_12h_ago.trunc_subsecs(0));
+        assert_eq!(refill_event.duration, 5.0);
+        assert_eq!(refill_event.volume, 0.25);
+        assert_eq!(refill_event.error_code, -2);
         //**************************************************************************************
     }
 }

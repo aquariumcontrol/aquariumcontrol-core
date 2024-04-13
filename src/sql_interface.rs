@@ -83,10 +83,20 @@ pub mod sql_query_strings {
     #[allow(dead_code)]
     pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 
-    /// This query is used to read the data of the last feed event from the database - used for testing only.
+    /// This query is used to read feed event from the database - used for testing only.
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
         "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
+
+    /// This query is used to read Balling dosing event from the database - used for testing only.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_READ_BALLING_EVENT: &str =
+        "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog;";
+
+    /// This query is used to read refill event from the database - used for testing only.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_READ_REFILL_EVENT: &str =
+        "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
 }
 
 /// This struct holds the configuration data for the SQL interface.

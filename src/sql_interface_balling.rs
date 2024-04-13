@@ -76,11 +76,25 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
+    use mysql::prelude::Queryable;
+    
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError, sql_query_strings};
     use crate::sql_interface_balling::SqlInterfaceBalling;
     use chrono::NaiveDateTime;
+
+    pub struct SqlBallingEvent {
+        timestamp: String,
+        pump_id: i32,
+        dosing_volume: f32,
+    }
+
+    pub struct BallingEvent {
+        timestamp: NaiveDateTime,
+        pump_id: i32,
+        dosing_volume: f32,
+    }
 
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
@@ -122,6 +136,38 @@ pub mod tests {
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
         //**************************************************************************************
 
+        //*** check content of last Balling dosing - PASS **************************************
+        // Read back Balling dosing event entry from data base
+        let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
+            sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
+            |(timestamp, pump_id, dosing_volume)| SqlBallingEvent {
+                timestamp,
+                pump_id,
+                dosing_volume,
+            },
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not read Balling dosing event from data base: {e:?}");
+            }
+        };
+        // check if SQL response has right structure
+        assert_eq!(single_balling_event_entry_array.len(), 1);
+        // check if SQL response contains the correct data
+        let balling_event = BallingEvent {
+            timestamp: NaiveDateTime::parse_from_str(
+                single_balling_event_entry_array[0].timestamp.as_str(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .expect("conversion of timestamp to NaiveDate failed."),
+            pump_id: single_balling_event_entry_array[0].pump_id,
+            dosing_volume: single_balling_event_entry_array[0].dosing_volume,
+        };
+        assert_eq!(balling_event.timestamp, balling_timestamp);
+        assert_eq!(balling_event.pump_id, 1);
+        assert_eq!(balling_event.dosing_volume, 0.5);
+        //**************************************************************************************
+        
         //*** check duration since last Balling dosing - PASS **********************************
         let duration_since_last_balling_dosing =
             match sql_interface_balling.get_duration_since_last_balling_dosing() {
