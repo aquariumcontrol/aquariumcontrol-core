@@ -77,10 +77,10 @@ impl SqlInterfaceBalling {
 #[cfg(test)]
 pub mod tests {
     use mysql::prelude::Queryable;
-    
+
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError, sql_query_strings};
+    use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_balling::SqlInterfaceBalling;
     use chrono::NaiveDateTime;
 
@@ -167,7 +167,7 @@ pub mod tests {
         assert_eq!(balling_event.pump_id, 1);
         assert_eq!(balling_event.dosing_volume, 0.5);
         //**************************************************************************************
-        
+
         //*** check duration since last Balling dosing - PASS **********************************
         let duration_since_last_balling_dosing =
             match sql_interface_balling.get_duration_since_last_balling_dosing() {

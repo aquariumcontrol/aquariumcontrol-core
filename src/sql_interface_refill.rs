@@ -107,7 +107,7 @@ pub mod tests {
 
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError, sql_query_strings};
+    use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_refill::SqlInterfaceRefill;
     use chrono::{NaiveDateTime, SubsecRound};
 
@@ -117,14 +117,14 @@ pub mod tests {
         volume: f32,
         error_code: i32,
     }
-    
+
     pub struct RefillEvent {
         timestamp: NaiveDateTime,
         duration: f32,
         volume: f32,
         error_code: i32,
     }
-    
+
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_refill() {
@@ -228,7 +228,7 @@ pub mod tests {
         assert_eq!(refill_volume_of_last_24h_one, 0.25);
         println!("* checking refill volume (target non-zero) succeeded.");
         //**************************************************************************************
-        
+
         //*** check content of last refill event - PASS ****************************************
         // Read back refill event entry from data base
         let single_refill_event_entry_array = match sql_interface_refill.conn.query_map(
@@ -258,7 +258,10 @@ pub mod tests {
             volume: single_refill_event_entry_array[0].volume,
             error_code: single_refill_event_entry_array[0].error_code,
         };
-        assert_eq!(refill_event.timestamp, naive_datetime_12h_ago.trunc_subsecs(0));
+        assert_eq!(
+            refill_event.timestamp,
+            naive_datetime_12h_ago.trunc_subsecs(0)
+        );
         assert_eq!(refill_event.duration, 5.0);
         assert_eq!(refill_event.volume, 0.25);
         assert_eq!(refill_event.error_code, -2);
