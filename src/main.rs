@@ -4,6 +4,7 @@ mod sql_interface;
 mod sql_interface_balling;
 mod sql_interface_heating;
 mod sql_interface_refill;
+mod sql_interface_feed;
 
 use chrono::NaiveDateTime;
 //use std::env;
@@ -14,6 +15,7 @@ use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::sql_interface_feed::SqlInterfaceFeed;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -31,6 +33,8 @@ fn main() {
     let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
 
     let mut sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
+
+    let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
 
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
@@ -117,7 +121,7 @@ fn main() {
 
     let feed_timestamp =
         NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
+    match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert feed event into database: {e:?}"),
     }
@@ -134,7 +138,7 @@ fn main() {
         Err(e) => panic!("Could not get heating stats from database:{e:?}"),
     };
 
-    let feedpattern = match sql_interface.get_single_feedpattern_from_database(1) {
+    let feedpattern = match sql_interface_feed.get_single_feedpattern_from_database(1) {
         Ok(c) => c,
         Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
     };

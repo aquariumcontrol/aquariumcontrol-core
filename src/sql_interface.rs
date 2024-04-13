@@ -3,9 +3,6 @@ use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
 
-use crate::feedpattern::FeedPhase;
-use crate::feedpattern::Feedpattern;
-
 /// This module contains constants of all SQL queries.
 pub mod sql_query_strings {
     /// This query provides the current data base name.
@@ -109,31 +106,6 @@ pub struct SqlInterfaceConfig {
 
     /// array of required tables
     pub db_tables: Vec<String>,
-}
-
-#[derive(Clone)]
-/// This struct holds the header information of a feed pattern.
-pub struct SqlFeedpatternHeader {
-    pub profile_id: i32,
-    pub profile_name: String,
-}
-
-#[derive(Clone)]
-/// This struct holds the data of one phase of a feed pattern as retrieved from SQL data base.
-/// The numeric data is post-processed to boolean in a subsequent step.
-pub struct SqlFeedPhase {
-    pub pause_duration: i16,
-    pub pause_skimmer: i16,
-    pub pause_main_pump_1: i16,
-    pub pause_main_pump_2: i16,
-    pub pause_aux_pump_1: i16,
-    pub pause_aux_pump_2: i16,
-    pub feed_duration: i16,
-    pub feed_skimmer: i16,
-    pub feed_main_pump_1: i16,
-    pub feed_main_pump_2: i16,
-    pub feed_aux_pump_1: i16,
-    pub feed_aux_pump_2: i16,
 }
 
 /// Struct is used to retrieve a single integer value from SQL database.
@@ -378,170 +350,6 @@ impl SqlInterface {
         Ok(single_float_array[0].single_float)
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single feed pattern header
-    pub fn get_feedpattern_header_from_database(
-        &mut self,
-        profile_id: i32,
-    ) -> Result<SqlFeedpatternHeader, SqlInterfaceError> {
-        // prepare query for header
-        let sql_query = str::replace(
-            sql_query_strings::SQL_QUERY_READ_FEEDPATTERN_HEADER,
-            "profile_id",
-            &profile_id.to_string(),
-        );
-        let single_feedpattern_entry_array =
-            match self
-                .conn
-                .query_map(sql_query.clone(), |(profile_id, profile_name)| {
-                    SqlFeedpatternHeader {
-                        profile_id,
-                        profile_name,
-                    }
-                }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                        "Could not get feed pattern header from SQL database with query:"
-                            .to_string()
-                            + sql_query.as_str(),
-                    ));
-                }
-            };
-
-        // check error case if there is no response
-        if single_feedpattern_entry_array.len() == 0 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
-        }
-        // check error case if there is more than one response
-        if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query.as_str(),
-            ));
-        }
-        let feedpattern_header = &single_feedpattern_entry_array[0];
-
-        Ok(feedpattern_header.clone())
-    }
-
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single feed pattern phase
-    pub fn get_feed_phase_from_database(
-        &mut self,
-        profile_id: i32,
-        phase_nr: i32,
-    ) -> Result<SqlFeedPhase, SqlInterfaceError> {
-        // prepare query for header
-        let sql_query_pre = str::replace(
-            sql_query_strings::SQL_QUERY_READ_FEED_PHASE,
-            "profile_id",
-            &profile_id.to_string(),
-        );
-        let sql_query = str::replace(&sql_query_pre, "#", format!("{:02}", phase_nr).as_str());
-
-        let single_feedpattern_entry_array = match self.conn.query_map(
-            sql_query.clone(),
-            |(
-                pause_duration,
-                pause_skimmer,
-                pause_main_pump_1,
-                pause_main_pump_2,
-                pause_aux_pump_1,
-                pause_aux_pump_2,
-                feed_duration,
-                feed_skimmer,
-                feed_main_pump_1,
-                feed_main_pump_2,
-                feed_aux_pump_1,
-                feed_aux_pump_2,
-            )| SqlFeedPhase {
-                pause_duration,
-                pause_skimmer,
-                pause_main_pump_1,
-                pause_main_pump_2,
-                pause_aux_pump_1,
-                pause_aux_pump_2,
-                feed_duration,
-                feed_skimmer,
-                feed_main_pump_1,
-                feed_main_pump_2,
-                feed_aux_pump_1,
-                feed_aux_pump_2,
-            },
-        ) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                    "Could not get feed pattern phase from SQL database with query: ".to_string()
-                        + sql_query.as_str(),
-                ));
-            }
-        };
-
-        // check error case if there is no response
-        if single_feedpattern_entry_array.len() == 0 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
-        }
-        // check error case if there is more than one response
-        if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
-        }
-        let feed_phase = &single_feedpattern_entry_array[0];
-
-        Ok(feed_phase.clone())
-    }
-
-    /// The function retries the header and all phases of a feed pattern from the SQL database.
-    pub fn get_single_feedpattern_from_database(
-        &mut self,
-        profile_id: i32,
-    ) -> Result<Feedpattern, SqlInterfaceError> {
-        let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
-            Ok(c) => c,
-            Err(e) => {
-                println!("{e:?}");
-                return Err(e);
-            }
-        };
-        let mut feed_phases = Vec::new();
-        for nr in 1..10 {
-            let sql_feed_phase = match self.get_feed_phase_from_database(profile_id, nr) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            let feed_phase = FeedPhase {
-                pause_duration: sql_feed_phase.pause_duration,
-                pause_skimmer: sql_feed_phase.pause_skimmer > 0,
-                pause_main_pump_1: sql_feed_phase.pause_main_pump_1 > 0,
-                pause_main_pump_2: sql_feed_phase.pause_main_pump_2 > 0,
-                pause_aux_pump_1: sql_feed_phase.pause_aux_pump_1 > 0,
-                pause_aux_pump_2: sql_feed_phase.pause_aux_pump_2 > 0,
-                feed_duration: sql_feed_phase.feed_duration,
-                feed_skimmer: sql_feed_phase.feed_skimmer > 0,
-                feed_main_pump_1: sql_feed_phase.feed_main_pump_1 > 0,
-                feed_main_pump_2: sql_feed_phase.feed_main_pump_2 > 0,
-                feed_aux_pump_1: sql_feed_phase.feed_aux_pump_1 > 0,
-                feed_aux_pump_2: sql_feed_phase.feed_aux_pump_2 > 0,
-            };
-            feed_phases.push(feed_phase);
-        }
-        Ok(Feedpattern {
-            profile_id: sql_feedpattern_header.profile_id,
-            profile_name: sql_feedpattern_header.profile_name,
-            feedphases: feed_phases,
-        })
-    }
-
     /// The function triggers SQL call for a single value for retrieving the current database name.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
@@ -618,34 +426,6 @@ impl SqlInterface {
     /// The function retrieves the current date from SQL database.
     pub fn get_current_date(&mut self) -> Result<NaiveDate, SqlInterfaceError> {
         self.get_date(sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
-    }
-
-    /// The function inserts one dataset of feed event into the database
-    pub fn insert_feed_event(
-        &mut self,
-        timestamp: NaiveDateTime,
-        feeder_run_time: f64,
-        profile_name: String,
-        profile_id: i64,
-    ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "feeder_run_time" => feeder_run_time,
-            "profile_name" => profile_name,
-            "profile_id" => profile_id,
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::InsertFeedEventFailure(
-                    "Error when inserting refill event into database.".to_string(),
-                ))
-            }
-        }
     }
 
     /// Get all tables from database
