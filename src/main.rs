@@ -2,9 +2,9 @@ mod config;
 mod feedpattern;
 mod sql_interface;
 mod sql_interface_balling;
+mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
-mod sql_interface_feed;
 
 use chrono::NaiveDateTime;
 //use std::env;
@@ -12,10 +12,10 @@ use chrono::NaiveDateTime;
 use crate::config::read_config_file;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_balling::SqlInterfaceBalling;
+use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
-use crate::sql_interface_feed::SqlInterfaceFeed;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");

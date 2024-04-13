@@ -79,7 +79,7 @@ pub mod sql_query_strings {
         WaterTempCounter=#WaterTempCounter, \
         HeatingControlRuntime=#HeatingControlRuntime;";
 
-    // This query is used for testing. It is used also by tests of other crates, therefore it resides here and not in the test module.
+    // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
     #[allow(dead_code)]
     pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 }
