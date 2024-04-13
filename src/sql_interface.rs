@@ -82,6 +82,11 @@ pub mod sql_query_strings {
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
     #[allow(dead_code)]
     pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
+
+    /// This query is used to read the data of the last feed event from the database - used for testing only.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
+        "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
 }
 
 /// This struct holds the configuration data for the SQL interface.
