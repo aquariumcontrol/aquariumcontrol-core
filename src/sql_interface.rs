@@ -64,9 +64,18 @@ pub mod sql_query_strings {
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
     /// This query is used to read oldest feed schedule entry which lies in the past.
-    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str =
-        "SELECT TimeStamp, ProfileName, IsDaily \
+    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str = "SELECT TimeStamp, ProfileName, IsDaily \
         FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
+
+    /// This query is used to update a feed schedule entry after having executing a feed pattern
+    /// which shall be repeated daily.
+    pub const SQL_QUERY_UPDATE_FEEDSCHEDULE_ENTRY: &str =
+        "UPDATE feedschedule SET Timestamp=:timestamp_new WHERE Timestamp=:timestamp_old;";
+
+    /// This query is used to update a feed schedule entry after having executing a feed pattern
+    /// which shall not be repeated daily.
+    pub const SQL_QUERY_DELETE_FEEDSCHEDULE_ENTRY: &str =
+        "DELETE FROM feedschedule WHERE Timestamp = :timestamp;";
 
     /// This query is used to write the heating statistical data into the database.
     /// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
@@ -167,6 +176,7 @@ pub enum SqlInterfaceError {
     TruncateTableFailure(String),
     FeedScheduleEntryRequestFailure(String),
     FeedScheduleEntryTimeStampConversionFailure(String),
+    SqlInterfaceErrorFeedScheduleUpdateFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.

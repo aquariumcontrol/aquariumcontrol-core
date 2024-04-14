@@ -126,10 +126,27 @@ fn main() {
         Err(e) => panic!("Could not insert feed event into database: {e:?}"),
     }
 
-    let feed_schedule_entry = match sql_interface_feed.get_feedschedule_entry_from_database() {
+    match sql_interface_feed.get_feedschedule_entry_from_database() {
         Ok(c) => match c {
-            Some(d) => d,
-            None => { panic!("Database has no feed schedule entry."); }
+            Some(mut d) => {
+                println!(
+                    "Feed schedule entry before update: timestamp={}, profile_name={}, repeat_daily={}",
+                    d.timestamp,
+                    d.profile_name,
+                    d.repeat_daily,
+                );
+                match sql_interface_feed.update_feedschedule_entry_in_database(&mut d) {
+                    Ok(()) => {
+                        println!("Update feed schedule entry");                    
+                    }
+                    Err(e) => {
+                        panic!("Error when updating feed schedule entry: {e:?}");
+                    }
+                }                                                        
+            },
+            None => {
+                println!("Database has no feed schedule entry which lies in the past.");
+            }
         },
         Err(e) => {
             panic!("Could not retrieve feed schedule information from database: {e:?}");
@@ -180,11 +197,5 @@ fn main() {
     println!(
         "Feed pattern: profile ID={} profile name={}",
         feedpattern.profile_id, feedpattern.profile_name
-    );
-    println!(
-        "Feed schedule entry: timestamp={}, profile_name={}, repeat_daily={}",
-        feed_schedule_entry.timestamp,
-        feed_schedule_entry.profile_name,
-        feed_schedule_entry.repeat_daily,
     );
 }
