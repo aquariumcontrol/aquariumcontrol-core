@@ -41,6 +41,9 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
         "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
 
+    pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
+        "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
+
     /// This query is used to read the refill volume of the last day from the data base.
     /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
@@ -177,6 +180,7 @@ pub enum SqlInterfaceError {
     FeedScheduleEntryRequestFailure(String),
     FeedScheduleEntryTimeStampConversionFailure(String),
     SqlInterfaceErrorFeedScheduleUpdateFailure(String),
+    SingleBallingSetValRequestFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.

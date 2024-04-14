@@ -724,7 +724,7 @@ pub mod tests {
         };
         println!("* reading existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************
-        
+
         // *** check updating feed schedule with repetion ***************************************
         match sql_interface_feed
             .update_feedschedule_entry_in_database(&mut feedschedule_entry_before_update)
@@ -735,7 +735,9 @@ pub mod tests {
             }
         }
 
-        let mut feedschedule_entry_after_update = match sql_interface_feed.get_feedschedule_entry_from_database() {
+        let mut feedschedule_entry_after_update = match sql_interface_feed
+            .get_feedschedule_entry_from_database()
+        {
             Ok(c) => match c {
                 Some(d) => {
                     assert_eq!(
@@ -756,7 +758,7 @@ pub mod tests {
         };
         println!("* update existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************
-        
+
         // *** check updating feed schedule without repetion ************************************
         // modify existing feed schedule entry -> it shall be deleted with call to update
         feedschedule_entry_after_update.repeat_daily = false;
@@ -772,10 +774,10 @@ pub mod tests {
         match sql_interface_feed.get_feedschedule_entry_from_database() {
             Ok(c) => {
                 assert_eq!(c, None);
-            },
+            }
             Err(_) => {
                 panic!("Error when trying to load feed schedule entry from empty table.");
-            },
+            }
         };
         println!("* deleting existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************

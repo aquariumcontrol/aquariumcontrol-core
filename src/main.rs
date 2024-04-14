@@ -159,6 +159,11 @@ fn main() {
         Ok(_) => {}
         Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
     }
+    let balling_setval_pump1 =
+        match sql_interface_balling.get_single_balling_setval_from_database(1) {
+            Ok(c) => c,
+            Err(e) => panic!("Could not retrieve Balling set values from database: {e:?}"),
+        };
 
     let heating_stats = match sql_interface_heating.get_single_heating_stats_from_database() {
         Ok(c) => c,
@@ -169,7 +174,6 @@ fn main() {
         Ok(c) => c,
         Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
     };
-
     println!("Read the following tables from database:");
     for table in tables {
         println!("* {}", table);
@@ -178,6 +182,13 @@ fn main() {
     println!(
         "Duration since last Balling dosing is {} seconds.",
         duration_balling_dosing
+    );
+    println!(
+        "Balling set values are: pump_id={}, dosing_speed={}, dosing_volume={}, label={}",
+        balling_setval_pump1.pump_id,
+        balling_setval_pump1.dosing_speed,
+        balling_setval_pump1.dosing_volume,
+        balling_setval_pump1.label
     );
     println!(
         "Duration until midnight is {} seconds.",
