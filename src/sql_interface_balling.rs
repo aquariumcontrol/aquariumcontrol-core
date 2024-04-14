@@ -106,7 +106,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-        //*** check timestamp of last Balling dosing - FAIL ************************************
+        // *** check timestamp of last Balling dosing - FAIL ************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -120,9 +120,9 @@ pub mod tests {
             ))
         );
         println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check timestamp of last Balling dosing - PASS ************************************
+        // *** check timestamp of last Balling dosing - PASS ************************************
         let balling_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
@@ -134,9 +134,9 @@ pub mod tests {
             Ok(balling_timestamp)
         );
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check content of last Balling dosing - PASS **************************************
+        // *** check content of last Balling dosing - PASS **************************************
         // Read back Balling dosing event entry from data base
         let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
@@ -166,9 +166,9 @@ pub mod tests {
         assert_eq!(balling_event.timestamp, balling_timestamp);
         assert_eq!(balling_event.pump_id, 1);
         assert_eq!(balling_event.dosing_volume, 0.5);
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check duration since last Balling dosing - PASS **********************************
+        // *** check duration since last Balling dosing - PASS **********************************
         let duration_since_last_balling_dosing =
             match sql_interface_balling.get_duration_since_last_balling_dosing() {
                 Ok(c) => c,
@@ -181,6 +181,6 @@ pub mod tests {
             reference_duration_since_last_balling_dosing
         );
         println!("* checking duration since last Balling dosing succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
     }
 }

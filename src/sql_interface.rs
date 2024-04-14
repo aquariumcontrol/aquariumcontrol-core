@@ -66,7 +66,7 @@ pub mod sql_query_strings {
     /// This query is used to read oldest feed schedule entry which lies in the past.
     pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str =
         "SELECT TimeStamp, ProfileName, IsDaily \
-        FROM aquarium.feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
+        FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
 
     /// This query is used to write the heating statistical data into the database.
     /// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
@@ -575,12 +575,12 @@ pub mod tests {
             database_name_from_db
         );
 
-        //*** check if required tables are existing - PASS *************************************
+        // *** check if required tables are existing - PASS *************************************
         assert_eq!(sql_interface.check_required_tables_existing(), Ok(()));
         println!("* checking required tables (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check if required tables are existing - FAIL *************************************
+        // *** check if required tables are existing - FAIL *************************************
         sql_interface.config.db_tables.push("dummy".to_string());
         assert_eq!(
             sql_interface.check_required_tables_existing(),
@@ -594,9 +594,9 @@ pub mod tests {
             ))
         );
         println!("* checking required tables (FAIL) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check if current date is local date - PASS ***************************************
+        // *** check if current date is local date - PASS ***************************************
         let sql_date = match SqlInterface::get_current_date(&mut sql_interface) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
@@ -608,9 +608,9 @@ pub mod tests {
             .to_string();
         assert_eq!(sql_date_string, local_date_string);
         println!("* checking current date (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** check if current timestamp is local timestamp - PASS *****************************
+        // *** check if current timestamp is local timestamp - PASS *****************************
         let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current timestamp from SQL database."),
@@ -618,6 +618,6 @@ pub mod tests {
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
     }
 }

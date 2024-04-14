@@ -218,7 +218,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
 
-        //*** retrieve heating stats - FAIL ****************************************************
+        // *** retrieve heating stats - FAIL ****************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "heatingstats".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -239,9 +239,9 @@ pub mod tests {
             }
         }
         println!("* checking retrieving heating stats (FAIL) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** insert heating stats - PASS ******************************************************
+        // *** insert heating stats - PASS ******************************************************
         // prepare data for inserting into database
         let today = match sql_interface.get_current_date() {
             Ok(c) => c,
@@ -261,9 +261,9 @@ pub mod tests {
             Ok(())
         );
         println!("* checking inserting heating stats (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** retrieve stats - PASS ************************************************************
+        // *** retrieve stats - PASS ************************************************************
         match sql_interface_heating.get_single_heating_stats_from_database() {
             Ok(c) => {
                 assert_eq!(c.date, today.into());
@@ -280,7 +280,7 @@ pub mod tests {
         }
         println!("* checking retrieving heating stats (PASS) succeeded.");
 
-        //*** retrieve stats - PASS ************************************************************
+        // *** retrieve stats - PASS ************************************************************
         // update data and trigger SQL statement (ON DUPLICATE UPDATE)
         heating_stats_entry.energy += 0.1;
         heating_stats_entry.ambient_temperature_average_value += 0.1;
@@ -307,9 +307,9 @@ pub mod tests {
             }
         }
         println!("* checking retrieving updated heating stats (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
 
-        //*** calculate duration until midnight ************************************************
+        // *** calculate duration until midnight ************************************************
         // reference calculation in Rust
         // Get current date components
         let now = Local::now();
@@ -334,6 +334,6 @@ pub mod tests {
             }
         }
         println!("* checking duration until midnight in seconds (PASS) succeeded.");
-        //**************************************************************************************
+        // **************************************************************************************
     }
 }
