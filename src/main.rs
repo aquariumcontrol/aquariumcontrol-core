@@ -126,6 +126,16 @@ fn main() {
         Err(e) => panic!("Could not insert feed event into database: {e:?}"),
     }
 
+    let feed_schedule_entry = match sql_interface_feed.get_feedschedule_entry_from_database() {
+        Ok(c) => match c {
+            Some(d) => d,
+            None => { panic!("Database has no feed schedule entry."); }
+        },
+        Err(e) => {
+            panic!("Could not retrieve feed schedule information from database: {e:?}");
+        }
+    };
+
     let balling_timestamp =
         NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
@@ -170,5 +180,11 @@ fn main() {
     println!(
         "Feed pattern: profile ID={} profile name={}",
         feedpattern.profile_id, feedpattern.profile_name
+    );
+    println!(
+        "Feed schedule entry: timestamp={}, profile_name={}, repeat_daily={}",
+        feed_schedule_entry.timestamp,
+        feed_schedule_entry.profile_name,
+        feed_schedule_entry.repeat_daily,
     );
 }

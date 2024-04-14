@@ -63,6 +63,11 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
+    /// This query is used to read oldest feed schedule entry which lies in the past.
+    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str =
+        "SELECT TimeStamp, ProfileName, IsDaily \
+        FROM aquarium.feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
+
     /// This query is used to write the heating statistical data into the database.
     /// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
     pub const SQL_QUERY_WRITE_HEATING_STATS: &str = "insert into heatingstats \
@@ -160,6 +165,8 @@ pub enum SqlInterfaceError {
     InsertRefillEventFailure(String),
     InsertBallingEventFailure(String),
     TruncateTableFailure(String),
+    FeedScheduleEntryRequestFailure(String),
+    FeedScheduleEntryTimeStampConversionFailure(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
