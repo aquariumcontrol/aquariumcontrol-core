@@ -137,13 +137,13 @@ fn main() {
                 );
                 match sql_interface_feed.update_feedschedule_entry_in_database(&mut d) {
                     Ok(()) => {
-                        println!("Update feed schedule entry");                    
+                        println!("Update feed schedule entry");
                     }
                     Err(e) => {
                         panic!("Error when updating feed schedule entry: {e:?}");
                     }
-                }                                                        
-            },
+                }
+            }
             None => {
                 println!("Database has no feed schedule entry which lies in the past.");
             }
