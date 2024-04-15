@@ -3,7 +3,6 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterface;
 use crate::sql_interface::SqlInterfaceError;
 
 pub struct DataFrame {

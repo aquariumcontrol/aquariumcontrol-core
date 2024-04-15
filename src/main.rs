@@ -14,6 +14,7 @@ use crate::config::read_config_file;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::SqlInterfaceData;
+use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
@@ -37,6 +38,8 @@ fn main() {
     let mut sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
 
     let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+
+    let mut sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
@@ -176,6 +179,36 @@ fn main() {
         Ok(c) => c,
         Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
     };
+
+    let current_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
+        Ok(c) => c,
+        Err(e) => {
+            panic!("Could not get current timestamp from database: {e:?}");
+        }
+    };
+    let dataframe = DataFrame {
+        timestamp: current_timestamp,
+        water_temperature: 25.5,
+        water_temperature_filtered: 25.0,
+        ph: 7.0,
+        ph_filtered: 7.5,
+        conductivity: 50000.0,
+        conductivity_filtered: 51000.0,
+        conductivity_compensated: 52000.0,
+        refill_in_progress: false,
+        main_tank_level_switch_status: false,
+        surface_ventilation_status: true,
+        ambient_temperature: 22.0,
+        ambient_humidity: 60.0,
+        heater_status: true,
+    };
+    match sql_interface_data.write_data_frame_to_database(dataframe) {
+        Ok(()) => {}
+        Err(e) => {
+            panic!("Could not write dataframe to database: {e:?}");
+        }
+    }
+
     println!("Read the following tables from database:");
     for table in tables {
         println!("* {}", table);
