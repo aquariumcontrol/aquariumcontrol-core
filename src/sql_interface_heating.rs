@@ -129,6 +129,7 @@ impl SqlInterfaceHeating {
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
     ) -> Result<(), SqlInterfaceError> {
+        // replace signals inside the ON DUPLICATE clause
         let sql_query_energy_replaced = str::replace(
             sql_query_strings::SQL_QUERY_WRITE_HEATING_STATS,
             "#Energy",
