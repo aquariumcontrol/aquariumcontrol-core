@@ -13,8 +13,8 @@ use chrono::NaiveDateTime;
 use crate::config::read_config_file;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_balling::SqlInterfaceBalling;
-use crate::sql_interface_data::SqlInterfaceData;
 use crate::sql_interface_data::DataFrame;
+use crate::sql_interface_data::SqlInterfaceData;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
@@ -202,7 +202,7 @@ fn main() {
         ambient_humidity: 60.0,
         heater_status: true,
     };
-    match sql_interface_data.write_data_frame_to_database(dataframe) {
+    match sql_interface_data.write_data_frame_to_database(&dataframe) {
         Ok(()) => {}
         Err(e) => {
             panic!("Could not write dataframe to database: {e:?}");

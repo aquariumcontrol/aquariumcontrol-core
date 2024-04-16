@@ -97,49 +97,25 @@ pub mod sql_query_strings {
         HeatingControlRuntime=#HeatingControlRuntime;";
 
     /// This query is used to write time-based data into the database.
-    /// Since insert operation for the library is limited to 12 columns,
-    /// this query will update the first part of the table.
-    #[allow(dead_code)]
-    pub const SQL_QUERY_WRITE_DATA_1: &str = "insert into data \
+    pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         (Timestamp, \
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
-        Conductivity, ConductivityFiltered, ConductivityCompensated) \
+        Conductivity, ConductivityFiltered, ConductivityCompensated,
+        RefillInProgress, MainTankLevelSwitchStatus, SurfaceVentilation,
+        AmbTemp, AmbHum, Heater) \
         values (:timestamp, \
-        :water_temperature, :water_temperature_filtered, \
-        :ph, :ph_filtered, \
-        :conductivity, :conductivity_filtered, :conductivity_compensated) \
-        ON DUPLICATE KEY UPDATE \";
+        #TemperatureUnfiltered, #TemperatureFiltered, \
+        #pHUnfiltered, #pHFiltered, \
+        #ConductivityUnfiltered, #ConductivityFiltered, #ConductivityCompensated, \
+        #RefillInProgress, #MainTankLevelSwitchStatus, #SurfaceVentilation,
+        #AmbTemp, #AmbHum, #Heater) \
+        ON DUPLICATE KEY UPDATE \
         Temperature=#TemperatureUnfiltered, TemperatureFiltered=#TemperatureFiltered, \
         pH=#pHUnfiltered, pHFiltered=#pHFiltered, \
-        Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, ConductivityCompensated=#ConductivityCompensated);";
-
-    /// This query is used to write time-based data into the database.
-    /// Since insert operation for the library is limited to 12 columns,
-    /// this query will update the second part of the table.
-    #[allow(dead_code)]
-    pub const SQL_QUERY_WRITE_DATA_2: &str = "insert into data \
-        (Timestamp, \
-        RefillInProgress, \
-        MainTankLevelSwitchStatus, \
-        SurfaceVentilation, \
-        AmbTemp, \
-        AmbHum, \
-        Heater) \
-        values (:timestamp, \
-        :refill_in_progress, \
-        :main_tank_level_switch_status, \
-        :surface_ventilation, \
-        :ambient_temperature, \
-        :ambient_humidity, \
-        :heater_status) \
-        ON DUPLICATE KEY UPDATE \
-        RefillInProgress=#RefillInProgress, \
-        MainTankLevelSwitchStatus=#MainTankLevelSwitchStatus, \
-        SurfaceVentilation=#SurfaceVentilation, \
-        AmbTemp=#AmbTemp, \
-        AmbHum=#AmbTemp, \
-        Heater=#Heater);";
+        Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, ConductivityCompensated=#ConductivityCompensated, \
+        RefillInProgress=#RefillInProgress, MainTankLevelSwitchStatus=#MainTankLevelSwitchStatus, SurfaceVentilation=#SurfaceVentilation, \
+        AmbTemp=#AmbTemp, AmbHum=#AmbHum, Heater=#Heater;";
 
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
     #[allow(dead_code)]
@@ -227,6 +203,8 @@ pub enum SqlInterfaceError {
     SqlInterfaceErrorFeedScheduleUpdateFailure(String),
     SingleBallingSetValRequestFailure(String),
     InsertDataFrameFailure(String),
+    #[allow(dead_code)]
+    SingleDataFrameRequestNoSingleResponse(String),
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface.
