@@ -3,8 +3,15 @@ use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
 
+use crate::version_information::VersionInformation;
+
 /// This module contains constants of all SQL queries.
 pub mod sql_query_strings {
+    /// This query provides version retrieves checks if the current application is listed in the table of supported versions.
+    /// It informs wether the version is supported and which hash is stored in the database for the version.
+    pub const SQL_QUERY_VERSION_INFORMATION: &str =
+        "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build;";
+
     /// This query provides the current data base name.
     pub const SQL_QUERY_DATABASE: &str = "select database();";
 
@@ -180,8 +187,11 @@ struct SingleFloat {
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
     ConnectionPoolFailure(String),
-    RequiredTablesNotExisting(String),
+    RequiredTablesNotExisting,
     ShowTablesWithoutProperResult(String),
+    SingleVersionRequestFailure(String),
+    SingleVersionRequestNotListed(String),
+    SingleVersionRequestMultipleResults,
     SingleStringRequestFailure(String),
     SingleStringRequestNoSingleResponse(String),
     SingleIntegerRequestFailure(String),
@@ -299,6 +309,62 @@ impl SqlInterface {
             ));
         }
         Ok(single_string_array[0].single_string.clone())
+    }
+
+    /// The function executes an SQL statement and evaluates if the response is empty, a single string value or contains multiple results.
+    pub fn get_hash_from_database(
+        &mut self,
+        version_information: &VersionInformation,
+    ) -> Result<String, SqlInterfaceError> {
+        // Get single string value from database
+        let sql_query_string_major_replaced = str::replace(
+            sql_query_strings::SQL_QUERY_VERSION_INFORMATION,
+            "#major",
+            &version_information.major.to_string(),
+        );
+        let sql_query_string_minor_replaced = str::replace(
+            &sql_query_string_major_replaced,
+            "#minor",
+            &version_information.minor.to_string(),
+        );
+        let sql_query_string = str::replace(
+            &sql_query_string_minor_replaced,
+            "#build",
+            &version_information.build.to_string(),
+        );
+
+        let single_string_array = match self
+            .conn
+            .query_map(sql_query_string.clone(), |single_string| SingleString {
+                single_string,
+            }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleVersionRequestFailure(
+                    "Could not get single string from SQL database using query:".to_string()
+                        + &sql_query_string,
+                ));
+            }
+        };
+
+        // check error case if there is no response
+        if single_string_array.len() == 0 {
+            return Err(SqlInterfaceError::SingleVersionRequestNotListed(
+                "SQL database responded with empty response to query: ".to_owned()
+                    + &sql_query_string,
+            ));
+        }
+
+        // check error case if there is more than one response
+        if single_string_array.len() > 1 {
+            println!(
+                "SQL database responded with multiple responses to request to query: {}",
+                sql_query_string
+            );
+            Err(SqlInterfaceError::SingleVersionRequestMultipleResults)
+        } else {
+            Ok(single_string_array[0].single_string.clone())
+        }
     }
 
     /// The function executes an SQL statement given as parameter and evaluates if the response consists of multiple (> 1) rows.
@@ -524,15 +590,15 @@ impl SqlInterface {
         ) {
             let required_tables_string = &self.config.db_tables.join(",");
             let existing_tables_string = &existing_tables.join(",");
-            let error_message = "Required tables (".to_string()
-                + required_tables_string
-                + ") are not existing in database ("
-                + existing_tables_string
-                + ").";
+            println!(
+                "Required tables ({}) are not existing in database ({}).",
+                required_tables_string, existing_tables_string
+            );
 
-            return Err(SqlInterfaceError::RequiredTablesNotExisting(error_message));
+            Err(SqlInterfaceError::RequiredTablesNotExisting)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     /// the function empties the table
@@ -622,14 +688,7 @@ pub mod tests {
         sql_interface.config.db_tables.push("dummy".to_string());
         assert_eq!(
             sql_interface.check_required_tables_existing(),
-            Err(SqlInterfaceError::RequiredTablesNotExisting(
-                "Required tables (ballingdosinglog,ballingsetvals,data,\
-                    feedlog,feedpatterns,feedschedule,heatingstats,refill,schedule,users,dummy) \
-                    are not existing in database \
-                    (ballingdosinglog,ballingsetvals,data,feedlog,feedpatterns,feedschedule\
-                        ,heatingstats,refill,schedule,users)."
-                    .to_string()
-            ))
+            Err(SqlInterfaceError::RequiredTablesNotExisting)
         );
         println!("* checking required tables (FAIL) succeeded.");
         // **************************************************************************************

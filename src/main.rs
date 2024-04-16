@@ -6,12 +6,13 @@ mod sql_interface_data;
 mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
+mod version_information;
 
 use chrono::NaiveDateTime;
 //use std::env;
 
 use crate::config::read_config_file;
-use crate::sql_interface::SqlInterface;
+use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
@@ -19,10 +20,14 @@ use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::version_information::VersionInformation;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
     let config = read_config_file("/config/aquarium_control.toml".to_string());
+
+    let version_information = VersionInformation::new();
+    println!("Hash of this executable is: {}", version_information.hash);
 
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
@@ -47,6 +52,25 @@ fn main() {
             panic!("Could not read list of tables from SQL database: {e:?}");
         }
     };
+
+    match sql_interface.get_hash_from_database(&version_information) {
+        Ok(c) => {
+            println!(
+                "Version information including hash of executable found in database: {}",
+                c
+            );
+            if c != version_information.hash {
+                println!("*** WARNING *** hash value for version in database does not match hash version of executable. Proceed with caution.");
+            }
+        }
+        Err(e) => {
+            if e == SqlInterfaceError::SingleVersionRequestMultipleResults {
+                println!("*** WARNING *** found multiple hash values for version in database. Proceed with caution.");
+            } else {
+                panic!("Could not find version information in database: {e:?}");
+            }
+        }
+    }
 
     let duration_refill = match sql_interface_refill.get_duration_since_last_refill() {
         Ok(c) => c,
