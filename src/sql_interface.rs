@@ -654,13 +654,16 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::version_information::VersionInformation;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use chrono::{DateTime, Local, SubsecRound, TimeZone};
+    use mysql::prelude::Queryable;
+    use mysql::params;
 
     #[test]
-    /// all test cases for this crate combined in one function to avoid problems with multithreading
+    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
     pub fn test_sql_interface() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
@@ -716,5 +719,106 @@ pub mod tests {
         assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
         // **************************************************************************************
+    }
+
+    pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
+        "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
+            
+    #[test]
+    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
+    pub fn test_sql_interface_version() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed.");
+
+        // *** check error response when querying empty table - FAIL ***********************************
+        let version_information = VersionInformation::new();
+        match SqlInterface::truncate_table(&mut sql_interface, "version".to_string()) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        match sql_interface.get_hash_from_database(&version_information) {
+            Ok(_) => {
+                panic!("Found version information in truncated table.");
+            },
+            Err(e) => {
+                
+                assert_eq!(e, SqlInterfaceError::SingleVersionRequestNotListed(
+                    "SQL database responded with empty response to query: \
+                    SELECT hash FROM version WHERE major=".to_string() +
+                    &version_information.major.to_string() + &" AND minor=".to_string() +
+                    &version_information.minor.to_string() + &" AND build=".to_string() +
+                    &version_information.build.to_string() + &";".to_string()));
+            }
+        }
+        // *********************************************************************************************
+        
+        // *** check error response when version information does not match entry in database - FAIL ***
+        let unknown_version_information = VersionInformation {
+            major: -1,
+            minor: -1,
+            build: -1,
+            hash: "void".to_string(),
+        };
+        let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
+        match sql_interface.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "major" => unknown_version_information.major,
+            "minor" => unknown_version_information.minor,
+            "build" => unknown_version_information.build,
+            "hash" => unknown_version_information.hash.clone(),
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting version information into database: {e:?}");
+            }
+        };
+        match sql_interface.get_hash_from_database(&version_information) {
+            Ok(_) => {
+                panic!("Found correct version information although having inserted incorrect version information table.");
+            },
+            Err(e) => {
+                assert_eq!(e, SqlInterfaceError::SingleVersionRequestNotListed(
+                    "SQL database responded with empty response to query: \
+                    SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;".to_string()));
+            }
+        }        
+
+        // *** check error response when hash is incorrect - FAIL ********************************
+        let version_information_with_wrong_hash = VersionInformation {
+            major: version_information.major,
+            minor: version_information.minor,
+            build: version_information.build,
+            hash: "wrong".to_string()
+        };
+        let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
+        match sql_interface.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "major" => version_information_with_wrong_hash.major,
+            "minor" => version_information_with_wrong_hash.minor,
+            "build" => version_information_with_wrong_hash.build,
+            "hash" => version_information_with_wrong_hash.hash.clone(),
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting version information into database: {e:?}");
+            }
+        };
+        match sql_interface.get_hash_from_database(&version_information) {
+            Ok(c) => {
+                let reference_hash = &version_information_with_wrong_hash.hash;
+                assert_eq!(&c, reference_hash);
+            },
+            Err(e) => {
+                panic!("Error retrieving version information from database: {e:?}");
+            }
+        }        
+        // ***************************************************************************************
     }
 }
