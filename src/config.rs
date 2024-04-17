@@ -1,4 +1,5 @@
 use crate::sql_interface::SqlInterfaceConfig;
+use crate::tcp_communication::TcpConnectionConfig;
 use serde_derive::Deserialize;
 use std::fs;
 
@@ -7,6 +8,7 @@ use std::fs;
 #[derive(Deserialize)]
 pub struct ConfigData {
     pub sql_interface: SqlInterfaceConfig,
+    pub tcp_connection: TcpConnectionConfig,
 }
 
 /// The function loads the configuration data described in a struct of type ConfigData from the .toml file.

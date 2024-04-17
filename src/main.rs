@@ -7,6 +7,7 @@ mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
 mod version_information;
+mod tcp_communication;
 
 use chrono::NaiveDateTime;
 //use std::env;
@@ -21,6 +22,7 @@ use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::version_information::VersionInformation;
+use crate::tcp_communication::TcpCommunication;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -268,4 +270,6 @@ fn main() {
         "Feed pattern: profile ID={} profile name={}",
         feedpattern.profile_id, feedpattern.profile_name
     );
+    
+    let tcp_communication = TcpCommunication::new(config.tcp_connection);
 }

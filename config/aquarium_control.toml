@@ -4,4 +4,9 @@ db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium"
-db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ] 
+db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
+
+[tcp_connection]
+ip_address = "192.168.1.27"                           # ipv4 address for communication with control application for testing purposes
+port = 35000                                          # port number for communication with control application for testing purposes
+
