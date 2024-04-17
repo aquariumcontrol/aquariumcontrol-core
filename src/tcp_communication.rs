@@ -1,7 +1,7 @@
 use std::io;
-use std::io::prelude::*;
-use std::net::TcpStream;
-
+use std::{
+    net::TcpStream,
+    io::{prelude::*, BufReader}};
 use serde_derive::Deserialize;
 
 /// This module contains constants representing commands received from control application.
@@ -65,16 +65,21 @@ impl TcpCommunication {
                 return Err(TcpCommunicationError::ConnectionFailed(e));
             }
         };
-    
+        let mut buf_reader = BufReader::new(&stream);
         let request = category::ATLASSCIENTIFIC.to_string() + " " + command::READ + " " + signal::ATLASSCIENTIFICTEMPERATURE + "\n";
         
-        match stream.write(request.as_bytes()) {
+        println!("Writing...");
+        let mut write_stream = stream.try_clone().unwrap();
+        match write_stream.write(request.as_bytes()) {
             Ok(_) => { },
             Err(e) => {panic!("{e:?}");}
         };
+        let _ = write_stream.flush();
         
+        println!("Reading...");
         let mut response = String::new();
-        match stream.read_to_string(&mut response) {
+        response.clear();
+        match buf_reader.read_line(&mut response) {
             Ok(_) => {},
             Err(e) => {panic!("{e:?}");}
         };
