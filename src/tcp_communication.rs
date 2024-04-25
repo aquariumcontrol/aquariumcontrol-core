@@ -1,8 +1,11 @@
+use serde_derive::Deserialize;
 use std::io;
 use std::{
+    io::{prelude::*, BufReader},
     net::TcpStream,
-    io::{prelude::*, BufReader}};
-use serde_derive::Deserialize;
+};
+
+use crate::channel_content::AquariumSignal;
 
 /// This module contains constants representing commands received from control application.
 #[allow(dead_code)]
@@ -30,7 +33,7 @@ mod category {
 /// This module contains constants representing the signal request received from control application.
 #[allow(dead_code)]
 mod signal {
-    #[allow(dead_code)]    
+    #[allow(dead_code)]
     pub const AMBIENTTEMPERATURE: &str = "AmbTemp";
     pub const AMBIENTHUMIDITY: &str = "AmbHum";
     pub const TANKLEVELSWITCHPOSITION: &str = "TnkLvlSwtch";
@@ -53,41 +56,86 @@ pub enum TcpCommunicationError {
 
 pub struct TcpCommunication {
     tcp_connection_config: TcpConnectionConfig,
-    stream: TcpStream,
+    write_stream: TcpStream,
+    buf_reader: BufReader<TcpStream>,
 }
 
 impl TcpCommunication {
-    pub fn new(tcp_connection: TcpConnectionConfig) -> Result<TcpCommunication, TcpCommunicationError>  {
-        let mut stream = match TcpStream::connect(tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string()) {
+    /// split a string into multiple words using space as delimiter and return the last word
+    fn get_last_word(sequence: &String) -> Option<&str> {
+        let words = sequence.split(" ").collect::<Vec<&str>>();
+        words.last().copied()
+    }
+
+    /// instantiate a struct of type TcpCommunication
+    pub fn new(
+        tcp_connection: TcpConnectionConfig,
+    ) -> Result<TcpCommunication, TcpCommunicationError> {
+        let mut stream = match TcpStream::connect(
+            tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
+        ) {
             Ok(c) => c,
             Err(e) => {
-                println!("Error when trying to connect to {} via port {}: {e:?}", tcp_connection.ip_address, tcp_connection.port);
+                println!(
+                    "Error when trying to connect to {} via port {}: {e:?}",
+                    tcp_connection.ip_address, tcp_connection.port
+                );
                 return Err(TcpCommunicationError::ConnectionFailed(e));
             }
         };
-        let mut buf_reader = BufReader::new(&stream);
-        let request = category::ATLASSCIENTIFIC.to_string() + " " + command::READ + " " + signal::ATLASSCIENTIFICTEMPERATURE + "\n";
-        
-        println!("Writing...");
-        let mut write_stream = stream.try_clone().unwrap();
-        match write_stream.write(request.as_bytes()) {
-            Ok(_) => { },
-            Err(e) => {panic!("{e:?}");}
+        Ok(TcpCommunication {
+            tcp_connection_config: tcp_connection,
+            write_stream: stream.try_clone().unwrap(),
+            buf_reader: BufReader::new(stream),
+        })
+    }
+
+    /// communicate with simulator to get water temperature
+    pub fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
+        let tcp_signal_identifier = match aquarium_signal {
+            AquariumSignal::WaterTemperature => signal::ATLASSCIENTIFICTEMPERATURE,
+            AquariumSignal::pH => signal::ATLASSCIENTIFICPH,
+            AquariumSignal::Conductivity => signal::ATLASSCIENTIFICCONDUCTIVITY,
+            AquariumSignal::AmbientTemperature => signal::AMBIENTTEMPERATURE,
+            AquariumSignal::AmbientHumidity => signal::AMBIENTHUMIDITY,
+            AquariumSignal::TankLevelSwitch => signal::TANKLEVELSWITCHPOSITION,
+            AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,            
         };
-        let _ = write_stream.flush();
-        
+        let request = category::ATLASSCIENTIFIC.to_string()
+            + " "
+            + command::READ
+            + " "
+            + signal::ATLASSCIENTIFICTEMPERATURE
+            + "\n";
+
+        println!("Writing...");
+        match self.write_stream.write(request.as_bytes()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("{e:?}");
+            }
+        };
+        let _ = self.write_stream.flush();
+
         println!("Reading...");
         let mut response = String::new();
         response.clear();
-        match buf_reader.read_line(&mut response) {
-            Ok(_) => {},
-            Err(e) => {panic!("{e:?}");}
+        match self.buf_reader.read_line(&mut response) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("{e:?}");
+            }
         };
         println!("Read from TCP: {}", response);
-        
-        Ok(TcpCommunication {
-            tcp_connection_config: tcp_connection,
-            stream: stream,
-        })
+        match Self::get_last_word(&response) {
+            Some(last_word) => {
+                println!("Last word of response is {}", last_word);
+                last_word.parse::<f32>().unwrap()
+            }
+            None => {
+                println!("Response does not contain any words.");
+                0.0 // todo: replace default value with error
+            }
+        }
     }
 }

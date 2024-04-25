@@ -654,13 +654,13 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::version_information::VersionInformation;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::version_information::VersionInformation;
     use chrono::{DateTime, Local, SubsecRound, TimeZone};
-    use mysql::prelude::Queryable;
     use mysql::params;
+    use mysql::prelude::Queryable;
 
     #[test]
     /// all test cases for this crate/table combined in one function to avoid problems with multithreading
@@ -723,7 +723,7 @@ pub mod tests {
 
     pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
         "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
-            
+
     #[test]
     /// all test cases for this crate/table combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_version() {
@@ -742,19 +742,26 @@ pub mod tests {
         match sql_interface.get_hash_from_database(&version_information) {
             Ok(_) => {
                 panic!("Found version information in truncated table.");
-            },
+            }
             Err(e) => {
-                
-                assert_eq!(e, SqlInterfaceError::SingleVersionRequestNotListed(
-                    "SQL database responded with empty response to query: \
-                    SELECT hash FROM version WHERE major=".to_string() +
-                    &version_information.major.to_string() + &" AND minor=".to_string() +
-                    &version_information.minor.to_string() + &" AND build=".to_string() +
-                    &version_information.build.to_string() + &";".to_string()));
+                assert_eq!(
+                    e,
+                    SqlInterfaceError::SingleVersionRequestNotListed(
+                        "SQL database responded with empty response to query: \
+                    SELECT hash FROM version WHERE major="
+                            .to_string()
+                            + &version_information.major.to_string()
+                            + &" AND minor=".to_string()
+                            + &version_information.minor.to_string()
+                            + &" AND build=".to_string()
+                            + &version_information.build.to_string()
+                            + &";".to_string()
+                    )
+                );
             }
         }
         // *********************************************************************************************
-        
+
         // *** check error response when version information does not match entry in database - FAIL ***
         let unknown_version_information = VersionInformation {
             major: -1,
@@ -780,20 +787,25 @@ pub mod tests {
         match sql_interface.get_hash_from_database(&version_information) {
             Ok(_) => {
                 panic!("Found correct version information although having inserted incorrect version information table.");
-            },
-            Err(e) => {
-                assert_eq!(e, SqlInterfaceError::SingleVersionRequestNotListed(
-                    "SQL database responded with empty response to query: \
-                    SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;".to_string()));
             }
-        }        
+            Err(e) => {
+                assert_eq!(
+                    e,
+                    SqlInterfaceError::SingleVersionRequestNotListed(
+                        "SQL database responded with empty response to query: \
+                    SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;"
+                            .to_string()
+                    )
+                );
+            }
+        }
 
         // *** check error response when hash is incorrect - FAIL ********************************
         let version_information_with_wrong_hash = VersionInformation {
             major: version_information.major,
             minor: version_information.minor,
             build: version_information.build,
-            hash: "wrong".to_string()
+            hash: "wrong".to_string(),
         };
         let sql_query_string = SQL_QUERY_WRITE_VERSION_INFORMATION.to_string();
         match sql_interface.conn.exec_drop::<_, _>(
@@ -814,11 +826,11 @@ pub mod tests {
             Ok(c) => {
                 let reference_hash = &version_information_with_wrong_hash.hash;
                 assert_eq!(&c, reference_hash);
-            },
+            }
             Err(e) => {
                 panic!("Error retrieving version information from database: {e:?}");
             }
-        }        
+        }
         // ***************************************************************************************
     }
 }

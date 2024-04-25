@@ -1,18 +1,28 @@
+#![allow(warnings)]
+mod channel_content;
 mod config;
+mod data_logger;
 mod feedpattern;
+mod gpio_handler;
 mod sql_interface;
 mod sql_interface_balling;
 mod sql_interface_data;
 mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
-mod version_information;
 mod tcp_communication;
+mod version_information;
 
 use chrono::NaiveDateTime;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread::scope;
 //use std::env;
 
+use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
+use crate::data_logger::DataLogger;
+use crate::gpio_handler::GpioHandler;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::DataFrame;
@@ -21,8 +31,8 @@ use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
-use crate::version_information::VersionInformation;
 use crate::tcp_communication::TcpCommunication;
+use crate::version_information::VersionInformation;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -270,6 +280,34 @@ fn main() {
         "Feed pattern: profile ID={} profile name={}",
         feedpattern.profile_id, feedpattern.profile_name
     );
-    
-    let tcp_communication = TcpCommunication::new(config.tcp_connection);
+
+    // create channels for communication between threads
+    let (tx_data_logger_to_gpio, rx_gpio_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
+
+    let data_logger = DataLogger::new(config.data_logger);
+    let gpio_handler = GpioHandler::new(config.gpio_handler);
+
+    scope(|scope| {
+        let tcp_com_for_gpio_handler = TcpCommunication::new(config.tcp_connection).unwrap();
+        scope.spawn(move || {
+            gpio_handler.execute(
+                tcp_com_for_gpio_handler,
+                tx_gpio_to_data_logger,
+                rx_gpio_from_data_logger,
+            );
+        });
+
+        scope.spawn(move || {
+            data_logger.execute(
+                sql_interface_data,
+                tx_data_logger_to_gpio,
+                rx_data_logger_from_gpio,
+            );
+        });
+    });
 }
