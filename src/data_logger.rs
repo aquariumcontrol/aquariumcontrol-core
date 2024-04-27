@@ -20,9 +20,9 @@ pub struct DataLogger {
 }
 
 pub mod data_logger_replacement_values {
-    pub const REPLACEMENT_VALUE_WATER_TEMPERATURE: f32 = 0.0;   
-    pub const REPLACEMENT_VALUE_PH: f32 = 0.0;   
-    pub const REPLACEMENT_VALUE_CONDUCTIVITY: f32 = 0.0;   
+    pub const REPLACEMENT_VALUE_WATER_TEMPERATURE: f32 = 0.0;
+    pub const REPLACEMENT_VALUE_PH: f32 = 0.0;
+    pub const REPLACEMENT_VALUE_CONDUCTIVITY: f32 = 0.0;
     pub const REPLACEMENT_VALUE_AMBIENT_TEMPERATURE: f32 = 0.0;
     pub const REPLACEMENT_VALUE_AMBIENT_HUMIDITY: f32 = 0.0;
     pub const REPLACEMENT_VALUE_TANK_LEVEL_SWITCH_POSITION: f32 = -1.0;
@@ -51,7 +51,7 @@ impl DataLogger {
         let mut ambient_humidity: f32 = 0.0;
         let mut tank_level_switch_position: f32 = 0.0;
         let mut tank_level_switch_invalid: f32 = 0.0;
-        
+
         loop {
             self.spin_sleeper.sleep(self.sleep_duration);
             match tx_to_gpio.send(InternalCommand::RequestSignal(
@@ -61,7 +61,9 @@ impl DataLogger {
                     // now listen for response
                     water_temperature = match rx_from_gpio.recv() {
                         Ok(c) => c,
-                        Err(_) => data_logger_replacement_values::REPLACEMENT_VALUE_WATER_TEMPERATURE,
+                        Err(_) => {
+                            data_logger_replacement_values::REPLACEMENT_VALUE_WATER_TEMPERATURE
+                        }
                     };
                 }
                 Err(e) => {
@@ -92,31 +94,41 @@ impl DataLogger {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting conductivity: {e:?}");
                 }
             }
-            match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)) {
+            match tx_to_gpio.send(InternalCommand::RequestSignal(
+                AquariumSignal::AmbientTemperature,
+            )) {
                 Ok(_) => {
                     // now listen for response
                     ambient_temperature = match rx_from_gpio.recv() {
                         Ok(c) => c,
-                        Err(_) => data_logger_replacement_values::REPLACEMENT_VALUE_AMBIENT_TEMPERATURE,
+                        Err(_) => {
+                            data_logger_replacement_values::REPLACEMENT_VALUE_AMBIENT_TEMPERATURE
+                        }
                     };
                 }
                 Err(e) => {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting ambient temperature: {e:?}");
                 }
             }
-            match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)) {
+            match tx_to_gpio.send(InternalCommand::RequestSignal(
+                AquariumSignal::AmbientHumidity,
+            )) {
                 Ok(_) => {
                     // now listen for response
                     ambient_humidity = match rx_from_gpio.recv() {
                         Ok(c) => c,
-                        Err(_) => data_logger_replacement_values::REPLACEMENT_VALUE_AMBIENT_HUMIDITY,
+                        Err(_) => {
+                            data_logger_replacement_values::REPLACEMENT_VALUE_AMBIENT_HUMIDITY
+                        }
                     };
                 }
                 Err(e) => {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting ambient humidity: {e:?}");
                 }
             }
-            match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition)) {
+            match tx_to_gpio.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPosition,
+            )) {
                 Ok(_) => {
                     // now listen for response
                     tank_level_switch_position = match rx_from_gpio.recv() {
@@ -128,7 +140,9 @@ impl DataLogger {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
                 }
             }
-            match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid)) {
+            match tx_to_gpio.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchInvalid,
+            )) {
                 Ok(_) => {
                     // now listen for response
                     tank_level_switch_invalid = match rx_from_gpio.recv() {
@@ -140,7 +154,7 @@ impl DataLogger {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
                 }
             }
-            
+
             // all data received, let's construct a data frame
             let current_timestamp = Local::now().naive_local();
             let data_frame = DataFrame {
@@ -161,8 +175,10 @@ impl DataLogger {
                 heater_status: false,
             };
             match sql_interface_data.write_data_frame_to_database(&data_frame) {
-                Ok(()) => {},
-                Err(e) => {println!("DataLogger: error occurred when writing to SQL database: {e:?}")},
+                Ok(()) => {}
+                Err(e) => {
+                    println!("DataLogger: error occurred when writing to SQL database: {e:?}")
+                }
             }
         }
     }

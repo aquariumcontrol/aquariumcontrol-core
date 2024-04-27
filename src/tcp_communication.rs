@@ -97,7 +97,7 @@ impl TcpCommunication {
             AquariumSignal::AmbientTemperature => signal::AMBIENTTEMPERATURE,
             AquariumSignal::AmbientHumidity => signal::AMBIENTHUMIDITY,
             AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
-            AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,            
+            AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,
         };
         let request = category::ATLASSCIENTIFIC.to_string()
             + " "
