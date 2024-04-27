@@ -109,19 +109,22 @@ pub mod sql_query_strings {
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
         Conductivity, ConductivityFiltered, ConductivityCompensated,
-        RefillInProgress, MainTankLevelSwitchStatus, SurfaceVentilation,
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation,
         AmbTemp, AmbHum, Heater) \
         values (:timestamp, \
         #TemperatureUnfiltered, #TemperatureFiltered, \
         #pHUnfiltered, #pHFiltered, \
         #ConductivityUnfiltered, #ConductivityFiltered, #ConductivityCompensated, \
-        #RefillInProgress, #MainTankLevelSwitchStatus, #SurfaceVentilation,
+        #RefillInProgress, #TankLevelSwitchPosition, #TankLevelSwitchInvalid, #SurfaceVentilation,
         #AmbTemp, #AmbHum, #Heater) \
         ON DUPLICATE KEY UPDATE \
         Temperature=#TemperatureUnfiltered, TemperatureFiltered=#TemperatureFiltered, \
         pH=#pHUnfiltered, pHFiltered=#pHFiltered, \
-        Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, ConductivityCompensated=#ConductivityCompensated, \
-        RefillInProgress=#RefillInProgress, MainTankLevelSwitchStatus=#MainTankLevelSwitchStatus, SurfaceVentilation=#SurfaceVentilation, \
+        Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, \
+        ConductivityCompensated=#ConductivityCompensated, \
+        RefillInProgress=#RefillInProgress, \
+        TankLevelSwitchPosition=#TankLevelSwitchPosition, TankLevelSwitchInvalid=#TankLevelSwitchInvalid, \
+        SurfaceVentilation=#SurfaceVentilation, \
         AmbTemp=#AmbTemp, AmbHum=#AmbHum, Heater=#Heater;";
 
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.

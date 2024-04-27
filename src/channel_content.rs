@@ -2,6 +2,7 @@
 /// These values are nested into enum InternalCommand. They represent all actuation devices.
 #[derive(Clone, Debug)]
 pub enum AquariumDevice {
+    /*
     Skimmer,
     MainPump1,
     MainPump2,
@@ -15,6 +16,7 @@ pub enum AquariumDevice {
     PeristalticPump2,
     PeristalticPump3,
     PeristalticPump4,
+    */
 }
 
 /// This enum is used for internal thread messaging between data logger and GPIO handler
@@ -27,15 +29,15 @@ pub enum AquariumSignal {
     Conductivity,
     AmbientTemperature,
     AmbientHumidity,
-    TankLevelSwitch,
+    TankLevelSwitchPosition,
     TankLevelSwitchInvalid,
 }
 
 /// This enum is used for internal thread messaging
 #[derive(Clone, Debug)]
 pub enum InternalCommand {
-    SwitchOn(AquariumDevice),
-    SwitchOff(AquariumDevice),
+    //SwitchOn(AquariumDevice),
+    //SwitchOff(AquariumDevice),
     RequestSignal(AquariumSignal),
-    Quit,
+    //Quit,
 }

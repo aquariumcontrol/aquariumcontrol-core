@@ -55,7 +55,6 @@ pub enum TcpCommunicationError {
 }
 
 pub struct TcpCommunication {
-    tcp_connection_config: TcpConnectionConfig,
     write_stream: TcpStream,
     buf_reader: BufReader<TcpStream>,
 }
@@ -71,7 +70,7 @@ impl TcpCommunication {
     pub fn new(
         tcp_connection: TcpConnectionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
-        let mut stream = match TcpStream::connect(
+        let stream = match TcpStream::connect(
             tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
         ) {
             Ok(c) => c,
@@ -84,7 +83,6 @@ impl TcpCommunication {
             }
         };
         Ok(TcpCommunication {
-            tcp_connection_config: tcp_connection,
             write_stream: stream.try_clone().unwrap(),
             buf_reader: BufReader::new(stream),
         })
@@ -98,14 +96,14 @@ impl TcpCommunication {
             AquariumSignal::Conductivity => signal::ATLASSCIENTIFICCONDUCTIVITY,
             AquariumSignal::AmbientTemperature => signal::AMBIENTTEMPERATURE,
             AquariumSignal::AmbientHumidity => signal::AMBIENTHUMIDITY,
-            AquariumSignal::TankLevelSwitch => signal::TANKLEVELSWITCHPOSITION,
+            AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
             AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,            
         };
         let request = category::ATLASSCIENTIFIC.to_string()
             + " "
             + command::READ
             + " "
-            + signal::ATLASSCIENTIFICTEMPERATURE
+            + tcp_signal_identifier
             + "\n";
 
         println!("Writing...");

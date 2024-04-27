@@ -16,7 +16,8 @@ pub struct DataFrame {
     pub conductivity_filtered: f32,
     pub conductivity_compensated: f32,
     pub refill_in_progress: bool,
-    pub main_tank_level_switch_status: bool,
+    pub tank_level_switch_position: bool,
+    pub tank_level_switch_invalid: bool,
     pub surface_ventilation_status: bool,
     pub ambient_temperature: f32,
     pub ambient_humidity: f32,
@@ -82,13 +83,18 @@ impl SqlInterfaceData {
             "#RefillInProgress",
             &data.refill_in_progress.to_string(),
         );
-        let sql_query_main_tank_level_switch_status_replaced = str::replace(
+        let sql_query_main_tank_level_switch_position_replaced = str::replace(
             &sql_query_refill_in_progress_replaced,
-            "#MainTankLevelSwitchStatus",
-            &data.main_tank_level_switch_status.to_string(),
+            "#TankLevelSwitchPosition",
+            &data.tank_level_switch_position.to_string(),
+        );
+        let sql_query_main_tank_level_switch_invalid_replaced = str::replace(
+            &sql_query_main_tank_level_switch_position_replaced,
+            "#TankLevelSwitchInvalid",
+            &data.tank_level_switch_invalid.to_string(),
         );
         let sql_query_surface_ventilation_status_replaced = str::replace(
-            &sql_query_main_tank_level_switch_status_replaced,
+            &sql_query_main_tank_level_switch_invalid_replaced,
             "#SurfaceVentilation",
             &data.surface_ventilation_status.to_string(),
         );
@@ -147,7 +153,8 @@ pub mod tests {
     }
     pub struct SqlDataFrame2 {
         pub refill_in_progress: bool,
-        pub main_tank_level_switch_status: bool,
+        pub tank_level_switch_position: bool,
+        pub tank_level_switch_invalid: bool,
         pub surface_ventilation_status: bool,
         pub ambient_temperature: f32,
         pub ambient_humidity: f32,
@@ -161,7 +168,7 @@ pub mod tests {
         FROM data WHERE Timestamp='#timestamp';";
 
     pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
-        RefillInProgress, MainTankLevelSwitchStatus, SurfaceVentilation, \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater FROM data \
         WHERE Timestamp = '#timestamp';";
 
@@ -207,14 +214,16 @@ pub mod tests {
             sql_query_string_2.clone(),
             |(
                 refill_in_progress,
-                main_tank_level_switch_status,
+                tank_level_switch_position,
+                tank_level_switch_invalid,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
                 heater_status,
             )| SqlDataFrame2 {
                 refill_in_progress,
-                main_tank_level_switch_status,
+                tank_level_switch_position,
+                tank_level_switch_invalid,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
@@ -234,7 +243,7 @@ pub mod tests {
             ));
         }
         // check error case if there is more than one response
-        if (data_frame_1_array.len() > 1) || (data_frame_2_array.len() > 1) {
+        if (data_frame_2_array.len() > 1) || (data_frame_2_array.len() > 1) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query: ".to_string(),
             ));
@@ -253,7 +262,8 @@ pub mod tests {
             conductivity_filtered: data_frame_1.conductivity_filtered,
             conductivity_compensated: data_frame_1.conductivity_compensated,
             refill_in_progress: data_frame_2.refill_in_progress,
-            main_tank_level_switch_status: data_frame_2.main_tank_level_switch_status,
+            tank_level_switch_position: data_frame_2.tank_level_switch_position,
+            tank_level_switch_invalid: data_frame_2.tank_level_switch_invalid,
             surface_ventilation_status: data_frame_2.surface_ventilation_status,
             ambient_temperature: data_frame_2.ambient_temperature,
             ambient_humidity: data_frame_2.ambient_humidity,
@@ -292,7 +302,8 @@ pub mod tests {
             conductivity_filtered: 51000.0,
             conductivity_compensated: 52000.0,
             refill_in_progress: false,
-            main_tank_level_switch_status: false,
+            tank_level_switch_position: false,
+            tank_level_switch_invalid: false,
             surface_ventilation_status: true,
             ambient_temperature: 22.0,
             ambient_humidity: 60.0,
@@ -328,7 +339,8 @@ pub mod tests {
             conductivity_filtered: 51001.0,
             conductivity_compensated: 52001.0,
             refill_in_progress: true,
-            main_tank_level_switch_status: true,
+            tank_level_switch_position: true,
+            tank_level_switch_invalid: true,
             surface_ventilation_status: false,
             ambient_temperature: 23.0,
             ambient_humidity: 61.0,

@@ -1,4 +1,4 @@
-#![allow(warnings)]
+//#![allow(warnings)]
 mod channel_content;
 mod config;
 mod data_logger;
@@ -232,7 +232,8 @@ fn main() {
         conductivity_filtered: 51000.0,
         conductivity_compensated: 52000.0,
         refill_in_progress: false,
-        main_tank_level_switch_status: false,
+        tank_level_switch_position: false,
+        tank_level_switch_invalid: false,
         surface_ventilation_status: true,
         ambient_temperature: 22.0,
         ambient_humidity: 60.0,
