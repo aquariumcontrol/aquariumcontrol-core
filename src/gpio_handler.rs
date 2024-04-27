@@ -52,10 +52,8 @@ impl GpioHandler {
             match rx_from_data_logger.recv() {
                 Ok(c) => {
                     if self.config.use_simulator {
-                        response_value = Self::get_response_from_simulator(
-                            tcp_communication_opt.as_mut(),
-                            c,
-                        );
+                        response_value =
+                            Self::get_response_from_simulator(tcp_communication_opt.as_mut(), c);
                     }
                     match tx_to_data_logger.send(response_value) {
                         Ok(()) => {}

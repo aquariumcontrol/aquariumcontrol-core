@@ -11,7 +11,7 @@ ip_address = "127.0.0.1"                           # ipv4 address for communicat
 port = 35000                                       # port number for communication with control application for testing purposes
 
 [data_logger]
-logging_interval = 60                              # log data every x seconds
+logging_interval = 10                              # log data every x seconds
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

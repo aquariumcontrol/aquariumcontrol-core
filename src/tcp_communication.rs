@@ -88,8 +88,28 @@ impl TcpCommunication {
         })
     }
 
+    /// function removes training newline or carriage return
+    /// taken from https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning
+    fn trim_newline(s: &mut String) {
+        if s.ends_with('\n') {
+            s.pop();
+            if s.ends_with('\r') {
+                s.pop();
+            }
+        }
+    }
+
     /// communicate with simulator to get water temperature
     pub fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
+        let category = match aquarium_signal {
+            AquariumSignal::WaterTemperature => category::ATLASSCIENTIFIC,
+            AquariumSignal::pH => category::ATLASSCIENTIFIC,
+            AquariumSignal::Conductivity => category::ATLASSCIENTIFIC,
+            AquariumSignal::AmbientTemperature => category::DHT22,
+            AquariumSignal::AmbientHumidity => category::DHT22,
+            AquariumSignal::TankLevelSwitchPosition => category::TANKLEVELSWITCH,
+            AquariumSignal::TankLevelSwitchInvalid => category::TANKLEVELSWITCH,
+        };
         let tcp_signal_identifier = match aquarium_signal {
             AquariumSignal::WaterTemperature => signal::ATLASSCIENTIFICTEMPERATURE,
             AquariumSignal::pH => signal::ATLASSCIENTIFICPH,
@@ -99,14 +119,10 @@ impl TcpCommunication {
             AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
             AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,
         };
-        let request = category::ATLASSCIENTIFIC.to_string()
-            + " "
-            + command::READ
-            + " "
-            + tcp_signal_identifier
-            + "\n";
+        let request =
+            category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";
 
-        println!("Writing...");
+        //println!("Writing...(request={})", request);
         match self.write_stream.write(request.as_bytes()) {
             Ok(_) => {}
             Err(e) => {
@@ -115,7 +131,7 @@ impl TcpCommunication {
         };
         let _ = self.write_stream.flush();
 
-        println!("Reading...");
+        //println!("Reading...");
         let mut response = String::new();
         response.clear();
         match self.buf_reader.read_line(&mut response) {
@@ -124,15 +140,25 @@ impl TcpCommunication {
                 panic!("{e:?}");
             }
         };
-        println!("Read from TCP: {}", response);
+        //println!("Read from TCP: {}", response);
         match Self::get_last_word(&response) {
             Some(last_word) => {
-                println!("Last word of response is {}", last_word);
-                last_word.parse::<f32>().unwrap()
+                if !last_word.is_empty() {
+                    let mut last_word_string = last_word.to_string();
+                    //println!("Last word of response is {}", last_word_string);
+                    Self::trim_newline(&mut last_word_string);
+                    match last_word_string.parse::<f32>() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            panic!("TcpCommunication: Failed to convert response ({last_word}) to f32: {e:?}");
+                        }
+                    }
+                } else {
+                    panic!("TcpCommunication: Last word of response is empty.");
+                }
             }
             None => {
-                println!("Response does not contain any words.");
-                0.0 // todo: replace default value with error
+                panic!("TcpCommunication: Response does not contain any words.");
             }
         }
     }

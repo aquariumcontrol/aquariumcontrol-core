@@ -291,19 +291,18 @@ fn main() {
         mpsc::channel();
 
     let data_logger = DataLogger::new(config.data_logger);
-    
+
     // open tcp connection only if configuration requires use of simulator instead of HW
-    let tcp_com_for_gpio_handler: Option<TcpCommunication>;    
+    let tcp_com_for_gpio_handler: Option<TcpCommunication>;
     if config.gpio_handler.use_simulator {
         tcp_com_for_gpio_handler = Some(TcpCommunication::new(config.tcp_connection).unwrap());
-    }
-    else {
+    } else {
         tcp_com_for_gpio_handler = None;
     }
-    
+
     let gpio_handler = GpioHandler::new(config.gpio_handler);
 
-    scope(|scope| {    
+    scope(|scope| {
         scope.spawn(move || {
             gpio_handler.execute(
                 tcp_com_for_gpio_handler,
