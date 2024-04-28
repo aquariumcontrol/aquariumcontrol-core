@@ -42,9 +42,9 @@ impl SqlInterfaceData {
         data: &DataFrame,
     ) -> Result<(), SqlInterfaceError> {
         let null_string = "NULL".to_string();
-        
+
         let timestamp_string = data.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-        
+
         // replace signal placeholders with values
         let water_temperature_string: String;
         let sql_query_water_temperature_replaced = str::replace(
@@ -53,12 +53,12 @@ impl SqlInterfaceData {
             match data.water_temperature {
                 Some(c) => {
                     water_temperature_string = c.to_string();
-                    &water_temperature_string    
-                },
+                    &water_temperature_string
+                }
                 None => &null_string,
             },
         );
-        
+
         let water_temperature_filtered_string: String;
         let sql_query_water_temperature_filtered_replaced = str::replace(
             &sql_query_water_temperature_replaced,
@@ -67,11 +67,11 @@ impl SqlInterfaceData {
                 Some(c) => {
                     water_temperature_filtered_string = c.to_string();
                     &water_temperature_filtered_string
-                },
+                }
                 None => &null_string,
             },
         );
-        
+
         let ph_string: String;
         let sql_query_ph_replaced = str::replace(
             &sql_query_water_temperature_filtered_replaced,
@@ -79,12 +79,12 @@ impl SqlInterfaceData {
             match data.ph {
                 Some(c) => {
                     ph_string = c.to_string();
-                    &ph_string    
-                },
-                None => &null_string,                
+                    &ph_string
+                }
+                None => &null_string,
             },
         );
-        
+
         let ph_filtered_string: String;
         let sql_query_ph_filtered_replaced = str::replace(
             &sql_query_ph_replaced,
@@ -92,12 +92,12 @@ impl SqlInterfaceData {
             match data.ph_filtered {
                 Some(c) => {
                     ph_filtered_string = c.to_string();
-                    &ph_filtered_string    
-                },
+                    &ph_filtered_string
+                }
                 None => &null_string,
             },
         );
-        
+
         let conductivity_string: String;
         let sql_query_conductivity_replaced = str::replace(
             &sql_query_ph_filtered_replaced,
@@ -105,12 +105,12 @@ impl SqlInterfaceData {
             match data.conductivity {
                 Some(c) => {
                     conductivity_string = c.to_string();
-                    &conductivity_string    
-                },
-                None => &null_string,                
+                    &conductivity_string
+                }
+                None => &null_string,
             },
         );
-        
+
         let conductivity_filtered_string: String;
         let sql_query_conductivity_filtered_replaced = str::replace(
             &sql_query_conductivity_replaced,
@@ -118,9 +118,9 @@ impl SqlInterfaceData {
             match data.conductivity_filtered {
                 Some(c) => {
                     conductivity_filtered_string = c.to_string();
-                    &conductivity_filtered_string    
-                },
-                None => &null_string,                
+                    &conductivity_filtered_string
+                }
+                None => &null_string,
             },
         );
 
@@ -132,11 +132,11 @@ impl SqlInterfaceData {
                 Some(c) => {
                     conductivity_compensated_string = c.to_string();
                     &conductivity_compensated_string
-                },
-                None => &null_string,                
+                }
+                None => &null_string,
             },
         );
-        
+
         let refill_in_progress_string: String;
         let sql_query_refill_in_progress_replaced = str::replace(
             &sql_query_string_conductivity_compensated_replaced,
@@ -144,12 +144,12 @@ impl SqlInterfaceData {
             match data.refill_in_progress {
                 Some(c) => {
                     refill_in_progress_string = c.to_string();
-                    &refill_in_progress_string    
-                },
-                None => &null_string,                
+                    &refill_in_progress_string
+                }
+                None => &null_string,
             },
         );
-        
+
         let tank_level_switch_position_string: String;
         let sql_query_main_tank_level_switch_position_replaced = str::replace(
             &sql_query_refill_in_progress_replaced,
@@ -158,11 +158,11 @@ impl SqlInterfaceData {
                 Some(c) => {
                     tank_level_switch_position_string = c.to_string();
                     &tank_level_switch_position_string
-                },
-                None => &null_string,                
+                }
+                None => &null_string,
             },
         );
-        
+
         let tank_level_switch_invalid_string: String;
         let sql_query_main_tank_level_switch_invalid_replaced = str::replace(
             &sql_query_main_tank_level_switch_position_replaced,
@@ -170,12 +170,12 @@ impl SqlInterfaceData {
             match data.tank_level_switch_invalid {
                 Some(c) => {
                     tank_level_switch_invalid_string = c.to_string();
-                    &tank_level_switch_invalid_string    
-                },
-                None => &null_string,                
+                    &tank_level_switch_invalid_string
+                }
+                None => &null_string,
             },
         );
-        
+
         let surface_ventilation_string: String;
         let sql_query_surface_ventilation_status_replaced = str::replace(
             &sql_query_main_tank_level_switch_invalid_replaced,
@@ -183,12 +183,12 @@ impl SqlInterfaceData {
             match data.surface_ventilation_status {
                 Some(c) => {
                     surface_ventilation_string = c.to_string();
-                    &surface_ventilation_string    
-                },
+                    &surface_ventilation_string
+                }
                 None => &null_string,
             },
         );
-        
+
         let ambient_temperature_string: String;
         let sql_query_ambient_temperature_replaced = str::replace(
             &sql_query_surface_ventilation_status_replaced,
@@ -196,12 +196,12 @@ impl SqlInterfaceData {
             match data.ambient_temperature {
                 Some(c) => {
                     ambient_temperature_string = c.to_string();
-                    &ambient_temperature_string    
-                },
+                    &ambient_temperature_string
+                }
                 None => &null_string,
             },
         );
-        
+
         let ambient_humidity_string: String;
         let sql_query_ambient_humidity_replaced = str::replace(
             &sql_query_ambient_temperature_replaced,
@@ -210,11 +210,11 @@ impl SqlInterfaceData {
                 Some(c) => {
                     ambient_humidity_string = c.to_string();
                     &ambient_humidity_string
-                },
-                None => &null_string,                
+                }
+                None => &null_string,
             },
         );
-        
+
         let heater_string: String;
         let sql_query_string = str::replace(
             &sql_query_ambient_humidity_replaced,
@@ -223,8 +223,8 @@ impl SqlInterfaceData {
                 Some(c) => {
                     heater_string = c.to_string();
                     &heater_string
-                },
-                None => &null_string,                
+                }
+                None => &null_string,
             },
         );
 
@@ -253,8 +253,12 @@ pub mod tests {
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_data::{DataFrame, SqlInterfaceData};
     use chrono::NaiveDateTime;
-    use mysql::{prelude::Queryable, PooledConn};
+    use mysql::{prelude::Queryable, PooledConn, Row, Value};
 
+    /// This struct contains the first part of one row from table 'data'
+    /// Due to limitations of the library, this struct can only contain up to 12 elements.
+    /// The library has no means for handling NULL values.
+    /// So the data types of this struct are no optionals.
     pub struct SqlDataFrame1 {
         pub timestamp: String,
         pub water_temperature: f32,
@@ -265,6 +269,11 @@ pub mod tests {
         pub conductivity_filtered: f32,
         pub conductivity_compensated: f32,
     }
+
+    /// This struct contains the second part of one row from table 'data'
+    /// Due to limitations of the library, this struct can only contain up to 12 elements.
+    /// The library has no means for handling NULL values.
+    /// So the data types of this struct are no optionals.
     pub struct SqlDataFrame2 {
         pub refill_in_progress: bool,
         pub tank_level_switch_position: bool,
@@ -286,7 +295,17 @@ pub mod tests {
         AmbTemp, AmbHum, Heater FROM data \
         WHERE Timestamp = '#timestamp';";
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single heating stats entry.
+    pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
+        Temperature, TemperatureFiltered, \
+        pH, pHFiltered, \
+        Conductivity, ConductivityFiltered, ConductivityCompensated \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
+        AmbTemp, AmbHum, Heater FROM data \
+        WHERE Timestamp = '#timestamp';";
+
+    /// The function executes two SQL statements to retrieve one row from table 'data'
+    /// In Ok case, the function returns one struct of type DataFrame wrapped in Result.
+    /// Note: This function cannot handle entries with NULL data due to limitations of the SQL library.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
@@ -385,6 +404,35 @@ pub mod tests {
         })
     }
 
+    /// The function executes two SQL statements to retrieve one row from table 'data'
+    /// In Ok case, the function returns one struct of type DataFrame wrapped in Result.
+    /// Note: This function handles exclusively entries with NULL data.
+    pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDateTime) {
+        let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
+        // Get series of NULL values from database
+        let sql_query_string = str::replace(
+            SQL_QUERY_READ_NULL_DATA_FRAME,
+            "#timestamp",
+            &timestamp_string,
+        );
+        let row: Row = conn
+            .query_first(sql_query_string)
+            .unwrap()
+            .expect("Querying single row of NULL values failed.");
+
+        for cell in row.columns_ref() {
+            let cell_value = &row[cell.name_str().as_ref()];
+            match cell_value {
+                _val @ Value::NULL => {
+                    println!("Identified NULL value.");
+                }
+                _ => {
+                    panic!("Identified non-=NULL value");
+                }
+            }
+        }
+    }
+
     #[test]
     /// all test cases for this crate combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_data() {
@@ -477,6 +525,47 @@ pub mod tests {
         };
         assert_eq!(dataframe_test, dataframe_reference_2);
         println!("* checking inserting already existing data frame into empty table succeeded");
+        // *****************************************************************************************
+
+        // *** insert and load DataFrame with NULL data - PASS *************************************
+        match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        let current_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get current timestamp from database: {e:?}");
+            }
+        };
+        let dataframe_reference_3 = DataFrame {
+            timestamp: current_timestamp,
+            water_temperature: None,
+            water_temperature_filtered: None,
+            ph: None,
+            ph_filtered: None,
+            conductivity: None,
+            conductivity_filtered: None,
+            conductivity_compensated: None,
+            refill_in_progress: None,
+            tank_level_switch_position: None,
+            tank_level_switch_invalid: None,
+            surface_ventilation_status: None,
+            ambient_temperature: None,
+            ambient_humidity: None,
+            heater_status: None,
+        };
+        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_3) {
+            Ok(()) => {}
+            Err(e) => {
+                panic!("Could not write dataframe to database: {e:?}");
+            }
+        }
+        check_database_row_if_all_null(
+            &mut sql_interface_data.conn,
+            dataframe_reference_3.timestamp,
+        );
+        println!("* checking inserting data frame with NULL values into empty table succeeded");
         // *****************************************************************************************
     }
 }
