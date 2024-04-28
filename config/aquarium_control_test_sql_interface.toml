@@ -12,6 +12,9 @@ port = 35000                                          # port number for communic
 
 [data_logger]
 logging_interval = 60                              # log data every x seconds
+filter_coefficient_water_temperature = { filter_coefficient = 0.5 }
+filter_coefficient_pH = { filter_coefficient = 0.5 }
+filter_coefficient_conductivity = { filter_coefficient = 0.5 }
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

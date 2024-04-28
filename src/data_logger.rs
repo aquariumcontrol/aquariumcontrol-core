@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use chrono::Local;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -6,6 +7,8 @@ use std::time::Duration;
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::iir_filter::IIRFilter;
+use crate::iir_filter::IIRFilterConfig;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 
@@ -15,25 +18,46 @@ use crate::sql_interface_data::SqlInterfaceData;
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
     logging_interval: u64,
+    filter_coefficient_water_temperature: IIRFilterConfig<()>,
+    filter_coefficient_pH: IIRFilterConfig<()>,
+    filter_coefficient_conductivity: IIRFilterConfig<()>,
 }
 
 /// This struct contains the configuration and the implementation for regular data logging to SQL database.
 pub struct DataLogger {
     sleep_duration: Duration,
     spin_sleeper: SpinSleeper,
+    filter_water_temperature: IIRFilter,
+    filter_pH: IIRFilter,
+    filter_conductivity: IIRFilter,
 }
 
 impl DataLogger {
     pub fn new(config: DataLoggerConfig) -> DataLogger {
         let logging_interval_secs = config.logging_interval;
-        DataLogger {
+        Self {
             sleep_duration: Duration::new(logging_interval_secs, 0),
             spin_sleeper: SpinSleeper::default(),
+            filter_water_temperature: IIRFilter::new_requires_initial(
+                &config.filter_coefficient_water_temperature,
+                0.0, // initialization value (mesured value not available at this time)
+                1.0, // 1 second time step
+            ),
+            filter_pH: IIRFilter::new_requires_initial(
+                &config.filter_coefficient_pH,
+                0.0, // initialization value (mesured value not available at this time)
+                1.0, // 1 second time step
+            ),
+            filter_conductivity: IIRFilter::new_requires_initial(
+                &config.filter_coefficient_conductivity,
+                0.0, // initialization value (mesured value not available at this time)
+                1.0, // 1 second time step
+            ),
         }
     }
 
     pub fn execute(
-        &self,
+        &mut self,
         mut sql_interface_data: SqlInterfaceData,
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
@@ -157,17 +181,31 @@ impl DataLogger {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
                 }
             }
-
+            
+            // calculate filtered values            
+            let water_temperature_filtered = match water_temperature {
+                Some(c) => Some(self.filter_water_temperature.get_filtered_value(c)),
+                None => None,
+            };
+            let pH_filtered = match ph {
+                Some(c) => Some(self.filter_pH.get_filtered_value(c)),
+                None => None,
+            };
+            let conductivity_filtered = match conductivity {
+                Some(c) => Some(self.filter_conductivity.get_filtered_value(c)),
+                None => None,
+            };
+            
             // all data received, let's construct a data frame
             let current_timestamp = Local::now().naive_local();
             let data_frame = DataFrame {
                 timestamp: current_timestamp,
                 water_temperature: water_temperature,
-                water_temperature_filtered: None,
+                water_temperature_filtered: water_temperature_filtered,
                 ph: ph,
-                ph_filtered: None,
+                ph_filtered: pH_filtered,
                 conductivity: conductivity,
-                conductivity_filtered: None,
+                conductivity_filtered: conductivity_filtered,
                 conductivity_compensated: None,
                 refill_in_progress: None,
                 tank_level_switch_position: tank_level_switch_position,

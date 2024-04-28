@@ -4,6 +4,7 @@ mod config;
 mod data_logger;
 mod feedpattern;
 mod gpio_handler;
+mod iir_filter;
 mod sql_interface;
 mod sql_interface_balling;
 mod sql_interface_data;
@@ -290,7 +291,7 @@ fn main() {
     let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
 
-    let data_logger = DataLogger::new(config.data_logger);
+    let mut data_logger = DataLogger::new(config.data_logger);
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     let tcp_com_for_gpio_handler: Option<TcpCommunication>;
