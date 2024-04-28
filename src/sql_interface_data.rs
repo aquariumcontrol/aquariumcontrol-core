@@ -8,20 +8,20 @@ use crate::sql_interface::SqlInterfaceError;
 #[derive(Debug, PartialEq)]
 pub struct DataFrame {
     pub timestamp: NaiveDateTime,
-    pub water_temperature: f32,
-    pub water_temperature_filtered: f32,
-    pub ph: f32,
-    pub ph_filtered: f32,
-    pub conductivity: f32,
-    pub conductivity_filtered: f32,
-    pub conductivity_compensated: f32,
-    pub refill_in_progress: bool,
-    pub tank_level_switch_position: bool,
-    pub tank_level_switch_invalid: bool,
-    pub surface_ventilation_status: bool,
-    pub ambient_temperature: f32,
-    pub ambient_humidity: f32,
-    pub heater_status: bool,
+    pub water_temperature: Option<f32>,
+    pub water_temperature_filtered: Option<f32>,
+    pub ph: Option<f32>,
+    pub ph_filtered: Option<f32>,
+    pub conductivity: Option<f32>,
+    pub conductivity_filtered: Option<f32>,
+    pub conductivity_compensated: Option<f32>,
+    pub refill_in_progress: Option<bool>,
+    pub tank_level_switch_position: Option<bool>,
+    pub tank_level_switch_invalid: Option<bool>,
+    pub surface_ventilation_status: Option<bool>,
+    pub ambient_temperature: Option<f32>,
+    pub ambient_humidity: Option<f32>,
+    pub heater_status: Option<bool>,
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface for time-based data.
@@ -41,77 +41,191 @@ impl SqlInterfaceData {
         &mut self,
         data: &DataFrame,
     ) -> Result<(), SqlInterfaceError> {
+        let null_string = "NULL".to_string();
+        
         let timestamp_string = data.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
+        
         // replace signal placeholders with values
+        let water_temperature_string: String;
         let sql_query_water_temperature_replaced = str::replace(
             sql_query_strings::SQL_QUERY_WRITE_DATA,
             "#TemperatureUnfiltered",
-            &data.water_temperature.to_string(),
+            match data.water_temperature {
+                Some(c) => {
+                    water_temperature_string = c.to_string();
+                    &water_temperature_string    
+                },
+                None => &null_string,
+            },
         );
+        
+        let water_temperature_filtered_string: String;
         let sql_query_water_temperature_filtered_replaced = str::replace(
             &sql_query_water_temperature_replaced,
             "#TemperatureFiltered",
-            &data.water_temperature_filtered.to_string(),
+            match data.water_temperature_filtered {
+                Some(c) => {
+                    water_temperature_filtered_string = c.to_string();
+                    &water_temperature_filtered_string
+                },
+                None => &null_string,
+            },
         );
+        
+        let ph_string: String;
         let sql_query_ph_replaced = str::replace(
             &sql_query_water_temperature_filtered_replaced,
             "#pHUnfiltered",
-            &data.ph.to_string(),
+            match data.ph {
+                Some(c) => {
+                    ph_string = c.to_string();
+                    &ph_string    
+                },
+                None => &null_string,                
+            },
         );
+        
+        let ph_filtered_string: String;
         let sql_query_ph_filtered_replaced = str::replace(
             &sql_query_ph_replaced,
             "#pHFiltered",
-            &data.ph_filtered.to_string(),
+            match data.ph_filtered {
+                Some(c) => {
+                    ph_filtered_string = c.to_string();
+                    &ph_filtered_string    
+                },
+                None => &null_string,
+            },
         );
+        
+        let conductivity_string: String;
         let sql_query_conductivity_replaced = str::replace(
             &sql_query_ph_filtered_replaced,
             "#ConductivityUnfiltered",
-            &data.conductivity.to_string(),
+            match data.conductivity {
+                Some(c) => {
+                    conductivity_string = c.to_string();
+                    &conductivity_string    
+                },
+                None => &null_string,                
+            },
         );
+        
+        let conductivity_filtered_string: String;
         let sql_query_conductivity_filtered_replaced = str::replace(
             &sql_query_conductivity_replaced,
             "#ConductivityFiltered",
-            &data.conductivity_filtered.to_string(),
+            match data.conductivity_filtered {
+                Some(c) => {
+                    conductivity_filtered_string = c.to_string();
+                    &conductivity_filtered_string    
+                },
+                None => &null_string,                
+            },
         );
+
+        let conductivity_compensated_string: String;
         let sql_query_string_conductivity_compensated_replaced = str::replace(
             &sql_query_conductivity_filtered_replaced,
             "#ConductivityCompensated",
-            &data.conductivity_compensated.to_string(),
+            match data.conductivity_compensated {
+                Some(c) => {
+                    conductivity_compensated_string = c.to_string();
+                    &conductivity_compensated_string
+                },
+                None => &null_string,                
+            },
         );
+        
+        let refill_in_progress_string: String;
         let sql_query_refill_in_progress_replaced = str::replace(
             &sql_query_string_conductivity_compensated_replaced,
             "#RefillInProgress",
-            &data.refill_in_progress.to_string(),
+            match data.refill_in_progress {
+                Some(c) => {
+                    refill_in_progress_string = c.to_string();
+                    &refill_in_progress_string    
+                },
+                None => &null_string,                
+            },
         );
+        
+        let tank_level_switch_position_string: String;
         let sql_query_main_tank_level_switch_position_replaced = str::replace(
             &sql_query_refill_in_progress_replaced,
             "#TankLevelSwitchPosition",
-            &data.tank_level_switch_position.to_string(),
+            match data.tank_level_switch_position {
+                Some(c) => {
+                    tank_level_switch_position_string = c.to_string();
+                    &tank_level_switch_position_string
+                },
+                None => &null_string,                
+            },
         );
+        
+        let tank_level_switch_invalid_string: String;
         let sql_query_main_tank_level_switch_invalid_replaced = str::replace(
             &sql_query_main_tank_level_switch_position_replaced,
             "#TankLevelSwitchInvalid",
-            &data.tank_level_switch_invalid.to_string(),
+            match data.tank_level_switch_invalid {
+                Some(c) => {
+                    tank_level_switch_invalid_string = c.to_string();
+                    &tank_level_switch_invalid_string    
+                },
+                None => &null_string,                
+            },
         );
+        
+        let surface_ventilation_string: String;
         let sql_query_surface_ventilation_status_replaced = str::replace(
             &sql_query_main_tank_level_switch_invalid_replaced,
             "#SurfaceVentilation",
-            &data.surface_ventilation_status.to_string(),
+            match data.surface_ventilation_status {
+                Some(c) => {
+                    surface_ventilation_string = c.to_string();
+                    &surface_ventilation_string    
+                },
+                None => &null_string,
+            },
         );
+        
+        let ambient_temperature_string: String;
         let sql_query_ambient_temperature_replaced = str::replace(
             &sql_query_surface_ventilation_status_replaced,
             "#AmbTemp",
-            &data.ambient_temperature.to_string(),
+            match data.ambient_temperature {
+                Some(c) => {
+                    ambient_temperature_string = c.to_string();
+                    &ambient_temperature_string    
+                },
+                None => &null_string,
+            },
         );
+        
+        let ambient_humidity_string: String;
         let sql_query_ambient_humidity_replaced = str::replace(
             &sql_query_ambient_temperature_replaced,
             "#AmbHum",
-            &data.ambient_humidity.to_string(),
+            match data.ambient_humidity {
+                Some(c) => {
+                    ambient_humidity_string = c.to_string();
+                    &ambient_humidity_string
+                },
+                None => &null_string,                
+            },
         );
+        
+        let heater_string: String;
         let sql_query_string = str::replace(
             &sql_query_ambient_humidity_replaced,
             "#Heater",
-            &data.heater_status.to_string(),
+            match data.heater_status {
+                Some(c) => {
+                    heater_string = c.to_string();
+                    &heater_string
+                },
+                None => &null_string,                
+            },
         );
 
         // execute query
@@ -254,20 +368,20 @@ pub mod tests {
         Ok(DataFrame {
             timestamp: NaiveDateTime::parse_from_str(&data_frame_1.timestamp, "%Y-%m-%d %H:%M:%S")
                 .expect("Failed to convert string to timestamp of type NaiveDateTime."),
-            water_temperature: data_frame_1.water_temperature,
-            water_temperature_filtered: data_frame_1.water_temperature_filtered,
-            ph: data_frame_1.ph,
-            ph_filtered: data_frame_1.ph_filtered,
-            conductivity: data_frame_1.conductivity,
-            conductivity_filtered: data_frame_1.conductivity_filtered,
-            conductivity_compensated: data_frame_1.conductivity_compensated,
-            refill_in_progress: data_frame_2.refill_in_progress,
-            tank_level_switch_position: data_frame_2.tank_level_switch_position,
-            tank_level_switch_invalid: data_frame_2.tank_level_switch_invalid,
-            surface_ventilation_status: data_frame_2.surface_ventilation_status,
-            ambient_temperature: data_frame_2.ambient_temperature,
-            ambient_humidity: data_frame_2.ambient_humidity,
-            heater_status: data_frame_2.heater_status,
+            water_temperature: Some(data_frame_1.water_temperature),
+            water_temperature_filtered: Some(data_frame_1.water_temperature_filtered),
+            ph: Some(data_frame_1.ph),
+            ph_filtered: Some(data_frame_1.ph_filtered),
+            conductivity: Some(data_frame_1.conductivity),
+            conductivity_filtered: Some(data_frame_1.conductivity_filtered),
+            conductivity_compensated: Some(data_frame_1.conductivity_compensated),
+            refill_in_progress: Some(data_frame_2.refill_in_progress),
+            tank_level_switch_position: Some(data_frame_2.tank_level_switch_position),
+            tank_level_switch_invalid: Some(data_frame_2.tank_level_switch_invalid),
+            surface_ventilation_status: Some(data_frame_2.surface_ventilation_status),
+            ambient_temperature: Some(data_frame_2.ambient_temperature),
+            ambient_humidity: Some(data_frame_2.ambient_humidity),
+            heater_status: Some(data_frame_2.heater_status),
         })
     }
 
@@ -294,20 +408,20 @@ pub mod tests {
         };
         let dataframe_reference_1 = DataFrame {
             timestamp: current_timestamp,
-            water_temperature: 25.5,
-            water_temperature_filtered: 25.0,
-            ph: 7.0,
-            ph_filtered: 7.5,
-            conductivity: 50000.0,
-            conductivity_filtered: 51000.0,
-            conductivity_compensated: 52000.0,
-            refill_in_progress: false,
-            tank_level_switch_position: false,
-            tank_level_switch_invalid: false,
-            surface_ventilation_status: true,
-            ambient_temperature: 22.0,
-            ambient_humidity: 60.0,
-            heater_status: true,
+            water_temperature: Some(25.5),
+            water_temperature_filtered: Some(25.0),
+            ph: Some(7.0),
+            ph_filtered: Some(7.5),
+            conductivity: Some(50000.0),
+            conductivity_filtered: Some(51000.0),
+            conductivity_compensated: Some(52000.0),
+            refill_in_progress: Some(false),
+            tank_level_switch_position: Some(false),
+            tank_level_switch_invalid: Some(false),
+            surface_ventilation_status: Some(true),
+            ambient_temperature: Some(22.0),
+            ambient_humidity: Some(60.0),
+            heater_status: Some(true),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_1) {
             Ok(()) => {}
@@ -331,20 +445,20 @@ pub mod tests {
         // *** insert and load the same DataFrame again - PASS (check ON DUPLICATE funcationality **
         let dataframe_reference_2 = DataFrame {
             timestamp: dataframe_reference_1.timestamp,
-            water_temperature: 26.5,
-            water_temperature_filtered: 26.0,
-            ph: 8.0,
-            ph_filtered: 8.5,
-            conductivity: 50001.0,
-            conductivity_filtered: 51001.0,
-            conductivity_compensated: 52001.0,
-            refill_in_progress: true,
-            tank_level_switch_position: true,
-            tank_level_switch_invalid: true,
-            surface_ventilation_status: false,
-            ambient_temperature: 23.0,
-            ambient_humidity: 61.0,
-            heater_status: false,
+            water_temperature: Some(26.5),
+            water_temperature_filtered: Some(26.0),
+            ph: Some(8.0),
+            ph_filtered: Some(8.5),
+            conductivity: Some(50001.0),
+            conductivity_filtered: Some(51001.0),
+            conductivity_compensated: Some(52001.0),
+            refill_in_progress: Some(true),
+            tank_level_switch_position: Some(true),
+            tank_level_switch_invalid: Some(true),
+            surface_ventilation_status: Some(false),
+            ambient_temperature: Some(23.0),
+            ambient_humidity: Some(61.0),
+            heater_status: Some(false),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_2) {
             Ok(()) => {}

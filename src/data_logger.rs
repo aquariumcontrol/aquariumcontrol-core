@@ -9,16 +9,22 @@ use crate::channel_content::InternalCommand;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 
+/// This struct holds the configuration data for the regular data logging to SQL database.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
     logging_interval: u64,
 }
 
+/// This struct contains the configuration and the implementation for regular data logging to SQL database.
 pub struct DataLogger {
     sleep_duration: Duration,
     spin_sleeper: SpinSleeper,
 }
 
+/// This module contains replacement values which are used when retrieving certain signals did not work.
+/// The SQL database requires each signal to have a value when inserting a row.
 pub mod data_logger_replacement_values {
     pub const REPLACEMENT_VALUE_WATER_TEMPERATURE: f32 = 0.0;
     pub const REPLACEMENT_VALUE_PH: f32 = 0.0;
@@ -159,20 +165,20 @@ impl DataLogger {
             let current_timestamp = Local::now().naive_local();
             let data_frame = DataFrame {
                 timestamp: current_timestamp,
-                water_temperature: water_temperature,
-                water_temperature_filtered: -1.0,
-                ph: ph,
-                ph_filtered: -1.0,
-                conductivity: conductivity,
-                conductivity_filtered: -1.0,
-                conductivity_compensated: -1.0,
-                refill_in_progress: false,
-                tank_level_switch_position: tank_level_switch_position > 0.0,
-                tank_level_switch_invalid: tank_level_switch_invalid > 0.0,
-                surface_ventilation_status: false,
-                ambient_temperature: ambient_temperature,
-                ambient_humidity: ambient_humidity,
-                heater_status: false,
+                water_temperature: Some(water_temperature),
+                water_temperature_filtered: None,
+                ph: Some(ph),
+                ph_filtered: None,
+                conductivity: Some(conductivity),
+                conductivity_filtered: None,
+                conductivity_compensated: None,
+                refill_in_progress: None,
+                tank_level_switch_position: Some(tank_level_switch_position > 0.0),
+                tank_level_switch_invalid: Some(tank_level_switch_invalid > 0.0),
+                surface_ventilation_status: None,
+                ambient_temperature: Some(ambient_temperature),
+                ambient_humidity: Some(ambient_humidity),
+                heater_status: None,
             };
             match sql_interface_data.write_data_frame_to_database(&data_frame) {
                 Ok(()) => {}
