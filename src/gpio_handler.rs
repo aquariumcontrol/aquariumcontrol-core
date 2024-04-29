@@ -55,6 +55,8 @@ impl GpioHandler {
         mut tcp_communication_opt: Option<TcpCommunication>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
+        tx_to_refill: Sender<bool>,
+        rx_from_refill: Receiver<InternalCommand>,
     ) {
         let mut response_value: f32 = 0.0;
 
@@ -67,6 +69,7 @@ impl GpioHandler {
         }
 
         loop {
+            // *** communication with data logger ***
             match rx_from_data_logger.try_recv() {
                 Ok(c) => {
                     if self.config.use_simulator {
@@ -91,6 +94,34 @@ impl GpioHandler {
                     }
                 }
             }
+            // **********************************
+
+            // *** communication with refill ***
+            match rx_from_refill.try_recv() {
+                Ok(c) => {
+                    if self.config.use_simulator {
+                        response_value =
+                            Self::get_response_from_simulator(tcp_communication_opt.as_mut(), c);
+                    }
+                    match tx_to_refill.send(response_value > 0.0) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Error in trying to send response value back to refill control: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from refill control: {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************
         }
     }
 }

@@ -5,6 +5,7 @@ mod data_logger;
 mod feedpattern;
 mod gpio_handler;
 mod iir_filter;
+mod refill;
 mod sql_interface;
 mod sql_interface_balling;
 mod sql_interface_data;
@@ -24,6 +25,7 @@ use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
 use crate::data_logger::DataLogger;
 use crate::gpio_handler::GpioHandler;
+use crate::refill::Refill;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::DataFrame;
@@ -290,8 +292,14 @@ fn main() {
     ) = mpsc::channel();
     let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
+    let (tx_refill_to_gpio, rx_gpio_from_refill): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
     let mut data_logger = DataLogger::new(config.data_logger);
+    let mut refill = Refill::new(config.refill);
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     let tcp_com_for_gpio_handler: Option<TcpCommunication>;
@@ -309,6 +317,8 @@ fn main() {
                 tcp_com_for_gpio_handler,
                 tx_gpio_to_data_logger,
                 rx_gpio_from_data_logger,
+                tx_gpio_to_refill,
+                rx_gpio_from_refill,
             );
         });
 
@@ -318,6 +328,10 @@ fn main() {
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
             );
+        });
+
+        scope.spawn(move || {
+            refill.execute(tx_refill_to_gpio, rx_refill_from_gpio);
         });
     });
 }
