@@ -19,12 +19,14 @@ pub struct RefillConfig {
     max_refill_count_hour: i64,
     max_refill_volume_hour: f64,
     min_interval_last_refill: i64,
+    tank_level_switch_position_high_stabilization_count: u32,
 }
 
 /// This struct contains the configuration and the implementation for the refill control.
 pub struct Refill {
     config: RefillConfig,
     sql_interface_refill: SqlInterfaceRefill,
+    tank_level_switch_position_high_stabilization_counter: u32,
 }
 
 struct RefillSqlData {
@@ -41,9 +43,48 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
+            tank_level_switch_position_high_stabilization_counter: 0,
         }
     }
 
+    /// function calculates a stabilized tank level switch position signal considering:
+    /// - if invalid bit of signal is true, then use the current value of the stabilized position signal.
+    /// - if the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
+    /// - if the the new signal is false (indicating low water level), then set increase the stabilization counter.
+    /// - if the stabiliyation counter exceeds the configured limit, then set the counter to zero and set the stabilized
+    /// signal to true indicating high water level.
+    fn calc_tank_level_switch_position_stabilized(
+        &mut self,
+        current_signal: bool,
+        new_signal: bool,
+        signal_invalid: bool,
+    ) -> bool {
+        if signal_invalid {
+            current_signal
+        } else {
+            match new_signal {
+                true => true,
+                false => {
+                    if self.tank_level_switch_position_high_stabilization_counter
+                        < self.config.tank_level_switch_position_high_stabilization_count
+                    {
+                        self.tank_level_switch_position_high_stabilization_counter += 1;
+                        true
+                    } else {
+                        self.tank_level_switch_position_high_stabilization_counter = 0;
+                        false
+                    }
+                }
+            }
+        }
+    }
+
+    /// retrieve the refill-related information from SQL database:
+    /// - duration since last refill in seconds
+    /// - volume refilled in last 24h 
+    /// - number of refill operations in last 24h
+    /// - volume refilled in the last hour
+    /// - number of refill operations in the last hour
     fn get_sql_refill_data(&mut self) -> RefillSqlData {
         let duration_since_last_refill =
             match self.sql_interface_refill.get_duration_since_last_refill() {
@@ -130,10 +171,10 @@ impl Refill {
         }
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
-        let mut tank_level_switch_position: bool = true;
+        let mut tank_level_switch_position: bool;
         let mut tank_level_switch_invalid: bool = false;
         let mut tank_level_switch_position_error: bool = false;
-
+        let mut tank_level_switch_position_stabilized: bool = true;
         // main control
         loop {
             i = 0;
@@ -157,6 +198,12 @@ impl Refill {
                             false
                         }
                     };
+                    tank_level_switch_position_stabilized =
+                        self.calc_tank_level_switch_position_stabilized(
+                            tank_level_switch_position_stabilized,
+                            tank_level_switch_position,
+                            tank_level_switch_invalid,
+                        );
                 }
                 Err(e) => {
                     println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
@@ -179,8 +226,8 @@ impl Refill {
                 }
             }
 
-            if !tank_level_switch_position && !tank_level_switch_invalid {
-                println!("Tank level switch indicates lower water level.");
+            if !tank_level_switch_position_stabilized {
+                println!("Stabilized tank level switch position indicates low water level.");
 
                 // execute checks before initiating refill
                 let refill_check_volume_last_24h =
