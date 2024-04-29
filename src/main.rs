@@ -87,13 +87,6 @@ fn main() {
         }
     }
 
-    let duration_refill = match sql_interface_refill.get_duration_since_last_refill() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get duration since last refill event: {e:?}");
-        }
-    };
-
     let duration_balling_dosing =
         match sql_interface_balling.get_duration_since_last_balling_dosing() {
             Ok(c) => c,
@@ -106,20 +99,6 @@ fn main() {
         Ok(c) => c,
         Err(e) => {
             panic!("Could not get duration until midnight: {e:?}");
-        }
-    };
-
-    let refill_volume_last_24h = match sql_interface_refill.get_refill_volume_of_last_24h() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get refill volume of last 24 hours: {e:?}");
-        }
-    };
-
-    let refill_count_last_24h = match sql_interface_refill.get_refill_count_of_last_24h() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get refill count of last 24 hours: {e:?}");
         }
     };
 
@@ -253,7 +232,6 @@ fn main() {
     for table in tables {
         println!("* {}", table);
     }
-    println!("Duration since last refill is {} seconds.", duration_refill);
     println!(
         "Duration since last Balling dosing is {} seconds.",
         duration_balling_dosing
@@ -269,9 +247,9 @@ fn main() {
         "Duration until midnight is {} seconds.",
         duration_until_midnight
     );
-    println!("Refill volume of last 24h is {} L.", refill_volume_last_24h);
-    println!("Refill count of last 24h is {}.", refill_count_last_24h);
-    println!("Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, Water Average={}, Water Counter={}, Control time = {}",
+    println!(
+        "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
+        Water Average={}, Water Counter={}, Control         time = {}",
         heating_stats.date.to_string(),
         heating_stats.energy,
         heating_stats.ambient_temperature_average_value,
@@ -299,7 +277,7 @@ fn main() {
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
     let mut data_logger = DataLogger::new(config.data_logger);
-    let mut refill = Refill::new(config.refill);
+    let mut refill = Refill::new(config.refill, sql_interface_refill);
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     let tcp_com_for_gpio_handler: Option<TcpCommunication>;
