@@ -25,8 +25,7 @@ pub struct DataLoggerConfig {
 
 /// This struct contains the configuration and the implementation for regular data logging to SQL database.
 pub struct DataLogger {
-    sleep_duration: Duration,
-    spin_sleeper: SpinSleeper,
+    config: DataLoggerConfig,
     filter_water_temperature: IIRFilter,
     filter_pH: IIRFilter,
     filter_conductivity: IIRFilter,
@@ -35,25 +34,26 @@ pub struct DataLogger {
 impl DataLogger {
     /// This function returns a new instance of DataLogger
     pub fn new(config: DataLoggerConfig) -> DataLogger {
-        let logging_interval_secs = config.logging_interval;
+        let filter_water_temperature = IIRFilter::new_requires_initial(
+            &config.filter_coefficient_water_temperature,
+            0.0, // initialization value (mesured value not available at this time)
+            1.0, // 1 second time step
+        );
+        let filter_pH = IIRFilter::new_requires_initial(
+            &config.filter_coefficient_pH,
+            0.0, // initialization value (mesured value not available at this time)
+            1.0, // 1 second time step
+        );
+        let filter_conductivity = IIRFilter::new_requires_initial(
+            &config.filter_coefficient_conductivity,
+            0.0, // initialization value (mesured value not available at this time)
+            1.0, // 1 second time step
+        );
         Self {
-            sleep_duration: Duration::new(logging_interval_secs, 0),
-            spin_sleeper: SpinSleeper::default(),
-            filter_water_temperature: IIRFilter::new_requires_initial(
-                &config.filter_coefficient_water_temperature,
-                0.0, // initialization value (mesured value not available at this time)
-                1.0, // 1 second time step
-            ),
-            filter_pH: IIRFilter::new_requires_initial(
-                &config.filter_coefficient_pH,
-                0.0, // initialization value (mesured value not available at this time)
-                1.0, // 1 second time step
-            ),
-            filter_conductivity: IIRFilter::new_requires_initial(
-                &config.filter_coefficient_conductivity,
-                0.0, // initialization value (mesured value not available at this time)
-                1.0, // 1 second time step
-            ),
+            config: config,
+            filter_water_temperature: filter_water_temperature,
+            filter_pH: filter_pH,
+            filter_conductivity: filter_conductivity,
         }
     }
 
@@ -64,6 +64,10 @@ impl DataLogger {
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
     ) {
+        let sleep_duration_one_sec = Duration::new(1, 0);
+        let mut i = 0;
+        let spin_sleeper = SpinSleeper::default();
+
         // define and initialize with value which will be overwritten in first iteration
         let mut water_temperature: Option<f32> = Some(0.0);
         let mut ph: Option<f32> = Some(0.0);
@@ -74,7 +78,10 @@ impl DataLogger {
         let mut tank_level_switch_position: Option<bool> = Some(false);
 
         loop {
-            self.spin_sleeper.sleep(self.sleep_duration);
+            while i < self.config.logging_interval {
+                i = i + 1;
+                spin_sleeper.sleep(sleep_duration_one_sec);
+            }
 
             // send request for water temperature
             match tx_to_gpio.send(InternalCommand::RequestSignal(
