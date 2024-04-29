@@ -26,6 +26,8 @@ struct RefillSqlData {
     duration_refill: i64,
     refill_volume_last_24h: f64,
     refill_count_last_24h: i64,
+    refill_volume_last_hour: f64,
+    refill_count_last_hour: i64,    
 }
 
 impl Refill {
@@ -58,10 +60,26 @@ impl Refill {
                 panic!("Could not get refill count of last 24 hours: {e:?}");
             }
         };
+        
+        let refill_volume_last_hour = match self.sql_interface_refill.get_refill_volume_of_last_hour() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get refill volume of last hour: {e:?}");
+            }
+        };
+
+        let refill_count_last_hour = match self.sql_interface_refill.get_refill_count_of_last_hour() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get refill count of last hour: {e:?}");
+            }
+        };
         RefillSqlData {
             duration_refill,
             refill_volume_last_24h,
             refill_count_last_24h,
+            refill_volume_last_hour,
+            refill_count_last_hour,
         }
     }
 
@@ -143,6 +161,14 @@ impl Refill {
                 println!(
                     "Refill count of last 24h is {}.",
                     sql_refill_data.refill_count_last_24h
+                );
+                println!(
+                    "Refill volume of last hour is {} L.",
+                    sql_refill_data.refill_volume_last_hour
+                );
+                println!(
+                    "Refill count of last hour is {}.",
+                    sql_refill_data.refill_count_last_hour
                 );
             }
         }

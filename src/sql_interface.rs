@@ -51,6 +51,16 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
         "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
 
+    /// This query is used to read the refill volume of the last hour from the data base.
+    /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
+    pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR: &str =
+        "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
+
+    /// This query is used to read the number of refill events of the last hour from the data base.
+    /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
+    pub const SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR: &str =
+        "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
+        
     /// This query is used to read the refill volume of the last day from the data base.
     /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =

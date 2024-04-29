@@ -57,12 +57,37 @@ impl SqlInterfaceRefill {
             Err(e) => Err(e),
         }
     }
+    
+    /// The function requests the number of water refill events in the last hour
+    pub fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
+        match SqlInterface::get_single_integer_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
+    }
 
     /// The function requests the water volume refilled in the last 24 hours
     pub fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => {
+                println!("{e:?}");
+                Err(e)
+            }
+        }
+    }
+
+    /// The function requests the water volume refilled in the last hour
+    pub fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
+        match SqlInterface::get_single_float_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR,
         ) {
             Ok(c) => Ok(c),
             Err(e) => {
@@ -189,7 +214,17 @@ pub mod tests {
                 Err(e) => panic!("Could not get refill count from last 24h (target=0): {e:?}"),
             };
         assert_eq!(refill_count_of_last_24h_zero, 0);
-        println!("* checking refill count (target zero) succeeded.");
+        println!("* checking refill count of last 24h (target zero) succeeded.");
+        // **************************************************************************************
+
+        // *** check refill count of last hour (zero) - PASS ************************************
+        let refill_count_of_last_hour_zero =
+            match sql_interface_refill.get_refill_count_of_last_hour() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill count from last hour (target=0): {e:?}"),
+            };
+        assert_eq!(refill_count_of_last_hour_zero, 0);
+        println!("* checking refill count of last hour (target zero) succeeded.");
         // **************************************************************************************
 
         //*** check refill volume of last 24h (zero) - PASS *************************************
@@ -199,7 +234,17 @@ pub mod tests {
                 Err(e) => panic!("Could not get refill volume from last 24h (target=0): {e:?}"),
             };
         assert_eq!(refill_volume_of_last_24h_zero, 0.0);
-        println!("* checking refill volume (target zero) succeeded.");
+        println!("* checking refill volume of last 24h (target zero) succeeded.");
+        // **************************************************************************************
+
+        //*** check refill volume of last hour (zero) - PASS *************************************
+        let refill_volume_of_last_hour_zero =
+            match sql_interface_refill.get_refill_volume_of_last_hour() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill volume from last hour (target=0): {e:?}"),
+            };
+        assert_eq!(refill_volume_of_last_hour_zero, 0.0);
+        println!("* checking refill volume of last hour (target zero) succeeded.");
         // **************************************************************************************
 
         // *** check refill count of last 24h (one) - PASS *************************************
@@ -216,7 +261,7 @@ pub mod tests {
             Err(e) => panic!("Could not get refill count from last 24h (target=1): {e:?}"),
         };
         assert_eq!(refill_count_of_last_24h_one, 1);
-        println!("* checking refill count (target non-zero) succeeded.");
+        println!("* checking refill count of last 24h (target non-zero) succeeded.");
         // **************************************************************************************
 
         // *** check refill volume of last 24h (one) - PASS *************************************
@@ -226,6 +271,33 @@ pub mod tests {
                 Err(e) => panic!("Could not get refill volue from last 24h (target=0.25): {e:?}"),
             };
         assert_eq!(refill_volume_of_last_24h_one, 0.25);
+        println!("* checking refill volume (target non-zero) succeeded.");
+        // **************************************************************************************
+
+        // *** check refill count of last hour (one) - PASS *************************************
+        let naive_datetime_30min_ago = SqlInterface::get_naive_timestamp_from_past(0, 30);
+        match sql_interface_refill.insert_refill_event(naive_datetime_30min_ago, 5.0, 0.25, -2) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not insert refill event in data base for test preparation: {e:?}")
+            }
+        }
+        let refill_count_of_last_hour_one = match sql_interface_refill.get_refill_count_of_last_hour()
+        {
+            Ok(c) => c,
+            Err(e) => panic!("Could not get refill count from last hour (target=1): {e:?}"),
+        };
+        assert_eq!(refill_count_of_last_hour_one, 1);
+        println!("* checking refill count of last hour (target non-zero) succeeded.");
+        // **************************************************************************************
+        
+        // *** check refill volume of last hour (one) - PASS *************************************
+        let refill_volume_of_last_hour_one =
+            match sql_interface_refill.get_refill_volume_of_last_hour() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill volue from last hour (target=0.25): {e:?}"),
+            };
+        assert_eq!(refill_volume_of_last_hour_one, 0.25);
         println!("* checking refill volume (target non-zero) succeeded.");
         // **************************************************************************************
 
@@ -260,7 +332,7 @@ pub mod tests {
         };
         assert_eq!(
             refill_event.timestamp,
-            naive_datetime_12h_ago.trunc_subsecs(0)
+            naive_datetime_30min_ago.trunc_subsecs(0)
         );
         assert_eq!(refill_event.duration, 5.0);
         assert_eq!(refill_event.volume, 0.25);
