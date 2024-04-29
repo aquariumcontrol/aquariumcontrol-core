@@ -14,6 +14,10 @@ use crate::sql_interface_refill::SqlInterfaceRefill;
 pub struct RefillConfig {
     initial_wait_interval: u64,
     check_interval: u64,
+    max_refill_count_24h: i64,
+    max_refill_volume_24h: f64,
+    max_refill_count_hour: i64,
+    max_refill_volume_hour: f64,
 }
 
 /// This struct contains the configuration and the implementation for the refill control.
@@ -27,7 +31,7 @@ struct RefillSqlData {
     refill_volume_last_24h: f64,
     refill_count_last_24h: i64,
     refill_volume_last_hour: f64,
-    refill_count_last_hour: i64,    
+    refill_count_last_hour: i64,
 }
 
 impl Refill {
@@ -46,8 +50,9 @@ impl Refill {
                 panic!("Could not get duration since last refill event: {e:?}");
             }
         };
-        
-        let refill_volume_last_24h = match self.sql_interface_refill.get_refill_volume_of_last_24h() {
+
+        let refill_volume_last_24h = match self.sql_interface_refill.get_refill_volume_of_last_24h()
+        {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not get refill volume of last 24 hours: {e:?}");
@@ -60,15 +65,17 @@ impl Refill {
                 panic!("Could not get refill count of last 24 hours: {e:?}");
             }
         };
-        
-        let refill_volume_last_hour = match self.sql_interface_refill.get_refill_volume_of_last_hour() {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not get refill volume of last hour: {e:?}");
-            }
-        };
 
-        let refill_count_last_hour = match self.sql_interface_refill.get_refill_count_of_last_hour() {
+        let refill_volume_last_hour =
+            match self.sql_interface_refill.get_refill_volume_of_last_hour() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("Could not get refill volume of last hour: {e:?}");
+                }
+            };
+
+        let refill_count_last_hour = match self.sql_interface_refill.get_refill_count_of_last_hour()
+        {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not get refill count of last hour: {e:?}");
@@ -158,18 +165,49 @@ impl Refill {
                     "Refill volume of last 24h is {} L.",
                     sql_refill_data.refill_volume_last_24h
                 );
+                let refill_check_volume_last_24h = sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
+                if refill_check_volume_last_24h {
+                    println!(
+                        "Refill volume of last 24h exceeds permissible refill volume per 24h of {}",
+                        self.config.max_refill_volume_24h
+                    )
+                }
+
                 println!(
                     "Refill count of last 24h is {}.",
                     sql_refill_data.refill_count_last_24h
                 );
+                let refill_check_count_last_24h = sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
+                if refill_check_count_last_24h {
+                    println!(
+                        "Refill count of last 24h exceeds permissible refill count per 24h of {}",
+                        self.config.max_refill_count_24h
+                    )
+                }
+
                 println!(
                     "Refill volume of last hour is {} L.",
                     sql_refill_data.refill_volume_last_hour
                 );
+                let refill_check_volume_last_hour = sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
+                if refill_check_volume_last_hour {
+                    println!(
+                        "Refill volume of last hour exceeds permissible refill volume per hour of {}",
+                        self.config.max_refill_volume_hour
+                    )
+                }
+
                 println!(
                     "Refill count of last hour is {}.",
                     sql_refill_data.refill_count_last_hour
                 );
+                let refill_check_volume_last_hour = sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
+                if refill_check_volume_last_hour {
+                    println!(
+                        "Refill count of last 24h exceeds permissible refill count per hour of {}",
+                        self.config.max_refill_count_hour
+                    )
+                }
             }
         }
     }

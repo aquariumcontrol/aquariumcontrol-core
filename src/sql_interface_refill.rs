@@ -57,7 +57,7 @@ impl SqlInterfaceRefill {
             Err(e) => Err(e),
         }
     }
-    
+
     /// The function requests the number of water refill events in the last hour
     pub fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
@@ -282,15 +282,15 @@ pub mod tests {
                 panic!("Could not insert refill event in data base for test preparation: {e:?}")
             }
         }
-        let refill_count_of_last_hour_one = match sql_interface_refill.get_refill_count_of_last_hour()
-        {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get refill count from last hour (target=1): {e:?}"),
-        };
+        let refill_count_of_last_hour_one =
+            match sql_interface_refill.get_refill_count_of_last_hour() {
+                Ok(c) => c,
+                Err(e) => panic!("Could not get refill count from last hour (target=1): {e:?}"),
+            };
         assert_eq!(refill_count_of_last_hour_one, 1);
         println!("* checking refill count of last hour (target non-zero) succeeded.");
         // **************************************************************************************
-        
+
         // *** check refill volume of last hour (one) - PASS *************************************
         let refill_volume_of_last_hour_one =
             match sql_interface_refill.get_refill_volume_of_last_hour() {
