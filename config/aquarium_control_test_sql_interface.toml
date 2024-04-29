@@ -16,5 +16,9 @@ filter_coefficient_water_temperature = { filter_coefficient = 0.5 }
 filter_coefficient_pH = { filter_coefficient = 0.5 }
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }
 
+[refill]
+initial_wait_interval = 60                          # wait for x seconds before starting refill control
+check_interval = 2                                  # check tank level every x seconds
+
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

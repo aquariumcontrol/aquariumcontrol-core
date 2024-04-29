@@ -19,8 +19,8 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
-    /// this function returns a new instance of GpioHandler
-    /// if real hardware is used, then the function also opens interface to GPIO and I2C
+    /// This function returns a new instance of GpioHandler
+    /// If real hardware is used, then the function also opens interface to GPIO and I2C
     pub fn new(config: GpioHandlerConfig) -> GpioHandler {
         if !config.use_simulator {
             #[cfg(not(target_os = "linux"))]
@@ -48,6 +48,7 @@ impl GpioHandler {
     fn execute_linux_specific_code() {
         println!("Linux specific code.");
     }
+
     /// this function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     pub fn execute(

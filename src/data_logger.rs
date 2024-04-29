@@ -33,6 +33,7 @@ pub struct DataLogger {
 }
 
 impl DataLogger {
+    /// This function returns a new instance of DataLogger
     pub fn new(config: DataLoggerConfig) -> DataLogger {
         let logging_interval_secs = config.logging_interval;
         Self {
@@ -56,6 +57,7 @@ impl DataLogger {
         }
     }
 
+    /// this function contains the main cycle of data logger functionality
     pub fn execute(
         &mut self,
         mut sql_interface_data: SqlInterfaceData,
