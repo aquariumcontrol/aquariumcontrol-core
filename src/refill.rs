@@ -29,6 +29,7 @@ pub struct Refill {
     sql_interface_refill: SqlInterfaceRefill,
     tank_level_switch_position_high_stabilization_counter: u32,
     error_switch_stuck_high: bool,
+    error_switch_stuck_low: bool,
 }
 
 struct RefillSqlData {
@@ -47,6 +48,7 @@ impl Refill {
             sql_interface_refill: sql_interface_refill,
             tank_level_switch_position_high_stabilization_counter: 0,
             error_switch_stuck_high: false,
+            error_switch_stuck_low: false,
         }
     }
 
@@ -278,6 +280,15 @@ impl Refill {
                     < self.config.min_interval_last_refill;
                 if refill_check_intervall_last_refill {
                     println!("Time interval since last refill is too small.");
+                }
+                else {
+                    if !refill_check_volume_last_24h && !refill_check_count_last_24h &&
+                        !refill_check_volume_last_hour && !refill_check_count_last_24h {
+                        if !self.error_switch_stuck_low {
+                            // conditions for allowing refill operation are given        
+                            println!("Executing refill.");                                    
+                        }
+                    }
                 }
             }
         }
