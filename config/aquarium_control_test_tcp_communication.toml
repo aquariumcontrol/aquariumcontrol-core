@@ -23,6 +23,7 @@ max_refill_count_24h = 20                           # max. allowed refill operat
 max_refill_volume_24h = 6.0                         # max. allowed refill volume per 24h
 max_refill_count_hour = 5                           # max. allowed refill operations per hour
 max_refill_volume_hour = 2.0                        # max. allowed refill volume per hour
+min_interval_last_refill = 600                      # min. required time interval in seconds between two refill operations
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

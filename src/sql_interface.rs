@@ -1,3 +1,4 @@
+use chrono::LocalResult::{Ambiguous, None, Single};
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
@@ -652,17 +653,26 @@ impl SqlInterface {
 
     /// calculates the time difference between a given timestamp of type NaiveDateTime
     /// to the current local time in seconds
-    /// This function is used for testing purposes only across multiple crates.
     #[allow(dead_code)]
-    pub fn get_duration_from_naive_timestamp_to_local_now(timestamp_naive: NaiveDateTime) -> i64 {
+    pub fn get_duration_from_naive_timestamp_to_local_now(
+        timestamp_naive: NaiveDateTime,
+    ) -> Option<i64> {
         let reference_current_timestamp = chrono::Local::now();
-        let timestamp_dt: DateTime<Local> = Local.from_local_datetime(&timestamp_naive).unwrap();
-
-        reference_current_timestamp
-            .signed_duration_since(timestamp_dt)
-            .num_seconds()
+        let timestamp_dt: DateTime<Local> = match Local.from_local_datetime(&timestamp_naive) {
+            Single(t) => t,
+            Ambiguous(_t1, _t2) => {
+                return Option::None;
+            }
+            None => {
+                return Option::None;
+            }
+        };
+        Some(
+            reference_current_timestamp
+                .signed_duration_since(timestamp_dt)
+                .num_seconds(),
+        )
     }
-    // todo: check of database version
 }
 
 #[cfg(test)]

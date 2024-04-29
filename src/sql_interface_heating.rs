@@ -324,8 +324,8 @@ pub mod tests {
         // Create a NaiveDateTime for midnight
         let midnight = NaiveDateTime::new(today, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
         // Calculate the difference
-        let duration_until_midnight =
-            24 * 3600 - SqlInterface::get_duration_from_naive_timestamp_to_local_now(midnight);
+        let duration_until_midnight = 24 * 3600
+            - SqlInterface::get_duration_from_naive_timestamp_to_local_now(midnight).unwrap();
         match sql_interface_heating.get_duration_until_midnight() {
             Ok(c) => {
                 assert_eq!(c, duration_until_midnight);

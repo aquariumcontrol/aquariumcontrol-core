@@ -12,12 +12,13 @@ use crate::sql_interface_refill::SqlInterfaceRefill;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct RefillConfig {
-    initial_wait_interval: u64,
-    check_interval: u64,
+    initial_wait_interval: i64,
+    check_interval: i64,
     max_refill_count_24h: i64,
     max_refill_volume_24h: f64,
     max_refill_count_hour: i64,
     max_refill_volume_hour: f64,
+    min_interval_last_refill: i64,
 }
 
 /// This struct contains the configuration and the implementation for the refill control.
@@ -27,7 +28,7 @@ pub struct Refill {
 }
 
 struct RefillSqlData {
-    duration_refill: i64,
+    duration_since_last_refill: i64,
     refill_volume_last_24h: f64,
     refill_count_last_24h: i64,
     refill_volume_last_hour: f64,
@@ -44,12 +45,13 @@ impl Refill {
     }
 
     fn get_sql_refill_data(&mut self) -> RefillSqlData {
-        let duration_refill = match self.sql_interface_refill.get_duration_since_last_refill() {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not get duration since last refill event: {e:?}");
-            }
-        };
+        let duration_since_last_refill =
+            match self.sql_interface_refill.get_duration_since_last_refill() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("Could not get duration since last refill event: {e:?}");
+                }
+            };
 
         let refill_volume_last_24h = match self.sql_interface_refill.get_refill_volume_of_last_24h()
         {
@@ -82,7 +84,7 @@ impl Refill {
             }
         };
         RefillSqlData {
-            duration_refill,
+            duration_since_last_refill,
             refill_volume_last_24h,
             refill_count_last_24h,
             refill_volume_last_hour,
@@ -96,8 +98,28 @@ impl Refill {
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
 
-        // get refill data from SQL database to check for problems early after startup
-        _ = self.get_sql_refill_data();
+        // retrieving data from SQL data base
+        let mut sql_refill_data = self.get_sql_refill_data();
+        println!(
+            "Duration since last refill is {} seconds.",
+            sql_refill_data.duration_since_last_refill
+        );
+        println!(
+            "Refill volume of last 24h is {} L.",
+            sql_refill_data.refill_volume_last_24h
+        );
+        println!(
+            "Refill count of last 24h is {}.",
+            sql_refill_data.refill_count_last_24h
+        );
+        println!(
+            "Refill volume of last hour is {} L.",
+            sql_refill_data.refill_volume_last_hour
+        );
+        println!(
+            "Refill count of last hour is {}.",
+            sql_refill_data.refill_count_last_hour
+        );
 
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
@@ -106,6 +128,8 @@ impl Refill {
                 spin_sleeper.sleep(sleep_duration_one_sec);
             }
         }
+        sql_refill_data.duration_since_last_refill =
+            sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
         let mut tank_level_switch_position: bool = true;
         let mut tank_level_switch_invalid: bool = false;
         let mut tank_level_switch_position_error: bool = false;
@@ -117,6 +141,9 @@ impl Refill {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
             }
+            sql_refill_data.duration_since_last_refill =
+                sql_refill_data.duration_since_last_refill + self.config.check_interval;
+
             // send request for tank level switch position
             match tx_to_gpio.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchPosition,
@@ -155,58 +182,44 @@ impl Refill {
             if !tank_level_switch_position && !tank_level_switch_invalid {
                 println!("Tank level switch indicates lower water level.");
 
-                // retrieving data from SQL data base
-                let sql_refill_data = self.get_sql_refill_data();
-                println!(
-                    "Duration since last refill is {} seconds.",
-                    sql_refill_data.duration_refill
-                );
-                println!(
-                    "Refill volume of last 24h is {} L.",
-                    sql_refill_data.refill_volume_last_24h
-                );
-                let refill_check_volume_last_24h = sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
+                // execute checks before initiating refill
+                let refill_check_volume_last_24h =
+                    sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
                 if refill_check_volume_last_24h {
                     println!(
                         "Refill volume of last 24h exceeds permissible refill volume per 24h of {}",
                         self.config.max_refill_volume_24h
                     )
                 }
-
-                println!(
-                    "Refill count of last 24h is {}.",
-                    sql_refill_data.refill_count_last_24h
-                );
-                let refill_check_count_last_24h = sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
+                let refill_check_count_last_24h =
+                    sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
                 if refill_check_count_last_24h {
                     println!(
                         "Refill count of last 24h exceeds permissible refill count per 24h of {}",
                         self.config.max_refill_count_24h
                     )
                 }
-
-                println!(
-                    "Refill volume of last hour is {} L.",
-                    sql_refill_data.refill_volume_last_hour
-                );
-                let refill_check_volume_last_hour = sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
+                let refill_check_volume_last_hour =
+                    sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
                 if refill_check_volume_last_hour {
                     println!(
                         "Refill volume of last hour exceeds permissible refill volume per hour of {}",
                         self.config.max_refill_volume_hour
                     )
                 }
-
-                println!(
-                    "Refill count of last hour is {}.",
-                    sql_refill_data.refill_count_last_hour
-                );
-                let refill_check_volume_last_hour = sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
-                if refill_check_volume_last_hour {
+                let refill_check_count_last_hour =
+                    sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
+                if refill_check_count_last_hour {
                     println!(
                         "Refill count of last 24h exceeds permissible refill count per hour of {}",
                         self.config.max_refill_count_hour
                     )
+                }
+
+                let refill_check_intervall_last_refill = sql_refill_data.duration_since_last_refill
+                    < self.config.min_interval_last_refill;
+                if refill_check_intervall_last_refill {
+                    println!("Time interval since last refill is too small.");
                 }
             }
         }

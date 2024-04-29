@@ -243,7 +243,8 @@ pub mod tests {
                 Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
             };
         let reference_duration_since_last_balling_dosing =
-            SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp);
+            SqlInterface::get_duration_from_naive_timestamp_to_local_now(balling_timestamp)
+                .unwrap();
         assert_eq!(
             duration_since_last_balling_dosing,
             reference_duration_since_last_balling_dosing
