@@ -17,5 +17,5 @@ filter_coefficient_pH = { filter_coefficient = 0.5 }
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }
 
 [gpio_handler]
-use_simulator = true                               # if true, then do not use real HW
+use_simulator = false                               # if true, then do not use real HW
 

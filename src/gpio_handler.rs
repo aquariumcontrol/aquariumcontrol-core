@@ -1,5 +1,10 @@
 use serde_derive::Deserialize;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+#[cfg(target_os = "linux")]
+use {
+    rppal::gpio::Gpio,
+    rppal::i2c::I2c, // required for communication with AtlasScientific sensors
+};
 
 use crate::channel_content::InternalCommand;
 use crate::tcp_communication::TcpCommunication;
@@ -15,7 +20,12 @@ pub struct GpioHandler {
 
 impl GpioHandler {
     /// this function returns a new instance of GpioHandler
+    /// if real hardware is used, then the function also opens interface to GPIO and I2C
     pub fn new(config: GpioHandlerConfig) -> GpioHandler {
+        if !config.use_simulator {
+            #[cfg(not(target_os = "linux"))]
+            panic!("Usage of hardware not supported on this platform.");
+        }
         GpioHandler { config: config }
     }
 
@@ -34,6 +44,10 @@ impl GpioHandler {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    fn execute_linux_specific_code() {
+        println!("Linux specific code.");
+    }
     /// this function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     pub fn execute(
@@ -44,12 +58,16 @@ impl GpioHandler {
     ) {
         let mut response_value: f32 = 0.0;
 
+        //if cfg!(linux) {
+        #[cfg(target_os = "linux")]
+        execute_linux_specific_code();
+        //}
         if self.config.use_simulator && tcp_communication_opt.is_none() {
             panic!("Gpiohandler configured to run with simulator, but no TCP connection provided.");
         }
 
         loop {
-            match rx_from_data_logger.recv() {
+            match rx_from_data_logger.try_recv() {
                 Ok(c) => {
                     if self.config.use_simulator {
                         response_value =
@@ -65,7 +83,12 @@ impl GpioHandler {
                     }
                 }
                 Err(e) => {
-                    println!("Error in trying to receive command from data logger: {e:?}");
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                        }
+                    }
                 }
             }
         }

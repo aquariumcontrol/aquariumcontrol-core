@@ -181,8 +181,8 @@ impl DataLogger {
                     println!("DataLogger: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
                 }
             }
-            
-            // calculate filtered values            
+
+            // calculate filtered values
             let water_temperature_filtered = match water_temperature {
                 Some(c) => Some(self.filter_water_temperature.get_filtered_value(c)),
                 None => None,
@@ -195,7 +195,7 @@ impl DataLogger {
                 Some(c) => Some(self.filter_conductivity.get_filtered_value(c)),
                 None => None,
             };
-            
+
             // all data received, let's construct a data frame
             let current_timestamp = Local::now().naive_local();
             let data_frame = DataFrame {

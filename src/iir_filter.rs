@@ -72,7 +72,7 @@ impl IIRFilter {
         }
     }
     */
-    
+
     /// returns the filtered value
     ///
     /// # Arguments:
