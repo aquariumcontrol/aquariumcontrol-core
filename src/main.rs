@@ -14,6 +14,7 @@ mod sql_interface_heating;
 mod sql_interface_refill;
 mod tcp_communication;
 mod version_information;
+mod controllino;
 
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
@@ -37,6 +38,7 @@ use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::tcp_communication::TcpCommunication;
 use crate::version_information::VersionInformation;
+use crate::controllino::Controllino;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -298,6 +300,8 @@ fn main() {
     let gpio_handler = GpioHandler::new(config.gpio_handler);
 
     scope(|scope| {
+        let controllino = Arc::new(Controllino::new(config.controllino));
+        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope.spawn(move || {
