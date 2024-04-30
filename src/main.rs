@@ -18,6 +18,7 @@ mod version_information;
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread::scope;
 //use std::env;
 
@@ -270,12 +271,19 @@ fn main() {
     ) = mpsc::channel();
     let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
+    
     let (tx_refill_to_gpio, rx_gpio_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
+        let (_tx_refill_to_controllino, _rx_controllino_from_refill): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (_tx_controllino_to_refill, _rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+    
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
 
@@ -290,6 +298,8 @@ fn main() {
     let gpio_handler = GpioHandler::new(config.gpio_handler);
 
     scope(|scope| {
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
         scope.spawn(move || {
             gpio_handler.execute(
                 tcp_com_for_gpio_handler,
@@ -308,8 +318,16 @@ fn main() {
             );
         });
 
+        let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
+
         scope.spawn(move || {
-            refill.execute(tx_refill_to_gpio, rx_refill_from_gpio);
+            refill.execute(
+                mutex_device_scheduler_refill,
+                tx_refill_to_gpio,
+                rx_refill_from_gpio,
+                _tx_refill_to_controllino,
+                _rx_refill_from_controllino,
+            );
         });
     });
 }

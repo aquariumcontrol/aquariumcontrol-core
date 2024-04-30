@@ -38,9 +38,6 @@ impl GpioHandler {
         let tcp_communication = tcp_communication_opt.unwrap();
         match internal_command {
             InternalCommand::RequestSignal(c) => tcp_communication.get_signal(c),
-            //InternalCommand::SwitchOn(c) => {0.0},
-            //InternalCommand::SwitchOff(c) => {0.0},
-            //InternalCommand::Quit => {0.0},
         }
     }
 
@@ -96,8 +93,8 @@ impl GpioHandler {
                 }
             }
             // **********************************
-
-            // *** communication with refill ***
+            
+            // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
                     if self.config.use_simulator {
@@ -108,7 +105,7 @@ impl GpioHandler {
                         Ok(()) => {}
                         Err(e) => {
                             println!(
-                                "Error in trying to send response value back to refill control: {e:?}"
+                                "Error in trying to send response value back to data logger: {e:?}"
                             );
                         }
                     }
@@ -117,7 +114,7 @@ impl GpioHandler {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from refill control: {e:?}");
+                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
                         }
                     }
                 }

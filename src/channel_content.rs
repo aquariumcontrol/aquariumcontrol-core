@@ -10,7 +10,9 @@ pub enum AquariumDevice {
     AuxPump2,
     Heater,
     Ventilation,
-    RefillPump,
+    */
+    //RefillPump,
+    /*
     Feeder,
     PeristalticPump1,
     PeristalticPump2,

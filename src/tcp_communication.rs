@@ -5,7 +5,7 @@ use std::{
     net::TcpStream,
 };
 
-use crate::channel_content::AquariumSignal;
+use crate::channel_content::{AquariumSignal};
 
 /// This module contains constants representing commands received from control application.
 #[allow(dead_code)]
@@ -42,6 +42,10 @@ mod signal {
     pub const ATLASSCIENTIFICPH: &str = "pH";
     pub const ATLASSCIENTIFICCONDUCTIVITY: &str = "conductivity";
 }
+
+/// This struct holds the configuration data for the TCP connection.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct TcpConnectionConfig {
     pub ip_address: String,
@@ -88,8 +92,8 @@ impl TcpCommunication {
         })
     }
 
-    /// function removes training newline or carriage return
-    /// taken from https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning
+    /// function removes trailing newline or carriage return.
+    /// Code taken over from <https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning>
     fn trim_newline(s: &mut String) {
         if s.ends_with('\n') {
             s.pop();
@@ -99,7 +103,7 @@ impl TcpCommunication {
         }
     }
 
-    /// communicate with simulator to get water temperature
+    /// communicate with simulator to get signal value
     pub fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
         let category = match aquarium_signal {
             AquariumSignal::WaterTemperature => category::ATLASSCIENTIFIC,

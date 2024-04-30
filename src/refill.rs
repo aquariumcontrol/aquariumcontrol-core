@@ -1,6 +1,7 @@
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::channel_content::AquariumSignal;
@@ -71,7 +72,9 @@ impl Refill {
                 true => true,
                 false => {
                     if self.tank_level_switch_position_high_stabilization_counter
-                        < self.config.tank_level_switch_position_high_stabilization_count
+                        < self
+                            .config
+                            .tank_level_switch_position_high_stabilization_count
                     {
                         self.tank_level_switch_position_high_stabilization_counter += 1;
                         true
@@ -86,7 +89,7 @@ impl Refill {
 
     /// retrieve the refill-related information from SQL database:
     /// - duration since last refill in seconds
-    /// - volume refilled in last 24h 
+    /// - volume refilled in last 24h
     /// - number of refill operations in last 24h
     /// - volume refilled in the last hour
     /// - number of refill operations in the last hour
@@ -141,11 +144,53 @@ impl Refill {
     /// function checks if the duration since the last refill operation eceeds a configurable limit.
     /// if yes, then corresponding error flag is set.
     fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: i64) {
-        self.error_switch_stuck_high = duration_since_last_refill > self.config.max_duration_since_last_refill;
+        self.error_switch_stuck_high =
+            duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
-    
+
+    /// this function executes the refill operation
+    pub fn execute_refill(
+        _tx_to_controllino: Sender<InternalCommand>,
+        _rx_from_controllino: &Receiver<bool>,
+    ) -> i64 {
+        // command start of refill pump
+        /*
+        match tx_to_gpio.send(InternalCommand::SwitchOn(
+            AquariumDevice::RefillPump,
+        )) {
+            Ok(_) => {
+                // now listen for response
+                tank_level_switch_position = match rx_from_gpio.recv() {
+                        Ok(c) => c,
+                        Err(_) => {
+                            tank_level_switch_position_error = true; // information is used in subsequent signal
+                            false
+                        }
+                    };
+                    tank_level_switch_position_stabilized = self
+                        .calc_tank_level_switch_position_stabilized(
+                            tank_level_switch_position_stabilized,
+                            tank_level_switch_position,
+                            tank_level_switch_invalid,
+                        );
+                }
+                Err(e) => {
+                    println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
+                }
+            }
+        */
+        0
+    }
+
     /// this function contains the main cycle of refill control
-    pub fn execute(&mut self, tx_to_gpio: Sender<InternalCommand>, rx_from_gpio: Receiver<bool>) {
+    pub fn execute(
+        &mut self,
+        mutex_device_scheduler_refill: Arc<Mutex<i32>>,
+        tx_to_gpio: Sender<InternalCommand>,
+        rx_from_gpio: Receiver<bool>,
+        tx_to_controllino: Sender<InternalCommand>,
+        rx_from_controllino: Receiver<bool>,
+    ) {
         let sleep_duration_one_sec = Duration::new(1, 0);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
@@ -195,9 +240,11 @@ impl Refill {
             }
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;
-            
-            self.check_error_condition_switch_stuck_high(sql_refill_data.duration_since_last_refill);
-            
+
+            self.check_error_condition_switch_stuck_high(
+                sql_refill_data.duration_since_last_refill,
+            );
+
             // send request for tank level switch position
             match tx_to_gpio.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchPosition,
@@ -211,8 +258,8 @@ impl Refill {
                             false
                         }
                     };
-                    tank_level_switch_position_stabilized =
-                        self.calc_tank_level_switch_position_stabilized(
+                    tank_level_switch_position_stabilized = self
+                        .calc_tank_level_switch_position_stabilized(
                             tank_level_switch_position_stabilized,
                             tank_level_switch_position,
                             tank_level_switch_invalid,
@@ -280,13 +327,22 @@ impl Refill {
                     < self.config.min_interval_last_refill;
                 if refill_check_intervall_last_refill {
                     println!("Time interval since last refill is too small.");
-                }
-                else {
-                    if !refill_check_volume_last_24h && !refill_check_count_last_24h &&
-                        !refill_check_volume_last_hour && !refill_check_count_last_24h {
+                } else {
+                    if !refill_check_volume_last_24h
+                        && !refill_check_count_last_24h
+                        && !refill_check_volume_last_hour
+                        && !refill_check_count_last_24h
+                    {
                         if !self.error_switch_stuck_low {
-                            // conditions for allowing refill operation are given        
-                            println!("Executing refill.");                                    
+                            // conditions for allowing refill operation are given
+                            println!("Executing refill.");
+                            // inner scope to limit lifetime of unlocked mutex
+                            {
+                                let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
+                                // now we are given exclusive access to actuators
+                                Self::execute_refill(tx_to_controllino.clone(), &rx_from_controllino);
+                                *mutex_data += 1;
+                            }
                         }
                     }
                 }
