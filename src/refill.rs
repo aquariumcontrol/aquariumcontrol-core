@@ -4,6 +4,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sql_interface_refill::SqlInterfaceRefill;
@@ -150,36 +151,52 @@ impl Refill {
 
     /// this function executes the refill operation
     pub fn execute_refill(
-        _tx_to_controllino: Sender<InternalCommand>,
-        _rx_from_controllino: &Receiver<bool>,
-    ) -> i64 {
+        tx_to_controllino: Sender<InternalCommand>,
+        rx_from_controllino: &Receiver<bool>,
+    ) {
         // command start of refill pump
-        /*
-        match tx_to_gpio.send(InternalCommand::SwitchOn(
-            AquariumDevice::RefillPump,
-        )) {
+        match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
             Ok(_) => {
                 // now listen for response
-                tank_level_switch_position = match rx_from_gpio.recv() {
-                        Ok(c) => c,
-                        Err(_) => {
-                            tank_level_switch_position_error = true; // information is used in subsequent signal
-                            false
-                        }
-                    };
-                    tank_level_switch_position_stabilized = self
-                        .calc_tank_level_switch_position_stabilized(
-                            tank_level_switch_position_stabilized,
-                            tank_level_switch_position,
-                            tank_level_switch_invalid,
-                        );
-                }
-                Err(e) => {
-                    println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
-                }
+                match rx_from_controllino.recv() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Refill: Error when trying to receive answer from Controllino when switching on refill pump: {e:?}")
+                    }
+                };
             }
-        */
-        0
+            Err(e) => {
+                println!("Refill: Error in channel communication to Controllino when switching on refill pump: {e:?}");
+            }
+        }
+
+        //*** wait for condition to stop refilling ***
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_hundred_milli_sec = Duration::from_millis(100);
+        let mut i = 0;
+        loop {
+            spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
+            i += 1;
+            if i > 9 {
+                break;
+            }
+        }
+
+        // command stop of refill pump
+        match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
+            Ok(_) => {
+                // now listen for response
+                match rx_from_controllino.recv() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Refill: Error when trying to receive answer from Controllino when switching off refill pump: {e:?}")
+                    }
+                };
+            }
+            Err(e) => {
+                println!("Refill: Error in channel communication to Controllino when switching off refill pump: {e:?}");
+            }
+        }
     }
 
     /// this function contains the main cycle of refill control
@@ -340,7 +357,10 @@ impl Refill {
                             {
                                 let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
                                 // now we are given exclusive access to actuators
-                                Self::execute_refill(tx_to_controllino.clone(), &rx_from_controllino);
+                                Self::execute_refill(
+                                    tx_to_controllino.clone(),
+                                    &rx_from_controllino,
+                                );
                                 *mutex_data += 1;
                             }
                         }

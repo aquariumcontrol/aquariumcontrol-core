@@ -34,8 +34,8 @@ pub enum AquariumSignal {
 /// This enum is used for internal thread messaging
 #[derive(Clone, Debug)]
 pub enum InternalCommand {
-    //SwitchOn(AquariumDevice),
-    //SwitchOff(AquariumDevice),
+    SwitchOn(AquariumDevice),
+    SwitchOff(AquariumDevice),
     RequestSignal(AquariumSignal),
     //Quit,
 }

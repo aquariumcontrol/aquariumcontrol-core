@@ -12,6 +12,7 @@ peristaltic_pump1_id = 12
 peristaltic_pump2_id = 13
 peristaltic_pump3_id = 14
 peristaltic_pump4_id = 15
+use_simulator = true                               # if true, then do not use real HW
 
 [sql_interface]
 db_user = "aquarium"

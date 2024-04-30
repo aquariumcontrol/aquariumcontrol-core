@@ -1,12 +1,12 @@
 use serde_derive::Deserialize;
 use std::fs;
 
+use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::refill::RefillConfig;
 use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
-use crate::controllino::ControllinoConfig;
 
 /// This is the top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.

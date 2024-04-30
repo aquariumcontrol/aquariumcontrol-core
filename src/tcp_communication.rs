@@ -5,7 +5,7 @@ use std::{
     net::TcpStream,
 };
 
-use crate::channel_content::{AquariumSignal};
+use crate::channel_content::AquariumSignal;
 
 /// This module contains constants representing commands received from control application.
 #[allow(dead_code)]
@@ -72,7 +72,7 @@ impl TcpCommunication {
 
     /// instantiate a struct of type TcpCommunication
     pub fn new(
-        tcp_connection: TcpConnectionConfig,
+        tcp_connection: &TcpConnectionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
         let stream = match TcpStream::connect(
             tcp_connection.ip_address.clone() + ":" + &tcp_connection.port.to_string(),
@@ -101,6 +101,45 @@ impl TcpCommunication {
                 s.pop();
             }
         }
+    }
+
+    /// communicate with simulator to change relay state
+    pub fn change_relay(&mut self, relay_id: u16, state: bool) {
+        let request: String;
+        let relay_id_string = relay_id.to_string();
+        if state {
+            request = category::CONTROLLINO.to_string()
+                + " "
+                + command::SETSINGLE
+                + " "
+                + &relay_id_string
+                + "\n";
+        } else {
+            request = category::CONTROLLINO.to_string()
+                + " "
+                + command::UNSETSINGLE
+                + " "
+                + &relay_id_string
+                + "\n";
+        }
+        //println!("Writing...(request={})", request);
+        match self.write_stream.write(request.as_bytes()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("{e:?}");
+            }
+        };
+        let _ = self.write_stream.flush();
+
+        //println!("Reading...");
+        let mut response = String::new();
+        response.clear();
+        match self.buf_reader.read_line(&mut response) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("{e:?}");
+            }
+        };
     }
 
     /// communicate with simulator to get signal value

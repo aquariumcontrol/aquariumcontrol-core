@@ -1,6 +1,7 @@
 //#![allow(warnings)]
 mod channel_content;
 mod config;
+mod controllino;
 mod data_logger;
 mod feedpattern;
 mod gpio_handler;
@@ -14,7 +15,6 @@ mod sql_interface_heating;
 mod sql_interface_refill;
 mod tcp_communication;
 mod version_information;
-mod controllino;
 
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
@@ -25,6 +25,7 @@ use std::thread::scope;
 
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
+use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::gpio_handler::GpioHandler;
 use crate::refill::Refill;
@@ -38,7 +39,6 @@ use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::tcp_communication::TcpCommunication;
 use crate::version_information::VersionInformation;
-use crate::controllino::Controllino;
 
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
@@ -273,35 +273,38 @@ fn main() {
     ) = mpsc::channel();
     let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
-    
+
     let (tx_refill_to_gpio, rx_gpio_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<bool>, Receiver<bool>) = mpsc::channel();
 
-        let (_tx_refill_to_controllino, _rx_controllino_from_refill): (
+    let (tx_refill_to_controllino, rx_controllino_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (_tx_controllino_to_refill, _rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) = mpsc::channel();
-    
+    let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
 
     // open tcp connection only if configuration requires use of simulator instead of HW
     let tcp_com_for_gpio_handler: Option<TcpCommunication>;
+    let tcp_com_for_controllino: Option<TcpCommunication>;
     if config.gpio_handler.use_simulator {
-        tcp_com_for_gpio_handler = Some(TcpCommunication::new(config.tcp_connection).unwrap());
+        tcp_com_for_gpio_handler = Some(TcpCommunication::new(&config.tcp_connection).unwrap());
+        tcp_com_for_controllino = Some(TcpCommunication::new(&config.tcp_connection).unwrap());
     } else {
         tcp_com_for_gpio_handler = None;
+        tcp_com_for_controllino = None;
     }
 
     let gpio_handler = GpioHandler::new(config.gpio_handler);
+    let controllino = Controllino::new(config.controllino);
 
     scope(|scope| {
-        let controllino = Arc::new(Controllino::new(config.controllino));
-        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope.spawn(move || {
@@ -329,8 +332,16 @@ fn main() {
                 mutex_device_scheduler_refill,
                 tx_refill_to_gpio,
                 rx_refill_from_gpio,
-                _tx_refill_to_controllino,
-                _rx_refill_from_controllino,
+                tx_refill_to_controllino,
+                rx_refill_from_controllino,
+            );
+        });
+        
+        scope.spawn(move || {
+            controllino.execute(
+                tcp_com_for_controllino,
+                tx_controllino_to_refill,
+                rx_controllino_from_refill,
             );
         });
     });

@@ -38,6 +38,9 @@ impl GpioHandler {
         let tcp_communication = tcp_communication_opt.unwrap();
         match internal_command {
             InternalCommand::RequestSignal(c) => tcp_communication.get_signal(c),
+            InternalCommand::SwitchOn(_) | InternalCommand::SwitchOff(_) => {
+                panic!("GpioHandler received request for device actuation.");
+            }
         }
     }
 
@@ -93,7 +96,7 @@ impl GpioHandler {
                 }
             }
             // **********************************
-            
+
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
