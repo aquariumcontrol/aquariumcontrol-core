@@ -42,6 +42,8 @@ max_refill_volume_hour = 2.0                            # max. allowed refill vo
 min_interval_last_refill = 600                          # min. required time interval in seconds between two refill operations
 tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
+refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
+max_refill_volume = 0.65                                # maximum allowed refill volume in one refill operation
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

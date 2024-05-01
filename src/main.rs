@@ -336,7 +336,7 @@ fn main() {
                 rx_refill_from_controllino,
             );
         });
-        
+
         scope.spawn(move || {
             controllino.execute(
                 tcp_com_for_controllino,
