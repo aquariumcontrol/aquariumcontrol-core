@@ -7,6 +7,7 @@ mod feedpattern;
 mod gpio_handler;
 mod iir_filter;
 mod refill;
+mod signal_handler;
 mod sql_interface;
 mod sql_interface_balling;
 mod sql_interface_data;
@@ -15,7 +16,6 @@ mod sql_interface_heating;
 mod sql_interface_refill;
 mod tcp_communication;
 mod version_information;
-
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -29,6 +29,7 @@ use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::gpio_handler::GpioHandler;
 use crate::refill::Refill;
+use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::DataFrame;
@@ -287,6 +288,15 @@ fn main() {
     let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
 
+    let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_refill_to_signal_handler, rx_signal_handler_from_refill): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
 
@@ -306,6 +316,10 @@ fn main() {
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        scope.spawn(move || {
+            handle_signals(tx_signal_handler_to_refill, rx_signal_handler_from_refill);
+        });
 
         scope.spawn(move || {
             gpio_handler.execute(
@@ -334,6 +348,8 @@ fn main() {
                 rx_refill_from_gpio,
                 tx_refill_to_controllino,
                 rx_refill_from_controllino,
+                tx_refill_to_signal_handler,
+                rx_refill_from_signal_handler,
             );
         });
 

@@ -1,9 +1,9 @@
+use chrono::Local;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use chrono::Local;
 
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
@@ -156,6 +156,47 @@ impl Refill {
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
 
+    /// function checks if there are new messages in the channel.
+    /// if the message contains the quit command, then the function returns true, otherwise false.
+    /// if the message contains the command to reset all errors, the function will set all error bits
+    /// to false and return false.
+    fn check_pending_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => {
+                    true
+                },
+                InternalCommand::ResetAllErrors => {
+                    self.error_switch_stuck_high = false;
+                    self.error_switch_stuck_low = false;
+                    self.error_receive_tank_level_switch_position = false;
+                    self.error_sql_update_failed = false;
+                    false    
+                },
+                | InternalCommand::RequestSignal(_)
+                | InternalCommand::SwitchOn(_)
+                | InternalCommand::SwitchOff(_) => {
+                    println!("Refill: ignoring not applicable command from signal handler.");
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "Refill: Error in trying to receive command from signal handler: {e:?}"
+                        );
+                    }
+                }
+                false
+            }
+        }
+    }
+
     /// function executes the channel communication to update the tank level switch position signal
     /// as well as the tank level switch invalid signal.
     fn update_tank_level_switch_signals(
@@ -203,9 +244,11 @@ impl Refill {
     /// this function executes the refill operation
     fn execute_refill(
         &mut self,
-        tx_to_controllino: Sender<InternalCommand>,
+        tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
-    ) {
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        let mut termination_request_received = false;
         // command start of refill pump
         match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
             Ok(_) => {
@@ -246,6 +289,10 @@ impl Refill {
 
             // calculate volume refilled in this operation
             refill_volume += sleep_interval_seconds * self.config.refill_pump_flow;
+            termination_request_received = self.check_pending_external_request(&rx_from_signal_handler);
+            if termination_request_received {
+                break;
+            }
 
             if refill_volume > self.config.max_refill_volume {
                 self.error_switch_stuck_low = true;
@@ -279,9 +326,11 @@ impl Refill {
         ) {
             Ok(_) => {}
             Err(e) => {
+                println!("Refill: error occurred when writing refill operation data to SQL database: {e:?}");
                 self.error_sql_update_failed = true;
             }
         }
+        termination_request_received
     }
 
     /// this function contains the main cycle of refill control
@@ -292,6 +341,8 @@ impl Refill {
         rx_from_gpio: Receiver<bool>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let sleep_duration_one_sec = Duration::new(1, 0);
         let mut i = 0;
@@ -330,12 +381,22 @@ impl Refill {
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
 
+        let mut termination_request_received = false;        
         // main control
         loop {
+            // check for external requests
+
             i = 0;
             while i < self.config.check_interval {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
+                termination_request_received = self.check_pending_external_request(&rx_from_signal_handler);
+                if termination_request_received {
+                    break;  // exit inner loop
+                }
+            }
+            if termination_request_received {
+                break; // exit outer loop
             }
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;
@@ -400,16 +461,30 @@ impl Refill {
                             {
                                 let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
                                 // now we are given exclusive access to actuators
-                                self.execute_refill(
-                                    tx_to_controllino.clone(),
+                                termination_request_received = self.execute_refill(
+                                    &tx_to_controllino.clone(),
                                     &rx_from_controllino,
+                                    &rx_from_signal_handler
                                 );
                                 *mutex_data += 1;
+                            }
+                            if termination_request_received {
+                                break;
                             }
                         }
                     }
                 }
             }
         }
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+            println!(
+                "Error in trying to send confirmation back to signal handler: {e:?}"
+                );
+            }
+        };
     }
 }

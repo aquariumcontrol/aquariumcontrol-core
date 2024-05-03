@@ -37,5 +37,6 @@ pub enum InternalCommand {
     SwitchOn(AquariumDevice),
     SwitchOff(AquariumDevice),
     RequestSignal(AquariumSignal),
-    //Quit,
+    ResetAllErrors,
+    Quit,
 }

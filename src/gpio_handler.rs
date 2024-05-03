@@ -38,8 +38,12 @@ impl GpioHandler {
         let tcp_communication = tcp_communication_opt.unwrap();
         match internal_command {
             InternalCommand::RequestSignal(c) => tcp_communication.get_signal(c),
-            InternalCommand::SwitchOn(_) | InternalCommand::SwitchOff(_) => {
-                panic!("GpioHandler received request for device actuation.");
+            InternalCommand::SwitchOn(_)
+            | InternalCommand::SwitchOff(_)
+            | InternalCommand::ResetAllErrors
+            | InternalCommand::Quit => {
+                println!("GpioHandler: ignoring irrelevant internal commands.");
+                0.0
             }
         }
     }

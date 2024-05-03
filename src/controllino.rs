@@ -107,8 +107,10 @@ impl Controllino {
                 relay_id = self.get_relay_id(c);
                 tcp_communication.change_relay(relay_id, false)
             }
-            InternalCommand::RequestSignal(_) => {
-                panic!("Controllino received request for signal.");
+            InternalCommand::RequestSignal(_)
+            | InternalCommand::ResetAllErrors
+            | InternalCommand::Quit => {
+                println!("Controllino: ignoring irrelevant internal command.");
             }
         }
     }
