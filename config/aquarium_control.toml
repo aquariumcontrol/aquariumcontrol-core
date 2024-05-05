@@ -46,5 +46,5 @@ refill_pump_flow = 0.05                                 # flow rate of refill pu
 max_refill_volume = 0.65                                # maximum allowed refill volume in one refill operation
 
 [gpio_handler]
-use_simulator = false                               # if true, then do not use real HW
+use_simulator = true                               # if true, then do not use real HW
 

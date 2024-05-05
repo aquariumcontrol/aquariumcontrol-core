@@ -297,25 +297,72 @@ fn main() {
         Receiver<bool>,
     ) = mpsc::channel();
 
+    let (tx_controllino_to_tcp, rx_tcp_from_controllino): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+
+    let (tx_gpio_to_tcp, rx_tcp_from_gpio): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
+    let (tx_tcp_to_gpio, rx_gpio_from_tcp): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+
+    // wrapping channels for communication with TCP thread
+    let tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.controllino.use_simulator {
+            true => Some(tx_controllino_to_tcp),
+            false => None,
+        };
+
+    let rx_tcp_from_controllino_opt: Option<Receiver<InternalCommand>> =
+        match config.controllino.use_simulator {
+            true => Some(rx_tcp_from_controllino),
+            false => None,
+        };
+
+    let tx_gpio_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.gpio_handler.use_simulator {
+            true => Some(tx_gpio_to_tcp),
+            false => None,
+        };
+
+    let rx_tcp_from_gpio_opt: Option<Receiver<InternalCommand>> =
+        match config.gpio_handler.use_simulator {
+            true => Some(rx_tcp_from_gpio),
+            false => None,
+        };
+
+    let tx_tcp_to_gpio_opt: Option<Sender<f32>> = match config.gpio_handler.use_simulator {
+        true => Some(tx_tcp_to_gpio),
+        false => None,
+    };
+
+    let rx_gpio_from_tcp_opt: Option<Receiver<f32>> = match config.gpio_handler.use_simulator {
+        true => Some(rx_gpio_from_tcp),
+        false => None,
+    };
+
+    let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
+    
+    let gpio_handler = GpioHandler::new(config.gpio_handler);
+    let controllino = Controllino::new(config.controllino);
+    
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
 
-    // open tcp connection only if configuration requires use of simulator instead of HW
-    let tcp_com_for_gpio_handler: Option<TcpCommunication>;
-    let tcp_com_for_controllino: Option<TcpCommunication>;
-    if config.gpio_handler.use_simulator {
-        tcp_com_for_gpio_handler = Some(TcpCommunication::new(&config.tcp_connection).unwrap());
-        tcp_com_for_controllino = Some(TcpCommunication::new(&config.tcp_connection).unwrap());
-    } else {
-        tcp_com_for_gpio_handler = None;
-        tcp_com_for_controllino = None;
-    }
-
-    let gpio_handler = GpioHandler::new(config.gpio_handler);
-    let controllino = Controllino::new(config.controllino);
-
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
+    
+        // open tcp connection only if configuration requires use of simulator instead of HW  
+        if use_simulator {
+            let mut tcp_connection = TcpCommunication::new(&config.tcp_connection).unwrap();
+            scope.spawn(move || {
+                tcp_connection.execute(
+                    rx_tcp_from_controllino_opt,
+                    rx_tcp_from_gpio_opt,
+                    tx_tcp_to_gpio_opt,
+                );
+            });
+        }
 
         scope.spawn(move || {
             handle_signals(tx_signal_handler_to_refill, rx_signal_handler_from_refill);
@@ -323,7 +370,8 @@ fn main() {
 
         scope.spawn(move || {
             gpio_handler.execute(
-                tcp_com_for_gpio_handler,
+                tx_gpio_to_tcp_opt,
+                rx_gpio_from_tcp_opt,
                 tx_gpio_to_data_logger,
                 rx_gpio_from_data_logger,
                 tx_gpio_to_refill,
@@ -355,7 +403,7 @@ fn main() {
 
         scope.spawn(move || {
             controllino.execute(
-                tcp_com_for_controllino,
+                tx_controllino_to_tcp_opt,
                 tx_controllino_to_refill,
                 rx_controllino_from_refill,
             );

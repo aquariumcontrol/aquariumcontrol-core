@@ -166,22 +166,18 @@ impl Refill {
     ) -> bool {
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
-                InternalCommand::Quit => {
-                    true
-                },
+                InternalCommand::Quit => true,
                 InternalCommand::ResetAllErrors => {
                     self.error_switch_stuck_high = false;
                     self.error_switch_stuck_low = false;
                     self.error_receive_tank_level_switch_position = false;
                     self.error_sql_update_failed = false;
-                    false    
+                    false
                 },
-                | InternalCommand::RequestSignal(_)
-                | InternalCommand::SwitchOn(_)
-                | InternalCommand::SwitchOff(_) => {
+                _ => {
                     println!("Refill: ignoring not applicable command from signal handler.");
                     false
-                }
+                },
             },
             Err(e) => {
                 match e {
@@ -264,6 +260,7 @@ impl Refill {
                 println!("Refill: Error in channel communication to Controllino when switching on refill pump: {e:?}");
             }
         }
+        println!("Refill: Sent request to switch on refill pump to Controllino thread.");
 
         //*** wait for condition to stop refilling ***
         let spin_sleeper = SpinSleeper::default();
@@ -289,11 +286,15 @@ impl Refill {
 
             // calculate volume refilled in this operation
             refill_volume += sleep_interval_seconds * self.config.refill_pump_flow;
-            termination_request_received = self.check_pending_external_request(&rx_from_signal_handler);
+            termination_request_received =
+                self.check_pending_external_request(&rx_from_signal_handler);
             if termination_request_received {
                 break;
             }
-
+            println!(
+                "Refill: refill volume not at {}, max={}",
+                refill_volume, self.config.max_refill_volume
+            );
             if refill_volume > self.config.max_refill_volume {
                 self.error_switch_stuck_low = true;
                 refill_error_code = 2;
@@ -316,6 +317,7 @@ impl Refill {
                 println!("Refill: Error in channel communication to Controllino when switching off refill pump: {e:?}");
             }
         }
+        println!("Refill: Sent request to switch off refill pump to Controllino thread.");
 
         // write result to data base
         match self.sql_interface_refill.insert_refill_event(
@@ -381,7 +383,7 @@ impl Refill {
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
 
-        let mut termination_request_received = false;        
+        let mut termination_request_received = false;
         // main control
         loop {
             // check for external requests
@@ -390,9 +392,10 @@ impl Refill {
             while i < self.config.check_interval {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
-                termination_request_received = self.check_pending_external_request(&rx_from_signal_handler);
+                termination_request_received =
+                    self.check_pending_external_request(&rx_from_signal_handler);
                 if termination_request_received {
-                    break;  // exit inner loop
+                    break; // exit inner loop
                 }
             }
             if termination_request_received {
@@ -464,7 +467,7 @@ impl Refill {
                                 termination_request_received = self.execute_refill(
                                     &tx_to_controllino.clone(),
                                     &rx_from_controllino,
-                                    &rx_from_signal_handler
+                                    &rx_from_signal_handler,
                                 );
                                 *mutex_data += 1;
                             }
@@ -481,9 +484,7 @@ impl Refill {
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-            println!(
-                "Error in trying to send confirmation back to signal handler: {e:?}"
-                );
+                println!("Error in trying to send confirmation back to signal handler: {e:?}");
             }
         };
     }

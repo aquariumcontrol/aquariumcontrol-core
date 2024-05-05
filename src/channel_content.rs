@@ -36,6 +36,8 @@ pub enum AquariumSignal {
 pub enum InternalCommand {
     SwitchOn(AquariumDevice),
     SwitchOff(AquariumDevice),
+    SetRelay(u16),
+    UnsetRelay(u16),
     RequestSignal(AquariumSignal),
     ResetAllErrors,
     Quit,

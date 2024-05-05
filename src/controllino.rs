@@ -2,7 +2,6 @@ use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
-use crate::TcpCommunication;
 
 /// This struct holds the configuration data for the Controllino interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -90,24 +89,37 @@ impl Controllino {
     }
 
     /// trigger actuation on simulator via TCP communication
-    /// this function is used for development purposes only
+    /// this function is used for development purposes only.
+    /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
+    /// considering relay id and relay logic.
     fn actuate_in_simulator(
         &self,
-        tcp_communication_opt: Option<&mut TcpCommunication>,
+        tx_to_tcp: &Sender<InternalCommand>,
         internal_command: InternalCommand,
     ) {
-        let tcp_communication = tcp_communication_opt.unwrap();
         let relay_id: u16;
         match internal_command {
             InternalCommand::SwitchOn(c) => {
                 relay_id = self.get_relay_id(c);
-                tcp_communication.change_relay(relay_id, true)
+                match tx_to_tcp.send(InternalCommand::SetRelay(relay_id)) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        panic!("Controllino: error when sending request for switching on relay #{} to TCP thread: {e:?}", relay_id);
+                    }
+                }
             }
             InternalCommand::SwitchOff(c) => {
                 relay_id = self.get_relay_id(c);
-                tcp_communication.change_relay(relay_id, false)
+                match tx_to_tcp.send(InternalCommand::UnsetRelay(relay_id)) {
+                    Ok(()) => {}
+                    Err(e) => {
+                        panic!("Controllino: error when sending request for switching on relay #{} to TCP thread: {e:?}", relay_id);
+                    }
+                }
             }
             InternalCommand::RequestSignal(_)
+            | InternalCommand::SetRelay(_)
+            | InternalCommand::UnsetRelay(_)
             | InternalCommand::ResetAllErrors
             | InternalCommand::Quit => {
                 println!("Controllino: ignoring irrelevant internal command.");
@@ -119,24 +131,27 @@ impl Controllino {
     /// or communicates with simulator
     pub fn execute(
         &self,
-        mut tcp_communication_opt: Option<TcpCommunication>,
+        tx_to_tcp_opt: Option<Sender<InternalCommand>>,
         tx_to_refill: Sender<bool>,
         rx_from_refill: Receiver<InternalCommand>,
     ) {
-        //if cfg!(linux) {
         #[cfg(target_os = "linux")]
         execute_linux_specific_code();
-        //}
-        if self.config.use_simulator && tcp_communication_opt.is_none() {
-            panic!("Controllino configured to run with simulator, but no TCP connection provided.");
+
+        let tx_to_tcp: Sender<InternalCommand>;
+        if self.config.use_simulator && tx_to_tcp_opt.is_none() {
+            panic!("Controllino configured to run with simulator, but no channel to TCP thread provided.");
+        } else {
+            tx_to_tcp = tx_to_tcp_opt.unwrap(); // this unwrap is safe because checked above.
         }
 
         loop {
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
+                    println!("Controllino: received request from Refill thread.");
                     if self.config.use_simulator {
-                        self.actuate_in_simulator(tcp_communication_opt.as_mut(), c);
+                        self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // todo: else branch using real
 

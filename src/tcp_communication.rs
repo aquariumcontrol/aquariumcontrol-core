@@ -3,9 +3,13 @@ use std::io;
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
+    time::Duration,
 };
+use spin_sleep::SpinSleeper;
 
 use crate::channel_content::AquariumSignal;
+use crate::channel_content::InternalCommand;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 /// This module contains constants representing commands received from control application.
 #[allow(dead_code)]
@@ -104,10 +108,11 @@ impl TcpCommunication {
     }
 
     /// communicate with simulator to change relay state
-    pub fn change_relay(&mut self, relay_id: u16, state: bool) {
+    fn change_relay(&mut self, relay_id: u16, state: bool) {
         let request: String;
         let relay_id_string = relay_id.to_string();
         if state {
+            println!("tcp_communication: switching on relay #{}", relay_id);
             request = category::CONTROLLINO.to_string()
                 + " "
                 + command::SETSINGLE
@@ -115,6 +120,7 @@ impl TcpCommunication {
                 + &relay_id_string
                 + "\n";
         } else {
+            println!("tcp_communication: switching off relay #{}", relay_id);
             request = category::CONTROLLINO.to_string()
                 + " "
                 + command::UNSETSINGLE
@@ -143,7 +149,7 @@ impl TcpCommunication {
     }
 
     /// communicate with simulator to get signal value
-    pub fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
+    fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
         let category = match aquarium_signal {
             AquariumSignal::WaterTemperature => category::ATLASSCIENTIFIC,
             AquariumSignal::pH => category::ATLASSCIENTIFIC,
@@ -203,6 +209,86 @@ impl TcpCommunication {
             None => {
                 panic!("TcpCommunication: Response does not contain any words.");
             }
+        }
+    }
+
+    pub fn execute(
+        &mut self,
+        rx_from_controllino_opt: Option<Receiver<InternalCommand>>,
+        rx_from_gpio_opt: Option<Receiver<InternalCommand>>,
+        tx_to_gpio_opt: Option<Sender<f32>>,
+    ) {
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_interval_millis = 10;
+        let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
+        loop {
+            // *** communication with GpioHandler - response required ***
+            match rx_from_gpio_opt {
+                Some(ref rx_from_gpio) => {
+                    match rx_from_gpio.try_recv() {
+                        Ok(c) => {
+                            match c {
+                                InternalCommand::RequestSignal(s) => {
+                                    let response_value = self.get_signal(s);
+                                    match tx_to_gpio_opt {
+                                        Some(ref tx_to_gpio) => match tx_to_gpio.send(response_value) {
+                                            Ok(()) => {}
+                                            Err(e) => {
+                                                println!(
+                                                            "Error in trying to send response value back to data logger: {e:?}"
+                                                        );
+                                            }
+                                        },
+                                        None => {
+                                            panic!("TCP communication: Missing channel to return value to GpioHandler.");
+                                        }
+                                    }
+                                }
+                                _ => { /* Do nothing for all other commands */ }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("TcpCommunication: Error in trying to receive command from data logger: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                }
+                None => {
+                    // no value provided - do nothing
+                }
+            }
+            // **********************************
+
+            // *** communication with Controllino - no response required ***
+            match rx_from_controllino_opt {
+                Some(ref rx_from_controllino) => {
+                    match rx_from_controllino.try_recv() {
+                        Ok(c) => match c {
+                            InternalCommand::SetRelay(c) => self.change_relay(c, true),
+                            InternalCommand::UnsetRelay(c) => self.change_relay(c, false),
+                            _ => { /* ignore all other commands */ },
+                        },
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("TcpCommunication: Error in trying to receive command from data logger: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                }
+                None => {
+                    // no value provided - do nothing
+                }
+            }
+            // **********************************
+            
+            spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
     }
 }
