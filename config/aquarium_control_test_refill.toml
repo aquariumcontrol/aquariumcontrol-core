@@ -44,6 +44,7 @@ tank_level_switch_position_high_stabilization_count = 5 # number of seconds befo
 max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
 refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
 max_refill_volume = 0.65                                # maximum allowed refill volume in one refill operation
+additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

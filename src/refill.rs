@@ -26,6 +26,7 @@ pub struct RefillConfig {
     max_duration_since_last_refill: i64,
     refill_pump_flow: f64,
     max_refill_volume: f64,
+    additional_refill_volume: f64,
 }
 
 /// This struct contains the configuration and the implementation for the refill control.
@@ -321,11 +322,14 @@ impl Refill {
         let mut refill_volume = 0.0;
         let mut refill_time_seconds = 0.0;
         let mut refill_error_code = 0;
+        let mut additional_refill_volume_executed = 0.0;
+        let refill_increment = sleep_interval_seconds * self.config.refill_pump_flow;
+        
         loop {
             spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
             refill_time_seconds += sleep_interval_seconds;
             self.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
-            if self.tank_level_switch_position {
+            if self.tank_level_switch_position && additional_refill_volume_executed > self.config.additional_refill_volume {
                 // water level changed to high
                 break;
             }
@@ -336,7 +340,11 @@ impl Refill {
             }
 
             // calculate volume refilled in this operation
-            refill_volume += sleep_interval_seconds * self.config.refill_pump_flow;
+            refill_volume += refill_increment;
+            if self.tank_level_switch_position {
+                additional_refill_volume_executed += refill_increment;
+                println!("Executing additional refill at {}L, limit at {}L", additional_refill_volume_executed, self.config.additional_refill_volume);
+            }
             termination_request_received =
                 self.check_pending_external_request(&rx_from_signal_handler);
             if termination_request_received {

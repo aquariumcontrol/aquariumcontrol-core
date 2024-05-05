@@ -34,9 +34,9 @@ impl fmt::Display for AquariumDevice {
             AquariumDevice::PeristalticPump1 => write!(f, "PeristalticPump1"),
             AquariumDevice::PeristalticPump2 => write!(f, "PeristalticPump2"),
             AquariumDevice::PeristalticPump3 => write!(f, "PeristalticPump3"),
-            AquariumDevice::PeristalticPump4 => write!(f, "PeristalticPump4"),            
+            AquariumDevice::PeristalticPump4 => write!(f, "PeristalticPump4"),
         }
-    }    
+    }
 }
 
 /// This enum is used for internal thread messaging between data logger and GPIO handler
@@ -62,7 +62,7 @@ impl fmt::Display for AquariumSignal {
             AquariumSignal::AmbientTemperature => write!(f, "AmbientTemperature"),
             AquariumSignal::AmbientHumidity => write!(f, "AmbientHumidity"),
             AquariumSignal::TankLevelSwitchPosition => write!(f, "TankLevelSwitchPosition"),
-            AquariumSignal::TankLevelSwitchInvalid => write!(f, "TankLevelSwitchInvalid"),                    
+            AquariumSignal::TankLevelSwitchInvalid => write!(f, "TankLevelSwitchInvalid"),
         }
     }
 }
@@ -88,7 +88,7 @@ impl fmt::Display for InternalCommand {
             InternalCommand::UnsetRelay(_) => write!(f, "UnsetRelay"),
             InternalCommand::RequestSignal(_) => write!(f, "RequestSignal"),
             InternalCommand::ResetAllErrors => write!(f, "ResetAllErrors"),
-            InternalCommand::Quit => write!(f, "Quit"),                    
+            InternalCommand::Quit => write!(f, "Quit"),
         }
     }
 }

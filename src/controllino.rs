@@ -122,7 +122,10 @@ impl Controllino {
             | InternalCommand::UnsetRelay(_)
             | InternalCommand::ResetAllErrors
             | InternalCommand::Quit => {
-                println!("Controllino: ignoring irrelevant internal command {}.", internal_command.to_string());
+                println!(
+                    "Controllino: ignoring irrelevant internal command {}.",
+                    internal_command.to_string()
+                );
             }
         }
     }

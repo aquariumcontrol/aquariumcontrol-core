@@ -33,7 +33,7 @@ filter_coefficient_pH = { filter_coefficient = 0.5 }
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }
 
 [refill]
-initial_wait_interval = 3                              # wait for x seconds before starting refill control
+initial_wait_interval = 3                               # wait for x seconds before starting refill control
 check_interval = 2                                      # check tank level every x seconds
 max_refill_count_24h = 20                               # max. allowed refill operations per 24h
 max_refill_volume_24h = 6.0                             # max. allowed refill volume per 24h
@@ -44,6 +44,7 @@ tank_level_switch_position_high_stabilization_count = 5 # number of seconds befo
 max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
 refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
 max_refill_volume = 0.65                                # maximum allowed refill volume in one refill operation
+additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW
