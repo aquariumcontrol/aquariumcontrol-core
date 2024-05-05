@@ -489,3 +489,88 @@ impl Refill {
         };
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::refill::Refill;
+    use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_refill::SqlInterfaceRefill;
+
+    fn prepare_refill_tests() -> Refill {
+        // prepare struct Refill for subsequent tests
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };  
+        let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());       
+        Refill::new(config.refill, sql_interface_refill)        
+    }
+    
+    #[test]
+    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid() {        
+        //*** test if position signal is not updating when invalid signal is true ***
+        let mut refill = prepare_refill_tests();
+        // check transition false -> true
+        refill.tank_level_switch_invalid = true;
+        refill.tank_level_switch_position = true;
+        refill.tank_level_switch_position_stabilized = false;
+        for _ in 0..10 {
+            refill.calc_tank_level_switch_position_stabilized();
+            assert_eq!(refill.tank_level_switch_position_stabilized, false);
+        }
+        println!("* checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
+    }
+    
+    #[test]
+    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid() {        
+        //*** test if position signal is not updating when invalid signal is true ***
+        let mut refill = prepare_refill_tests();
+        // check transition true -> false
+        refill.tank_level_switch_invalid = true;
+        refill.tank_level_switch_position = false;
+        refill.tank_level_switch_position_stabilized = true;
+        for _ in 0..10 {
+            refill.calc_tank_level_switch_position_stabilized();
+            assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        }
+        println!("* checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
+    }    
+    
+    #[test]
+    pub fn test_calc_tank_level_switch_position_stabilized_false_true() {        
+        //*** test if position signal is updating without delay when invalid signal is false ***
+        let mut refill = prepare_refill_tests();
+        // check transition true -> false
+        refill.tank_level_switch_invalid = false;
+        refill.tank_level_switch_position = true;
+        refill.tank_level_switch_position_stabilized = false;
+        refill.calc_tank_level_switch_position_stabilized();
+        assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        println!("* checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
+    }    
+    
+    #[test]
+    pub fn test_calc_tank_level_switch_position_stabilized_true_false() {        
+        let config: ConfigData = read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        //*** test if position signal is updating with delay when invalid signal is false ***
+        let mut refill = prepare_refill_tests();
+        // check transition true -> false
+        refill.tank_level_switch_invalid = false;
+        refill.tank_level_switch_position = false;
+        refill.tank_level_switch_position_stabilized = true;
+        for _ in 0..config.refill.tank_level_switch_position_high_stabilization_count {
+            refill.calc_tank_level_switch_position_stabilized();
+            assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        }
+        refill.calc_tank_level_switch_position_stabilized();
+        assert_eq!(refill.tank_level_switch_position_stabilized, false);
+        println!("* checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
+    }        
+}
