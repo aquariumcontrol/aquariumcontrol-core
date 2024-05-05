@@ -279,7 +279,7 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+    let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
 
     let (tx_refill_to_controllino, rx_controllino_from_refill): (
         Sender<InternalCommand>,

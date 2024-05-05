@@ -198,7 +198,7 @@ impl Refill {
     fn update_tank_level_switch_signals(
         &mut self,
         tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<bool>,
+        rx_from_gpio: &Receiver<f32>,
     ) {
         // send request for tank level switch position
         match tx_to_gpio.send(InternalCommand::RequestSignal(
@@ -207,7 +207,7 @@ impl Refill {
             Ok(_) => {
                 // now listen for response
                 self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => c,
+                    Ok(c) => c > 0.0,
                     Err(_) => {
                         self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
                         false
@@ -226,7 +226,7 @@ impl Refill {
             Ok(_) => {
                 // now listen for response
                 self.tank_level_switch_invalid = match rx_from_gpio.recv() {
-                    Ok(c) => c | self.error_receive_tank_level_switch_position, // consider status of previous signal
+                    Ok(c) => c > 0.0,
                     Err(_) => true,
                 };
             }
@@ -291,6 +291,8 @@ impl Refill {
         &mut self,
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
+        tx_to_gpio: &Sender<InternalCommand>,
+        rx_from_gpio: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
     ) -> bool {
         let mut termination_request_received = false;
@@ -322,7 +324,7 @@ impl Refill {
         loop {
             spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
             refill_time_seconds += sleep_interval_seconds;
-            self.update_tank_level_switch_signals(&tx_to_controllino, rx_from_controllino);
+            self.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
             if self.tank_level_switch_position {
                 // water level changed to high
                 break;
@@ -341,7 +343,7 @@ impl Refill {
                 break;
             }
             println!(
-                "Refill: refill volume not at {}, max={}",
+                "Refill: current refill volume at {}L, limit={}L",
                 refill_volume, self.config.max_refill_volume
             );
             if refill_volume > self.config.max_refill_volume {
@@ -389,7 +391,7 @@ impl Refill {
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
         tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<bool>,
+        rx_from_gpio: Receiver<f32>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -476,8 +478,10 @@ impl Refill {
                             let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
                             // now we are given exclusive access to actuators
                             termination_request_received = self.execute_refill(
-                                &tx_to_controllino.clone(),
+                                &tx_to_controllino,
                                 &rx_from_controllino,
+                                &tx_to_gpio,
+                                &rx_from_gpio,
                                 &rx_from_signal_handler,
                             );
                             *mutex_data += 1;

@@ -68,7 +68,7 @@ impl GpioHandler {
         rx_from_tcp_opt: Option<Receiver<f32>>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
-        tx_to_refill: Sender<bool>,
+        tx_to_refill: Sender<f32>,
         rx_from_refill: Receiver<InternalCommand>,
     ) {
         let mut response_value: f32 = 0.0;
@@ -120,7 +120,7 @@ impl GpioHandler {
                         response_value =
                             Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
                     }
-                    match tx_to_refill.send(response_value > 0.0) {
+                    match tx_to_refill.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
                             println!(
