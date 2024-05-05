@@ -342,17 +342,17 @@ fn main() {
     };
 
     let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
-    
+
     let gpio_handler = GpioHandler::new(config.gpio_handler);
     let controllino = Controllino::new(config.controllino);
-    
+
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
-    
-        // open tcp connection only if configuration requires use of simulator instead of HW  
+
+        // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_connection = TcpCommunication::new(&config.tcp_connection).unwrap();
             scope.spawn(move || {

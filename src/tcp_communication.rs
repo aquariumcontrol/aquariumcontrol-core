@@ -1,11 +1,11 @@
 use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
 use std::io;
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
     time::Duration,
 };
-use spin_sleep::SpinSleeper;
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
@@ -231,14 +231,16 @@ impl TcpCommunication {
                                 InternalCommand::RequestSignal(s) => {
                                     let response_value = self.get_signal(s);
                                     match tx_to_gpio_opt {
-                                        Some(ref tx_to_gpio) => match tx_to_gpio.send(response_value) {
-                                            Ok(()) => {}
-                                            Err(e) => {
-                                                println!(
+                                        Some(ref tx_to_gpio) => {
+                                            match tx_to_gpio.send(response_value) {
+                                                Ok(()) => {}
+                                                Err(e) => {
+                                                    println!(
                                                             "Error in trying to send response value back to data logger: {e:?}"
                                                         );
+                                                }
                                             }
-                                        },
+                                        }
                                         None => {
                                             panic!("TCP communication: Missing channel to return value to GpioHandler.");
                                         }
@@ -270,7 +272,7 @@ impl TcpCommunication {
                         Ok(c) => match c {
                             InternalCommand::SetRelay(c) => self.change_relay(c, true),
                             InternalCommand::UnsetRelay(c) => self.change_relay(c, false),
-                            _ => { /* ignore all other commands */ },
+                            _ => { /* ignore all other commands */ }
                         },
                         Err(e) => {
                             match e {
@@ -287,7 +289,7 @@ impl TcpCommunication {
                 }
             }
             // **********************************
-            
+
             spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
     }

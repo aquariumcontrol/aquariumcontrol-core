@@ -173,11 +173,11 @@ impl Refill {
                     self.error_receive_tank_level_switch_position = false;
                     self.error_sql_update_failed = false;
                     false
-                },
+                }
                 _ => {
                     println!("Refill: ignoring not applicable command from signal handler.");
                     false
-                },
+                }
             },
             Err(e) => {
                 match e {
@@ -234,7 +234,56 @@ impl Refill {
                 println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
             }
         }
+
+        // calculate the stabilized tank level signal to be used in main control loop
         self.calc_tank_level_switch_position_stabilized();
+    }
+
+    // this function checks if historic refill data does not exceed limitations in terms of count and volume.
+    // the function returns a tuple of boolean variables
+    fn check_volume_count_time_limits(&self, sql_refill_data: &RefillSqlData) -> bool {
+        let refill_check_volume_last_24h =
+            sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
+        if refill_check_volume_last_24h {
+            println!(
+                "Refill volume of last 24h exceeds permissible refill volume per 24h of {}",
+                self.config.max_refill_volume_24h
+            )
+        }
+        let refill_check_count_last_24h =
+            sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
+        if refill_check_count_last_24h {
+            println!(
+                "Refill count of last 24h exceeds permissible refill count per 24h of {}",
+                self.config.max_refill_count_24h
+            )
+        }
+        let refill_check_volume_last_hour =
+            sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
+        if refill_check_volume_last_hour {
+            println!(
+                "Refill volume of last hour exceeds permissible refill volume per hour of {}",
+                self.config.max_refill_volume_hour
+            )
+        }
+        let refill_check_count_last_hour =
+            sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
+        if refill_check_count_last_hour {
+            println!(
+                "Refill count of last 24h exceeds permissible refill count per hour of {}",
+                self.config.max_refill_count_hour
+            )
+        }
+        let refill_check_intervall_last_refill = sql_refill_data.duration_since_last_refill
+                < self.config.min_interval_last_refill;
+        if refill_check_intervall_last_refill {
+            println!("Time interval since last refill {} is too small (limit={}).", sql_refill_data.duration_since_last_refill, sql_refill_data.duration_since_last_refill);
+        }
+        refill_check_volume_last_24h |
+        refill_check_count_last_24h |
+        refill_check_volume_last_hour |
+        refill_check_count_last_24h |
+        refill_check_intervall_last_refill
     }
 
     /// this function executes the refill operation
@@ -384,10 +433,10 @@ impl Refill {
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
 
         let mut termination_request_received = false;
-        // main control
-        loop {
-            // check for external requests
 
+        // main control loop for refill
+        loop {
+            // check for external requests while waiting for the check interval to pass
             i = 0;
             while i < self.config.check_interval {
                 i = i + 1;
@@ -401,79 +450,40 @@ impl Refill {
             if termination_request_received {
                 break; // exit outer loop
             }
+
+            // check when the last refill operation has taken place
+            // if too much time has passed, issue an error condition - not impeding rest of operation
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;
-
             self.check_error_condition_switch_stuck_high(
                 sql_refill_data.duration_since_last_refill,
             );
 
+            // either communicate with real HW or with simulator to get updated signal information
+            // this call will also update the stabilized tank level position.
             self.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
 
             if !self.tank_level_switch_position_stabilized && !self.tank_level_switch_invalid {
                 println!("Stabilized tank level switch position indicates low water level.");
 
                 // execute checks before initiating refill
-                let refill_check_volume_last_24h =
-                    sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
-                if refill_check_volume_last_24h {
-                    println!(
-                        "Refill volume of last 24h exceeds permissible refill volume per 24h of {}",
-                        self.config.max_refill_volume_24h
-                    )
-                }
-                let refill_check_count_last_24h =
-                    sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
-                if refill_check_count_last_24h {
-                    println!(
-                        "Refill count of last 24h exceeds permissible refill count per 24h of {}",
-                        self.config.max_refill_count_24h
-                    )
-                }
-                let refill_check_volume_last_hour =
-                    sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
-                if refill_check_volume_last_hour {
-                    println!(
-                        "Refill volume of last hour exceeds permissible refill volume per hour of {}",
-                        self.config.max_refill_volume_hour
-                    )
-                }
-                let refill_check_count_last_hour =
-                    sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
-                if refill_check_count_last_hour {
-                    println!(
-                        "Refill count of last 24h exceeds permissible refill count per hour of {}",
-                        self.config.max_refill_count_hour
-                    )
-                }
-
-                let refill_check_intervall_last_refill = sql_refill_data.duration_since_last_refill
-                    < self.config.min_interval_last_refill;
-                if refill_check_intervall_last_refill {
-                    println!("Time interval since last refill is too small.");
-                } else {
-                    if !refill_check_volume_last_24h
-                        && !refill_check_count_last_24h
-                        && !refill_check_volume_last_hour
-                        && !refill_check_count_last_24h
-                    {
-                        if !self.error_switch_stuck_low && !self.error_sql_update_failed {
-                            // conditions for allowing refill operation are given
-                            println!("Executing refill.");
-                            // inner scope to limit lifetime of unlocked mutex
-                            {
-                                let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
-                                // now we are given exclusive access to actuators
-                                termination_request_received = self.execute_refill(
-                                    &tx_to_controllino.clone(),
-                                    &rx_from_controllino,
-                                    &rx_from_signal_handler,
-                                );
-                                *mutex_data += 1;
-                            }
-                            if termination_request_received {
-                                break;
-                            }
+                if !self.check_volume_count_time_limits(&sql_refill_data) {
+                    if !self.error_switch_stuck_low && !self.error_sql_update_failed {
+                        // conditions for allowing refill operation are given
+                        println!("Executing refill.");
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
+                            // now we are given exclusive access to actuators
+                            termination_request_received = self.execute_refill(
+                                &tx_to_controllino.clone(),
+                                &rx_from_controllino,
+                                &rx_from_signal_handler,
+                            );
+                            *mutex_data += 1;
+                        }
+                        if termination_request_received {
+                            break;
                         }
                     }
                 }
@@ -508,13 +518,13 @@ pub mod tests {
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
-        };  
-        let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());       
-        Refill::new(config.refill, sql_interface_refill)        
+        };
+        let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+        Refill::new(config.refill, sql_interface_refill)
     }
-    
+
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid() {        
+    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid() {
         //*** test if position signal is not updating when invalid signal is true ***
         let mut refill = prepare_refill_tests();
         // check transition false -> true
@@ -527,9 +537,9 @@ pub mod tests {
         }
         println!("* checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
     }
-    
+
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid() {        
+    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid() {
         //*** test if position signal is not updating when invalid signal is true ***
         let mut refill = prepare_refill_tests();
         // check transition true -> false
@@ -541,10 +551,10 @@ pub mod tests {
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
         println!("* checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
-    }    
-    
+    }
+
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_false_true() {        
+    pub fn test_calc_tank_level_switch_position_stabilized_false_true() {
         //*** test if position signal is updating without delay when invalid signal is false ***
         let mut refill = prepare_refill_tests();
         // check transition true -> false
@@ -554,23 +564,27 @@ pub mod tests {
         refill.calc_tank_level_switch_position_stabilized();
         assert_eq!(refill.tank_level_switch_position_stabilized, true);
         println!("* checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
-    }    
-    
+    }
+
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_true_false() {        
-        let config: ConfigData = read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+    pub fn test_calc_tank_level_switch_position_stabilized_true_false() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         //*** test if position signal is updating with delay when invalid signal is false ***
         let mut refill = prepare_refill_tests();
         // check transition true -> false
         refill.tank_level_switch_invalid = false;
         refill.tank_level_switch_position = false;
         refill.tank_level_switch_position_stabilized = true;
-        for _ in 0..config.refill.tank_level_switch_position_high_stabilization_count {
+        for _ in 0..config
+            .refill
+            .tank_level_switch_position_high_stabilization_count
+        {
             refill.calc_tank_level_switch_position_stabilized();
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
         refill.calc_tank_level_switch_position_stabilized();
         assert_eq!(refill.tank_level_switch_position_stabilized, false);
         println!("* checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
-    }        
+    }
 }
