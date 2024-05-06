@@ -206,9 +206,13 @@ impl Refill {
             AquariumSignal::TankLevelSwitchPosition,
         )) {
             Ok(_) => {
+                //println!("Refill: Sent request for tank level switch position.");
                 // now listen for response
                 self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => c > 0.0,
+                    Ok(c) => {
+                        //println!("Refill: Received tank level switch position.");
+                        c > 0.0
+                    }
                     Err(_) => {
                         self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
                         false
@@ -275,16 +279,20 @@ impl Refill {
                 self.config.max_refill_count_hour
             )
         }
-        let refill_check_intervall_last_refill = sql_refill_data.duration_since_last_refill
-                < self.config.min_interval_last_refill;
+        let refill_check_intervall_last_refill =
+            sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_intervall_last_refill {
-            println!("Time interval since last refill {} is too small (limit={}).", sql_refill_data.duration_since_last_refill, sql_refill_data.duration_since_last_refill);
+            println!(
+                "Time interval since last refill {} is too small (limit={}).",
+                sql_refill_data.duration_since_last_refill,
+                sql_refill_data.duration_since_last_refill
+            );
         }
-        refill_check_volume_last_24h |
-        refill_check_count_last_24h |
-        refill_check_volume_last_hour |
-        refill_check_count_last_24h |
-        refill_check_intervall_last_refill
+        refill_check_volume_last_24h
+            | refill_check_count_last_24h
+            | refill_check_volume_last_hour
+            | refill_check_count_last_24h
+            | refill_check_intervall_last_refill
     }
 
     /// this function executes the refill operation
@@ -324,12 +332,14 @@ impl Refill {
         let mut refill_error_code = 0;
         let mut additional_refill_volume_executed = 0.0;
         let refill_increment = sleep_interval_seconds * self.config.refill_pump_flow;
-        
+
         loop {
             spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
             refill_time_seconds += sleep_interval_seconds;
             self.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
-            if self.tank_level_switch_position && additional_refill_volume_executed > self.config.additional_refill_volume {
+            if self.tank_level_switch_position
+                && additional_refill_volume_executed > self.config.additional_refill_volume
+            {
                 // water level changed to high
                 break;
             }
@@ -343,7 +353,10 @@ impl Refill {
             refill_volume += refill_increment;
             if self.tank_level_switch_position {
                 additional_refill_volume_executed += refill_increment;
-                println!("Executing additional refill at {}L, limit at {}L", additional_refill_volume_executed, self.config.additional_refill_volume);
+                println!(
+                    "Executing additional refill at {}L, limit at {}L",
+                    additional_refill_volume_executed, self.config.additional_refill_volume
+                );
             }
             termination_request_received =
                 self.check_pending_external_request(&rx_from_signal_handler);
@@ -447,6 +460,7 @@ impl Refill {
         // main control loop for refill
         loop {
             // check for external requests while waiting for the check interval to pass
+            println!("Refill: executing main loop.");
             i = 0;
             while i < self.config.check_interval {
                 i = i + 1;

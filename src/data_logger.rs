@@ -224,6 +224,7 @@ impl DataLogger {
                 ambient_humidity: ambient_humidity,
                 heater_status: None,
             };
+            println!("DateFrame = {}", data_frame);
             match sql_interface_data.write_data_frame_to_database(&data_frame) {
                 Ok(()) => {}
                 Err(e) => {

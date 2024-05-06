@@ -1,6 +1,7 @@
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
+use std::fmt;
 
 use crate::sql_interface::sql_query_strings;
 use crate::sql_interface::SqlInterfaceError;
@@ -22,6 +23,110 @@ pub struct DataFrame {
     pub ambient_temperature: Option<f32>,
     pub ambient_humidity: Option<f32>,
     pub heater_status: Option<bool>,
+}
+
+impl fmt::Display for DataFrame {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let none_string = "None".to_string();
+        let water_temperature_string = match self.water_temperature {
+            Some(water_temperature) => water_temperature.to_string(),
+           None => none_string.clone(),
+        };
+        let water_temperature_filtered_string = match self.water_temperature_filtered {
+            Some(water_temperature_filtered) => water_temperature_filtered.to_string(),
+            None => none_string.clone(),
+        };
+        let ph_string = match self.ph {
+            Some(ph) => ph.to_string(),
+            None => none_string.clone(),
+        };
+        let ph_filtered_string = match self.ph_filtered {
+            Some(ph_filtered) => ph_filtered.to_string(),
+            None => none_string.clone(),
+        };
+        let conductivity_string = match self.conductivity {
+            Some(conductivity) => conductivity.to_string(),
+            None => none_string.clone(),
+        };
+        let conductivity_filtered_string = match self.conductivity_filtered {
+            Some(conductivity_filtered) => conductivity_filtered.to_string(),
+            None => none_string.clone(),
+        };
+        let conductivity_compensated_string = match self.conductivity_compensated {
+            Some(conductivity_compensated) => conductivity_compensated.to_string(),
+            None => none_string.clone(),
+        };
+        let refill_in_progress_string = match self.refill_in_progress {
+            Some(refill_in_progress) => match refill_in_progress {
+                true => "yes".to_string(),
+                false => "no".to_string(),
+            },
+            None => none_string.clone(),
+        };
+        let tank_level_switch_position_string = match self.tank_level_switch_position {
+            Some(tank_level_switch_position) => match tank_level_switch_position {
+                true => "high".to_string(),
+                false => "low".to_string(),
+            },
+            None => none_string.clone(),
+        };
+        let tank_level_switch_invalid_string = match self.tank_level_switch_invalid {
+            Some(tank_level_switch_invalid) => match tank_level_switch_invalid {
+                true => "invalid".to_string(),
+                false => "valid".to_string(),
+            },
+            None => none_string.clone(),
+        };
+        let surface_ventilation_status_string = match self.surface_ventilation_status {
+            Some(surface_ventilation_status) => match surface_ventilation_status {
+                true => "on".to_string(),
+                false => "off".to_string(),
+            },
+            None => none_string.clone(),
+        };
+        let ambient_temperature_string = match self.ambient_temperature {
+            Some(ambient_temperature) => ambient_temperature.to_string(),
+            None => none_string.clone(),
+        };
+        let ambient_humidity_string = match self.ambient_humidity {
+            Some(ambient_humidity) => ambient_humidity.to_string(),
+            None => none_string.clone(),
+        };
+        let heater_status_string = match self.heater_status {
+            Some(heater_status) => match heater_status {
+                true => "on".to_string(),
+                false => "off".to_string(),
+            },
+           None => none_string.clone(),
+        };
+        write!(
+            f,
+            "timestamp: {}, \
+            water_temperature: {}, water_temperature_filtered: {}, \
+            ph: {}, ph_filtered: {}, \
+            conductivity: {}, conductivity_filtered: {}, conductivity_compensated: {}, \
+            refill_in_progress: {}, \
+            tank_level_switch_position: {}, tank_level_switch_invalid: {}, \
+            surface_ventilation_status: {}, \
+            ambient_temperature: {}, ambient_humidity: {}, \
+            heater_status: {}",
+            self.timestamp,
+            water_temperature_string,
+            water_temperature_filtered_string,
+            ph_string,
+            ph_filtered_string,
+            conductivity_string,
+            conductivity_filtered_string,
+            conductivity_compensated_string,
+            refill_in_progress_string,
+            tank_level_switch_position_string,
+            tank_level_switch_invalid_string,
+            surface_ventilation_status_string,
+            ambient_temperature_string,
+            ambient_humidity_string,
+            heater_status_string
+        )
+    }
 }
 
 /// This struct contains the configuration and the implementation of the SQL interface for time-based data.
