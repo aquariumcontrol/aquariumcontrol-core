@@ -285,7 +285,7 @@ impl Refill {
             println!(
                 "Time interval since last refill {} is too small (limit={}).",
                 sql_refill_data.duration_since_last_refill,
-                sql_refill_data.duration_since_last_refill
+                self.config.min_interval_last_refill
             );
         }
         refill_check_volume_last_24h

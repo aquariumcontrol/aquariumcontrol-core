@@ -37,15 +37,18 @@ impl GpioHandler {
         internal_command: InternalCommand,
     ) -> f32 {
         match internal_command {
-            InternalCommand::RequestSignal(_) => match tx_to_tcp.send(internal_command) {
-                Ok(()) => match rx_from_tcp.recv() {
-                    Ok(c) => c,
+            InternalCommand::RequestSignal(ref c) => {
+                //println!("GpioHandler::get_response_from_simulator: requesting {}", c);
+                match tx_to_tcp.send(internal_command) {
+                    Ok(()) => match rx_from_tcp.recv() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            panic!("GpioHandler: Error occurred when trying to receive response from TCP thread: {e:?}");
+                        }
+                    },
                     Err(e) => {
-                        panic!("GpioHandler: Error occurred when trying to receive response from TCP thread: {e:?}");
+                        panic!("GpioHandler: Error in trying to send request to TCP thread: {e:?}");
                     }
-                },
-                Err(e) => {
-                    panic!("GpioHandler: Error in trying to send request to TCP thread: {e:?}");
                 }
             },
             _ => {

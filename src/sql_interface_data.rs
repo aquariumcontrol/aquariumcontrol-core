@@ -30,7 +30,7 @@ impl fmt::Display for DataFrame {
         let none_string = "None".to_string();
         let water_temperature_string = match self.water_temperature {
             Some(water_temperature) => water_temperature.to_string(),
-           None => none_string.clone(),
+            None => none_string.clone(),
         };
         let water_temperature_filtered_string = match self.water_temperature_filtered {
             Some(water_temperature_filtered) => water_temperature_filtered.to_string(),
@@ -142,6 +142,7 @@ impl SqlInterfaceData {
     }
 
     /// The function writes all data inside the data frame to the SQL data base.
+    /// float variables with NaN or infinite (both positive and negative) are inserted as NULL into the database.
     pub fn write_data_frame_to_database(
         &mut self,
         data: &DataFrame,
@@ -157,7 +158,10 @@ impl SqlInterfaceData {
             "#TemperatureUnfiltered",
             match data.water_temperature {
                 Some(c) => {
-                    water_temperature_string = c.to_string();
+                    water_temperature_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &water_temperature_string
                 }
                 None => &null_string,
@@ -170,7 +174,10 @@ impl SqlInterfaceData {
             "#TemperatureFiltered",
             match data.water_temperature_filtered {
                 Some(c) => {
-                    water_temperature_filtered_string = c.to_string();
+                    water_temperature_filtered_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &water_temperature_filtered_string
                 }
                 None => &null_string,
@@ -183,7 +190,10 @@ impl SqlInterfaceData {
             "#pHUnfiltered",
             match data.ph {
                 Some(c) => {
-                    ph_string = c.to_string();
+                    ph_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &ph_string
                 }
                 None => &null_string,
@@ -196,7 +206,10 @@ impl SqlInterfaceData {
             "#pHFiltered",
             match data.ph_filtered {
                 Some(c) => {
-                    ph_filtered_string = c.to_string();
+                    ph_filtered_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &ph_filtered_string
                 }
                 None => &null_string,
@@ -209,7 +222,10 @@ impl SqlInterfaceData {
             "#ConductivityUnfiltered",
             match data.conductivity {
                 Some(c) => {
-                    conductivity_string = c.to_string();
+                    conductivity_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &conductivity_string
                 }
                 None => &null_string,
@@ -222,7 +238,10 @@ impl SqlInterfaceData {
             "#ConductivityFiltered",
             match data.conductivity_filtered {
                 Some(c) => {
-                    conductivity_filtered_string = c.to_string();
+                    conductivity_filtered_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &conductivity_filtered_string
                 }
                 None => &null_string,
@@ -235,7 +254,10 @@ impl SqlInterfaceData {
             "#ConductivityCompensated",
             match data.conductivity_compensated {
                 Some(c) => {
-                    conductivity_compensated_string = c.to_string();
+                    conductivity_compensated_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &conductivity_compensated_string
                 }
                 None => &null_string,
@@ -300,7 +322,10 @@ impl SqlInterfaceData {
             "#AmbTemp",
             match data.ambient_temperature {
                 Some(c) => {
-                    ambient_temperature_string = c.to_string();
+                    ambient_temperature_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &ambient_temperature_string
                 }
                 None => &null_string,
@@ -313,7 +338,10 @@ impl SqlInterfaceData {
             "#AmbHum",
             match data.ambient_humidity {
                 Some(c) => {
-                    ambient_humidity_string = c.to_string();
+                    ambient_humidity_string = match c.is_nan() | c.is_infinite() {
+                        true => null_string.clone(),
+                        false => c.to_string(),
+                    };
                     &ambient_humidity_string
                 }
                 None => &null_string,

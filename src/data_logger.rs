@@ -65,7 +65,7 @@ impl DataLogger {
         rx_from_gpio: Receiver<f32>,
     ) {
         let sleep_duration_one_sec = Duration::new(1, 0);
-        let mut i = 0;
+        let mut i;
         let spin_sleeper = SpinSleeper::default();
 
         // define and initialize with value which will be overwritten in first iteration
@@ -78,6 +78,7 @@ impl DataLogger {
         let mut tank_level_switch_position: Option<bool> = Some(false);
 
         loop {
+            i = 0;
             while i < self.config.logging_interval {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
