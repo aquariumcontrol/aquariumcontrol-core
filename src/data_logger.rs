@@ -2,7 +2,7 @@
 use chrono::Local;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 use crate::channel_content::AquariumSignal;
@@ -63,8 +63,9 @@ impl DataLogger {
         mut sql_interface_data: SqlInterfaceData,
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
+        rx_from_refill: Receiver<bool>,
     ) {
-        let sleep_duration_one_sec = Duration::new(1, 0);
+        let sleep_duration_one_millisec = Duration::from_millis(1);
         let mut i;
         let spin_sleeper = SpinSleeper::default();
 
@@ -76,12 +77,27 @@ impl DataLogger {
         let mut ambient_humidity: Option<f32> = Some(0.0);
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(false);
+        let mut refill_in_progress: bool = false;
 
         loop {
             i = 0;
-            while i < self.config.logging_interval {
+            while i < self.config.logging_interval * 1000 {
+                // get information if refill is in progress from refill thread
+                match rx_from_refill.try_recv() {
+                    Ok(c) => {
+                        refill_in_progress = c;                        
+                    }
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                            }
+                        }
+                    }
+                }
                 i = i + 1;
-                spin_sleeper.sleep(sleep_duration_one_sec);
+                spin_sleeper.sleep(sleep_duration_one_millisec);                
             }
 
             // send request for water temperature
@@ -217,7 +233,7 @@ impl DataLogger {
                 conductivity: conductivity,
                 conductivity_filtered: conductivity_filtered,
                 conductivity_compensated: None,
-                refill_in_progress: None,
+                refill_in_progress: Some(refill_in_progress),
                 tank_level_switch_position: tank_level_switch_position,
                 tank_level_switch_invalid: tank_level_switch_invalid,
                 surface_ventilation_status: None,

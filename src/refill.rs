@@ -303,7 +303,16 @@ impl Refill {
         tx_to_gpio: &Sender<InternalCommand>,
         rx_from_gpio: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
+        tx_to_datalogger: &Sender<bool>,
     ) -> bool {
+        // inform data logger that refill is in progress
+        match tx_to_datalogger.send(true) {
+            Ok(_) => { /* no listening to response */ },
+            Err(e) => {
+                println!("Refill: Error in channel communication to DataLogger when starting refill: {e:?}");
+            }
+        }
+        
         let mut termination_request_received = false;
         // command start of refill pump
         match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
@@ -391,6 +400,14 @@ impl Refill {
         }
         println!("Refill: Sent request to switch off refill pump to Controllino thread.");
 
+        // inform data logger that refill is finished
+        match tx_to_datalogger.send(false) {
+            Ok(_) => { /* no listening to response */ },
+            Err(e) => {
+                println!("Refill: Error in channel communication to DataLogger when finishing refill: {e:?}");
+            }
+        }
+        
         // write result to data base
         match self.sql_interface_refill.insert_refill_event(
             Local::now().naive_local(),
@@ -417,6 +434,7 @@ impl Refill {
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        tx_to_datalogger: Sender<bool>,
     ) {
         let sleep_duration_one_sec = Duration::new(1, 0);
         let mut i = 0;
@@ -505,6 +523,7 @@ impl Refill {
                                 &tx_to_gpio,
                                 &rx_from_gpio,
                                 &rx_from_signal_handler,
+                                &tx_to_datalogger,
                             );
                             *mutex_data += 1;
                         }

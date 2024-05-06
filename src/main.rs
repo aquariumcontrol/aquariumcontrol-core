@@ -280,6 +280,11 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+ 
+   let (tx_refill_to_datalogger, rx_datalogger_from_refill): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
 
     let (tx_refill_to_controllino, rx_controllino_from_refill): (
         Sender<InternalCommand>,
@@ -384,6 +389,7 @@ fn main() {
                 sql_interface_data,
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
+                rx_datalogger_from_refill,
             );
         });
 
@@ -398,6 +404,7 @@ fn main() {
                 rx_refill_from_controllino,
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
+                tx_refill_to_datalogger
             );
         });
 

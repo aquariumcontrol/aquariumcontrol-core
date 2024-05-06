@@ -37,7 +37,7 @@ impl GpioHandler {
         internal_command: InternalCommand,
     ) -> f32 {
         match internal_command {
-            InternalCommand::RequestSignal(ref c) => {
+            InternalCommand::RequestSignal(_) => {
                 //println!("GpioHandler::get_response_from_simulator: requesting {}", c);
                 match tx_to_tcp.send(internal_command) {
                     Ok(()) => match rx_from_tcp.recv() {
