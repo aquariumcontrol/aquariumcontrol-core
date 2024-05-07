@@ -168,7 +168,7 @@ impl Refill {
         //println!("Refill: checking pending external request.");
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
-                InternalCommand::Quit => { true },
+                InternalCommand::Quit => true,
                 InternalCommand::ResetAllErrors => {
                     self.error_switch_stuck_high = false;
                     self.error_switch_stuck_low = false;
@@ -368,8 +368,7 @@ impl Refill {
                     additional_refill_volume_executed, self.config.additional_refill_volume
                 );
             }
-            quit_command_received =
-                self.check_pending_external_request(&rx_from_signal_handler);
+            quit_command_received = self.check_pending_external_request(&rx_from_signal_handler);
             if quit_command_received {
                 break;
             }
@@ -465,7 +464,7 @@ impl Refill {
         );
 
         let mut quit_command_received = false;
-        
+
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval {
@@ -480,7 +479,6 @@ impl Refill {
         }
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
-
 
         // main control loop for refill
         loop {
@@ -555,7 +553,7 @@ impl Refill {
                 );
             }
         };
-        
+
         // this thread has channel connection to underlying threads (Controllino, GpioHandler).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
@@ -563,7 +561,7 @@ impl Refill {
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => match c {
-                    InternalCommand::Terminate => { true },
+                    InternalCommand::Terminate => true,
                     _ => {
                         println!("Refill: ignoring not applicable command from signal handler.");
                         false
@@ -574,7 +572,7 @@ impl Refill {
                     false
                 }
             }
-        }        
+        }
     }
 }
 

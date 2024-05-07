@@ -131,7 +131,7 @@ pub fn handle_signals(
                             println!("handle_signals: could not receive answer from TcpCommunication thread {e:?}")
                         }
                     },
-                    None => { /* do nothing */ },
+                    None => { /* do nothing */ }
                 }
             }
             Err(e) => {
@@ -140,7 +140,7 @@ pub fn handle_signals(
         },
         None => { /* do nothing */ }
     }
-    
+
     // DataLogger thread has already ceased operation. It is now awaiting termination command.
     match tx_to_datalogger.send(InternalCommand::Terminate) {
         Ok(_) => {
@@ -150,7 +150,7 @@ pub fn handle_signals(
             println!("handle_signals: Error in channel communication to DataLogger when sending Terminate command: {e:?}");
         }
     }
-    
+
     // Refill thread has already ceased operation. It is now awaiting termination command.
     match tx_to_refill.send(InternalCommand::Terminate) {
         Ok(_) => {

@@ -293,7 +293,7 @@ impl DataLogger {
                 println!("DataLogger: Error in trying to send confirmation back to signal handler: {e:?}");
             }
         };
-        
+
         // this thread has channel connection to underlying threads (GpioHandler).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
@@ -301,9 +301,11 @@ impl DataLogger {
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => match c {
-                    InternalCommand::Terminate => { true },
+                    InternalCommand::Terminate => true,
                     _ => {
-                        println!("DataLogger: ignoring not applicable command from signal handler.");
+                        println!(
+                            "DataLogger: ignoring not applicable command from signal handler."
+                        );
                         false
                     }
                 },
@@ -312,6 +314,6 @@ impl DataLogger {
                     false
                 }
             }
-        }        
+        }
     }
 }
