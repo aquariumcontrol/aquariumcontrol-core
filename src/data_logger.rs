@@ -108,16 +108,20 @@ impl DataLogger {
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(false);
         let mut refill_in_progress: bool = false;
+        let mut quit_command_received = false;
 
         loop {
-            if self.check_pending_external_request(&rx_from_signal_handler) {
-                break;
-            }
-
             i = 0;
             while i < self.config.logging_interval * 1000 {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_millisec);
+                if self.check_pending_external_request(&rx_from_signal_handler) {
+                    quit_command_received = true;
+                    break;
+                }
+            }
+            if quit_command_received {
+                break;
             }
 
             // get information if refill is in progress from refill thread
@@ -282,7 +286,7 @@ impl DataLogger {
                 Err(e) => {
                     println!("DataLogger: error occurred when writing to SQL database: {e:?}")
                 }
-            }
+            };
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -313,7 +317,8 @@ impl DataLogger {
                     println!("DataLogger: error when trying to receive termination signal: {e:?}");
                     false
                 }
-            }
+            };
+            spin_sleeper.sleep(sleep_duration_one_millisec);
         }
     }
 }

@@ -571,7 +571,7 @@ impl Refill {
                     println!("Refill: error when trying to receive termination signal: {e:?}");
                     false
                 }
-            }
+            };
         }
     }
 }
