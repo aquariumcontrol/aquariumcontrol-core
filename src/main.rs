@@ -267,32 +267,42 @@ fn main() {
         feedpattern.profile_id, feedpattern.profile_name
     );
 
+    let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
+
     // create channels for communication between threads
+    // *** data_logger <=> gpio ***
     let (tx_data_logger_to_gpio, rx_gpio_from_data_logger): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
+
     let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
+    // ****************************
 
+    // *** refill <=> gpio ***
     let (tx_refill_to_gpio, rx_gpio_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
- 
-   let (tx_refill_to_datalogger, rx_datalogger_from_refill): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
+    // *****************************
 
+    // *** refill => datalogger ***
+    let (tx_refill_to_datalogger, rx_datalogger_from_refill): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *****************************
+
+    // *** refill <=> controllino ***
     let (tx_refill_to_controllino, rx_controllino_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
+    // *******************************
 
+    // *** signal handler <=> refill ***
     let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
@@ -301,17 +311,62 @@ fn main() {
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
+    // ***********************************
 
+    // *** signal handler <=> gpio ***
+    let (tx_signal_handler_to_gpio, rx_gpio_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_signal_handler, rx_signal_handler_from_gpio): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *********************************
+
+    // *** signal handler <=> controllino ***
+    let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_signal_handler, rx_signal_handler_from_controllino): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***************************************
+
+    // *** signal handler <=> datalogger ***
+    let (tx_signal_handler_to_datalogger, rx_datalogger_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_datalogger_to_signal_handler, rx_signal_handler_from_datalogger): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // **************************************
+
+    // *** signal handler <=> tcp ***
+    let (tx_signal_handler_to_tcp, rx_tcp_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tcp_to_signal_handler, rx_signal_handler_from_tcp): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+
+    // *** controllino => tcp ***
     let (tx_controllino_to_tcp, rx_tcp_from_controllino): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
+    // ****************************
 
+    // *** gpio <=> tcp ***
     let (tx_gpio_to_tcp, rx_tcp_from_gpio): (Sender<InternalCommand>, Receiver<InternalCommand>) =
         mpsc::channel();
     let (tx_tcp_to_gpio, rx_gpio_from_tcp): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    // **********************
 
-    // wrapping channels for communication with TCP thread
+    // wrapping sender/receiver for communication with TCP thread
     let tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>> =
         match config.controllino.use_simulator {
             true => Some(tx_controllino_to_tcp),
@@ -346,10 +401,8 @@ fn main() {
         false => None,
     };
 
-    let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
-
-    let gpio_handler = GpioHandler::new(config.gpio_handler);
-    let controllino = Controllino::new(config.controllino);
+    let mut gpio_handler = GpioHandler::new(config.gpio_handler);
+    let mut controllino = Controllino::new(config.controllino);
 
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
@@ -365,12 +418,25 @@ fn main() {
                     rx_tcp_from_controllino_opt,
                     rx_tcp_from_gpio_opt,
                     tx_tcp_to_gpio_opt,
+                    tx_tcp_to_signal_handler,
+                    rx_tcp_from_signal_handler,
                 );
             });
         }
 
         scope.spawn(move || {
-            handle_signals(tx_signal_handler_to_refill, rx_signal_handler_from_refill);
+            handle_signals(
+                tx_signal_handler_to_refill,
+                rx_signal_handler_from_refill,
+                tx_signal_handler_to_controllino,
+                rx_signal_handler_from_controllino,
+                tx_signal_handler_to_gpio,
+                rx_signal_handler_from_gpio,
+                tx_signal_handler_to_datalogger,
+                rx_signal_handler_from_datalogger,
+                tx_signal_handler_to_tcp,
+                rx_signal_handler_from_tcp,
+            );
         });
 
         scope.spawn(move || {
@@ -381,6 +447,8 @@ fn main() {
                 rx_gpio_from_data_logger,
                 tx_gpio_to_refill,
                 rx_gpio_from_refill,
+                tx_gpio_to_signal_handler,
+                rx_gpio_from_signal_handler,
             );
         });
 
@@ -390,6 +458,8 @@ fn main() {
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
                 rx_datalogger_from_refill,
+                tx_datalogger_to_signal_handler,
+                rx_datalogger_from_signal_handler,
             );
         });
 
@@ -404,7 +474,7 @@ fn main() {
                 rx_refill_from_controllino,
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
-                tx_refill_to_datalogger
+                tx_refill_to_datalogger,
             );
         });
 
@@ -413,6 +483,8 @@ fn main() {
                 tx_controllino_to_tcp_opt,
                 tx_controllino_to_refill,
                 rx_controllino_from_refill,
+                tx_controllino_to_signal_handler,
+                rx_controllino_from_signal_handler,
             );
         });
     });

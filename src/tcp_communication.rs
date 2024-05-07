@@ -212,16 +212,52 @@ impl TcpCommunication {
         }
     }
 
+    /// function checks if there are new messages in the channel.
+    /// if the message contains the quit command, then the function returns true, otherwise false.
+    fn check_pending_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => {
+                match c {
+                    InternalCommand::Quit => true,
+                    _ => {
+                        println!("TcpCommunication: ignoring not applicable command from signal handler.");
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "TcpCommunication: Error in trying to receive command from signal handler: {e:?}"
+                        );
+                    }
+                }
+                false
+            }
+        }
+    }
+
     pub fn execute(
         &mut self,
         rx_from_controllino_opt: Option<Receiver<InternalCommand>>,
         rx_from_gpio_opt: Option<Receiver<InternalCommand>>,
         tx_to_gpio_opt: Option<Sender<f32>>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
+            if self.check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+
             // *** communication with GpioHandler - response required ***
             match rx_from_gpio_opt {
                 Some(ref rx_from_gpio) => {
@@ -292,5 +328,14 @@ impl TcpCommunication {
 
             spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
+
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!("TcpCommunication: Error in trying to send confirmation back to signal handler: {e:?}");
+            }
+        };
     }
 }

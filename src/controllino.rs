@@ -117,11 +117,7 @@ impl Controllino {
                     }
                 }
             }
-            InternalCommand::RequestSignal(_)
-            | InternalCommand::SetRelay(_)
-            | InternalCommand::UnsetRelay(_)
-            | InternalCommand::ResetAllErrors
-            | InternalCommand::Quit => {
+            _ => {
                 println!(
                     "Controllino: ignoring irrelevant internal command {}.",
                     internal_command.to_string()
@@ -130,13 +126,43 @@ impl Controllino {
         }
     }
 
+    /// function checks if there are new messages in the channel.
+    /// if the message contains the quit command, then the function returns true, otherwise false.
+    fn check_pending_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => true,
+                _ => {
+                    println!("Controllino: ignoring not applicable command from signal handler.");
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "Controllino: Error in trying to receive command from signal handler: {e:?}"
+                        );
+                    }
+                }
+                false
+            }
+        }
+    }
+
     /// this function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     pub fn execute(
-        &self,
+        &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
         tx_to_refill: Sender<bool>,
         rx_from_refill: Receiver<InternalCommand>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         #[cfg(target_os = "linux")]
         execute_linux_specific_code();
@@ -149,6 +175,10 @@ impl Controllino {
         }
 
         loop {
+            if self.check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
@@ -156,7 +186,7 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
-                    // todo: else branch using real
+                    // todo: else branch using real HW
 
                     match tx_to_refill.send(true) {
                         Ok(()) => {}
@@ -178,5 +208,14 @@ impl Controllino {
             }
             // **********************************
         }
+
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!("Controllino: Error in trying to send confirmation back to signal handler: {e:?}");
+            }
+        };
     }
 }

@@ -165,9 +165,10 @@ impl Refill {
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
     ) -> bool {
+        println!("Refill: checking pending external request.");
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
-                InternalCommand::Quit => true,
+                InternalCommand::Quit => { true },
                 InternalCommand::ResetAllErrors => {
                     self.error_switch_stuck_high = false;
                     self.error_switch_stuck_low = false;
@@ -284,8 +285,7 @@ impl Refill {
         if refill_check_intervall_last_refill {
             println!(
                 "Time interval since last refill {} is too small (limit={}).",
-                sql_refill_data.duration_since_last_refill,
-                self.config.min_interval_last_refill
+                sql_refill_data.duration_since_last_refill, self.config.min_interval_last_refill
             );
         }
         refill_check_volume_last_24h
@@ -306,14 +306,15 @@ impl Refill {
         tx_to_datalogger: &Sender<bool>,
     ) -> bool {
         // inform data logger that refill is in progress
+        println!("Refill: communicating to data logger thread...");
         match tx_to_datalogger.send(true) {
-            Ok(_) => { /* no listening to response */ },
+            Ok(_) => { /* no listening to response */ }
             Err(e) => {
                 println!("Refill: Error in channel communication to DataLogger when starting refill: {e:?}");
             }
         }
-        
-        let mut termination_request_received = false;
+        println!("Refill: executing refill...");
+        let mut quit_command_received = false;
         // command start of refill pump
         match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
             Ok(_) => {
@@ -367,9 +368,9 @@ impl Refill {
                     additional_refill_volume_executed, self.config.additional_refill_volume
                 );
             }
-            termination_request_received =
+            quit_command_received =
                 self.check_pending_external_request(&rx_from_signal_handler);
-            if termination_request_received {
+            if quit_command_received {
                 break;
             }
             println!(
@@ -402,12 +403,12 @@ impl Refill {
 
         // inform data logger that refill is finished
         match tx_to_datalogger.send(false) {
-            Ok(_) => { /* no listening to response */ },
+            Ok(_) => { /* no listening to response */ }
             Err(e) => {
                 println!("Refill: Error in channel communication to DataLogger when finishing refill: {e:?}");
             }
         }
-        
+
         // write result to data base
         match self.sql_interface_refill.insert_refill_event(
             Local::now().naive_local(),
@@ -421,7 +422,7 @@ impl Refill {
                 self.error_sql_update_failed = true;
             }
         }
-        termination_request_received
+        quit_command_received
     }
 
     /// this function contains the main cycle of refill control
@@ -463,34 +464,42 @@ impl Refill {
             sql_refill_data.refill_count_last_hour
         );
 
+        let mut quit_command_received = false;
+        
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
+                quit_command_received =
+                    self.check_pending_external_request(&rx_from_signal_handler);
+                if quit_command_received {
+                    break;
+                }
             }
         }
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
 
-        let mut termination_request_received = false;
 
         // main control loop for refill
         loop {
+            // check if either during main control loop or during refill execution termination requests has been received
+            if quit_command_received {
+                break; // exit outer loop
+            }
+
             // check for external requests while waiting for the check interval to pass
             println!("Refill: executing main loop.");
             i = 0;
             while i < self.config.check_interval {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_sec);
-                termination_request_received =
+                quit_command_received =
                     self.check_pending_external_request(&rx_from_signal_handler);
-                if termination_request_received {
-                    break; // exit inner loop
+                if quit_command_received {
+                    break;
                 }
-            }
-            if termination_request_received {
-                break; // exit outer loop
             }
 
             // check when the last refill operation has taken place
@@ -505,7 +514,10 @@ impl Refill {
             // this call will also update the stabilized tank level position.
             self.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
 
-            if !self.tank_level_switch_position_stabilized && !self.tank_level_switch_invalid {
+            if !quit_command_received
+                && !self.tank_level_switch_position_stabilized
+                && !self.tank_level_switch_invalid
+            {
                 println!("Stabilized tank level switch position indicates low water level.");
 
                 // execute checks before initiating refill
@@ -517,7 +529,7 @@ impl Refill {
                         {
                             let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
                             // now we are given exclusive access to actuators
-                            termination_request_received = self.execute_refill(
+                            quit_command_received = self.execute_refill(
                                 &tx_to_controllino,
                                 &rx_from_controllino,
                                 &tx_to_gpio,
@@ -527,21 +539,42 @@ impl Refill {
                             );
                             *mutex_data += 1;
                         }
-                        if termination_request_received {
-                            break;
-                        }
                     }
                 }
             }
         }
+
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        println!("Refill: Sending Quit confirmation to signal handler.");
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!("Error in trying to send confirmation back to signal handler: {e:?}");
+                println!(
+                    "Refill: Error in trying to send confirmation back to signal handler: {e:?}"
+                );
             }
         };
+        
+        // this thread has channel connection to underlying threads (Controllino, GpioHandler).
+        // These threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by signal_handler crate.
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match rx_from_signal_handler.recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => { true },
+                    _ => {
+                        println!("Refill: ignoring not applicable command from signal handler.");
+                        false
+                    }
+                },
+                Err(e) => {
+                    println!("Refill: error when trying to receive termination signal.");
+                    false
+                }
+            }
+        }        
     }
 }
 

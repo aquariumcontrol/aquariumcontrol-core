@@ -77,6 +77,7 @@ pub enum InternalCommand {
     RequestSignal(AquariumSignal),
     ResetAllErrors,
     Quit,
+    Terminate,
 }
 
 impl fmt::Display for InternalCommand {
@@ -89,6 +90,7 @@ impl fmt::Display for InternalCommand {
             InternalCommand::RequestSignal(_) => write!(f, "RequestSignal"),
             InternalCommand::ResetAllErrors => write!(f, "ResetAllErrors"),
             InternalCommand::Quit => write!(f, "Quit"),
+            InternalCommand::Terminate => write!(f, "Terminate"),
         }
     }
 }

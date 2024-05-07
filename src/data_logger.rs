@@ -57,6 +57,34 @@ impl DataLogger {
         }
     }
 
+    /// function checks if there are new messages in the channel.
+    /// if the message contains the quit command, then the function returns true, otherwise false.
+    fn check_pending_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => true,
+                _ => {
+                    println!("DataLogger: ignoring not applicable command from signal handler.");
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "DataLogger: Error in trying to receive command from signal handler: {e:?}"
+                        );
+                    }
+                }
+                false
+            }
+        }
+    }
+
     /// this function contains the main cycle of data logger functionality
     pub fn execute(
         &mut self,
@@ -64,6 +92,8 @@ impl DataLogger {
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
         rx_from_refill: Receiver<bool>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let mut i;
@@ -80,24 +110,29 @@ impl DataLogger {
         let mut refill_in_progress: bool = false;
 
         loop {
+            if self.check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+
             i = 0;
             while i < self.config.logging_interval * 1000 {
-                // get information if refill is in progress from refill thread
-                match rx_from_refill.try_recv() {
-                    Ok(c) => {
-                        refill_in_progress = c;                        
-                    }
-                    Err(e) => {
-                        match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
-                                panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
-                            }
+                i = i + 1;
+                spin_sleeper.sleep(sleep_duration_one_millisec);
+            }
+
+            // get information if refill is in progress from refill thread
+            match rx_from_refill.try_recv() {
+                Ok(c) => {
+                    refill_in_progress = c;
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
                         }
                     }
                 }
-                i = i + 1;
-                spin_sleeper.sleep(sleep_duration_one_millisec);                
             }
 
             // send request for water temperature
@@ -249,5 +284,34 @@ impl DataLogger {
                 }
             }
         }
+
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!("DataLogger: Error in trying to send confirmation back to signal handler: {e:?}");
+            }
+        };
+        
+        // this thread has channel connection to underlying threads (GpioHandler).
+        // These threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by signal_handler crate.
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match rx_from_signal_handler.recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => { true },
+                    _ => {
+                        println!("DataLogger: ignoring not applicable command from signal handler.");
+                        false
+                    }
+                },
+                Err(e) => {
+                    println!("DataLogger: error when trying to receive termination signal: {e:?}");
+                    false
+                }
+            }
+        }        
     }
 }

@@ -97,7 +97,7 @@ impl fmt::Display for DataFrame {
                 true => "on".to_string(),
                 false => "off".to_string(),
             },
-           None => none_string.clone(),
+            None => none_string.clone(),
         };
         write!(
             f,

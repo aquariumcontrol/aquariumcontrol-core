@@ -50,7 +50,7 @@ impl GpioHandler {
                         panic!("GpioHandler: Error in trying to send request to TCP thread: {e:?}");
                     }
                 }
-            },
+            }
             _ => {
                 println!("GpioHandler: ignoring irrelevant internal commands.");
                 0.0
@@ -63,16 +63,46 @@ impl GpioHandler {
         println!("Linux specific code.");
     }
 
+    /// function checks if there are new messages in the channel.
+    /// if the message contains the quit command, then the function returns true, otherwise false.
+    fn check_pending_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => true,
+                _ => {
+                    println!("GpioHandler: ignoring not applicable command from signal handler.");
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "GpioHandler: Error in trying to receive command from signal handler: {e:?}"
+                        );
+                    }
+                }
+                false
+            }
+        }
+    }
+
     /// this function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     pub fn execute(
-        &self,
+        &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: Option<Receiver<f32>>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_refill: Sender<f32>,
         rx_from_refill: Receiver<InternalCommand>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let mut response_value: f32 = 0.0;
 
@@ -89,6 +119,10 @@ impl GpioHandler {
         }
 
         loop {
+            if self.check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+
             // *** communication with data logger ***
             match rx_from_data_logger.try_recv() {
                 Ok(c) => {
@@ -143,5 +177,14 @@ impl GpioHandler {
             }
             // **********************************
         }
+
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!("GpioHandler: Error in trying to send confirmation back to signal handler: {e:?}");
+            }
+        };
     }
 }
