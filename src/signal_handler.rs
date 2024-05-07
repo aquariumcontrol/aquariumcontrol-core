@@ -17,9 +17,13 @@ pub fn handle_signals(
     rx_from_gpio: Receiver<bool>,
     tx_to_datalogger: Sender<InternalCommand>,
     rx_from_datalogger: Receiver<bool>,
-    tx_to_tcp: Sender<InternalCommand>,
-    rx_from_tcp: Receiver<bool>,
+    tx_to_tcp_opt: Option<Sender<InternalCommand>>,
+    rx_from_tcp_opt: Option<Receiver<bool>>,
 ) {
+    if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
+        panic!("handle_signals: inconsistent channel parameters for TcpCommunication provided to handle_signals.");
+    }
+
     let spin_sleeper = SpinSleeper::default();
     let sleep_interval_millis = 100;
     let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis);
@@ -115,20 +119,26 @@ pub fn handle_signals(
     }
 
     // finally, let's shut down TcpCommunication
-    match tx_to_tcp.send(InternalCommand::Quit) {
-        Ok(_) => {
-            println!("signal_handler: Waiting for TcpCommunication thread to terminate.");
-            // now listen for response
-            match rx_from_tcp.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("handle_signals: could not receive answer from TcpCommunication thread {e:?}")
+    match tx_to_tcp_opt {
+        Some(tx_to_tcp) => match tx_to_tcp.send(InternalCommand::Quit) {
+            Ok(_) => {
+                println!("signal_handler: Waiting for TcpCommunication thread to terminate.");
+                // now listen for response
+                match rx_from_tcp_opt {
+                    Some(rx_from_tcp) => match rx_from_tcp.recv() {
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("handle_signals: could not receive answer from TcpCommunication thread {e:?}")
+                        }
+                    },
+                    None => { /* do nothing */ },
                 }
-            };
-        }
-        Err(e) => {
-            println!("handle_signals: Error in channel communication to TcpCommunication when sending Quit command: {e:?}");
-        }
+            }
+            Err(e) => {
+                println!("handle_signals: Error in channel communication to TcpCommunication when sending Quit command: {e:?}");
+            }
+        },
+        None => { /* do nothing */ }
     }
     
     // DataLogger thread has already ceased operation. It is now awaiting termination command.

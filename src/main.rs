@@ -367,6 +367,18 @@ fn main() {
     // **********************
 
     // wrapping sender/receiver for communication with TCP thread
+    let tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match use_simulator {
+            true => Some(tx_signal_handler_to_tcp),
+            false => None,    
+        };
+        
+    let rx_signal_handler_from_tcp_opt: Option<Receiver<bool>> =
+        match use_simulator {
+            true => Some(rx_signal_handler_from_tcp),
+            false => None,    
+        };
+    
     let tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>> =
         match config.controllino.use_simulator {
             true => Some(tx_controllino_to_tcp),
@@ -434,8 +446,8 @@ fn main() {
                 rx_signal_handler_from_gpio,
                 tx_signal_handler_to_datalogger,
                 rx_signal_handler_from_datalogger,
-                tx_signal_handler_to_tcp,
-                rx_signal_handler_from_tcp,
+                tx_signal_handler_to_tcp_opt,
+                rx_signal_handler_from_tcp_opt,
             );
         });
 

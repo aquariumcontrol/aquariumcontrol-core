@@ -165,7 +165,7 @@ impl Refill {
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
     ) -> bool {
-        println!("Refill: checking pending external request.");
+        //println!("Refill: checking pending external request.");
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
                 InternalCommand::Quit => { true },
@@ -570,7 +570,7 @@ impl Refill {
                     }
                 },
                 Err(e) => {
-                    println!("Refill: error when trying to receive termination signal.");
+                    println!("Refill: error when trying to receive termination signal: {e:?}");
                     false
                 }
             }
