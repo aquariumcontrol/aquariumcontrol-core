@@ -20,3 +20,4 @@ signal-hook = "0.3.17"
 
 [dev-dependencies]
 assert_float_eq = "1"
+all_asserts = "2.3.1"

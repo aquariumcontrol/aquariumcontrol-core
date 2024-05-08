@@ -161,7 +161,7 @@ pub mod sql_query_strings {
 /// This struct holds the configuration data for the SQL interface.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct SqlInterfaceConfig {
     /// database user
     pub db_user: String,
