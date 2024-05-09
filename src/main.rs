@@ -29,6 +29,7 @@ use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::gpio_handler::GpioHandler;
 use crate::refill::Refill;
+use crate::refill::RefillExecution;
 use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
@@ -475,6 +476,8 @@ fn main() {
 
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
+        let mut refill_execution = RefillExecution;
+
         scope.spawn(move || {
             refill.execute(
                 mutex_device_scheduler_refill,
@@ -485,6 +488,7 @@ fn main() {
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
                 tx_refill_to_datalogger,
+                &mut refill_execution,
             );
         });
 
