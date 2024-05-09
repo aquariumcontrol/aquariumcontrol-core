@@ -806,7 +806,7 @@ pub mod tests {
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
                 refill.execute(
-                    mutex_device_scheduler,
+                    mutex_device_scheduler.clone(),
                     tx_refill_to_gpio,
                     rx_refill_from_gpio,
                     tx_refill_to_controllino,
@@ -815,6 +815,9 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
                 );
+                // check if no refill operation has been executed
+                let mutex_data = mutex_device_scheduler.lock().unwrap();
+                assert_eq!(*mutex_data, 0);                    
             });
             let finish_time = SystemTime::now();
             let execution_duration = finish_time.duration_since(start_time).unwrap();
@@ -929,9 +932,9 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {
-            let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
             // this scope is providing the test environment
             scope.spawn(move || {
@@ -1002,7 +1005,7 @@ pub mod tests {
             // this scope is executing the test object
             scope.spawn(move || {
                 refill.execute(
-                    mutex_device_scheduler,
+                    mutex_device_scheduler.clone(),
                     tx_refill_to_gpio,
                     rx_refill_from_gpio,
                     tx_refill_to_controllino,
@@ -1011,6 +1014,9 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
                 );
+                // check if no refill operation has been executed            
+                let mutex_data = mutex_device_scheduler.lock().unwrap();
+                assert_eq!(*mutex_data, 0);
             });
         });
     }
