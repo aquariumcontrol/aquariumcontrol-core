@@ -30,12 +30,87 @@ pub struct RefillConfig {
     additional_refill_volume: f64,
 }
 
+pub struct TankLevelSwitchSignals {
+    tank_level_switch_position: bool,
+    tank_level_switch_invalid: bool,
+    error_receive_tank_level_switch_position: bool,
+    error_receive_tank_level_switch_invalid: bool,
+}
+
+impl TankLevelSwitchSignals {
+    /// function executes the channel communication to update the tank level switch position signal
+    /// as well as the tank level switch invalid signal.
+    fn update_tank_level_switch_signals(
+        &mut self,
+        tx_to_gpio: &Sender<InternalCommand>,
+        rx_from_gpio: &Receiver<f32>,
+    ) {
+        // send request for tank level switch position
+        match tx_to_gpio.send(InternalCommand::RequestSignal(
+            AquariumSignal::TankLevelSwitchPosition,
+        )) {
+            Ok(_) => {
+                //println!("Refill: Sent request for tank level switch position.");
+                // now listen for response
+                self.tank_level_switch_position = match rx_from_gpio.recv() {
+                    Ok(c) => {
+                        self.error_receive_tank_level_switch_position = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        println!("Refill: Error in update_tank_level_switch_signals when reading channel content for tank_level_switch_position: {e:?}");
+                        self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
+                        false
+                    }
+                };
+            }
+            Err(e) => {
+                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
+            }
+        }
+
+        // send request for tank level switch invalid
+        match tx_to_gpio.send(InternalCommand::RequestSignal(
+            AquariumSignal::TankLevelSwitchInvalid,
+        )) {
+            Ok(_) => {
+                // now listen for response
+                self.tank_level_switch_invalid = match rx_from_gpio.recv() {
+                    Ok(c) => {
+                        self.error_receive_tank_level_switch_invalid = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        println!("Refill: Error in update_tank_level_switch_signals when reading channel content for tank_level_switch_invalid: {e:?}");
+                        self.error_receive_tank_level_switch_invalid = true;
+                        true
+                    }
+                };
+            }
+            Err(e) => {
+                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
+            }
+        }
+
+        println!(
+            "Refill: update_tank_level_switch_signals set struct variables \
+                        tank_level_switch_position={} and tank_level_switch_invalid={}",
+            match self.tank_level_switch_position {
+                true => "high",
+                false => "low",
+            },
+            match self.tank_level_switch_invalid {
+                true => "invalid",
+                false => "valid",
+            }
+        );
+    }
+}
+
 /// This struct contains the configuration and the implementation for the refill control.
 pub struct Refill {
     config: RefillConfig,
     sql_interface_refill: SqlInterfaceRefill,
-    tank_level_switch_position: bool,
-    tank_level_switch_invalid: bool,
     tank_level_switch_position_stabilized: bool,
     tank_level_switch_position_high_stabilization_counter: u32,
     error_switch_stuck_high: bool,
@@ -74,8 +149,6 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
-            tank_level_switch_position: true,
-            tank_level_switch_invalid: true,
             tank_level_switch_position_stabilized: true,
             tank_level_switch_position_high_stabilization_counter: 0,
             error_switch_stuck_high: false,
@@ -91,25 +164,29 @@ impl Refill {
     /// - if the the new signal is false (indicating low water level), then set increase the stabilization counter.
     /// - if the stabiliyation counter exceeds the configured limit, then set the counter to zero and set the stabilized
     /// signal to true indicating high water level.
-    fn calc_tank_level_switch_position_stabilized(&mut self) {
-        if !self.tank_level_switch_invalid {
+    fn calc_tank_level_switch_position_stabilized(
+        &mut self,
+        tank_level_switch_signals: &TankLevelSwitchSignals,
+    ) {
+        if !tank_level_switch_signals.tank_level_switch_invalid {
             // update stabilized signal only when new signal is not invalid
-            self.tank_level_switch_position_stabilized = match self.tank_level_switch_position {
-                true => true, // set stabilized to true without delay
-                false => {
-                    if self.tank_level_switch_position_high_stabilization_counter
-                        < self
-                            .config
-                            .tank_level_switch_position_high_stabilization_count
-                    {
-                        self.tank_level_switch_position_high_stabilization_counter += 1;
-                        true
-                    } else {
-                        self.tank_level_switch_position_high_stabilization_counter = 0;
-                        false
+            self.tank_level_switch_position_stabilized =
+                match tank_level_switch_signals.tank_level_switch_position {
+                    true => true, // set stabilized to true without delay
+                    false => {
+                        if self.tank_level_switch_position_high_stabilization_counter
+                            < self
+                                .config
+                                .tank_level_switch_position_high_stabilization_count
+                        {
+                            self.tank_level_switch_position_high_stabilization_counter += 1;
+                            true
+                        } else {
+                            self.tank_level_switch_position_high_stabilization_counter = 0;
+                            false
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -212,73 +289,6 @@ impl Refill {
         }
     }
 
-    /// function executes the channel communication to update the tank level switch position signal
-    /// as well as the tank level switch invalid signal.
-    fn update_tank_level_switch_signals(
-        &mut self,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
-    ) {
-        // send request for tank level switch position
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchPosition,
-        )) {
-            Ok(_) => {
-                //println!("Refill: Sent request for tank level switch position.");
-                // now listen for response
-                self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        //println!("Refill: Received tank level switch position.");
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        println!("Refill: Error in update_tank_level_switch_signals when reading channel content for tank_level_switch_position: {e:?}");
-                        self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
-                        false
-                    }
-                };
-            }
-            Err(e) => {
-                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
-            }
-        }
-
-        // send request for tank level switch invalid
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchInvalid,
-        )) {
-            Ok(_) => {
-                // now listen for response
-                self.tank_level_switch_invalid = match rx_from_gpio.recv() {
-                    Ok(c) => c > 0.0,
-                    Err(e) => {
-                        println!("Refill: Error in update_tank_level_switch_signals when reading channel content for tank_level_switch_invalid: {e:?}");
-                        true
-                    }
-                };
-            }
-            Err(e) => {
-                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
-            }
-        }
-
-        println!(
-            "Refill: update_tank_level_switch_signals set struct variables \
-                        tank_level_switch_position={} and tank_level_switch_invalid={}",
-            match self.tank_level_switch_position {
-                true => "high",
-                false => "low",
-            },
-            match self.tank_level_switch_invalid {
-                true => "invalid",
-                false => "valid",
-            }
-        );
-
-        // calculate the stabilized tank level signal to be used in main control loop
-        self.calc_tank_level_switch_position_stabilized();
-    }
-
     // this function checks if historic refill data does not exceed limitations in terms of count and volume.
     // the function returns a tuple of boolean variables
     fn check_volume_count_time_limits(&self, sql_refill_data: &RefillSqlData) -> bool {
@@ -338,6 +348,7 @@ impl Refill {
         rx_from_gpio: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_datalogger: &Sender<bool>,
+        tank_level_switch_signals: &mut TankLevelSwitchSignals,
     ) -> bool {
         // inform data logger that refill is in progress
         println!("Refill: communicating to data logger thread...");
@@ -380,14 +391,14 @@ impl Refill {
         loop {
             spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
             refill_time_seconds += sleep_interval_seconds;
-            self.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
-            if self.tank_level_switch_position
+            tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
+            if tank_level_switch_signals.tank_level_switch_position
                 && additional_refill_volume_executed > self.config.additional_refill_volume
             {
                 // water level changed to high
                 break;
             }
-            if self.tank_level_switch_invalid {
+            if tank_level_switch_signals.tank_level_switch_invalid {
                 // switch signal is invalid
                 refill_error_code = 1;
                 break;
@@ -395,7 +406,7 @@ impl Refill {
 
             // calculate volume refilled in this operation
             refill_volume += refill_increment;
-            if self.tank_level_switch_position {
+            if tank_level_switch_signals.tank_level_switch_position {
                 additional_refill_volume_executed += refill_increment;
                 println!(
                     "Executing additional refill at {}L, limit at {}L",
@@ -473,7 +484,12 @@ impl Refill {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
-
+        let mut tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: true,
+            tank_level_switch_invalid: true,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         // retrieving data from SQL data base
         let mut sql_refill_data = self.get_sql_refill_data();
         println!("{}", sql_refill_data);
@@ -515,11 +531,13 @@ impl Refill {
 
             // either communicate with real HW or with simulator to get updated signal information
             // this call will also update the stabilized tank level position.
-            self.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
+            tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
+
+            self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
 
             if !quit_command_received
                 && !self.tank_level_switch_position_stabilized
-                && !self.tank_level_switch_invalid
+                && !tank_level_switch_signals.tank_level_switch_invalid
             {
                 println!("Stabilized tank level switch position indicates low water level.");
 
@@ -539,6 +557,7 @@ impl Refill {
                                 &rx_from_gpio,
                                 &rx_from_signal_handler,
                                 &tx_to_datalogger,
+                                &mut tank_level_switch_signals,
                             );
                             *mutex_data += 1;
                         }
@@ -609,6 +628,7 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::refill::Refill;
+    use crate::refill::TankLevelSwitchSignals;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
 
@@ -649,11 +669,15 @@ pub mod tests {
         //*** test if position signal is not updating when invalid signal is true ***
         let (_, mut refill) = prepare_refill_tests();
         // check transition false -> true
-        refill.tank_level_switch_invalid = true;
-        refill.tank_level_switch_position = true;
+        let tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: true,
+            tank_level_switch_invalid: true,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         refill.tank_level_switch_position_stabilized = false;
         for _ in 0..10 {
-            refill.calc_tank_level_switch_position_stabilized();
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, false);
         }
         println!("* checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
@@ -664,11 +688,15 @@ pub mod tests {
         //*** test if position signal is not updating when invalid signal is true ***
         let (_, mut refill) = prepare_refill_tests();
         // check transition true -> false
-        refill.tank_level_switch_invalid = true;
-        refill.tank_level_switch_position = false;
+        let tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: true,
+            tank_level_switch_invalid: true,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         refill.tank_level_switch_position_stabilized = true;
         for _ in 0..10 {
-            refill.calc_tank_level_switch_position_stabilized();
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
         println!("* checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
@@ -679,10 +707,14 @@ pub mod tests {
         //*** test if position signal is updating without delay when invalid signal is false ***
         let (_, mut refill) = prepare_refill_tests();
         // check transition true -> false
-        refill.tank_level_switch_invalid = false;
-        refill.tank_level_switch_position = true;
+        let tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: true,
+            tank_level_switch_invalid: false,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         refill.tank_level_switch_position_stabilized = false;
-        refill.calc_tank_level_switch_position_stabilized();
+        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
         assert_eq!(refill.tank_level_switch_position_stabilized, true);
         println!("* checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
     }
@@ -692,17 +724,21 @@ pub mod tests {
         //*** test if position signal is updating with delay when invalid signal is false ***
         let (config, mut refill) = prepare_refill_tests();
         // check transition true -> false
-        refill.tank_level_switch_invalid = false;
-        refill.tank_level_switch_position = false;
+        let tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: false,
+            tank_level_switch_invalid: false,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         refill.tank_level_switch_position_stabilized = true;
         for _ in 0..config
             .refill
             .tank_level_switch_position_high_stabilization_count
         {
-            refill.calc_tank_level_switch_position_stabilized();
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
-        refill.calc_tank_level_switch_position_stabilized();
+        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
         assert_eq!(refill.tank_level_switch_position_stabilized, false);
         println!("* checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
     }
@@ -724,7 +760,7 @@ pub mod tests {
     }
 
     #[test]
-    // this test case checks the .check_pending_external_request method if it correctly processes the ResetAllErrors command    
+    // this test case checks the .check_pending_external_request method if it correctly processes the ResetAllErrors command
     // the test case checks the struct attribute after having executed the function
     pub fn test_check_pending_external_request_reset_all_errors_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
@@ -817,7 +853,7 @@ pub mod tests {
                 );
                 // check if no refill operation has been executed
                 let mutex_data = mutex_device_scheduler.lock().unwrap();
-                assert_eq!(*mutex_data, 0);                    
+                assert_eq!(*mutex_data, 0);
             });
             let finish_time = SystemTime::now();
             let execution_duration = finish_time.duration_since(start_time).unwrap();
@@ -827,7 +863,7 @@ pub mod tests {
             );
         });
     }
-    
+
     // helper function for test case test_update_tank_level_switch_signals
     // the test case uses different combination of stimuli in each iteration of the loop
     // this function provides the stimuli depending on the index of the iteration
@@ -850,7 +886,12 @@ pub mod tests {
     pub fn test_update_tank_level_switch_signals() {
         let sleep_duration_200_millisec = Duration::from_millis(200);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill) = prepare_refill_tests();
+        let mut tank_level_switch_signals = TankLevelSwitchSignals {
+            tank_level_switch_position: false,
+            tank_level_switch_invalid: false,
+            error_receive_tank_level_switch_position: false,
+            error_receive_tank_level_switch_invalid: false,
+        };
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         scope(|scope| {
@@ -888,7 +929,7 @@ pub mod tests {
 
             scope.spawn(move || {
                 for i in 0..4 {
-                    refill
+                    tank_level_switch_signals
                         .update_tank_level_switch_signals(&tx_refill_to_gpio, &rx_refill_from_gpio);
                     let (target_response_switch_position, target_response_switch_invalid) =
                         response_values_for_update_tank_level_switch_signals(i);
@@ -905,11 +946,11 @@ pub mod tests {
                         }
                     );
                     assert_eq!(
-                        refill.tank_level_switch_position,
+                        tank_level_switch_signals.tank_level_switch_position,
                         target_response_switch_position
                     );
                     assert_eq!(
-                        refill.tank_level_switch_invalid,
+                        tank_level_switch_signals.tank_level_switch_invalid,
                         target_response_switch_invalid
                     );
                     spin_sleeper.sleep(sleep_duration_200_millisec);
@@ -928,14 +969,13 @@ pub mod tests {
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, _) = mpsc::channel();
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _)= mpsc::channel();
+        let (tx_refill_to_controllino, _) = mpsc::channel();
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {
-
             // this scope is providing the test environment
             scope.spawn(move || {
                 let start_time = SystemTime::now();
@@ -1014,7 +1054,7 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
                 );
-                // check if no refill operation has been executed            
+                // check if no refill operation has been executed
                 let mutex_data = mutex_device_scheduler.lock().unwrap();
                 assert_eq!(*mutex_data, 0);
             });
