@@ -470,7 +470,7 @@ impl Refill {
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_datalogger: Sender<bool>,
     ) {
-        let sleep_duration_one_sec = Duration::new(1, 0);
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
 
@@ -482,14 +482,14 @@ impl Refill {
 
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
-            while i < self.config.initial_wait_interval {
+            while i < self.config.initial_wait_interval * 10 {
                 i = i + 1;
                 quit_command_received =
                     self.check_pending_external_request(&rx_from_signal_handler);
                 if quit_command_received {
                     break;
                 }
-                spin_sleeper.sleep(sleep_duration_one_sec);
+                spin_sleeper.sleep(sleep_duration_hundred_millis);
             }
         }
         sql_refill_data.duration_since_last_refill =
@@ -504,16 +504,6 @@ impl Refill {
 
             // check for external requests while waiting for the check interval to pass
             println!("Refill: executing main loop.");
-            i = 0;
-            while i < self.config.check_interval {
-                i = i + 1;
-                spin_sleeper.sleep(sleep_duration_one_sec);
-                quit_command_received =
-                    self.check_pending_external_request(&rx_from_signal_handler);
-                if quit_command_received {
-                    break;
-                }
-            }
 
             // check when the last refill operation has taken place
             // if too much time has passed, issue an error condition - not impeding rest of operation
@@ -555,6 +545,18 @@ impl Refill {
                     }
                 }
             }
+
+            // wait for configured time period before rechecking the sensor signal
+            i = 0;
+            while i < self.config.check_interval * 10 {
+                i = i + 1;
+                quit_command_received =
+                    self.check_pending_external_request(&rx_from_signal_handler);
+                if quit_command_received {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_hundred_millis);
+            }
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -564,7 +566,7 @@ impl Refill {
             Ok(()) => {}
             Err(e) => {
                 println!(
-                    "Refill: Error in trying to send confirmation back to signal handler: {e:?}"
+                    "Refill: Error in trying to send quit confirmation back to signal handler: {e:?}"
                 );
             }
         };
@@ -578,7 +580,7 @@ impl Refill {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Refill: ignoring not applicable command from signal handler.");
+                        println!("Refill: ignoring inapplicable command from signal handler.");
                         false
                     }
                 },
@@ -593,12 +595,14 @@ impl Refill {
 
 #[cfg(test)]
 pub mod tests {
+    use chrono::DateTime;
+    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
@@ -607,6 +611,22 @@ pub mod tests {
     use crate::refill::Refill;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
+
+    trait Output {
+        fn output(&self) -> String;
+    }
+
+    impl Output for SystemTime {
+        fn output(&self) -> String {
+            let datetime: DateTime<Local> = (*self).into();
+            let duration_since_epoch = self
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
+            datetime.format("%d/%m/%Y %T").to_string()
+                + " "
+                + &duration_since_epoch.as_millis().to_string()
+        }
+    }
 
     fn prepare_refill_tests() -> (ConfigData, Refill) {
         // prepare struct Refill for subsequent tests
@@ -704,16 +724,19 @@ pub mod tests {
     }
 
     #[test]
+    // this test case checks the .check_pending_external_request method if it correctly processes the ResetAllErrors command    
+    // the test case checks the struct attribute after having executed the function
     pub fn test_check_pending_external_request_reset_all_errors_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
 
         let (_, mut refill) = prepare_refill_tests();
+        refill.error_switch_stuck_high = true;
+        refill.error_switch_stuck_low = true;
+        refill.error_receive_tank_level_switch_position = true;
+        refill.error_sql_update_failed = true;
 
         scope(|scope| {
             scope.spawn(move || {
@@ -723,21 +746,24 @@ pub mod tests {
             scope.spawn(move || {
                 assert_eq!(refill.check_pending_external_request(&rx_refill_from_signal_handler), false);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
+                assert_eq!(refill.error_switch_stuck_high, false);
+                assert_eq!(refill.error_switch_stuck_low, false);
+                assert_eq!(refill.error_receive_tank_level_switch_position, false);
+                assert_eq!(refill.error_sql_update_failed, false);
+                println!("* checking reset of all error flags succeeded.");
             });
         });
     }
 
     #[test]
+    // this test case checks the .check_pending_external_request method if it correctly processes the Quit command
     pub fn test_check_pending_external_request_quit_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill) = prepare_refill_tests();
 
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
             scope.spawn(move || {
@@ -752,23 +778,21 @@ pub mod tests {
     }
 
     #[test]
+    // this test case checks if the .execute functions terminates without delays
+    // when a quit/termination request is sent after starting the function
     pub fn test_execute_with_pending_quit_terminate_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
+        // channels for the test object. test environment only uses one of the channels
         let (_, mut refill) = prepare_refill_tests();
-        let (tx_refill_to_gpio, _): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-            mpsc::channel();
-        let (_, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
-        let (tx_refill_to_datalogger, _): (Sender<bool>, Receiver<bool>) = mpsc::channel();
-        let (tx_refill_to_controllino, _): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-            mpsc::channel();
-        let (_, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-        let (tx_refill_to_signal_handler, _): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+        let (tx_refill_to_gpio, _) = mpsc::channel();
+        let (_, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_datalogger, _) = mpsc::channel();
+        let (tx_refill_to_controllino, _) = mpsc::channel();
+        let (_, rx_refill_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_signal_handler, _) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -800,7 +824,10 @@ pub mod tests {
             );
         });
     }
-
+    
+    // helper function for test case test_update_tank_level_switch_signals
+    // the test case uses different combination of stimuli in each iteration of the loop
+    // this function provides the stimuli depending on the index of the iteration
     fn response_values_for_update_tank_level_switch_signals(index: i32) -> (bool, bool) {
         match index {
             0 => (false, false),
@@ -814,16 +841,15 @@ pub mod tests {
     }
 
     #[test]
+    // this test case checks the function update_tank_level_switch_signals
+    // the test case provides values via channel and checks if the test object sets the
+    // attributes correctly.
     pub fn test_update_tank_level_switch_signals() {
         let sleep_duration_200_millisec = Duration::from_millis(200);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill) = prepare_refill_tests();
-        let (tx_refill_to_gpio, rx_gpio_from_refill): (
-            Sender<InternalCommand>,
-            Receiver<InternalCommand>,
-        ) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) =
-            mpsc::channel();
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         scope(|scope| {
             scope.spawn(move || {
                 for i in 0..4 {
@@ -885,6 +911,106 @@ pub mod tests {
                     );
                     spin_sleeper.sleep(sleep_duration_200_millisec);
                 }
+            });
+        });
+    }
+
+    #[test]
+    // this test case executes one iteration of the loop of the .execute function without triggering a refill
+    // it checks the timing of initial wait period and main control interval
+    pub fn test_execute_without_refill() {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+        let (config, mut refill) = prepare_refill_tests();
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_datalogger, _) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_controllino, _)= mpsc::channel();
+        let (_, rx_refill_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+
+        scope(|scope| {
+            let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                let start_time = SystemTime::now();
+                println!(
+                    "test_execute_without_refill: start_time={}",
+                    start_time.output()
+                );
+                // when reaching main control cycle, test object will request signal updates
+                rx_gpio_from_refill.recv().unwrap();
+                // record time after test object sent command via channel
+                let initial_waiting_passed_time = SystemTime::now();
+                println!(
+                    "test_execute_without_refill: initial_waiting_passed_time={}",
+                    initial_waiting_passed_time.output()
+                );
+                let _ = tx_gpio_to_refill.send(1.0);
+                rx_gpio_from_refill.recv().unwrap();
+                let _ = tx_gpio_to_refill.send(0.0);
+                // from here onwards, test object will continue through main cycle and
+                // request signal updates one more time
+                rx_gpio_from_refill.recv().unwrap();
+                let _ = tx_gpio_to_refill.send(1.0);
+                rx_gpio_from_refill.recv().unwrap();
+                let _ = tx_gpio_to_refill.send(0.0);
+                // now we can send the quit command                
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let finish_time = SystemTime::now();
+                println!(
+                    "test_execute_without_refill: finish_time={}",
+                    finish_time.output()
+                );
+                let initial_wait_duration_millis = initial_waiting_passed_time
+                    .duration_since(start_time)
+                    .unwrap()
+                    .as_millis();
+                let check_interval_duration_millis = finish_time
+                    .duration_since(initial_waiting_passed_time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "test_execute_without_refill: initial_wait_duration={}ms, check_interval_duration={}ms",
+                    initial_wait_duration_millis,
+                    check_interval_duration_millis
+                );
+                all_asserts::assert_le!(
+                    initial_wait_duration_millis,
+                    (config.refill.initial_wait_interval * 1000 + 200) as u128
+                );
+                all_asserts::assert_ge!(
+                    initial_wait_duration_millis,
+                    (config.refill.initial_wait_interval * 1000 - 100) as u128
+                );
+                all_asserts::assert_le!(
+                    check_interval_duration_millis,
+                    (config.refill.check_interval * 1000 + 200) as u128
+                );
+                all_asserts::assert_ge!(
+                    check_interval_duration_millis,
+                    (config.refill.check_interval * 1000 - 100) as u128
+                );
+            });
+            // give the test environment a little time to trigger the receive call for signal update
+            spin_sleeper.sleep(sleep_duration_50_millisec);
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_gpio,
+                    rx_refill_from_gpio,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_datalogger,
+                );
             });
         });
     }
