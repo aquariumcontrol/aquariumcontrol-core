@@ -30,6 +30,46 @@ pub struct RefillConfig {
     additional_refill_volume: f64,
 }
 
+/// function checks if there are new messages in the channel.
+/// if the message contains the quit command, then the function returns true, otherwise false.
+/// if the message contains the command to reset all errors, the function will set all error bits
+/// to false and return false.
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    refill_errors: &mut RefillErrors,
+) -> bool {
+    //println!("Refill: checking pending external request.");
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Quit => true,
+            InternalCommand::ResetAllErrors => {
+                refill_errors.error_switch_stuck_high = false;
+                refill_errors.error_switch_stuck_low = false;
+                refill_errors.error_receive_tank_level_switch_position = false;
+                refill_errors.error_sql_update_failed = false;
+                false
+            }
+            _ => {
+                println!("Refill: ignoring inapplicable command from signal handler.");
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Refill: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            false
+        }
+    }
+}
+
+/// This struct contains the communication between Refill thread and GpioHandler thread via channels.
+/// The struct holds attributes for the results and for error flags indicating unsuccesful communication.
 pub struct TankLevelSwitchSignals {
     tank_level_switch_position: bool,
     tank_level_switch_invalid: bool,
@@ -107,16 +147,21 @@ impl TankLevelSwitchSignals {
     }
 }
 
+/// This struct contains the error flags for the refill component.
+pub struct RefillErrors {
+    error_switch_stuck_high: bool,
+    error_switch_stuck_low: bool,
+    error_receive_tank_level_switch_position: bool,
+    error_sql_update_failed: bool,
+}
+
 /// This struct contains the configuration and the implementation for the refill control.
 pub struct Refill {
     config: RefillConfig,
     sql_interface_refill: SqlInterfaceRefill,
     tank_level_switch_position_stabilized: bool,
     tank_level_switch_position_high_stabilization_counter: u32,
-    error_switch_stuck_high: bool,
-    error_switch_stuck_low: bool,
-    error_receive_tank_level_switch_position: bool,
-    error_sql_update_failed: bool,
+    refill_errors: RefillErrors,
 }
 
 struct RefillSqlData {
@@ -151,10 +196,12 @@ impl Refill {
             sql_interface_refill: sql_interface_refill,
             tank_level_switch_position_stabilized: true,
             tank_level_switch_position_high_stabilization_counter: 0,
-            error_switch_stuck_high: false,
-            error_switch_stuck_low: false,
-            error_receive_tank_level_switch_position: false,
-            error_sql_update_failed: false,
+            refill_errors: RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+            },
         }
     }
 
@@ -247,46 +294,8 @@ impl Refill {
     /// function checks if the duration since the last refill operation eceeds a configurable limit.
     /// if yes, then corresponding error flag is set.
     fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: i64) {
-        self.error_switch_stuck_high =
+        self.refill_errors.error_switch_stuck_high =
             duration_since_last_refill > self.config.max_duration_since_last_refill;
-    }
-
-    /// function checks if there are new messages in the channel.
-    /// if the message contains the quit command, then the function returns true, otherwise false.
-    /// if the message contains the command to reset all errors, the function will set all error bits
-    /// to false and return false.
-    fn check_pending_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) -> bool {
-        //println!("Refill: checking pending external request.");
-        match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Quit => true,
-                InternalCommand::ResetAllErrors => {
-                    self.error_switch_stuck_high = false;
-                    self.error_switch_stuck_low = false;
-                    self.error_receive_tank_level_switch_position = false;
-                    self.error_sql_update_failed = false;
-                    false
-                }
-                _ => {
-                    println!("Refill: ignoring inapplicable command from signal handler.");
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "Refill: Error in trying to receive command from signal handler: {e:?}"
-                        );
-                    }
-                }
-                false
-            }
-        }
     }
 
     // this function checks if historic refill data does not exceed limitations in terms of count and volume.
@@ -413,7 +422,8 @@ impl Refill {
                     additional_refill_volume_executed, self.config.additional_refill_volume
                 );
             }
-            quit_command_received = self.check_pending_external_request(&rx_from_signal_handler);
+            quit_command_received =
+                check_pending_external_request(&rx_from_signal_handler, &mut self.refill_errors);
             if quit_command_received {
                 break;
             }
@@ -422,7 +432,7 @@ impl Refill {
                 refill_volume, self.config.max_refill_volume
             );
             if refill_volume > self.config.max_refill_volume {
-                self.error_switch_stuck_low = true;
+                self.refill_errors.error_switch_stuck_low = true;
                 refill_error_code = 2;
                 break;
             }
@@ -463,7 +473,7 @@ impl Refill {
             Ok(_) => {}
             Err(e) => {
                 println!("Refill: error occurred when writing refill operation data to SQL database: {e:?}");
-                self.error_sql_update_failed = true;
+                self.refill_errors.error_sql_update_failed = true;
             }
         }
         quit_command_received
@@ -500,8 +510,10 @@ impl Refill {
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval * 10 {
                 i = i + 1;
-                quit_command_received =
-                    self.check_pending_external_request(&rx_from_signal_handler);
+                quit_command_received = check_pending_external_request(
+                    &rx_from_signal_handler,
+                    &mut self.refill_errors,
+                );
                 if quit_command_received {
                     break;
                 }
@@ -543,7 +555,9 @@ impl Refill {
 
                 // execute checks before initiating refill
                 if !self.check_volume_count_time_limits(&sql_refill_data) {
-                    if !self.error_switch_stuck_low && !self.error_sql_update_failed {
+                    if !self.refill_errors.error_switch_stuck_low
+                        && !self.refill_errors.error_sql_update_failed
+                    {
                         // conditions for allowing refill operation are given
                         println!("Executing refill.");
                         // inner scope to limit lifetime of unlocked mutex
@@ -569,8 +583,10 @@ impl Refill {
             i = 0;
             while i < self.config.check_interval * 10 {
                 i = i + 1;
-                quit_command_received =
-                    self.check_pending_external_request(&rx_from_signal_handler);
+                quit_command_received = check_pending_external_request(
+                    &rx_from_signal_handler,
+                    &mut self.refill_errors,
+                );
                 if quit_command_received {
                     break;
                 }
@@ -627,7 +643,9 @@ pub mod tests {
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
+    use crate::refill::check_pending_external_request;
     use crate::refill::Refill;
+    use crate::refill::RefillErrors;
     use crate::refill::TankLevelSwitchSignals;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
@@ -745,15 +763,19 @@ pub mod tests {
 
     #[test]
     pub fn test_check_pending_external_request_empty_channel() {
-        let (_config, mut refill) = prepare_refill_tests();
-
+        let mut refill_errors = RefillErrors {
+            error_switch_stuck_high: false,
+            error_switch_stuck_low: false,
+            error_receive_tank_level_switch_position: false,
+            error_sql_update_failed: false,
+        };
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
         assert_eq!(
-            refill.check_pending_external_request(&rx_refill_from_signal_handler),
+            check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors),
             false
         );
         println!("* checking false result of check_pending_external_request when channel is empty succeeded.");
@@ -768,11 +790,12 @@ pub mod tests {
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
 
-        let (_, mut refill) = prepare_refill_tests();
-        refill.error_switch_stuck_high = true;
-        refill.error_switch_stuck_low = true;
-        refill.error_receive_tank_level_switch_position = true;
-        refill.error_sql_update_failed = true;
+        let mut refill_errors = RefillErrors {
+            error_switch_stuck_high: true,
+            error_switch_stuck_low: true,
+            error_receive_tank_level_switch_position: true,
+            error_sql_update_failed: true,
+        };
 
         scope(|scope| {
             scope.spawn(move || {
@@ -780,12 +803,12 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(refill.check_pending_external_request(&rx_refill_from_signal_handler), false);
+                assert_eq!(check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors), false);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
-                assert_eq!(refill.error_switch_stuck_high, false);
-                assert_eq!(refill.error_switch_stuck_low, false);
-                assert_eq!(refill.error_receive_tank_level_switch_position, false);
-                assert_eq!(refill.error_sql_update_failed, false);
+                assert_eq!(refill_errors.error_switch_stuck_high, false);
+                assert_eq!(refill_errors.error_switch_stuck_low, false);
+                assert_eq!(refill_errors.error_receive_tank_level_switch_position, false);
+                assert_eq!(refill_errors.error_sql_update_failed, false);
                 println!("* checking reset of all error flags succeeded.");
             });
         });
@@ -797,7 +820,12 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill) = prepare_refill_tests();
+        let mut refill_errors = RefillErrors {
+            error_switch_stuck_high: true,
+            error_switch_stuck_low: true,
+            error_receive_tank_level_switch_position: true,
+            error_sql_update_failed: true,
+        };
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
 
@@ -807,7 +835,7 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(refill.check_pending_external_request(&rx_refill_from_signal_handler), true);
+                assert_eq!(check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors), true);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
             });
         });
