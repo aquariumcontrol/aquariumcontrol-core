@@ -47,6 +47,16 @@ impl SqlInterfaceRefill {
         Ok(delta_time.num_seconds())
     }
 
+    pub fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
+        match SqlInterface::get_single_integer_from_database(
+            &mut self.conn,
+            sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
+        ) {
+            Ok(c) => Ok(c),
+            Err(e) => Err(e),
+        }
+    }
+
     /// The function requests the number of water refill events in the last 24 hours
     pub fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
@@ -167,6 +177,7 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
+        assert_eq!(sql_interface_refill.check_empty(), Ok(0));
         assert_eq!(
             sql_interface_refill.get_last_refill_timestamp(),
             Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
@@ -185,6 +196,7 @@ pub mod tests {
             Ok(_) => {}
             Err(e) => panic!("Could not insert refill event into database: {e:?}"),
         };
+        assert_eq!(sql_interface_refill.check_empty(), Ok(1));
         assert_eq!(
             sql_interface_refill.get_last_refill_timestamp(),
             Ok(refill_timestamp)
