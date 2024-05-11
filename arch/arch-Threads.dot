@@ -1,0 +1,42 @@
+digraph archRefill {
+    fontname="Helvetica,Arial,sans-serif"
+    node [fontname="Helvetica,Arial,sans-serif"]
+    edge [fontname="Helvetica,Arial,sans-serif"][penwidth=2.0]
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Refill;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] DataLogger;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Balling;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Feed;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Heating;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Ventilation;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Monitors;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] Controllino;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] GpioHandler;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] SignalHandler;
+    node [shape=box fillcolor="white:gray" style=filled gradientangle=270] TcpCommunication;
+    
+    Refill->GpioHandler [dir=both];
+    Refill->Controllino [dir=both];
+    DataLogger->GpioHandler [dir=both];
+    Refill->DataLogger;
+    SignalHandler->Refill [dir=both];
+    SignalHandler->GpioHandler [dir=both];
+    SignalHandler->TcpCommunication [dir=both];
+    SignalHandler->Controllino [dir=both];
+    SignalHandler->Balling [dir=both];
+    SignalHandler->Feed [dir=both];
+    SignalHandler->Heating [dir=both];
+    SignalHandler->Ventilation [dir=both];
+    Controllino->TcpCommunication;
+    GpioHandler->TcpCommunication [dir=both];
+    Balling->Controllino [dir=both,color=blue];
+    Feed->Controllino [dir=both,color=blue];
+    Heating->DataLogger [color=blue];
+    Heating->Controllino [dir=both];
+    Ventilation->DataLogger [color=blue];
+    Ventilation->Controllino [dir=both,color=blue];
+    Monitors->GpioHandler [dir=both,color=blue];
+    Monitors->Controllino [dir=both,color=blue];
+    Monitors->Refill [dir=both,color=blue]
+    label="Achitecture of thread communication";
+    fontsize=20;
+}
