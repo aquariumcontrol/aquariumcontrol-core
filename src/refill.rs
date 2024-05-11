@@ -1355,7 +1355,7 @@ pub mod tests {
     pub fn test_execute_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (config, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
         // accelerate test case execution
         refill
             .config
@@ -1458,7 +1458,7 @@ pub mod tests {
     pub fn test_execute_conditions_historic_data_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (config, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
         // accelerate test case execution
         refill
             .config
@@ -1561,7 +1561,7 @@ pub mod tests {
     pub fn test_execute_conditions_historic_data_error_recent_refill_event() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (config, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
 
         // accelerate test case execution
         refill
@@ -1593,8 +1593,12 @@ pub mod tests {
             0,
             refill.config.min_interval_last_refill - refill.config.check_interval * 2,
         );
-        match refill.sql_interface_refill.insert_refill_event(naive_datetime_some_time_ago, 5.0, 0.25, -2)
-        {
+        match refill.sql_interface_refill.insert_refill_event(
+            naive_datetime_some_time_ago,
+            5.0,
+            0.25,
+            -2,
+        ) {
             Ok(_) => {}
             Err(e) => {
                 panic!(
@@ -1603,9 +1607,6 @@ pub mod tests {
                 );
             }
         }
-
-        // additional interface required for manipulation of SQL database during test
-        let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -1685,6 +1686,71 @@ pub mod tests {
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
+            });
+        });
+    }
+
+    #[test]
+    // this test case executes execute_refill function and immediately sets the sensor signal to high
+    pub fn test_execute_refill() {
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut refill_execution = RefillExecution;
+
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
+        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (/*tx_signal_handler_to_refill*/_, rx_refill_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                _ = rx_datalogger_from_refill.recv();
+                println!("Refill test_execute_refill: received information from refill execution to data logger.");
+                _ = rx_controllino_from_refill.recv(); // receive command
+                _ = tx_controllino_to_refill.send(true); // send confirmation back
+
+                let target_number_iterations = (refill.config.additional_refill_volume / refill.config.refill_pump_flow) as u32 * 10 + 1;
+                // indicate sensor signal high immediately
+                run_main_cycle_with_sensor_signals(
+                    target_number_iterations,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    true,
+                    false,
+                );
+
+                _ = rx_controllino_from_refill.recv(); // receive command
+                _ = tx_controllino_to_refill.send(true); // send confirmation back
+
+                _ = rx_datalogger_from_refill.recv();
+                println!("Refill test_execute_refill: received information from refill execution to data logger.");
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let mut tank_level_switch_signals = TankLevelSwitchSignals {
+                        tank_level_switch_position: false,
+                        tank_level_switch_invalid: false,
+                        error_receive_tank_level_switch_position: false,
+                        error_receive_tank_level_switch_invalid: false,
+                    };
+                
+                let result = refill_execution.execute_refill(
+                    &tx_refill_to_controllino,
+                    &rx_refill_from_controllino,
+                    &tx_refill_to_gpio,
+                    &rx_refill_from_gpio,
+                    &rx_refill_from_signal_handler,
+                    &tx_refill_to_datalogger,
+                    &mut tank_level_switch_signals,
+                    &mut refill.refill_errors,
+                    &refill.config,
+                    &mut refill.sql_interface_refill,
+                );
+
+                assert_eq!(result, false);
             });
         });
     }
