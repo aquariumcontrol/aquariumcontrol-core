@@ -1690,6 +1690,37 @@ pub mod tests {
         });
     }
 
+    fn test_execute_refill_receive_acuation_command_send_confirmation(
+        rx_controllino_from_refill: &Receiver<InternalCommand>,
+        tx_controllino_to_refill: &Sender<bool>,
+    ) {
+        // receive command from test object
+        match rx_controllino_from_refill.recv() {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Refill: test_execute_refill_immediate_switch_high: Error when receiving actuation command from test object: {e:?}");
+            }
+        }
+
+        // send confirmation back
+        match tx_controllino_to_refill.send(true) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Refill: test_execute_refill_immediate_switch_high: Error when sending back actuation command confirmation to test object: {e:?}");
+            }
+        }
+    }
+
+    fn test_execute_refill_receive_information_for_datalogger(rx_datalogger_from_refill: &Receiver<bool>) {
+                // receive information for data logger
+                match rx_datalogger_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: error when receiving information for data logger: {e:?}");
+                    }
+                }        
+    }
+    
     #[test]
     // this test case executes execute_refill function and immediately sets the sensor signal to high
     pub fn test_execute_refill_immediate_switch_high() {
@@ -1701,34 +1732,13 @@ pub mod tests {
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (/*tx_signal_handler_to_refill*/_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (/*tx_signal_handler_to_refill*/ _, rx_refill_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                // receive information for data logger
-                match rx_datalogger_from_refill.recv() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: error when receiving information for data logger: {e:?}");
-                    }
-                }
-                    
-                // receive command from test object
-                match rx_controllino_from_refill.recv() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when receiving actuation command from test object: {e:?}");
-                    }
-                }
-                 
-                 // send confirmation back
-                match tx_controllino_to_refill.send(true) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when sending back actuation command confirmation to test object: {e:?}");
-                    }
-                }
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
 
                 let target_number_iterations = (refill.config.additional_refill_volume / refill.config.refill_pump_flow) as u32 * 10 + 1;
                 // indicate sensor signal high immediately
@@ -1740,39 +1750,19 @@ pub mod tests {
                     false,
                 );
 
-                // receive command from test object
-                match rx_controllino_from_refill.recv() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when receiving actuation command from test object: {e:?}");
-                    }
-                }
-                 // send confirmation back
-                match tx_controllino_to_refill.send(true) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when sending back actuation command confirmation to test object: {e:?}");
-                    }
-                }
-
-                // receive information for data logger
-                match rx_datalogger_from_refill.recv() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_execute_refill_immediate_switch_high: error when receiving information for data logger {e:?}");
-                    }                    
-                }
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
             scope.spawn(move || {
                 let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                        tank_level_switch_position: false,
-                        tank_level_switch_invalid: false,
-                        error_receive_tank_level_switch_position: false,
-                        error_receive_tank_level_switch_invalid: false,
-                    };
-                
+                    tank_level_switch_position: false,
+                    tank_level_switch_invalid: false,
+                    error_receive_tank_level_switch_position: false,
+                    error_receive_tank_level_switch_invalid: false,
+                };
+
                 let result = refill_execution.execute_refill(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
