@@ -1782,6 +1782,68 @@ pub mod tests {
     }
     
     #[test]
+    // this test case executes execute_refill function and immediately sets the sensor signal to high
+    // additionally the test case also sets the invalid bit.
+    // Additional refill shall be aborted.
+    pub fn test_execute_refill_immediate_switch_high_with_invalid_true() {
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut refill_execution = RefillExecution;
+
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
+        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (/*tx_signal_handler_to_refill*/ _, rx_refill_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+
+                let target_number_iterations = 1;
+                // indicate sensor signal high immediately
+                run_main_cycle_with_sensor_signals(
+                    target_number_iterations,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    true,
+                    true,
+                );
+
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let mut tank_level_switch_signals = TankLevelSwitchSignals {
+                    tank_level_switch_position: false,
+                    tank_level_switch_invalid: false,
+                    error_receive_tank_level_switch_position: false,
+                    error_receive_tank_level_switch_invalid: false,
+                };
+
+                let result = refill_execution.execute_refill(
+                    &tx_refill_to_controllino,
+                    &rx_refill_from_controllino,
+                    &tx_refill_to_gpio,
+                    &rx_refill_from_gpio,
+                    &rx_refill_from_signal_handler,
+                    &tx_refill_to_datalogger,
+                    &mut tank_level_switch_signals,
+                    &mut refill.refill_errors,
+                    &refill.config,
+                    &mut refill.sql_interface_refill,
+                );
+
+                assert_eq!(result, false);
+            });
+        });
+    }
+    
+    #[test]
     // this test case executes execute_refill function and sets the sensor signal to high after defined number of iterations
     pub fn test_execute_refill_delayed_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
@@ -1817,6 +1879,75 @@ pub mod tests {
                     &tx_gpio_to_refill,
                     true,
                     false,
+                );
+
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let mut tank_level_switch_signals = TankLevelSwitchSignals {
+                    tank_level_switch_position: false,
+                    tank_level_switch_invalid: false,
+                    error_receive_tank_level_switch_position: false,
+                    error_receive_tank_level_switch_invalid: false,
+                };
+
+                let result = refill_execution.execute_refill(
+                    &tx_refill_to_controllino,
+                    &rx_refill_from_controllino,
+                    &tx_refill_to_gpio,
+                    &rx_refill_from_gpio,
+                    &rx_refill_from_signal_handler,
+                    &tx_refill_to_datalogger,
+                    &mut tank_level_switch_signals,
+                    &mut refill.refill_errors,
+                    &refill.config,
+                    &mut refill.sql_interface_refill,
+                );
+
+                assert_eq!(result, false);
+            });
+        });
+    }
+    
+    #[test]
+    // this test case executes execute_refill function and sets the sensor invalid signal to true after defined number of iterations
+    pub fn test_execute_refill_delayed_switch_high_with_invalid_true() {
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut refill_execution = RefillExecution;
+
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
+        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (/*tx_signal_handler_to_refill*/ _, rx_refill_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+
+                let target_number_iterations_main_fill = (0.15 / refill.config.refill_pump_flow) as u32 * 10 + 1;
+                // leave switch at low for some time
+                run_main_cycle_with_sensor_signals(
+                    target_number_iterations_main_fill,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    false,
+                    false,
+                );
+                // Now let's simulate invalid sensor signal while position signal stays low.
+                // Expected behavior: Refill operation shall abort immediately.
+                run_main_cycle_with_sensor_signals(
+                    1,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    false,
+                    true,
                 );
 
                 test_execute_refill_receive_acuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
