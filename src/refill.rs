@@ -1692,7 +1692,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function and immediately sets the sensor signal to high
-    pub fn test_execute_refill() {
+    pub fn test_execute_refill_immediate_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -1706,10 +1706,29 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                _ = rx_datalogger_from_refill.recv();
-                println!("Refill test_execute_refill: received information from refill execution to data logger.");
-                _ = rx_controllino_from_refill.recv(); // receive command
-                _ = tx_controllino_to_refill.send(true); // send confirmation back
+                // receive information for data logger
+                match rx_datalogger_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: error when receiving information for data logger: {e:?}");
+                    }
+                }
+                    
+                // receive command from test object
+                match rx_controllino_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when receiving actuation command from test object: {e:?}");
+                    }
+                }
+                 
+                 // send confirmation back
+                match tx_controllino_to_refill.send(true) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when sending back actuation command confirmation to test object: {e:?}");
+                    }
+                }
 
                 let target_number_iterations = (refill.config.additional_refill_volume / refill.config.refill_pump_flow) as u32 * 10 + 1;
                 // indicate sensor signal high immediately
@@ -1721,11 +1740,28 @@ pub mod tests {
                     false,
                 );
 
-                _ = rx_controllino_from_refill.recv(); // receive command
-                _ = tx_controllino_to_refill.send(true); // send confirmation back
+                // receive command from test object
+                match rx_controllino_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when receiving actuation command from test object: {e:?}");
+                    }
+                }
+                 // send confirmation back
+                match tx_controllino_to_refill.send(true) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: Error when sending back actuation command confirmation to test object: {e:?}");
+                    }
+                }
 
-                _ = rx_datalogger_from_refill.recv();
-                println!("Refill test_execute_refill: received information from refill execution to data logger.");
+                // receive information for data logger
+                match rx_datalogger_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_execute_refill_immediate_switch_high: error when receiving information for data logger {e:?}");
+                    }                    
+                }
             });
 
             // this scope is executing the test object
