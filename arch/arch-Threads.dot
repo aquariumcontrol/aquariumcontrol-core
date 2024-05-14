@@ -18,6 +18,7 @@ digraph archRefill {
     Refill->Controllino [dir=both];
     DataLogger->GpioHandler [dir=both];
     Refill->DataLogger;
+    Refill->Heating [color=blue];
     SignalHandler->Refill [dir=both];
     SignalHandler->GpioHandler [dir=both];
     SignalHandler->TcpCommunication [dir=both];
