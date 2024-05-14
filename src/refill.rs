@@ -1948,7 +1948,7 @@ pub mod tests {
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (/*tx_signal_handler_to_refill*/ _, rx_refill_from_signal_handler) = mpsc::channel();
+        let (_, rx_refill_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -1980,6 +1980,75 @@ pub mod tests {
                     &rx_gpio_from_refill,
                     &tx_gpio_to_refill,
                     true,
+                    false,
+                );
+
+                test_execute_refill_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_refill,
+                    &tx_controllino_to_refill,
+                );
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let mut tank_level_switch_signals = TankLevelSwitchSignals {
+                    tank_level_switch_position: false,
+                    tank_level_switch_invalid: false,
+                    error_receive_tank_level_switch_position: false,
+                    error_receive_tank_level_switch_invalid: false,
+                };
+
+                let result = refill_execution.execute_refill(
+                    &tx_refill_to_controllino,
+                    &rx_refill_from_controllino,
+                    &tx_refill_to_gpio,
+                    &rx_refill_from_gpio,
+                    &rx_refill_from_signal_handler,
+                    &tx_refill_to_datalogger,
+                    &mut tank_level_switch_signals,
+                    &mut refill.refill_errors,
+                    &refill.config,
+                    &mut refill.sql_interface_refill,
+                );
+
+                assert_eq!(result, false);
+            });
+        });
+    }
+    
+    #[test]
+    // this test case executes execute_refill function with simulation of level switch stuck at low position
+    pub fn test_execute_refill_switch_stuck_low() {
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut refill_execution = RefillExecution;
+
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
+        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (_, rx_refill_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_execute_refill_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_refill,
+                    &tx_controllino_to_refill,
+                );
+
+                // Switch is stuck at low position. Check max limitation of refill
+                let target_number_iterations_additional_fill =
+                    (refill.config.max_refill_volume / refill.config.refill_pump_flow)
+                        as u32
+                        * 10;
+                run_main_cycle_with_sensor_signals(
+                    target_number_iterations_additional_fill,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    false,
                     false,
                 );
 
