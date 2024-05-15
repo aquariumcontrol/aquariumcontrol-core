@@ -7,6 +7,7 @@ mod feedpattern;
 mod gpio_handler;
 mod iir_filter;
 mod refill;
+mod sawtooth_profile;
 mod signal_handler;
 mod sql_interface;
 mod sql_interface_balling;

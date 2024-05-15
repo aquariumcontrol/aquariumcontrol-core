@@ -1792,7 +1792,7 @@ pub mod tests {
             });
         });
     }
-    
+
     #[test]
     // this test case executes execute_refill function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
@@ -1816,7 +1816,7 @@ pub mod tests {
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
-                
+
                 // send Quit signal
                 match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
                     Ok(_) => {},
@@ -1825,7 +1825,7 @@ pub mod tests {
                             Error when sending Quit command to test object: {e:?}");
                     }
                 }
-                
+
                 // leave switch high
                 run_main_cycle_with_sensor_signals(
                     1,
@@ -2016,7 +2016,7 @@ pub mod tests {
             });
         });
     }
-    
+
     #[test]
     // this test case executes execute_refill function with simulation of level switch stuck at low position
     pub fn test_execute_refill_switch_stuck_low() {
@@ -2041,9 +2041,7 @@ pub mod tests {
 
                 // Switch is stuck at low position. Check max limitation of refill
                 let target_number_iterations_additional_fill =
-                    (refill.config.max_refill_volume / refill.config.refill_pump_flow)
-                        as u32
-                        * 10;
+                    (refill.config.max_refill_volume / refill.config.refill_pump_flow) as u32 * 10;
                 run_main_cycle_with_sensor_signals(
                     target_number_iterations_additional_fill,
                     &rx_gpio_from_refill,
@@ -2085,7 +2083,7 @@ pub mod tests {
             });
         });
     }
-    
+
     #[test]
     // this test case executes execute_refill function and sets the sensor signal to high after defined number of iterations
     pub fn test_execute_refill_delayed_switch_high_and_quit_signal() {
@@ -2118,7 +2116,7 @@ pub mod tests {
                     false,
                     false,
                 );
-                
+
                 // send Quit signal
                 match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
                     Ok(_) => {},
