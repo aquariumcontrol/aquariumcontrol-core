@@ -37,9 +37,10 @@ pub struct RefillConfig {
 fn check_pending_external_request(
     rx_from_signal_handler: &Receiver<InternalCommand>,
     refill_errors: &mut RefillErrors,
+    tx_to_heating: &Sender<bool>,
 ) -> bool {
     //println!("Refill: checking pending external request.");
-    match rx_from_signal_handler.try_recv() {
+    let quit_signal_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             InternalCommand::ResetAllErrors => {
@@ -65,7 +66,19 @@ fn check_pending_external_request(
             }
             false
         }
+    };
+
+    if !quit_signal_received {
+        // inform heating thread that error has been reset
+        match tx_to_heating.send(refill_errors.error_switch_stuck_low) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Refill: Error when sending message to heating thread: {e:?}");
+            }
+        }
     }
+
+    quit_signal_received
 }
 
 pub trait RefillExecutionTrait {
@@ -77,6 +90,7 @@ pub trait RefillExecutionTrait {
         rx_from_gpio: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_datalogger: &Sender<bool>,
+        tx_to_heating: &Sender<bool>,
         tank_level_switch_signals: &mut TankLevelSwitchSignals,
         refill_errors: &mut RefillErrors,
         config: &RefillConfig,
@@ -96,6 +110,7 @@ impl RefillExecutionTrait for RefillExecution {
         rx_from_gpio: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_datalogger: &Sender<bool>,
+        tx_to_heating: &Sender<bool>,
         tank_level_switch_signals: &mut TankLevelSwitchSignals,
         refill_errors: &mut RefillErrors,
         config: &RefillConfig,
@@ -167,7 +182,7 @@ impl RefillExecutionTrait for RefillExecution {
                 );
             }
             quit_command_received =
-                check_pending_external_request(&rx_from_signal_handler, refill_errors);
+                check_pending_external_request(&rx_from_signal_handler, refill_errors, tx_to_heating);
             if quit_command_received {
                 break;
             }
@@ -198,6 +213,15 @@ impl RefillExecutionTrait for RefillExecution {
             }
         }
         println!("Refill: Sent request to switch off refill pump to Controllino thread.");
+
+        if refill_errors.error_switch_stuck_low {
+            match tx_to_heating.send(refill_errors.error_switch_stuck_low) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Refill: Error when sending message to heating thread: {e:?}");
+                }
+            }
+        }
 
         // inform data logger that refill is finished
         match tx_to_datalogger.send(false) {
@@ -532,6 +556,7 @@ impl Refill {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_datalogger: Sender<bool>,
+        tx_to_heating: Sender<bool>,
         refill_execution: &mut impl RefillExecutionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -556,6 +581,7 @@ impl Refill {
                 quit_command_received = check_pending_external_request(
                     &rx_from_signal_handler,
                     &mut self.refill_errors,
+                    &tx_to_heating,
                 );
                 if quit_command_received {
                     break;
@@ -629,6 +655,7 @@ impl Refill {
                                 &rx_from_gpio,
                                 &rx_from_signal_handler,
                                 &tx_to_datalogger,
+                                &tx_to_heating,
                                 &mut tank_level_switch_signals,
                                 &mut self.refill_errors,
                                 &self.config,
@@ -647,6 +674,7 @@ impl Refill {
                 quit_command_received = check_pending_external_request(
                     &rx_from_signal_handler,
                     &mut self.refill_errors,
+                    &tx_to_heating,
                 );
                 if quit_command_received {
                     break;
@@ -761,6 +789,7 @@ pub mod tests {
             _rx_from_gpio: &Receiver<f32>,
             _rx_from_signal_handler: &Receiver<InternalCommand>,
             _tx_to_datalogger: &Sender<bool>,
+            _tx_to_heating: &Sender<bool>,
             _tank_level_switch_signals: &mut TankLevelSwitchSignals,
             _refill_errors: &mut RefillErrors,
             _config: &RefillConfig,
@@ -889,10 +918,32 @@ pub mod tests {
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
-        assert_eq!(
-            check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors),
-            false
-        );
+        let (tx_refill_to_heating, rx_heating_from_refill): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        
+        scope(|scope| {
+            scope.spawn(move || {
+                assert_eq!(
+                    check_pending_external_request(
+                        &rx_refill_from_signal_handler,
+                        &mut refill_errors,
+                        &tx_refill_to_heating),
+                    false
+                );
+            });
+            scope.spawn(move || {
+                match rx_heating_from_refill.recv() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        panic!("Refill: test_check_pending_external_request_empty_channel \
+                            error when trying to receive from check_pending_external_request");
+                    }
+                }
+            });
+        });
+            
         println!("* checking false result of check_pending_external_request when channel is empty succeeded.");
     }
 
@@ -904,6 +955,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, rx_heating_from_refill) = mpsc::channel();
 
         let mut refill_errors = RefillErrors {
             error_switch_stuck_high: true,
@@ -915,10 +967,23 @@ pub mod tests {
         scope(|scope| {
             scope.spawn(move || {
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::ResetAllErrors);
+                let response_to_heating_error_reset = match rx_heating_from_refill.recv() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        panic!("Refill: test_check_pending_external_request_reset_all_errors_command \
+                            error when trying to receive from check_pending_external_request");
+                    }
+                };
+                assert_eq!(response_to_heating_error_reset, false);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors), false);
+                assert_eq!(
+                    check_pending_external_request(
+                        &rx_refill_from_signal_handler,
+                        &mut refill_errors,
+                        &tx_refill_to_heating),
+                    false);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
                 assert_eq!(refill_errors.error_switch_stuck_high, false);
                 assert_eq!(refill_errors.error_switch_stuck_low, false);
@@ -943,14 +1008,21 @@ pub mod tests {
         };
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             scope.spawn(move || {
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                // no receiving of message for heating - this message is not sent back when sending Quit command
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors), true);
+                assert_eq!(
+                    check_pending_external_request(
+                        &rx_refill_from_signal_handler,
+                        &mut refill_errors,
+                        &tx_refill_to_heating
+                    ), true);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
             });
         });
@@ -972,6 +1044,7 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, _) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -994,6 +1067,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,
                     &mut refill_execution,
                 );
                 // check if no refill operation has been executed
@@ -1120,6 +1194,7 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {
@@ -1202,6 +1277,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,
                     &mut refill_test_execution_void,
                 );
                 // check if no refill operation has been executed
@@ -1256,6 +1332,7 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1344,6 +1421,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,
                     &mut refill_test_execution_void,
                 );
             });
@@ -1370,6 +1448,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
+        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1447,6 +1527,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,
                     &mut refill_test_execution_void,
                 );
             });
@@ -1473,6 +1554,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
+        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1550,6 +1633,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,
                     &mut refill_test_execution_void,
                 );
             });
@@ -1577,6 +1661,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
+        
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1684,6 +1770,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
+                    tx_refill_to_heating,                    
                     &mut refill_test_execution_void,
                 );
             });
@@ -1734,6 +1821,7 @@ pub mod tests {
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
         let (_, rx_refill_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
@@ -1782,6 +1870,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -1807,6 +1896,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -1858,6 +1948,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -1883,6 +1974,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -1926,6 +2018,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -1949,6 +2042,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -2006,6 +2100,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -2029,6 +2124,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, rx_heating_from_refill) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -2073,6 +2169,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -2096,6 +2193,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -2149,6 +2247,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -2172,6 +2271,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -2225,6 +2325,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,
@@ -2250,6 +2351,7 @@ pub mod tests {
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_heating, _) = mpsc::channel();
 
         scope(|scope| {
             // this scope is providing the test environment
@@ -2296,6 +2398,7 @@ pub mod tests {
                     &rx_refill_from_gpio,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
+                    &tx_refill_to_heating,
                     &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
                     &refill.config,

@@ -4,8 +4,8 @@ use std::fs;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
 use crate::gpio_handler::GpioHandlerConfig;
-use crate::refill::RefillConfig;
 use crate::heating::HeatingConfig;
+use crate::refill::RefillConfig;
 use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
 

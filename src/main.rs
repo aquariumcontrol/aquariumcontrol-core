@@ -5,8 +5,8 @@ mod controllino;
 mod data_logger;
 mod feedpattern;
 mod gpio_handler;
-mod iir_filter;
 mod heating;
+mod iir_filter;
 mod refill;
 mod sawtooth_profile;
 mod signal_handler;
@@ -30,6 +30,7 @@ use crate::config::read_config_file;
 use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::gpio_handler::GpioHandler;
+use crate::heating::Heating;
 use crate::refill::Refill;
 use crate::refill::RefillExecution;
 use crate::signal_handler::handle_signals;
@@ -291,8 +292,26 @@ fn main() {
     let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
     // *****************************
 
+    // *** heating <=> gpio ***
+    let (tx_heating_to_gpio, rx_gpio_from_heating): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_heating, rx_heating_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    // *****************************
+
     // *** refill => datalogger ***
     let (tx_refill_to_datalogger, rx_datalogger_from_refill): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *****************************
+
+    // *** refill => heating ***
+    let (tx_refill_to_heating, rx_heating_from_refill): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *****************************
+
+    // *** heating => datalogger ***
+    let (tx_heating_to_datalogger, rx_datalogger_from_heating): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *****************************
 
@@ -305,12 +324,32 @@ fn main() {
         mpsc::channel();
     // *******************************
 
+    // *** heating <=> controllino ***
+    let (tx_heating_to_controllino, rx_controllino_from_heating): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_heating, rx_heating_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+
     // *** signal handler <=> refill ***
     let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_refill_to_signal_handler, rx_signal_handler_from_refill): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> heating ***
+    let (tx_signal_handler_to_heating, rx_heating_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_heating_to_signal_handler, rx_signal_handler_from_heating): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -419,6 +458,7 @@ fn main() {
 
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
+    let mut heating = Heating::new(config.heating, sql_interface_heating);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -441,6 +481,8 @@ fn main() {
             handle_signals(
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,
+                tx_signal_handler_to_heating,
+                rx_signal_handler_from_heating,
                 tx_signal_handler_to_controllino,
                 rx_signal_handler_from_controllino,
                 tx_signal_handler_to_gpio,
@@ -460,6 +502,8 @@ fn main() {
                 rx_gpio_from_data_logger,
                 tx_gpio_to_refill,
                 rx_gpio_from_refill,
+                tx_gpio_to_heating,
+                rx_gpio_from_heating,
                 tx_gpio_to_signal_handler,
                 rx_gpio_from_signal_handler,
             );
@@ -471,6 +515,7 @@ fn main() {
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
                 rx_datalogger_from_refill,
+                rx_datalogger_from_heating,
                 tx_datalogger_to_signal_handler,
                 rx_datalogger_from_signal_handler,
             );
@@ -490,7 +535,24 @@ fn main() {
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
                 tx_refill_to_datalogger,
+                tx_refill_to_heating,
                 &mut refill_execution,
+            );
+        });
+
+        let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
+
+        scope.spawn(move || {
+            heating.execute(
+                mutex_device_scheduler_heating,
+                tx_heating_to_gpio,
+                rx_heating_from_gpio,
+                tx_heating_to_controllino,
+                rx_heating_from_controllino,
+                tx_heating_to_signal_handler,
+                rx_heating_from_signal_handler,
+                tx_heating_to_datalogger,
+                rx_heating_from_refill,
             );
         });
 
@@ -499,6 +561,8 @@ fn main() {
                 tx_controllino_to_tcp_opt,
                 tx_controllino_to_refill,
                 rx_controllino_from_refill,
+                tx_controllino_to_heating,
+                rx_controllino_from_heating,
                 tx_controllino_to_signal_handler,
                 rx_controllino_from_signal_handler,
             );

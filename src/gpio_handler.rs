@@ -101,6 +101,8 @@ impl GpioHandler {
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_refill: Sender<f32>,
         rx_from_refill: Receiver<InternalCommand>,
+        tx_to_heating: Sender<f32>,
+        rx_from_heating: Receiver<InternalCommand>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {

@@ -52,7 +52,7 @@ switch_off_temperature = 25.5                           # temperature, at which 
 stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
 stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
 # configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
-saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10,}
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 
 [gpio_handler]
 use_simulator = true                               # if true, then do not use real HW

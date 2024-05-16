@@ -92,6 +92,7 @@ impl DataLogger {
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
         rx_from_refill: Receiver<bool>,
+        rx_from_heating: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -108,6 +109,7 @@ impl DataLogger {
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(false);
         let mut refill_in_progress: bool = false;
+        let mut heater_is_on: bool = false;
         let mut quit_command_received = false;
 
         loop {
@@ -128,6 +130,21 @@ impl DataLogger {
             match rx_from_refill.try_recv() {
                 Ok(c) => {
                     refill_in_progress = c;
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                        }
+                    }
+                }
+            }
+
+            // get information if heater is on from heating thread
+            match rx_from_heating.try_recv() {
+                Ok(c) => {
+                    heater_is_on = c;
                 }
                 Err(e) => {
                     match e {
@@ -278,7 +295,7 @@ impl DataLogger {
                 surface_ventilation_status: None,
                 ambient_temperature: ambient_temperature,
                 ambient_humidity: ambient_humidity,
-                heater_status: None,
+                heater_status: Some(heater_is_on),
             };
             println!("DateFrame = {}", data_frame);
             match sql_interface_data.write_data_frame_to_database(&data_frame) {

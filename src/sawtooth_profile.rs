@@ -1,5 +1,5 @@
-use std::fmt;
 use serde_derive::Deserialize;
+use std::fmt;
 
 #[derive(Deserialize)]
 pub struct SawToothProfileConfig {
@@ -71,7 +71,7 @@ impl SawToothProfile {
         } else {
             self.counter += 1;
         }
-        
+
         // in the first phase, increase level to max.
         if self.counter <= self.phase1_counter_limit {
             self.level_normalized = self.counter as f32 / self.phase1_counter_limit as f32;
@@ -90,7 +90,6 @@ impl SawToothProfile {
         if self.counter > self.phase3_counter_limit && self.counter < self.phase4_counter_limit {
             self.level_normalized = 0.0;
         }
-
     }
 }
 
@@ -117,7 +116,7 @@ pub mod tests {
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 0);
-        
+
         // iterate to the middle of first interval
         for _ in 0..5 {
             saw_tooth_profile.execute();
@@ -153,7 +152,7 @@ pub mod tests {
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.5);
         assert_eq!(saw_tooth_profile.counter, 17);
-        
+
         // iterate to the end of third interval
         for _ in 0..5 {
             saw_tooth_profile.execute();
@@ -161,13 +160,13 @@ pub mod tests {
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 22);
-        
+
         // iterate to the middle of fourth interval
         saw_tooth_profile.execute();
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 23);
-        
+
         // trigger start of new cycle
         saw_tooth_profile.execute();
         println!("{}", saw_tooth_profile);

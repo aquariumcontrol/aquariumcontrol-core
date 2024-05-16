@@ -11,6 +11,8 @@ use std::time::Duration;
 pub fn handle_signals(
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
+    tx_to_heating: Sender<InternalCommand>,
+    rx_from_heating: Receiver<bool>,
     tx_to_controllino: Sender<InternalCommand>,
     rx_from_controllino: Receiver<bool>,
     tx_to_gpio: Sender<InternalCommand>,
