@@ -181,8 +181,11 @@ impl RefillExecutionTrait for RefillExecution {
                     additional_refill_volume_executed, config.additional_refill_volume
                 );
             }
-            quit_command_received =
-                check_pending_external_request(&rx_from_signal_handler, refill_errors, tx_to_heating);
+            quit_command_received = check_pending_external_request(
+                &rx_from_signal_handler,
+                refill_errors,
+                tx_to_heating,
+            );
             if quit_command_received {
                 break;
             }
@@ -918,32 +921,31 @@ pub mod tests {
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
-        let (tx_refill_to_heating, rx_heating_from_refill): (
-            Sender<bool>,
-            Receiver<bool>,
-        ) = mpsc::channel();
-        
+        let (tx_refill_to_heating, rx_heating_from_refill): (Sender<bool>, Receiver<bool>) =
+            mpsc::channel();
+
         scope(|scope| {
             scope.spawn(move || {
                 assert_eq!(
                     check_pending_external_request(
                         &rx_refill_from_signal_handler,
                         &mut refill_errors,
-                        &tx_refill_to_heating),
+                        &tx_refill_to_heating
+                    ),
                     false
                 );
             });
-            scope.spawn(move || {
-                match rx_heating_from_refill.recv() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("Refill: test_check_pending_external_request_empty_channel \
-                            error when trying to receive from check_pending_external_request");
-                    }
+            scope.spawn(move || match rx_heating_from_refill.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!(
+                        "Refill: test_check_pending_external_request_empty_channel \
+                            error when trying to receive from check_pending_external_request"
+                    );
                 }
             });
         });
-            
+
         println!("* checking false result of check_pending_external_request when channel is empty succeeded.");
     }
 
@@ -970,8 +972,10 @@ pub mod tests {
                 let response_to_heating_error_reset = match rx_heating_from_refill.recv() {
                     Ok(c) => c,
                     Err(e) => {
-                        panic!("Refill: test_check_pending_external_request_reset_all_errors_command \
-                            error when trying to receive from check_pending_external_request");
+                        panic!(
+                            "Refill: test_check_pending_external_request_reset_all_errors_command \
+                            error when trying to receive from check_pending_external_request"
+                        );
                     }
                 };
                 assert_eq!(response_to_heating_error_reset, false);
@@ -1449,7 +1453,7 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_refill_to_heating, _) = mpsc::channel();
-        
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1555,7 +1559,7 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_refill_to_heating, _) = mpsc::channel();
-        
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1662,7 +1666,7 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_refill_to_heating, _) = mpsc::channel();
-        
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1770,7 +1774,7 @@ pub mod tests {
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_datalogger,
-                    tx_refill_to_heating,                    
+                    tx_refill_to_heating,
                     &mut refill_test_execution_void,
                 );
             });

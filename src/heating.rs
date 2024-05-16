@@ -58,13 +58,15 @@ impl Heating {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            println!("Heating: Error in trying to receive refill error status: {e:?}");
+                            println!(
+                                "Heating: Error in trying to receive refill error status: {e:?}"
+                            );
                         }
                     }
                     false
                 }
             };
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }        
+        }
     }
 }
