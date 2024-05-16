@@ -6,6 +6,7 @@ mod data_logger;
 mod feedpattern;
 mod gpio_handler;
 mod iir_filter;
+mod heating;
 mod refill;
 mod sawtooth_profile;
 mod signal_handler;

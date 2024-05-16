@@ -1,5 +1,7 @@
 use std::fmt;
+use serde_derive::Deserialize;
 
+#[derive(Deserialize)]
 pub struct SawToothProfileConfig {
     phase1_length: u32,
     phase2_length: u32,

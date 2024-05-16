@@ -5,6 +5,7 @@ use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::refill::RefillConfig;
+use crate::heating::HeatingConfig;
 use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
 
@@ -17,6 +18,7 @@ pub struct ConfigData {
     pub data_logger: DataLoggerConfig,
     pub gpio_handler: GpioHandlerConfig,
     pub refill: RefillConfig,
+    pub heating: HeatingConfig,
     pub controllino: ControllinoConfig,
 }
 

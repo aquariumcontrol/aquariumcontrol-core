@@ -12,7 +12,7 @@ peristaltic_pump1_id = 12
 peristaltic_pump2_id = 13
 peristaltic_pump3_id = 14
 peristaltic_pump4_id = 15
-use_simulator = true                               # if true, then do not use real HW
+use_simulator = true                                    # if true, then do not use real HW
 
 [sql_interface]
 db_user = "aquarium"
@@ -23,11 +23,11 @@ db_name = "aquarium_test"
 db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
 
 [tcp_connection]
-ip_address = "192.168.1.27"                           # ipv4 address for communication with control application for testing purposes
-port = 35000                                          # port number for communication with control application for testing purposes
+ip_address = "192.168.1.27"                             # ipv4 address for communication with control application for testing purposes
+port = 35000                                            # port number for communication with control application for testing purposes
 
 [data_logger]
-logging_interval = 60                              # log data every x seconds
+logging_interval = 60                                   # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5 }
 filter_coefficient_pH = { filter_coefficient = 0.5 }
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }
@@ -46,5 +46,13 @@ refill_pump_flow = 0.05                                 # flow rate of refill pu
 max_refill_volume = 0.8                                 # maximum allowed refill volume in one refill operation
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
+[heating]
+switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
+switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
+stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
+stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
+# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10,}
+
 [gpio_handler]
-use_simulator = true                               # if true, then do not use real HW
+use_simulator = true                                    # if true, then do not use real HW
