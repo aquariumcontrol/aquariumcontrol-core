@@ -49,7 +49,7 @@ pub fn handle_signals(
     // first, let's shut down the refill control
     match tx_to_refill.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Refill thread to terminate.");
+            println!("signal_handler: Waiting for Refill thread to shut down.");
             // now listen for response
             match rx_from_refill.recv() {
                 Ok(_) => {}
@@ -60,6 +60,23 @@ pub fn handle_signals(
         }
         Err(e) => {
             println!("handle_signals: Error in channel communication to Refill when sending Quit command: {e:?}");
+        }
+    }
+
+    // second, let's shut down the heating control
+    match tx_to_heating.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for Heating thread to shut down.");
+            // now listen for response
+            match rx_from_heating.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from heating thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Heating when sending Quit command: {e:?}");
         }
     }
 
@@ -153,6 +170,16 @@ pub fn handle_signals(
         }
     }
 
+    // Heating thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_heating.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Heating thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Heating when sending Terminate command: {e:?}");
+        }
+    }
+    
     // Refill thread has already ceased operation. It is now awaiting termination command.
     match tx_to_refill.send(InternalCommand::Terminate) {
         Ok(_) => {
