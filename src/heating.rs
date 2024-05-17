@@ -23,6 +23,31 @@ pub struct HeatingConfig {
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 
+/// function checks if there are new messages in the channel.
+/// if the message contains the quit command, then the function returns true, otherwise false.
+fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Quit => true,
+            _ => {
+                println!("Heating: ignoring inapplicable command from signal handler.");
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Heating: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            false
+        }
+    }
+}
+
 /// This struct contains the configuration and the implementation for the refill control.
 pub struct Heating {
     config: HeatingConfig,
@@ -134,13 +159,49 @@ impl Heating {
                 println!("Heating: Sent request to switch off heater to Controllino thread.");
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            
+
             // update the saw tooth profile only once per second
             if loop_counter % 10 == 0 {
                 saw_tooth_profile.execute();
             }
-                        
+
             loop_counter += 1;
+
+            if check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+        }
+
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        println!("Heating: Sending Quit confirmation to signal handler.");
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!(
+                    "Heating: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                );
+            }
+        };
+
+        // this thread has channel connection to underlying threads (Controllino, GpioHandler).
+        // These threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by signal_handler crate.
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match rx_from_signal_handler.recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => true,
+                    _ => {
+                        println!("Heating: ignoring inapplicable command from signal handler.");
+                        false
+                    }
+                },
+                Err(e) => {
+                    println!("Heating: error when trying to receive termination signal: {e:?}");
+                    false
+                }
+            };
         }
     }
 }
