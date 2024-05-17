@@ -172,12 +172,39 @@ impl GpioHandler {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                            panic!("GpioHandler: Error in trying to receive command from data refill: {e:?}");
                         }
                     }
                 }
             }
             // **********************************
+            
+            // *** communication with heating control ***
+            match rx_from_heating.try_recv() {
+                Ok(c) => {
+                    if self.config.use_simulator {
+                        response_value =
+                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    }
+                    match tx_to_heating.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Error in trying to send response value back to data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from heating: {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************   
         }
 
         // application received request to terminate, that is why the loop was left.
