@@ -178,7 +178,7 @@ impl GpioHandler {
                 }
             }
             // **********************************
-            
+
             // *** communication with heating control ***
             match rx_from_heating.try_recv() {
                 Ok(c) => {
@@ -204,7 +204,7 @@ impl GpioHandler {
                     }
                 }
             }
-            // **********************************   
+            // **********************************
         }
 
         // application received request to terminate, that is why the loop was left.

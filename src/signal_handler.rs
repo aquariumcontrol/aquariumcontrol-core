@@ -179,7 +179,7 @@ pub fn handle_signals(
             println!("handle_signals: Error in channel communication to Heating when sending Terminate command: {e:?}");
         }
     }
-    
+
     // Refill thread has already ceased operation. It is now awaiting termination command.
     match tx_to_refill.send(InternalCommand::Terminate) {
         Ok(_) => {

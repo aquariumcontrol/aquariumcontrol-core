@@ -4,6 +4,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::channel_content::ActuatorState;
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
@@ -91,81 +92,97 @@ impl Heating {
         let mut measured_temperature = 0.0;
         let mut measurement_error: bool = false;
         let mut loop_counter = 0;
+        let mut heater_state: ActuatorState = ActuatorState::Undefined;
 
         loop {
-            // send request for temperature
-            match tx_to_gpio.send(InternalCommand::RequestSignal(
-                AquariumSignal::WaterTemperature,
-            )) {
-                Ok(_) => {
-                    measurement_error = false;
-                    // now listen for response
-                    measured_temperature = match rx_from_gpio.recv() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            println!(
-                                "Heating: Error when reading channel content for water temperature: {e:?}"
-                            );
-                            measurement_error = true;
-                            measured_temperature // keep the old value
-                        }
-                    };
-                }
-                Err(e) => {
-                    measurement_error = true;
-                    println!(
-                        "Heating: Error in channel communication to GPIO handler \
-                        when requesting tank level switch invalid: {e:?}"
-                    );
-                }
-            }
-
-            if (self.calc_normalized_control_deviation(measured_temperature)
-                < saw_tooth_profile.level_normalized)
-                && !measurement_error
-            {
-                // switch on heater
-                match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_controllino.recv() {
-                            Ok(_) => {}
-                            Err(e) => {
-                                println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
-                    }
-                }
-                println!("Heating: Sent request to switch on heater to Controllino thread.");
-            } else {
-                // switch off heater
-                match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_controllino.recv() {
-                            Ok(_) => {}
-                            Err(e) => {
-                                println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
-                    }
-                }
-                println!("Heating: Sent request to switch off heater to Controllino thread.");
-            }
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-
-            // update the saw tooth profile only once per second
+            // run the temperature control only once per second
             if loop_counter % 10 == 0 {
+                // send request for temperature
+                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                    AquariumSignal::WaterTemperature,
+                )) {
+                    Ok(_) => {
+                        measurement_error = false;
+                        // now listen for response
+                        measured_temperature = match rx_from_gpio.recv() {
+                            Ok(c) => c,
+                            Err(e) => {
+                                println!(
+                                    "Heating: Error when reading channel content for water temperature: {e:?}"
+                                );
+                                measurement_error = true;
+                                measured_temperature // keep the old value
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        measurement_error = true;
+                        println!(
+                            "Heating: Error in channel communication to GPIO handler \
+                            when requesting tank level switch invalid: {e:?}"
+                        );
+                    }
+                }
+
+                if (self.calc_normalized_control_deviation(measured_temperature)
+                    < saw_tooth_profile.level_normalized)
+                    && !measurement_error
+                {
+                    // switch on heater if not already on
+                    if heater_state != ActuatorState::On {
+                        match tx_to_controllino
+                            .send(InternalCommand::SwitchOn(AquariumDevice::Heater))
+                        {
+                            Ok(_) => {
+                                // now listen for response
+                                match rx_from_controllino.recv() {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
+                                    }
+                                };
+                            }
+                            Err(e) => {
+                                println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
+                            }
+                        }
+                        println!(
+                            "Heating: Sent request to switch on heater to Controllino thread."
+                        );
+                        heater_state = ActuatorState::On;
+                    }
+                } else {
+                    // switch off heater
+                    if heater_state != ActuatorState::Off {
+                        match tx_to_controllino
+                            .send(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                        {
+                            Ok(_) => {
+                                // now listen for response
+                                match rx_from_controllino.recv() {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
+                                    }
+                                };
+                            }
+                            Err(e) => {
+                                println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
+                            }
+                        }
+                        println!(
+                            "Heating: Sent request to switch off heater to Controllino thread."
+                        );
+                        heater_state = ActuatorState::Off;
+                    }
+                }
+
                 saw_tooth_profile.execute();
             }
 
             loop_counter += 1;
+
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;

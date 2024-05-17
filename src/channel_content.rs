@@ -94,3 +94,10 @@ impl fmt::Display for InternalCommand {
         }
     }
 }
+
+#[derive(PartialEq)]
+pub enum ActuatorState {
+    On,
+    Off,
+    Undefined,
+}
