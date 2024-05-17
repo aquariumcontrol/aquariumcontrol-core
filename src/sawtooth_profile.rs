@@ -109,7 +109,7 @@ pub mod tests {
             phase3_length: 10,
             phase4_length: 2,
         };
-        let mut saw_tooth_profile = SawToothProfile::new(saw_tooth_profile_config);
+        let mut saw_tooth_profile = SawToothProfile::new(&saw_tooth_profile_config);
         println!("{}", saw_tooth_profile);
 
         // initial calculation of normalized level
