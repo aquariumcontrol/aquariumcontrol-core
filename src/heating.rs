@@ -51,46 +51,59 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 
 /// function communicates to Controllino thread via channel to switch on the heater
 fn switch_on_heater(
+    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
 ) {
-    match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
-        Ok(_) => {
-            // now listen for response
-            match rx_from_controllino.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
-                }
-            };
+    {
+        // avoid electrical overloads through parallel device actuation
+        let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
+        match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
+            Ok(_) => {
+                // now listen for response
+                match rx_from_controllino.recv() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
+                    }
+                };
+            }
+            Err(e) => {
+                println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
+            }
         }
-        Err(e) => {
-            println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
-        }
+        println!("Heating: Sent request to switch on heater to Controllino thread.");
+        
+        *mutex_data += 1;
     }
-    println!("Heating: Sent request to switch on heater to Controllino thread.");
 }
 
 /// function communicates to Controllino thread via channel to switch off the heater
 fn switch_off_heater(
+    mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
 ) {
-    match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
-        Ok(_) => {
-            // now listen for response
-            match rx_from_controllino.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
-                }
-            };
+    {
+        // avoid electrical overloads through parallel device actuation
+        let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
+        match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
+            Ok(_) => {
+                // now listen for response
+                match rx_from_controllino.recv() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
+                    }
+                };
+            }
+            Err(e) => {
+                println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
+            }
         }
-        Err(e) => {
-            println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
-        }
+        println!("Heating: Sent request to switch off heater to Controllino thread.");
+        *mutex_data += 1;
     }
-    println!("Heating: Sent request to switch off heater to Controllino thread.");
 }
 
 /// This struct contains the configuration and the implementation for the refill control.
@@ -175,12 +188,12 @@ impl Heating {
                     // switch on heater if not already on
                     if heater_state != ActuatorState::On {
                         heater_state = ActuatorState::On;
-                        switch_on_heater(&tx_to_controllino, &rx_from_controllino);
+                        switch_on_heater(&mutex_device_scheduler_heating, &tx_to_controllino, &rx_from_controllino);
                     }
                 } else {
                     // switch off heater
                     if heater_state != ActuatorState::Off {
-                        switch_off_heater(&tx_to_controllino, &rx_from_controllino);
+                        switch_off_heater(&mutex_device_scheduler_heating, &tx_to_controllino, &rx_from_controllino);
                         heater_state = ActuatorState::Off;
                     }
                 }
@@ -199,7 +212,7 @@ impl Heating {
 
         // switch off heater
         if heater_state != ActuatorState::Off {
-            switch_off_heater(&tx_to_controllino, &rx_from_controllino);
+            switch_off_heater(&mutex_device_scheduler_heating, &tx_to_controllino, &rx_from_controllino);
             heater_state = ActuatorState::Off;
         }
 
@@ -235,4 +248,33 @@ impl Heating {
             };
         }
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    
+    // Check if the heater remains switched off during two cycles of the saw tooth profile.
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    #[test]
+    pub fn test_heating_with_measured_temperature_high() {
+        
+    }
+    
+    // Check if the heater is switched on and is not switched off during two cycles of the saw tooth profile.
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    // Check if the heater is switched off after sending Quit command and before sending Terminate command.
+    #[test]
+    pub fn test_heating_with_measured_temperature_low() {
+        
+    }
+    
+    // Check if the heater is switched on and off during two cycles of the saw tooth profile.
+    // Duration of heater switched on shall equal duration of heater switched off (1% tolerance). 
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    #[test]
+    pub fn test_heating_with_measured_temperature_50_percent() {
+        
+    }
+    
+    
 }
