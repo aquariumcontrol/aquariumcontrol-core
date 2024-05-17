@@ -8,6 +8,7 @@ use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfileConfig;
+use crate::sawtooth_profile::SawToothProfile;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 
 /// This struct holds the configuration data for the heating control.
@@ -22,6 +23,7 @@ pub struct HeatingConfig {
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 
+/// This struct contains the configuration and the implementation for the refill control.
 pub struct Heating {
     config: HeatingConfig,
     sql_interface_heating: SqlInterfaceHeating,
@@ -35,6 +37,17 @@ impl Heating {
         }
     }
 
+    fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
+        let target_value_delta = self.config.switch_off_temperature - self.config.switch_on_temperature;
+        let measured_value_delta = measured_value - self.config.switch_on_temperature;
+        if target_value_delta > 0.0 {
+            measured_value_delta / target_value_delta
+        }
+        else {
+            0.0 // default value when target values are not properly set up.
+        }
+    }
+    
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -49,9 +62,46 @@ impl Heating {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut refill_error = false;
         let spin_sleeper = SpinSleeper::default();
-
+        let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
+        let mut measured_temperature = 0.0;
+        let mut measurement_error: bool = false;
+             
         loop {
+            // send request for temperature
+            match tx_to_gpio.send(InternalCommand::RequestSignal(
+                AquariumSignal::WaterTemperature,
+            )) {
+                Ok(_) => {
+                    measurement_error = false;
+                    // now listen for response
+                    measured_temperature = match rx_from_gpio.recv() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            println!(
+                                "Heating: Error when reading channel content for water temperature: {e:?}"
+                            );
+                            measurement_error = true;
+                            measured_temperature     // keep the old value    
+                        }
+                    };
+                }
+                Err(e) => {
+                    measurement_error = true;
+                    println!("Heating: Error in channel communication to GPIO handler \
+                        when requesting tank level switch invalid: {e:?}");
+                    
+                }
+            }
+                
+            if (self.calc_normalized_control_deviation(measured_temperature) < saw_tooth_profile.level_normalized) &&
+                !measurement_error {
+                // switch on heater
+            }
+            else {
+                // switch off heater
+            }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
+            saw_tooth_profile.execute();
         }
     }
 }

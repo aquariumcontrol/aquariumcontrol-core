@@ -46,7 +46,7 @@ impl SawToothProfile {
     ///
     /// * `config` - struct of type SawToothProfileConfig with phase lengths in seconds
     ///
-    pub fn new(config: SawToothProfileConfig) -> SawToothProfile {
+    pub fn new(config: &SawToothProfileConfig) -> SawToothProfile {
         SawToothProfile {
             counter: 0,
             level_normalized: 0.0,
