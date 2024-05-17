@@ -49,6 +49,50 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
+/// function communicates to Controllino thread via channel to switch on the heater
+fn switch_on_heater(
+    tx_to_controllino: &Sender<InternalCommand>,
+    rx_from_controllino: &Receiver<bool>,
+) {
+    match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
+        Ok(_) => {
+            // now listen for response
+            match rx_from_controllino.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
+                }
+            };
+        }
+        Err(e) => {
+            println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
+        }
+    }
+    println!("Heating: Sent request to switch on heater to Controllino thread.");
+}
+
+/// function communicates to Controllino thread via channel to switch off the heater
+fn switch_off_heater(
+    tx_to_controllino: &Sender<InternalCommand>,
+    rx_from_controllino: &Receiver<bool>,
+) {
+    match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
+        Ok(_) => {
+            // now listen for response
+            match rx_from_controllino.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
+                }
+            };
+        }
+        Err(e) => {
+            println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
+        }
+    }
+    println!("Heating: Sent request to switch off heater to Controllino thread.");
+}
+
 /// This struct contains the configuration and the implementation for the refill control.
 pub struct Heating {
     config: HeatingConfig,
@@ -130,49 +174,13 @@ impl Heating {
                 {
                     // switch on heater if not already on
                     if heater_state != ActuatorState::On {
-                        match tx_to_controllino
-                            .send(InternalCommand::SwitchOn(AquariumDevice::Heater))
-                        {
-                            Ok(_) => {
-                                // now listen for response
-                                match rx_from_controllino.recv() {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
-                                    }
-                                };
-                            }
-                            Err(e) => {
-                                println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
-                            }
-                        }
-                        println!(
-                            "Heating: Sent request to switch on heater to Controllino thread."
-                        );
                         heater_state = ActuatorState::On;
+                        switch_on_heater(&tx_to_controllino, &rx_from_controllino);
                     }
                 } else {
                     // switch off heater
                     if heater_state != ActuatorState::Off {
-                        match tx_to_controllino
-                            .send(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                        {
-                            Ok(_) => {
-                                // now listen for response
-                                match rx_from_controllino.recv() {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
-                                    }
-                                };
-                            }
-                            Err(e) => {
-                                println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
-                            }
-                        }
-                        println!(
-                            "Heating: Sent request to switch off heater to Controllino thread."
-                        );
+                        switch_off_heater(&tx_to_controllino, &rx_from_controllino);
                         heater_state = ActuatorState::Off;
                     }
                 }
@@ -187,6 +195,12 @@ impl Heating {
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
             }
+        }
+
+        // switch off heater
+        if heater_state != ActuatorState::Off {
+            switch_off_heater(&tx_to_controllino, &rx_from_controllino);
+            heater_state = ActuatorState::Off;
         }
 
         // application received request to terminate, that is why the loop was left.
