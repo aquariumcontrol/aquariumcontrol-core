@@ -305,11 +305,6 @@ fn main() {
         mpsc::channel();
     // *****************************
 
-    // *** refill => heating ***
-    let (tx_refill_to_heating, rx_heating_from_refill): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *****************************
-
     // *** heating => datalogger ***
     let (tx_heating_to_datalogger, rx_datalogger_from_heating): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
@@ -535,7 +530,6 @@ fn main() {
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
                 tx_refill_to_datalogger,
-                tx_refill_to_heating,
                 &mut refill_execution,
             );
         });
@@ -552,7 +546,6 @@ fn main() {
                 tx_heating_to_signal_handler,
                 rx_heating_from_signal_handler,
                 tx_heating_to_datalogger,
-                rx_heating_from_refill,
             );
         });
 

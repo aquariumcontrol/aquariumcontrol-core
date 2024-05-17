@@ -45,27 +45,12 @@ impl Heating {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_datalogger: Sender<bool>,
-        rx_from_refill: Receiver<bool>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut refill_error = false;
         let spin_sleeper = SpinSleeper::default();
 
         loop {
-            refill_error = match rx_from_refill.try_recv() {
-                Ok(c) => c,
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            println!(
-                                "Heating: Error in trying to receive refill error status: {e:?}"
-                            );
-                        }
-                    }
-                    false
-                }
-            };
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
