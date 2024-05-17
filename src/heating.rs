@@ -7,8 +7,8 @@ use std::time::Duration;
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
-use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sawtooth_profile::SawToothProfile;
+use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 
 /// This struct holds the configuration data for the heating control.
@@ -38,16 +38,16 @@ impl Heating {
     }
 
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
-        let target_value_delta = self.config.switch_off_temperature - self.config.switch_on_temperature;
+        let target_value_delta =
+            self.config.switch_off_temperature - self.config.switch_on_temperature;
         let measured_value_delta = measured_value - self.config.switch_on_temperature;
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
-        }
-        else {
+        } else {
             0.0 // default value when target values are not properly set up.
         }
     }
-    
+
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -65,7 +65,8 @@ impl Heating {
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_temperature = 0.0;
         let mut measurement_error: bool = false;
-             
+        let mut loop_counter = 0;
+
         loop {
             // send request for temperature
             match tx_to_gpio.send(InternalCommand::RequestSignal(
@@ -81,27 +82,65 @@ impl Heating {
                                 "Heating: Error when reading channel content for water temperature: {e:?}"
                             );
                             measurement_error = true;
-                            measured_temperature     // keep the old value    
+                            measured_temperature // keep the old value
                         }
                     };
                 }
                 Err(e) => {
                     measurement_error = true;
-                    println!("Heating: Error in channel communication to GPIO handler \
-                        when requesting tank level switch invalid: {e:?}");
-                    
+                    println!(
+                        "Heating: Error in channel communication to GPIO handler \
+                        when requesting tank level switch invalid: {e:?}"
+                    );
                 }
             }
-                
-            if (self.calc_normalized_control_deviation(measured_temperature) < saw_tooth_profile.level_normalized) &&
-                !measurement_error {
+
+            if (self.calc_normalized_control_deviation(measured_temperature)
+                < saw_tooth_profile.level_normalized)
+                && !measurement_error
+            {
                 // switch on heater
-            }
-            else {
+                match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_controllino.recv() {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
+                    }
+                }
+                println!("Heating: Sent request to switch on heater to Controllino thread.");
+            } else {
                 // switch off heater
+                match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_controllino.recv() {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
+                    }
+                }
+                println!("Heating: Sent request to switch off heater to Controllino thread.");
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            saw_tooth_profile.execute();
+            
+            // update the saw tooth profile only once per second
+            if loop_counter % 10 == 0 {
+                saw_tooth_profile.execute();
+            }
+                        
+            loop_counter += 1;
         }
     }
 }
