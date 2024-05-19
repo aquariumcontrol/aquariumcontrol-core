@@ -696,6 +696,7 @@ impl Refill {
                     false
                 }
             };
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
 }

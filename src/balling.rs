@@ -27,6 +27,31 @@ pub struct BallingConfig {
     active: bool,
 }
 
+/// function checks if there are new messages in the channel.
+/// if the message contains the quit command, then the function returns true, otherwise false.
+fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Quit => true,
+            _ => {
+                println!("Balling: ignoring inapplicable command from signal handler.");
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Balling: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            false
+        }
+    }
+}
+
 pub struct Balling {
     config: BallingConfig,
     sql_interface_balling: SqlInterfaceBalling,
@@ -43,10 +68,51 @@ impl Balling {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
-        tx_balling_to_controllino: Sender<InternalCommand>,
-        rx_balling_from_controllino: Receiver<bool>,
-        tx_balling_to_signal_handler: Sender<bool>,
-        rx_balling_from_signal_handler: Receiver<InternalCommand>,
+        tx_to_controllino: Sender<InternalCommand>,
+        rx_from_controllino: Receiver<bool>,
+        tx_to_signal_handler: Sender<bool>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+        
+        loop {
+            if check_pending_external_request(&rx_from_signal_handler) {
+                break;
+            }
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
+        }
+        // application received request to terminate, that is why the loop was left.
+        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        println!("Balling: Sending Quit confirmation to signal handler.");
+        _ = match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                println!(
+                    "Balling: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                );
+            }
+        };
+
+        // this thread has channel connection to underlying threads (Controllino).
+        // These threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by signal_handler crate.
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match rx_from_signal_handler.recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => true,
+                    _ => {
+                        println!("Balling: ignoring inapplicable command from signal handler.");
+                        false
+                    }
+                },
+                Err(e) => {
+                    println!("Balling: error when trying to receive termination signal: {e:?}");
+                    false
+                }
+            };
+            spin_sleeper.sleep(sleep_duration_hundred_millis);            
+        }        
     }
 }
