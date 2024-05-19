@@ -16,7 +16,6 @@ use std::time::Duration;
 
 use crate::channel_content::ActuatorState;
 use crate::channel_content::AquariumDevice;
-use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 

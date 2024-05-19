@@ -173,7 +173,7 @@ impl Heating {
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_temperature = 0.0;
-        let mut measurement_error: bool = false;
+        let mut measurement_error: bool;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
 
@@ -254,7 +254,6 @@ impl Heating {
                 &rx_from_controllino,
                 &tx_to_datalogger,
             );
-            heater_state = ActuatorState::Off;
         }
 
         // @todo: this code needs to move to main control along with the

@@ -53,10 +53,8 @@ use crate::refill::RefillExecution;
 use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
-use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 use crate::sql_interface_feed::SqlInterfaceFeed;
-use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::tcp_communication::TcpCommunication;
@@ -168,13 +166,6 @@ fn main() {
     let feedpattern = match sql_interface_feed.get_single_feedpattern_from_database(1) {
         Ok(c) => c,
         Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
-    };
-
-    let current_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get current timestamp from database: {e:?}");
-        }
     };
 
     println!("Read the following tables from database:");

@@ -119,7 +119,7 @@ pub fn handle_signals(
         Ok(_) => {
             println!("signal_handler: Waiting for Monitors thread to shut down.");
             // now listen for response
-            match rx_from_ventilation.recv() {
+            match rx_from_monitors.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     println!("handle_signals: could not receive answer from Monitors thread {e:?}")
@@ -136,7 +136,7 @@ pub fn handle_signals(
         Ok(_) => {
             println!("signal_handler: Waiting for Feed thread to shut down.");
             // now listen for response
-            match rx_from_ventilation.recv() {
+            match rx_from_feed.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     println!("handle_signals: could not receive answer from Feed thread {e:?}")
@@ -153,7 +153,7 @@ pub fn handle_signals(
         Ok(_) => {
             println!("signal_handler: Waiting for Balling thread to shut down.");
             // now listen for response
-            match rx_from_ventilation.recv() {
+            match rx_from_balling.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     println!("handle_signals: could not receive answer from Balling thread {e:?}")

@@ -163,7 +163,7 @@ impl Ventilation {
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_temperature = 0.0;
-        let mut measurement_error: bool = false;
+        let mut measurement_error: bool;
         let mut loop_counter = 0;
         let mut ventilation_state: ActuatorState = ActuatorState::Undefined;
 
@@ -245,7 +245,6 @@ impl Ventilation {
                     &rx_from_controllino,
                     &tx_to_datalogger,
                 );
-                ventilation_state = ActuatorState::Off;
             }
         } else {
             // switch off ventilation if not already off
@@ -256,7 +255,6 @@ impl Ventilation {
                     &rx_from_controllino,
                     &tx_to_datalogger,
                 );
-                ventilation_state = ActuatorState::Off;
             }
         }
 
