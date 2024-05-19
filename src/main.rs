@@ -1,3 +1,12 @@
+/* Copyright 2024 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
 //#![allow(warnings)]
 mod channel_content;
 mod config;
@@ -18,6 +27,7 @@ mod sql_interface_heating;
 mod sql_interface_refill;
 mod tcp_communication;
 mod version_information;
+
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -454,7 +464,7 @@ fn main() {
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
-
+    
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
