@@ -176,29 +176,6 @@ fn main() {
             panic!("Could not get current timestamp from database: {e:?}");
         }
     };
-    let dataframe = DataFrame {
-        timestamp: current_timestamp,
-        water_temperature: Some(25.5),
-        water_temperature_filtered: Some(25.0),
-        ph: Some(7.0),
-        ph_filtered: Some(7.5),
-        conductivity: Some(50000.0),
-        conductivity_filtered: Some(51000.0),
-        conductivity_compensated: Some(52000.0),
-        refill_in_progress: Some(false),
-        tank_level_switch_position: Some(false),
-        tank_level_switch_invalid: Some(false),
-        surface_ventilation_status: Some(true),
-        ambient_temperature: Some(22.0),
-        ambient_humidity: Some(60.0),
-        heater_status: Some(true),
-    };
-    match sql_interface_data.write_data_frame_to_database(&dataframe) {
-        Ok(()) => {}
-        Err(e) => {
-            panic!("Could not write dataframe to database: {e:?}");
-        }
-    }
 
     println!("Read the following tables from database:");
     for table in tables {
