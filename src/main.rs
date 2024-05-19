@@ -128,21 +128,6 @@ fn main() {
         }
     };
 
-    let today = match sql_interface.get_current_date() {
-        Ok(c) => c,
-        Err(_) => panic!("Could not get current date."),
-    };
-
-    let heating_stats_entry = HeatingStatsEntry {
-        date: today.into(),
-        energy: 0.9,
-        ambient_temperature_average_value: 22.0,
-        ambient_temperature_average_counter: 72000,
-        water_temperature_average_value: 25.0,
-        water_temperature_average_counter: 78000,
-        heating_control_runtime: 64000,
-    };
-
     let database = match sql_interface.get_database() {
         Ok(c) => c,
         Err(e) => panic!("Could not get database name: {e:?}"),
@@ -161,11 +146,6 @@ fn main() {
     match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
         Ok(_) => {}
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
-    };
-
-    match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
-        Ok(_) => {}
-        Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
     };
 
     let feed_timestamp =
@@ -675,6 +655,7 @@ fn main() {
                 tx_heating_to_signal_handler,
                 rx_heating_from_signal_handler,
                 tx_heating_to_datalogger,
+                &mut sql_interface,
             );
         });
 

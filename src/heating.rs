@@ -19,7 +19,8 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
-use crate::sql_interface_heating::SqlInterfaceHeating;
+use crate::sql_interface_heating::{SqlInterfaceHeating, HeatingStatsEntry};
+use crate::sql_interface::SqlInterface;
 
 /// This struct holds the configuration data for the heating control.
 /// The configuration is loaded from the .toml configuration file.
@@ -165,6 +166,7 @@ impl Heating {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_datalogger: Sender<bool>,
+        sql_interface: &mut SqlInterface,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut refill_error = false;
@@ -255,6 +257,33 @@ impl Heating {
             heater_state = ActuatorState::Off;
         }
 
+        // @todo: this code needs to move to main control along with the
+        // two subsequent sections.
+        let today = match sql_interface.get_current_date() {
+            Ok(c) => c,
+            Err(_) => panic!("Could not get current date."),
+        };
+        
+        // @todo: this is mock data for subsequent call to SQL.
+        // This numbers need to be replaced with data aquired during operation.
+        let heating_stats_entry = HeatingStatsEntry {
+            date: today.into(),
+            energy: 0.9,
+            ambient_temperature_average_value: 22.0,
+            ambient_temperature_average_counter: 72000,
+            water_temperature_average_value: 25.0,
+            water_temperature_average_counter: 78000,
+            heating_control_runtime: 64000,
+        };
+            
+        // @todo: temporarily, this call is placed here to avoid warnings.
+        // with implementation of midnight timing and aquisition of data,
+        // this call needs to move to the central control cycle.
+        match self.sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
+        };
+            
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         println!("Heating: Sending Quit confirmation to signal handler.");
