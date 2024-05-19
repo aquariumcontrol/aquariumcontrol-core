@@ -25,6 +25,7 @@ use crate::sql_interface_refill::SqlInterfaceRefill;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
 pub struct RefillConfig {
+    active: bool,
     initial_wait_interval: i64,
     check_interval: i64,
     max_refill_count_24h: i64,
@@ -583,71 +584,73 @@ impl Refill {
                 break; // exit outer loop
             }
 
-            // check for external requests while waiting for the check interval to pass
-            println!("Refill: executing main loop.");
-
-            // frequent update required for calculation of error condition switch stuck high
-            sql_refill_data.duration_since_last_refill =
-                sql_refill_data.duration_since_last_refill + self.config.check_interval;
-
-            // check when the last refill operation has taken place
-            // if too much time has passed, issue an error condition - not impeding rest of operation
-            self.check_error_condition_switch_stuck_high(
-                sql_refill_data.duration_since_last_refill,
-            );
-
-            // either communicate with real HW or with simulator to get updated signal information
-            // this call will also update the stabilized tank level position.
-            tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
-
-            self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-
-            println!(
-                "self.tank_level_switch_position_stabilized={}",
-                self.tank_level_switch_position_stabilized
-            );
-            println!(
-                "tank_level_switch_signals.tank_level_switch_invalid={}",
-                tank_level_switch_signals.tank_level_switch_invalid
-            );
-            if !quit_command_received
-                && !self.tank_level_switch_position_stabilized
-                && !tank_level_switch_signals.tank_level_switch_invalid
-            {
-                println!(
-                    "Refill: Stabilized tank level switch position indicates low water level."
+            if self.config.active {
+                // check for external requests while waiting for the check interval to pass
+                println!("Refill: executing main loop.");
+    
+                // frequent update required for calculation of error condition switch stuck high
+                sql_refill_data.duration_since_last_refill =
+                    sql_refill_data.duration_since_last_refill + self.config.check_interval;
+    
+                // check when the last refill operation has taken place
+                // if too much time has passed, issue an error condition - not impeding rest of operation
+                self.check_error_condition_switch_stuck_high(
+                    sql_refill_data.duration_since_last_refill,
                 );
-                sql_refill_data = self.get_sql_refill_data();
-
-                // execute checks before initiating refill
-                if !self.check_volume_count_time_limits(&sql_refill_data) {
-                    if !self.refill_errors.error_switch_stuck_low
-                        && !self.refill_errors.error_sql_update_failed
-                    {
-                        // conditions for allowing refill operation are given
-                        println!("Refill: Executing refill.");
-                        // inner scope to limit lifetime of unlocked mutex
+    
+                // either communicate with real HW or with simulator to get updated signal information
+                // this call will also update the stabilized tank level position.
+                tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
+    
+                self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+    
+                println!(
+                    "self.tank_level_switch_position_stabilized={}",
+                    self.tank_level_switch_position_stabilized
+                );
+                println!(
+                    "tank_level_switch_signals.tank_level_switch_invalid={}",
+                    tank_level_switch_signals.tank_level_switch_invalid
+                );
+                if !quit_command_received
+                    && !self.tank_level_switch_position_stabilized
+                    && !tank_level_switch_signals.tank_level_switch_invalid
+                {
+                    println!(
+                        "Refill: Stabilized tank level switch position indicates low water level."
+                    );
+                    sql_refill_data = self.get_sql_refill_data();
+    
+                    // execute checks before initiating refill
+                    if !self.check_volume_count_time_limits(&sql_refill_data) {
+                        if !self.refill_errors.error_switch_stuck_low
+                            && !self.refill_errors.error_sql_update_failed
                         {
-                            let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
-                            // now we are given exclusive access to actuators
-                            quit_command_received = refill_execution.execute_refill(
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_gpio,
-                                &rx_from_gpio,
-                                &rx_from_signal_handler,
-                                &tx_to_datalogger,
-                                &mut tank_level_switch_signals,
-                                &mut self.refill_errors,
-                                &self.config,
-                                &mut self.sql_interface_refill,
-                            );
-                            *mutex_data += 1;
+                            // conditions for allowing refill operation are given
+                            println!("Refill: Executing refill.");
+                            // inner scope to limit lifetime of unlocked mutex
+                            {
+                                let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
+                                // now we are given exclusive access to actuators
+                                quit_command_received = refill_execution.execute_refill(
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_gpio,
+                                    &rx_from_gpio,
+                                    &rx_from_signal_handler,
+                                    &tx_to_datalogger,
+                                    &mut tank_level_switch_signals,
+                                    &mut self.refill_errors,
+                                    &self.config,
+                                    &mut self.sql_interface_refill,
+                                );
+                                *mutex_data += 1;
+                            }
                         }
                     }
                 }
             }
-
+            
             // wait for configured time period before rechecking the sensor signal
             i = 0;
             while i < self.config.check_interval * 10 {
@@ -2142,11 +2145,12 @@ pub mod tests {
                     false,
                 );
 
+                println!("Refill: test_execute_refill_delayed_switch_high_and_quit_signal: sending Quit command...");
                 // send Quit signal
                 match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
                     Ok(_) => {},
                     Err(e) => {
-                        panic!("Refill: test_execute_refill_delayed_switch_high_with_invalid_true_and_quit_signal\
+                        panic!("Refill: test_execute_refill_delayed_switch_high_and_quit_signal\
                             Error when sending Quit command to test object: {e:?}");
                     }
                 }

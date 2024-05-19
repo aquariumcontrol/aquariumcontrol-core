@@ -54,6 +54,8 @@ active = true
 active = true
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
+switch_on_ventilation_when_terminating = true           # behavior when terminating the application
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 
 [balling]
 active = true
