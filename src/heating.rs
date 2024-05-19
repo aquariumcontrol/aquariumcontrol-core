@@ -26,6 +26,7 @@ use crate::sql_interface_heating::SqlInterfaceHeating;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct HeatingConfig {
+    active: bool,
     switch_on_temperature: f32,
     switch_off_temperature: f32,
     stop_on_refill_error: bool,
@@ -176,7 +177,7 @@ impl Heating {
 
         loop {
             // run the temperature control only once per second
-            if loop_counter % 10 == 0 {
+            if (loop_counter % 10 == 0) && (self.config.active) {
                 // send request for temperature
                 match tx_to_gpio.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
@@ -307,4 +308,8 @@ pub mod tests {
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_heating_with_measured_temperature_50_percent() {}
+    
+    // Check if heating control is not acting when disabled (active=false in configuration file)
+    #[test]
+    pub fn test_heating_not_active() {}
 }
