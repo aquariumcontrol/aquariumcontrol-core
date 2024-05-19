@@ -564,6 +564,7 @@ fn main() {
                 rx_data_logger_from_gpio,
                 rx_datalogger_from_refill,
                 rx_datalogger_from_heating,
+                rx_datalogger_from_ventilation,
                 tx_datalogger_to_signal_handler,
                 rx_datalogger_from_signal_handler,
             );

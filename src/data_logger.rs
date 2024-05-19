@@ -102,6 +102,7 @@ impl DataLogger {
         rx_from_gpio: Receiver<f32>,
         rx_from_refill: Receiver<bool>,
         rx_from_heating: Receiver<bool>,
+        rx_from_ventilation: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -119,6 +120,7 @@ impl DataLogger {
         let mut tank_level_switch_position: Option<bool> = Some(false);
         let mut refill_in_progress: bool = false;
         let mut heater_is_on: bool = false;
+        let mut ventilation_is_on: bool = false;
         let mut quit_command_received = false;
 
         loop {
@@ -144,7 +146,7 @@ impl DataLogger {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                            panic!("DataLogger: Error in trying to receive command from refill thread: {e:?}");
                         }
                     }
                 }
@@ -159,7 +161,22 @@ impl DataLogger {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                            panic!("DataLogger: Error in trying to receive command from heating thread: {e:?}");
+                        }
+                    }
+                }
+            }
+            
+            // get information if ventilation is on from ventilation thread
+            match rx_from_ventilation.try_recv() {
+                Ok(c) => {
+                    ventilation_is_on = c;
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("DataLogger: Error in trying to receive command from ventilation thread: {e:?}");
                         }
                     }
                 }
@@ -301,7 +318,7 @@ impl DataLogger {
                 refill_in_progress: Some(refill_in_progress),
                 tank_level_switch_position: tank_level_switch_position,
                 tank_level_switch_invalid: tank_level_switch_invalid,
-                surface_ventilation_status: None,
+                surface_ventilation_status: Some(ventilation_is_on),
                 ambient_temperature: ambient_temperature,
                 ambient_humidity: ambient_humidity,
                 heater_status: Some(heater_is_on),
