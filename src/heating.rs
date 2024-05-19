@@ -201,16 +201,16 @@ impl Heating {
                 {
                     // switch on heater if not already on
                     if heater_state != ActuatorState::On {
-                        heater_state = ActuatorState::On;
                         switch_on_heater(
                             &mutex_device_scheduler_heating,
                             &tx_to_controllino,
                             &rx_from_controllino,
                             &tx_to_datalogger,
                         );
+                        heater_state = ActuatorState::On;
                     }
                 } else {
-                    // switch off heater
+                    // switch off heater if no already off
                     if heater_state != ActuatorState::Off {
                         switch_off_heater(
                             &mutex_device_scheduler_heating,
@@ -234,7 +234,7 @@ impl Heating {
             }
         }
 
-        // switch off heater
+        // switch off heater if not already off
         if heater_state != ActuatorState::Off {
             switch_off_heater(
                 &mutex_device_scheduler_heating,
