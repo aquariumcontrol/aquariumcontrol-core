@@ -172,6 +172,8 @@ impl Controllino {
         rx_from_refill: Receiver<InternalCommand>,
         tx_to_heating: Sender<bool>,
         rx_from_heating: Receiver<InternalCommand>,
+        tx_to_ventilation: Sender<bool>,
+        rx_from_ventilation: Receiver<InternalCommand>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -197,7 +199,7 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
-                    // todo: else branch using real HW
+                    // @todo: else branch using real HW
 
                     match tx_to_refill.send(true) {
                         Ok(()) => {}
@@ -226,13 +228,42 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
-                    // todo: else branch using real HW
+                    // @todo: else branch using real HW
 
                     match tx_to_heating.send(true) {
                         Ok(()) => {}
                         Err(e) => {
                             println!(
                                 "Controllino: Error in trying to send response value back to heating control: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("Controllino: Error in trying to receive command from heating control {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************
+            
+            // *** communication with ventilation control ***
+            match rx_from_ventilation.try_recv() {
+                Ok(c) => {
+                    println!("Controllino: received request from Ventilation thread.");
+                    if self.config.use_simulator {
+                        self.actuate_in_simulator(&tx_to_tcp, c);
+                    }
+                    // @todo: else branch using real HW
+
+                    match tx_to_ventilation.send(true) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Controllino: Error in trying to send response value back to ventilation control: {e:?}"
                             );
                         }
                     }

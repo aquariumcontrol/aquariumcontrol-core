@@ -670,6 +670,8 @@ fn main() {
                 rx_controllino_from_refill,
                 tx_controllino_to_heating,
                 rx_controllino_from_heating,
+                tx_controllino_to_ventilation,
+                rx_controllino_from_ventilation,
                 tx_controllino_to_signal_handler,
                 rx_controllino_from_signal_handler,
             );
