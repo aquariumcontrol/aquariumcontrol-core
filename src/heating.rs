@@ -180,28 +180,39 @@ impl Heating {
         let duration_until_midnight = match self.sql_interface_heating.get_duration_until_midnight() {
             Ok(c) => c,
             Err(e) => {
-                panic!("Could not get duration until midnight: {e:?}");
+                println!("Heating: Could not get duration until midnight: {e:?}");
+                100000 // default value for time in seconds until midnight
             }
         };
         println!(
             "Heating: Duration until midnight is {} seconds.",
             duration_until_midnight
         );
-        let heating_stats = match self.sql_interface_heating.get_single_heating_stats_from_database() {
-            Ok(c) => c,
-            Err(e) => panic!("Could not get heating stats from database:{e:?}"),
+        let heating_stats_opt = match self.sql_interface_heating.get_single_heating_stats_from_database() {
+            Ok(c) => Some(c),
+            Err(e) => {
+                println!("Heating: Could not get heating stats from database:{e:?}");
+                None
+            },
         };
-        println!(
-            "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
-            Water Average={}, Water Counter={}, Control         time = {}",
-            heating_stats.date.to_string(),
-            heating_stats.energy,
-            heating_stats.ambient_temperature_average_value,
-            heating_stats.ambient_temperature_average_counter,
-            heating_stats.water_temperature_average_value,
-            heating_stats.water_temperature_average_counter,
-            heating_stats.heating_control_runtime
-        );
+        match heating_stats_opt {
+            Some(heating_stats) => {
+                println!(
+                    "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
+                    Water Average={}, Water Counter={}, Control         time = {}",
+                    heating_stats.date.to_string(),
+                    heating_stats.energy,
+                    heating_stats.ambient_temperature_average_value,
+                    heating_stats.ambient_temperature_average_counter,
+                    heating_stats.water_temperature_average_value,
+                    heating_stats.water_temperature_average_counter,
+                    heating_stats.heating_control_runtime
+                );
+            },
+            None => {
+                // do nothing
+            }
+        }
                 
         loop {
             // run the temperature control only once per second
