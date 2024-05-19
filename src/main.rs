@@ -8,14 +8,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 //#![allow(warnings)]
+mod balling;
 mod channel_content;
 mod config;
 mod controllino;
 mod data_logger;
+mod feed;
 mod feedpattern;
 mod gpio_handler;
 mod heating;
 mod iir_filter;
+mod monitors;
 mod refill;
 mod sawtooth_profile;
 mod signal_handler;
@@ -26,6 +29,7 @@ mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
 mod tcp_communication;
+mod ventilation;
 mod version_information;
 
 use chrono::NaiveDateTime;
@@ -35,12 +39,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::scope;
 //use std::env;
 
+use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
 use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
+use crate::feed::Feed;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
+use crate::monitors::Monitors;
 use crate::refill::Refill;
 use crate::refill::RefillExecution;
 use crate::signal_handler::handle_signals;
@@ -53,6 +60,7 @@ use crate::sql_interface_heating::HeatingStatsEntry;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::tcp_communication::TcpCommunication;
+use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
 
 fn main() {
@@ -310,6 +318,24 @@ fn main() {
     let (tx_gpio_to_heating, rx_heating_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
     // *****************************
 
+    // *** ventilation <=> gpio ***
+    let (tx_ventilation_to_gpio, rx_gpio_from_ventilation): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_ventilation, rx_ventilation_from_gpio): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *****************************
+
+    // *** monitors <=> gpio ***
+    let (tx_monitors_to_gpio, rx_gpio_from_monitors): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_monitors, rx_monitors_from_gpio): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
+    // *****************************
+
     // *** refill => datalogger ***
     let (tx_refill_to_datalogger, rx_datalogger_from_refill): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
@@ -318,6 +344,13 @@ fn main() {
     // *** heating => datalogger ***
     let (tx_heating_to_datalogger, rx_datalogger_from_heating): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
+    // *****************************
+
+    // *** ventilation => datalogger ***
+    let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *****************************
 
     // *** refill <=> controllino ***
@@ -338,6 +371,44 @@ fn main() {
         mpsc::channel();
     // *******************************
 
+    // *** ventilation <=> controllino ***
+    let (tx_ventilation_to_controllino, rx_controllino_from_ventilation): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_ventilation, rx_ventilation_from_controllino): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // *******************************
+
+    // *** feed <=> controllino ***
+    let (tx_feed_to_controllino, rx_controllino_from_feed): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_feed, rx_feed_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+
+    // *** balling <=> controllino ***
+    let (tx_balling_to_controllino, rx_controllino_from_balling): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_balling, rx_balling_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+
+    // *** monitors <=> controllino ***
+    let (tx_monitors_to_controllino, rx_controllino_from_monitors): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_controllino_to_monitors, rx_monitors_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+
     // *** signal handler <=> refill ***
     let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
         Sender<InternalCommand>,
@@ -355,6 +426,48 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_heating_to_signal_handler, rx_signal_handler_from_heating): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> feed ***
+    let (tx_signal_handler_to_feed, rx_feed_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_feed_to_signal_handler, rx_signal_handler_from_feed): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> balling ***
+    let (tx_signal_handler_to_balling, rx_balling_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_balling_to_signal_handler, rx_signal_handler_from_balling): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> monitors ***
+    let (tx_signal_handler_to_monitors, rx_monitors_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_monitors_to_signal_handler, rx_signal_handler_from_monitors): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> ventilation ***
+    let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -464,7 +577,11 @@ fn main() {
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
-    
+    let mut feed = Feed::new(config.feed, sql_interface_feed);
+    let mut ventilation = Ventilation::new(config.ventilation);
+    let mut balling = Balling::new(config.balling, sql_interface_balling);
+    let mut monitors = Monitors::new(config.monitors);
+
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
@@ -526,6 +643,7 @@ fn main() {
             );
         });
 
+        // Refill needs actuation of relay
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
         let mut refill_execution = RefillExecution;
@@ -544,6 +662,7 @@ fn main() {
             );
         });
 
+        // Heating needs actuation of relay
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
@@ -556,6 +675,63 @@ fn main() {
                 tx_heating_to_signal_handler,
                 rx_heating_from_signal_handler,
                 tx_heating_to_datalogger,
+            );
+        });
+
+        // Ventilation needs actuation of relay
+        let mutex_device_scheduler_ventilation = Arc::clone(&mutex_device_scheduler);
+
+        scope.spawn(move || {
+            ventilation.execute(
+                mutex_device_scheduler_ventilation,
+                tx_ventilation_to_gpio,
+                rx_ventilation_from_gpio,
+                tx_ventilation_to_controllino,
+                rx_ventilation_from_controllino,
+                tx_ventilation_to_signal_handler,
+                rx_ventilation_from_signal_handler,
+                tx_ventilation_to_datalogger,
+            );
+        });
+
+        // Monitors needs communication with Controllino device
+        let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
+
+        scope.spawn(move || {
+            monitors.execute(
+                mutex_device_scheduler_monitors,
+                tx_monitors_to_gpio,
+                rx_monitors_from_gpio,
+                tx_monitors_to_controllino,
+                rx_monitors_from_controllino,
+                tx_monitors_to_signal_handler,
+                rx_monitors_from_signal_handler,
+            );
+        });
+
+        // Feed needs actuation of relay
+        let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
+
+        scope.spawn(move || {
+            feed.execute(
+                mutex_device_scheduler_feed,
+                tx_feed_to_controllino,
+                rx_feed_from_controllino,
+                tx_feed_to_signal_handler,
+                rx_feed_from_signal_handler,
+            );
+        });
+
+        // Balling dosing needs actuation of relays
+        let mutex_device_scheduler_balling = Arc::clone(&mutex_device_scheduler);
+
+        scope.spawn(move || {
+            balling.execute(
+                mutex_device_scheduler_balling,
+                tx_balling_to_controllino,
+                rx_balling_from_controllino,
+                tx_balling_to_signal_handler,
+                rx_balling_from_signal_handler,
             );
         });
 

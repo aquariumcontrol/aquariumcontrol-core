@@ -10,13 +10,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use serde_derive::Deserialize;
 use std::fs;
 
+use crate::balling::BallingConfig;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
+use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::heating::HeatingConfig;
+use crate::monitors::MonitorsConfig;
 use crate::refill::RefillConfig;
 use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
+use crate::ventilation::VentilationConfig;
 
 /// This is the top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.
@@ -28,6 +32,10 @@ pub struct ConfigData {
     pub gpio_handler: GpioHandlerConfig,
     pub refill: RefillConfig,
     pub heating: HeatingConfig,
+    pub ventilation: VentilationConfig,
+    pub monitors: MonitorsConfig,
+    pub balling: BallingConfig,
+    pub feed: FeedConfig,
     pub controllino: ControllinoConfig,
 }
 
