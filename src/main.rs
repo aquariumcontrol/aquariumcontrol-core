@@ -323,7 +323,7 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_gpio_to_ventilation, rx_ventilation_from_gpio): (Sender<bool>, Receiver<bool>) =
+    let (tx_gpio_to_ventilation, rx_ventilation_from_gpio): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
     // *****************************
 
