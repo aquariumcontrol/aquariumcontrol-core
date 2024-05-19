@@ -74,12 +74,32 @@ impl Balling {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
+        let mut loop_counter = 0;
 
+        let mut duration_balling_dosing =
+            match self.sql_interface_balling.get_duration_since_last_balling_dosing() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("Could not get duration since last Balling dosing event: {e:?}");
+                }
+            };
+        println!(
+            "Balling: Duration since last Balling dosing is {} seconds.",
+            duration_balling_dosing
+        );
+                
         loop {
+            if self.config.active && (loop_counter % 10 == 0) {
+                println!("Balling: executing main control.");
+                duration_balling_dosing += 1;    
+            }
+            
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
+            
+            loop_counter += 1;
         }
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.

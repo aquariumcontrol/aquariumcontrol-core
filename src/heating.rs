@@ -176,7 +176,33 @@ impl Heating {
         let mut measurement_error: bool;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
-
+        
+        let duration_until_midnight = match self.sql_interface_heating.get_duration_until_midnight() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get duration until midnight: {e:?}");
+            }
+        };
+        println!(
+            "Heating: Duration until midnight is {} seconds.",
+            duration_until_midnight
+        );
+        let heating_stats = match self.sql_interface_heating.get_single_heating_stats_from_database() {
+            Ok(c) => c,
+            Err(e) => panic!("Could not get heating stats from database:{e:?}"),
+        };
+        println!(
+            "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
+            Water Average={}, Water Counter={}, Control         time = {}",
+            heating_stats.date.to_string(),
+            heating_stats.energy,
+            heating_stats.ambient_temperature_average_value,
+            heating_stats.ambient_temperature_average_counter,
+            heating_stats.water_temperature_average_value,
+            heating_stats.water_temperature_average_counter,
+            heating_stats.heating_control_runtime
+        );
+                
         loop {
             // run the temperature control only once per second
             if (loop_counter % 10 == 0) && (self.config.active) {

@@ -79,11 +79,11 @@ fn main() {
 
     let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
 
-    let mut sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
+    let sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
 
     let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
 
-    let mut sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
+    let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
@@ -110,21 +110,6 @@ fn main() {
             }
         }
     }
-
-    let duration_balling_dosing =
-        match sql_interface_balling.get_duration_since_last_balling_dosing() {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not get duration since last Balling dosing event: {e:?}");
-            }
-        };
-
-    let duration_until_midnight = match sql_interface_heating.get_duration_until_midnight() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("Could not get duration until midnight: {e:?}");
-        }
-    };
 
     let database = match sql_interface.get_database() {
         Ok(c) => c,
@@ -158,11 +143,6 @@ fn main() {
             Err(e) => panic!("Could not retrieve Balling set values from database: {e:?}"),
         };
 
-    let heating_stats = match sql_interface_heating.get_single_heating_stats_from_database() {
-        Ok(c) => c,
-        Err(e) => panic!("Could not get heating stats from database:{e:?}"),
-    };
-
     let feedpattern = match sql_interface_feed.get_single_feedpattern_from_database(1) {
         Ok(c) => c,
         Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
@@ -173,30 +153,11 @@ fn main() {
         println!("* {}", table);
     }
     println!(
-        "Duration since last Balling dosing is {} seconds.",
-        duration_balling_dosing
-    );
-    println!(
         "Balling set values are: pump_id={}, dosing_speed={}, dosing_volume={}, label={}",
         balling_setval_pump1.pump_id,
         balling_setval_pump1.dosing_speed,
         balling_setval_pump1.dosing_volume,
         balling_setval_pump1.label
-    );
-    println!(
-        "Duration until midnight is {} seconds.",
-        duration_until_midnight
-    );
-    println!(
-        "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
-        Water Average={}, Water Counter={}, Control         time = {}",
-        heating_stats.date.to_string(),
-        heating_stats.energy,
-        heating_stats.ambient_temperature_average_value,
-        heating_stats.ambient_temperature_average_counter,
-        heating_stats.water_temperature_average_value,
-        heating_stats.water_temperature_average_counter,
-        heating_stats.heating_control_runtime
     );
     println!(
         "Feed pattern: profile ID={} profile name={}",

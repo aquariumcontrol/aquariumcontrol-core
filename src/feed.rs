@@ -25,6 +25,7 @@ use crate::sql_interface_feed::SqlInterfaceFeed;
 #[derive(Deserialize)]
 pub struct FeedConfig {
     active: bool,
+    schedule_check_interval: u32,
 }
 
 /// function checks if there are new messages in the channel.
@@ -73,13 +74,19 @@ impl Feed {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
-
+        let mut loop_counter = 0;
+        
         loop {
+            if self.config.active && (loop_counter % 10 == self.config.schedule_check_interval) {
+                println!("Feed: checking schedule...");
+            }
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
+            
+            loop_counter += 1;
         }
 
         // @todo: this is mock data generation, replace with actual data.
