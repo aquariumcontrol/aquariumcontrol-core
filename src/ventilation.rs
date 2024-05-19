@@ -247,8 +247,7 @@ impl Ventilation {
                 );
                 ventilation_state = ActuatorState::Off;
             }
-        }
-        else {
+        } else {
             // switch off ventilation if not already off
             if ventilation_state != ActuatorState::Off {
                 switch_off_ventilation(
@@ -258,7 +257,7 @@ impl Ventilation {
                     &tx_to_datalogger,
                 );
                 ventilation_state = ActuatorState::Off;
-            }            
+            }
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -291,7 +290,7 @@ impl Ventilation {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);                        
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
 }
@@ -315,7 +314,7 @@ pub mod tests {
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_ventilation_with_measured_temperature_50_percent() {}
-    
+
     // Check if ventilation control is not acting when disabled (active=false in configuration file)
     #[test]
     pub fn test_ventilation_not_active() {}

@@ -19,8 +19,8 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
-use crate::sql_interface_heating::{SqlInterfaceHeating, HeatingStatsEntry};
 use crate::sql_interface::SqlInterface;
+use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
 /// This struct holds the configuration data for the heating control.
 /// The configuration is loaded from the .toml configuration file.
@@ -263,7 +263,7 @@ impl Heating {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date."),
         };
-        
+
         // @todo: this is mock data for subsequent call to SQL.
         // This numbers need to be replaced with data aquired during operation.
         let heating_stats_entry = HeatingStatsEntry {
@@ -275,15 +275,18 @@ impl Heating {
             water_temperature_average_counter: 78000,
             heating_control_runtime: 64000,
         };
-            
+
         // @todo: temporarily, this call is placed here to avoid warnings.
         // with implementation of midnight timing and aquisition of data,
         // this call needs to move to the central control cycle.
-        match self.sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
+        match self
+            .sql_interface_heating
+            .insert_heating_stats_entry(&heating_stats_entry)
+        {
             Ok(_) => {}
             Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
         };
-            
+
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         println!("Heating: Sending Quit confirmation to signal handler.");
@@ -314,7 +317,7 @@ impl Heating {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);            
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
 }
@@ -338,7 +341,7 @@ pub mod tests {
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_heating_with_measured_temperature_50_percent() {}
-    
+
     // Check if heating control is not acting when disabled (active=false in configuration file)
     #[test]
     pub fn test_heating_not_active() {}

@@ -75,7 +75,7 @@ impl Balling {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
-        
+
         loop {
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
@@ -112,7 +112,7 @@ impl Balling {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);            
-        }        
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
+        }
     }
 }

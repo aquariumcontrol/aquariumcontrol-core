@@ -148,40 +148,6 @@ fn main() {
         Err(e) => panic!("Could not insert refill event into database: {e:?}"),
     };
 
-    let feed_timestamp =
-        NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
-        Ok(_) => {}
-        Err(e) => panic!("Could not insert feed event into database: {e:?}"),
-    }
-
-    match sql_interface_feed.get_feedschedule_entry_from_database() {
-        Ok(c) => match c {
-            Some(mut d) => {
-                println!(
-                    "Feed schedule entry before update: timestamp={}, profile_name={}, repeat_daily={}",
-                    d.timestamp,
-                    d.profile_name,
-                    d.repeat_daily,
-                );
-                match sql_interface_feed.update_feedschedule_entry_in_database(&mut d) {
-                    Ok(()) => {
-                        println!("Update feed schedule entry");
-                    }
-                    Err(e) => {
-                        panic!("Error when updating feed schedule entry: {e:?}");
-                    }
-                }
-            }
-            None => {
-                println!("Database has no feed schedule entry which lies in the past.");
-            }
-        },
-        Err(e) => {
-            panic!("Could not retrieve feed schedule information from database: {e:?}");
-        }
-    };
-
     let balling_timestamp =
         NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {

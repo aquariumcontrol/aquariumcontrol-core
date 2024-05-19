@@ -587,23 +587,24 @@ impl Refill {
             if self.config.active {
                 // check for external requests while waiting for the check interval to pass
                 println!("Refill: executing main loop.");
-    
+
                 // frequent update required for calculation of error condition switch stuck high
                 sql_refill_data.duration_since_last_refill =
                     sql_refill_data.duration_since_last_refill + self.config.check_interval;
-    
+
                 // check when the last refill operation has taken place
                 // if too much time has passed, issue an error condition - not impeding rest of operation
                 self.check_error_condition_switch_stuck_high(
                     sql_refill_data.duration_since_last_refill,
                 );
-    
+
                 // either communicate with real HW or with simulator to get updated signal information
                 // this call will also update the stabilized tank level position.
-                tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
-    
+                tank_level_switch_signals
+                    .update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
+
                 self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-    
+
                 println!(
                     "self.tank_level_switch_position_stabilized={}",
                     self.tank_level_switch_position_stabilized
@@ -620,7 +621,7 @@ impl Refill {
                         "Refill: Stabilized tank level switch position indicates low water level."
                     );
                     sql_refill_data = self.get_sql_refill_data();
-    
+
                     // execute checks before initiating refill
                     if !self.check_volume_count_time_limits(&sql_refill_data) {
                         if !self.refill_errors.error_switch_stuck_low
@@ -650,7 +651,7 @@ impl Refill {
                     }
                 }
             }
-            
+
             // wait for configured time period before rechecking the sensor signal
             i = 0;
             while i < self.config.check_interval * 10 {

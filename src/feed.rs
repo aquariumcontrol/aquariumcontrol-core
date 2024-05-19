@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use chrono::NaiveDateTime;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -42,9 +43,7 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
-                    println!(
-                        "Feed: Error in trying to receive command from signal handler: {e:?}"
-                    );
+                    println!("Feed: Error in trying to receive command from signal handler: {e:?}");
                 }
             }
             false
@@ -75,14 +74,60 @@ impl Feed {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
-        
+
         loop {
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
             }
-            
+
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
+
+        // @todo: this is mock data generation, replace with actual data.
+        let feed_timestamp =
+            NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        match self
+            .sql_interface_feed
+            .insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1)
+        {
+            Ok(_) => {}
+            Err(e) => panic!("Could not insert feed event into database: {e:?}"),
+        }
+
+        // @todo: move call to inside control loop
+        match self
+            .sql_interface_feed
+            .get_feedschedule_entry_from_database()
+        {
+            Ok(c) => match c {
+                Some(mut d) => {
+                    println!(
+                        "Feed schedule entry before update: timestamp={}, profile_name={}, repeat_daily={}",
+                        d.timestamp,
+                        d.profile_name,
+                        d.repeat_daily,
+                    );
+                    match self
+                        .sql_interface_feed
+                        .update_feedschedule_entry_in_database(&mut d)
+                    {
+                        Ok(()) => {
+                            println!("Update feed schedule entry");
+                        }
+                        Err(e) => {
+                            panic!("Error when updating feed schedule entry: {e:?}");
+                        }
+                    }
+                }
+                None => {
+                    println!("Database has no feed schedule entry which lies in the past.");
+                }
+            },
+            Err(e) => {
+                panic!("Could not retrieve feed schedule information from database: {e:?}");
+            }
+        };
+
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         println!("Feed: Sending Quit confirmation to signal handler.");
@@ -113,7 +158,7 @@ impl Feed {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);            
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
 }
