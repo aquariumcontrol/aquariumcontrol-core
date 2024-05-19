@@ -60,6 +60,7 @@ saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_leng
 
 [balling]
 active = true
+schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
 
 [monitors]
 active = true

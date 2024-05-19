@@ -192,7 +192,7 @@ impl Ventilation {
                         measurement_error = true;
                         println!(
                             "Ventilation: Error in channel communication to GPIO handler \
-                            when requesting tank level switch invalid: {e:?}"
+                            when requesting water temperature: {e:?}"
                         );
                     }
                 }
