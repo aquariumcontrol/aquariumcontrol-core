@@ -24,6 +24,7 @@ use crate::sql_interface_balling::SqlInterfaceBalling;
 #[derive(Deserialize)]
 pub struct BallingConfig {
     active: bool,
+    schedule_check_interval: u32,
 }
 
 /// function checks if there are new messages in the channel.
@@ -89,7 +90,7 @@ impl Balling {
         );
                 
         loop {
-            if self.config.active && (loop_counter % 10 == 0) {
+            if self.config.active && (loop_counter % self.config.schedule_check_interval == 0) {
                 println!("Balling: executing main control.");
                 duration_balling_dosing += 1;    
             }
