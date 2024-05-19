@@ -114,6 +114,8 @@ impl GpioHandler {
         rx_from_heating: Receiver<InternalCommand>,
         tx_to_ventilation: Sender<f32>,
         rx_from_ventilation: Receiver<InternalCommand>,
+        tx_to_monitors: Sender<f32>,
+        rx_from_monitors: Receiver<InternalCommand>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -243,6 +245,33 @@ impl GpioHandler {
                 }
             }
             // **********************************
+            
+            // *** communication with monitors ***
+            match rx_from_monitors.try_recv() {
+                Ok(c) => {
+                    if self.config.use_simulator {
+                        response_value =
+                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    }
+                    match tx_to_monitors.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Error in trying to send response value back to data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("GpioHandler: Error in trying to receive command from monitors: {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************            
         }
 
         // application received request to terminate, that is why the loop was left.

@@ -550,6 +550,8 @@ fn main() {
                 rx_gpio_from_heating,
                 tx_gpio_to_ventilation,
                 rx_gpio_from_ventilation,
+                tx_gpio_to_monitors,
+                rx_gpio_from_monitors,
                 tx_gpio_to_signal_handler,
                 rx_gpio_from_signal_handler,
             );
