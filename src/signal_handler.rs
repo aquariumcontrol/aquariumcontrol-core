@@ -96,7 +96,75 @@ pub fn handle_signals(
             println!("handle_signals: Error in channel communication to Heating when sending Quit command: {e:?}");
         }
     }
-
+    
+    // next, let's shut down the heating control
+    match tx_to_ventilation.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for Ventilation thread to shut down.");
+            // now listen for response
+            match rx_from_ventilation.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from ventilation thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Ventilation when sending Quit command: {e:?}");
+        }
+    }
+    
+    // next, let's shut down the monitors
+    match tx_to_monitors.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for Monitors thread to shut down.");
+            // now listen for response
+            match rx_from_ventilation.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from Monitors thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Monitors when sending Quit command: {e:?}");
+        }
+    }
+    
+    // next, let's shut down the monitors
+    match tx_to_feed.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for Feed thread to shut down.");
+            // now listen for response
+            match rx_from_ventilation.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from Feed thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Feed when sending Quit command: {e:?}");
+        }
+    }
+    
+    // next, let's shut down the monitors
+    match tx_to_balling.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for Balling thread to shut down.");
+            // now listen for response
+            match rx_from_ventilation.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from Balling thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Balling when sending Quit command: {e:?}");
+        }
+    }
+    
     // next, let's shut down the data logging
     match tx_to_datalogger.send(InternalCommand::Quit) {
         Ok(_) => {
@@ -194,6 +262,46 @@ pub fn handle_signals(
         }
         Err(e) => {
             println!("handle_signals: Error in channel communication to Heating when sending Terminate command: {e:?}");
+        }
+    }
+    
+    // Ventilation thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_ventilation.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Ventilation thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Ventilation when sending Terminate command: {e:?}");
+        }
+    }
+    
+    // Feed thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_feed.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Feed thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Feed when sending Terminate command: {e:?}");
+        }
+    }
+    
+    // Balling thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_balling.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Balling thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Balling when sending Terminate command: {e:?}");
+        }
+    }
+    
+    // Monitors thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_monitors.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Monitors thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Monitors when sending Terminate command: {e:?}");
         }
     }
 
