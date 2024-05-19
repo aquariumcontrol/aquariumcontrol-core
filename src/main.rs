@@ -672,6 +672,10 @@ fn main() {
                 rx_controllino_from_heating,
                 tx_controllino_to_ventilation,
                 rx_controllino_from_ventilation,
+                tx_controllino_to_balling,
+                rx_controllino_from_balling,
+                tx_controllino_to_feed,
+                rx_controllino_from_feed,
                 tx_controllino_to_signal_handler,
                 rx_controllino_from_signal_handler,
             );

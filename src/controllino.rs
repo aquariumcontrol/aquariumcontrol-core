@@ -174,6 +174,10 @@ impl Controllino {
         rx_from_heating: Receiver<InternalCommand>,
         tx_to_ventilation: Sender<bool>,
         rx_from_ventilation: Receiver<InternalCommand>,
+        tx_to_balling: Sender<bool>,
+        rx_from_balling: Receiver<InternalCommand>,
+        tx_to_feed: Sender<bool>,
+        rx_from_feed: Receiver<InternalCommand>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -272,12 +276,71 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from heating control {e:?}");
+                            panic!("Controllino: Error in trying to receive command from ventilation control {e:?}");
                         }
                     }
                 }
             }
             // **********************************
+            
+            // *** communication with Balling dosing control ***
+            match rx_from_balling.try_recv() {
+                Ok(c) => {
+                    println!("Controllino: received request from Balling thread.");
+                    if self.config.use_simulator {
+                        self.actuate_in_simulator(&tx_to_tcp, c);
+                    }
+                    // @todo: else branch using real HW
+
+                    match tx_to_balling.send(true) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Controllino: Error in trying to send response value back to Balling dosing control: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("Controllino: Error in trying to receive command from Balling dosing control {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************
+
+            // *** communication with feed control ***
+            match rx_from_feed.try_recv() {
+                Ok(c) => {
+                    println!("Controllino: received request from Feed thread.");
+                    if self.config.use_simulator {
+                        self.actuate_in_simulator(&tx_to_tcp, c);
+                    }
+                    // @todo: else branch using real HW
+
+                    match tx_to_feed.send(true) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            println!(
+                                "Controllino: Error in trying to send response value back to feed control: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("Controllino: Error in trying to receive command from feed control {e:?}");
+                        }
+                    }
+                }
+            }
+            // **********************************
+                        
         }
 
         // application received request to terminate, that is why the loop was left.
