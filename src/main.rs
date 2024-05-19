@@ -548,6 +548,8 @@ fn main() {
                 rx_gpio_from_refill,
                 tx_gpio_to_heating,
                 rx_gpio_from_heating,
+                tx_gpio_to_ventilation,
+                rx_gpio_from_ventilation,
                 tx_gpio_to_signal_handler,
                 rx_gpio_from_signal_handler,
             );
