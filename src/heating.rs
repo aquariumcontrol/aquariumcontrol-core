@@ -176,8 +176,9 @@ impl Heating {
         let mut measurement_error: bool;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
-        
-        let duration_until_midnight = match self.sql_interface_heating.get_duration_until_midnight() {
+
+        let duration_until_midnight = match self.sql_interface_heating.get_duration_until_midnight()
+        {
             Ok(c) => c,
             Err(e) => {
                 println!("Heating: Could not get duration until midnight: {e:?}");
@@ -188,12 +189,15 @@ impl Heating {
             "Heating: Duration until midnight is {} seconds.",
             duration_until_midnight
         );
-        let heating_stats_opt = match self.sql_interface_heating.get_single_heating_stats_from_database() {
+        let heating_stats_opt = match self
+            .sql_interface_heating
+            .get_single_heating_stats_from_database()
+        {
             Ok(c) => Some(c),
             Err(e) => {
                 println!("Heating: Could not get heating stats from database:{e:?}");
                 None
-            },
+            }
         };
         match heating_stats_opt {
             Some(heating_stats) => {
@@ -208,12 +212,12 @@ impl Heating {
                     heating_stats.water_temperature_average_counter,
                     heating_stats.heating_control_runtime
                 );
-            },
+            }
             None => {
                 // do nothing
             }
         }
-                
+
         loop {
             // run the temperature control only once per second
             if (loop_counter % 10 == 0) && (self.config.active) {
@@ -244,30 +248,59 @@ impl Heating {
                     }
                 }
 
-                if (self.calc_normalized_control_deviation(measured_temperature)
-                    < saw_tooth_profile.level_normalized)
-                    && !measurement_error
+                if (measured_temperature >= self.config.switch_on_temperature)
+                    && (measured_temperature <= self.config.switch_off_temperature)
                 {
-                    // switch on heater if not already on
-                    if heater_state != ActuatorState::On {
-                        switch_on_heater(
-                            &mutex_device_scheduler_heating,
-                            &tx_to_controllino,
-                            &rx_from_controllino,
-                            &tx_to_datalogger,
-                        );
-                        heater_state = ActuatorState::On;
+                    if (self.calc_normalized_control_deviation(measured_temperature)
+                        < saw_tooth_profile.level_normalized)
+                        && !measurement_error
+                    {
+                        // switch on heater if not already on
+                        if heater_state != ActuatorState::On {
+                            switch_on_heater(
+                                &mutex_device_scheduler_heating,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            heater_state = ActuatorState::On;
+                        }
+                    } else {
+                        // switch off heater if no already off
+                        if heater_state != ActuatorState::Off {
+                            switch_off_heater(
+                                &mutex_device_scheduler_heating,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            heater_state = ActuatorState::Off;
+                        }
                     }
                 } else {
-                    // switch off heater if no already off
-                    if heater_state != ActuatorState::Off {
-                        switch_off_heater(
-                            &mutex_device_scheduler_heating,
-                            &tx_to_controllino,
-                            &rx_from_controllino,
-                            &tx_to_datalogger,
-                        );
-                        heater_state = ActuatorState::Off;
+                    if measured_temperature > self.config.switch_off_temperature {
+                        // switch off heater if no already off
+                        if heater_state != ActuatorState::Off {
+                            switch_off_heater(
+                                &mutex_device_scheduler_heating,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            heater_state = ActuatorState::Off;
+                        }
+                    }
+                    if (measured_temperature < self.config.switch_on_temperature) {
+                        // switch on heater if not already on
+                        if heater_state != ActuatorState::On {
+                            switch_on_heater(
+                                &mutex_device_scheduler_heating,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            heater_state = ActuatorState::On;
+                        }
                     }
                 }
 

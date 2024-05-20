@@ -218,7 +218,7 @@ impl GpioHandler {
                 }
             }
             // **********************************
-            
+
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
@@ -245,7 +245,7 @@ impl GpioHandler {
                 }
             }
             // **********************************
-            
+
             // *** communication with monitors ***
             match rx_from_monitors.try_recv() {
                 Ok(c) => {
@@ -271,7 +271,7 @@ impl GpioHandler {
                     }
                 }
             }
-            // **********************************            
+            // **********************************
         }
 
         // application received request to terminate, that is why the loop was left.

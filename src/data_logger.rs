@@ -166,7 +166,7 @@ impl DataLogger {
                     }
                 }
             }
-            
+
             // get information if ventilation is on from ventilation thread
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {

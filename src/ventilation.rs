@@ -139,8 +139,9 @@ impl Ventilation {
 
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta =
-            self.config.switch_off_temperature - self.config.switch_on_temperature;
-        let measured_value_delta = measured_value - self.config.switch_on_temperature;
+            self.config.switch_on_temperature - self.config.switch_off_temperature;
+        let measured_value_delta = measured_value - self.config.switch_off_temperature;
+        //println!("Ventilation: calc_normalized_control_deviation: measured_value_delta={} target_value_delta={}", measured_value_delta, target_value_delta);
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
         } else {
@@ -197,30 +198,59 @@ impl Ventilation {
                     }
                 }
 
-                if (self.calc_normalized_control_deviation(measured_temperature)
-                    > saw_tooth_profile.level_normalized)
-                    && !measurement_error
+                if (measured_temperature >= self.config.switch_off_temperature)
+                    && (measured_temperature <= self.config.switch_on_temperature)
                 {
-                    // switch on ventilation if not already on
-                    if ventilation_state != ActuatorState::On {
-                        switch_on_ventilation(
-                            &mutex_device_scheduler_ventilation,
-                            &tx_to_controllino,
-                            &rx_from_controllino,
-                            &tx_to_datalogger,
-                        );
-                        ventilation_state = ActuatorState::On;
+                    if (self.calc_normalized_control_deviation(measured_temperature)
+                        > saw_tooth_profile.level_normalized)
+                        && !measurement_error
+                    {
+                        // switch on ventilation if not already on
+                        if ventilation_state != ActuatorState::On {
+                            switch_on_ventilation(
+                                &mutex_device_scheduler_ventilation,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            ventilation_state = ActuatorState::On;
+                        }
+                    } else {
+                        // switch off ventilation if no already off
+                        if ventilation_state != ActuatorState::Off {
+                            switch_off_ventilation(
+                                &mutex_device_scheduler_ventilation,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            ventilation_state = ActuatorState::Off;
+                        }
                     }
                 } else {
-                    // switch off ventilation if no already off
-                    if ventilation_state != ActuatorState::Off {
-                        switch_off_ventilation(
-                            &mutex_device_scheduler_ventilation,
-                            &tx_to_controllino,
-                            &rx_from_controllino,
-                            &tx_to_datalogger,
-                        );
-                        ventilation_state = ActuatorState::Off;
+                    if measured_temperature > self.config.switch_on_temperature {
+                        // switch on ventilation if no already on
+                        if ventilation_state != ActuatorState::On {
+                            switch_on_ventilation(
+                                &mutex_device_scheduler_ventilation,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            ventilation_state = ActuatorState::On;
+                        }
+                    }
+                    if (measured_temperature < self.config.switch_off_temperature) {
+                        // switch off ventilation if not already off
+                        if ventilation_state != ActuatorState::Off {
+                            switch_off_ventilation(
+                                &mutex_device_scheduler_ventilation,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                                &tx_to_datalogger,
+                            );
+                            ventilation_state = ActuatorState::Off;
+                        }
                     }
                 }
 

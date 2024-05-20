@@ -75,7 +75,7 @@ impl Feed {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
-        
+
         loop {
             if self.config.active && (loop_counter % 10 == self.config.schedule_check_interval) {
                 println!("Feed: checking schedule...");
@@ -85,7 +85,7 @@ impl Feed {
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            
+
             loop_counter += 1;
         }
 

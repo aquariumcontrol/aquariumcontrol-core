@@ -253,7 +253,7 @@ impl Controllino {
                 }
             }
             // **********************************
-            
+
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
@@ -282,7 +282,7 @@ impl Controllino {
                 }
             }
             // **********************************
-            
+
             // *** communication with Balling dosing control ***
             match rx_from_balling.try_recv() {
                 Ok(c) => {
@@ -340,7 +340,6 @@ impl Controllino {
                 }
             }
             // **********************************
-                        
         }
 
         // application received request to terminate, that is why the loop was left.

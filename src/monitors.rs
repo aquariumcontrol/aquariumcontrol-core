@@ -71,17 +71,18 @@ impl Monitors {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
-        
+
         loop {
-            if self.config.active && (loop_counter % 100 == 0) { // run monitors every 10 seconds
+            if self.config.active && (loop_counter % 100 == 0) {
+                // run monitors every 10 seconds
                 println!("Monitors: Executing main control");
-            }    
+            }
             if check_pending_external_request(&rx_from_signal_handler) {
                 break;
             }
-            
+
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            
+
             loop_counter += 1;
         }
         // application received request to terminate, that is why the loop was left.
