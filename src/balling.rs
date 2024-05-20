@@ -18,7 +18,7 @@ use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
 use crate::sql_interface_balling::SqlInterfaceBalling;
 
-/// This struct holds the configuration data for the balling dosing control.
+/// Holds the configuration data for the balling dosing control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -27,8 +27,10 @@ pub struct BallingConfig {
     schedule_check_interval: u32,
 }
 
-/// function checks if there are new messages in the channel.
+/// Checks if there are new messages in the channel.
 /// if the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
 fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -52,12 +54,17 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
+/// Contains the configuration and the implementation for the Balling dosing control.
 pub struct Balling {
     config: BallingConfig,
     sql_interface_balling: SqlInterfaceBalling,
 }
 
 impl Balling {
+    /// Provides a struct of type Balling.
+    /// # Arguments
+    /// * `config` - configuration data for Balling dosing control
+    /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
     pub fn new(config: BallingConfig, sql_interface_balling: SqlInterfaceBalling) -> Balling {
         Balling {
             config: config,
@@ -65,6 +72,12 @@ impl Balling {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,

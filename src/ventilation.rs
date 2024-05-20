@@ -240,7 +240,7 @@ impl Ventilation {
                             ventilation_state = ActuatorState::On;
                         }
                     }
-                    if (measured_temperature < self.config.switch_off_temperature) {
+                    if measured_temperature < self.config.switch_off_temperature {
                         // switch off ventilation if not already off
                         if ventilation_state != ActuatorState::Off {
                             switch_off_ventilation(

@@ -12,7 +12,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
 
-/// This struct holds the configuration data for the Controllino interface.
+/// Holds the configuration data for the Controllino interface.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
@@ -64,16 +64,22 @@ pub struct ControllinoConfig {
     pub use_simulator: bool,
 }
 
-/// This struct contains the configuration and the implementation of the Controllino interface
+/// Contains the configuration and the implementation of the Controllino interface
 pub struct Controllino {
     pub config: ControllinoConfig,
 }
 
 impl Controllino {
+    /// Provides a struct of type Controllino
+    /// # Arguments
+    /// * `config` - configuration data for Controllino
     pub fn new(config: ControllinoConfig) -> Controllino {
         Controllino { config }
     }
 
+    /// Provides a numeric relay id for communication with the device or with simulator
+    /// # Arguments
+    /// * `device` - enum value for which the function shall provide the relay id
     fn get_relay_id(&self, device: AquariumDevice) -> u16 {
         match device {
             AquariumDevice::Skimmer => self.config.skimmer_id,
@@ -92,15 +98,19 @@ impl Controllino {
         }
     }
 
+    /// Placeholder for future implementation of platform-specific code
     #[cfg(target_os = "linux")]
     fn execute_linux_specific_code() {
         println!("Linux specific code.");
     }
 
-    /// trigger actuation on simulator via TCP communication
-    /// this function is used for development purposes only.
+    /// Triggers actuation on simulator via TCP communication
+    /// This function is used for development purposes only.
     /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
     /// considering relay id and relay logic.
+    /// # Arguments
+    /// * `tx_to_tcp` - Reference to Sender part of communication channel with TcpCommunication
+    /// * `internal_command` - enum value used for identifying content which shall be sent
     fn actuate_in_simulator(
         &self,
         tx_to_tcp: &Sender<InternalCommand>,
@@ -135,8 +145,10 @@ impl Controllino {
         }
     }
 
-    /// function checks if there are new messages in the channel.
+    /// Function checks if there are new messages in the channel.
     /// if the message contains the quit command, then the function returns true, otherwise false.
+    /// # Arguments
+    /// * `rc_from_signal_handler` - recevier part of channel for communication with signal handler.
     fn check_pending_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -163,8 +175,23 @@ impl Controllino {
         }
     }
 
-    /// this function receives request from other threads and either actuates on real HW
+    /// Executes the main control in a loop until signal handler commands quitting.
+    /// This function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - receiver part of channel for communication to signal handler
+    /// * `tx_to_refill` -  sender part of channel for communication to refill thread
+    /// * `rx_from_refill` - receiver part of channel for communication from refill thread
+    /// * `tx_to_heating` - sender part of channel for communication to heating thread
+    /// * `rx_from_heating` - receiver part of channel for communication from heating thread
+    /// * `tx_to_ventilation` - sender part of channel for communication to ventilation thread
+    /// * `rx_from_ventilation` - receiver part of channel for communication from ventilation thread
+    /// * `tx_to_balling` - sender part of channel for communication to Balling dosing thread
+    /// * `rx_from_balling` - receiver part of channel for communication from Balling dosing thread
+    /// * `tx_to_feed` - sender part of channel for communication to feed thread
+    /// * `rx_from_feed` - receiver part of channel for communication from feed thread
+    /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,

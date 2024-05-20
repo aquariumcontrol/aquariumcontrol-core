@@ -22,7 +22,7 @@ use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
 use crate::ventilation::VentilationConfig;
 
-/// This is the top level struct to hold the configuration data read from .toml file.
+/// Top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.
 #[derive(Deserialize)]
 pub struct ConfigData {
@@ -39,11 +39,10 @@ pub struct ConfigData {
     pub controllino: ControllinoConfig,
 }
 
-/// The function loads the configuration data described in a struct of type ConfigData from the .toml file.
+/// Loads the configuration data described in a struct of type ConfigData from the .toml file.
 /// In case of failure, the function panics.
 /// In success case, the function returns a variable of type ConfigData.
 /// # Arguments:
-///
 /// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 pub fn read_config_file(relative_path: String) -> ConfigData {
     use std::env;

@@ -35,7 +35,7 @@ pub struct IIRFilterConfig<T: FilterDefault> {
     pub initial_value: T,
 }
 
-/// The struct contains the configuration data for a filter and implements calculation of an infinite impulse response (IIR) filter.
+/// Contains the configuration data for a filter and implements calculation of an infinite impulse response (IIR) filter.
 /// The filtering works with the formula: New filtered value = (1 - filter coefficient) * Old filtered value + filter coefficient * new unfiltered value
 pub struct IIRFilter {
     filter_coefficient: f32,
@@ -43,7 +43,7 @@ pub struct IIRFilter {
 }
 
 impl IIRFilter {
-    /// returns a variable of type IIRFilter where the initial value is stated as parameter
+    /// Returns a struct of type IIRFilter where the initial value is stated as parameter
     ///
     /// # Arguments:
     ///
@@ -82,10 +82,8 @@ impl IIRFilter {
     }
     */
 
-    /// returns the filtered value
-    ///
+    /// Returns the filtered value.
     /// # Arguments:
-    ///
     /// * `new_value` - unfiltered input value
     pub fn get_filtered_value(&mut self, new_value: f32) -> f32 {
         self.old_value =

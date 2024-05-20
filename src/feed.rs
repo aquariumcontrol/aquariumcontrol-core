@@ -19,7 +19,7 @@ use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 
-/// This struct holds the configuration data for the feed control.
+/// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -28,8 +28,10 @@ pub struct FeedConfig {
     schedule_check_interval: u32,
 }
 
-/// function checks if there are new messages in the channel.
+/// Checks if there are new messages in the channel.
 /// if the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel    
 fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -51,12 +53,17 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
+/// Contains the configuration and the implementation for the feed control.
 pub struct Feed {
     config: FeedConfig,
     sql_interface_feed: SqlInterfaceFeed,
 }
 
 impl Feed {
+    /// Provides a struct of type Feed
+    /// # Arguments
+    /// * `config` - configuration data for feed control
+    /// * `sql_interface_feed` - specific SQL interface for feed control           
     pub fn new(config: FeedConfig, sql_interface_feed: SqlInterfaceFeed) -> Feed {
         Self {
             config: config,
@@ -64,6 +71,12 @@ impl Feed {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler  
     pub fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,

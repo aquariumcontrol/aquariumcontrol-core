@@ -17,18 +17,24 @@ use {
 
 use crate::channel_content::InternalCommand;
 
+/// Holds the configuration data for the GPIO handler.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct GpioHandlerConfig {
     pub use_simulator: bool,
 }
 
+/// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
     config: GpioHandlerConfig,
 }
 
 impl GpioHandler {
-    /// This function returns a new instance of GpioHandler
-    /// If real hardware is used, then the function also opens interface to GPIO and I2C
+    /// This function returns a struct of type GpioHandler.
+    /// If real hardware is used, then the function also opens interface to GPIO and I2C.
+    /// # Arguments
+    /// * `config` - configuration data for GPIO handler
     pub fn new(config: GpioHandlerConfig) -> GpioHandler {
         if !config.use_simulator {
             #[cfg(not(target_os = "linux"))]
@@ -37,9 +43,9 @@ impl GpioHandler {
         GpioHandler { config: config }
     }
 
-    /// request a response from the simulator via TCP communication by sending
+    /// Requests a response from the simulator via TCP communication by sending
     /// an internal message via channel to the TCP thread.
-    /// this function is used for development purposes only
+    /// This function is used for development purposes only.
     fn get_response_from_simulator(
         tx_to_tcp: &Sender<InternalCommand>,
         rx_from_tcp: &Receiver<f32>,
@@ -67,13 +73,16 @@ impl GpioHandler {
         }
     }
 
+    /// Placeholder for future implementation of platform-specific code    
     #[cfg(target_os = "linux")]
     fn execute_linux_specific_code() {
         println!("Linux specific code.");
     }
 
-    /// function checks if there are new messages in the channel.
-    /// if the message contains the quit command, then the function returns true, otherwise false.
+    /// Checks if there are new messages in the channel.
+    /// If the message contains the quit command, then the function returns true, otherwise false.
+    /// # Arguments
+    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
     fn check_pending_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -100,8 +109,24 @@ impl GpioHandler {
         }
     }
 
-    /// this function receives request from other threads and either actuates on real HW
-    /// or communicates with simulator
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// This function receives request from other threads and either actuates on real HW
+    /// or communicates with simulator.
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - sender part of channel for communication with signal handler
+    /// * `rx_from_tcp_opt` -  receiver part of channel for communication with signal handler
+    /// * `tx_to_data_logger` - sender part of channel for communication to data logger
+    /// * `rx_to_data_logger` - receiver part of channel for communication from data logger
+    /// * `tx_from_refill` - sender part of channel for communication to refill thread
+    /// * `rx_from_refill` - receiver part of channel for communication from refill thread
+    /// * `tx_to_heating` - sender part of channel for communication to heating thread
+    /// * `rx_from_heating` - receiver part of channel for communication from heating thread    
+    /// * `tx_to_ventilation` - sender part of channel for communication to ventilation thread
+    /// * `rx_from_ventilation` - receiver part of channel for communication from ventilation thread
+    /// * `tx_to_monitors` - sender part of channel for communication to monitors thread
+    /// * `rx_from_monitors` - receiver part of channel for communication from monitors thread
+    /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler    
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,

@@ -21,7 +21,7 @@ use crate::iir_filter::IIRFilterConfig;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 
-/// This struct holds the configuration data for the regular data logging to SQL database.
+/// Holds the configuration data for the regular data logging to SQL database.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -32,7 +32,34 @@ pub struct DataLoggerConfig {
     filter_coefficient_conductivity: IIRFilterConfig<()>,
 }
 
-/// This struct contains the configuration and the implementation for regular data logging to SQL database.
+/// Checks if there are new messages in the channel.
+/// if the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel    
+fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Quit => true,
+            _ => {
+                println!("DataLogger: ignoring inapplicable command from signal handler.");
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "DataLogger: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            false
+        }
+    }
+}
+
+/// Contains the configuration and the implementation for regular data logging to SQL database.
 pub struct DataLogger {
     config: DataLoggerConfig,
     filter_water_temperature: IIRFilter,
@@ -41,7 +68,8 @@ pub struct DataLogger {
 }
 
 impl DataLogger {
-    /// This function returns a new instance of DataLogger
+    /// Returns a struct of type DataLogger
+    /// * `config` - configuration data for data logger
     pub fn new(config: DataLoggerConfig) -> DataLogger {
         let filter_water_temperature = IIRFilter::new_requires_initial(
             &config.filter_coefficient_water_temperature,
@@ -66,35 +94,14 @@ impl DataLogger {
         }
     }
 
-    /// function checks if there are new messages in the channel.
-    /// if the message contains the quit command, then the function returns true, otherwise false.
-    fn check_pending_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) -> bool {
-        match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Quit => true,
-                _ => {
-                    println!("DataLogger: ignoring not applicable command from signal handler.");
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "DataLogger: Error in trying to receive command from signal handler: {e:?}"
-                        );
-                    }
-                }
-                false
-            }
-        }
-    }
-
-    /// this function contains the main cycle of data logger functionality
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_gpio` - Sender part of channel for communication to Controllino
+    /// * `rx_from_gpio` - Receiver part of channel for communication from Controllino
+    /// * `rx_from_refill` - Receiver part of channel for communication from refill thread
+    /// * `rx_from_heating` - Receiver part of channel for communication from heating thread
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         mut sql_interface_data: SqlInterfaceData,
@@ -128,7 +135,7 @@ impl DataLogger {
             while i < self.config.logging_interval * 1000 {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_millisec);
-                if self.check_pending_external_request(&rx_from_signal_handler) {
+                if check_pending_external_request(&rx_from_signal_handler) {
                     quit_command_received = true;
                     break;
                 }

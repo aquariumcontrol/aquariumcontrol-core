@@ -22,7 +22,7 @@ use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
-/// This struct holds the configuration data for the heating control.
+/// Holds the configuration data for the heating control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -35,8 +35,10 @@ pub struct HeatingConfig {
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 
-/// function checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
+/// Checks if there are new messages in the channel.
+/// If the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
 fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -60,7 +62,12 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
-/// function communicates to Controllino thread via channel to switch on the heater
+/// Communicates to Controllino thread via channel to switch on the heater.
+/// # Arguments
+/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
+/// * `tx_to_controllino` - sender part of channel for communication to Controllino
+/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
+/// * `tx_to_datalogger` - sender part of channel for communication to data logger
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
@@ -96,7 +103,12 @@ fn switch_on_heater(
     }
 }
 
-/// function communicates to Controllino thread via channel to switch off the heater
+/// Communicates to Controllino thread via channel to switch off the heater.
+/// # Arguments
+/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
+/// * `tx_to_controllino` - sender part of channel for communication to Controllino
+/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
+/// * `tx_to_datalogger` - sender part of channel for communication to data logger
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
@@ -131,13 +143,17 @@ fn switch_off_heater(
     }
 }
 
-/// This struct contains the configuration and the implementation for the refill control.
+/// Contains the configuration and the implementation for the refill control.
 pub struct Heating {
     config: HeatingConfig,
     sql_interface_heating: SqlInterfaceHeating,
 }
 
 impl Heating {
+    /// Provides a struct of type Heating.
+    /// # Arguments
+    /// * `config` - configuration data for heating control
+    /// * `sql_interface_heating` - specific SQL interface for heating control           
     pub fn new(config: HeatingConfig, sql_interface_heating: SqlInterfaceHeating) -> Heating {
         Self {
             config: config,
@@ -145,6 +161,9 @@ impl Heating {
         }
     }
 
+    /// Calculates a normalized controller deviation between measured value and target value in the range from zero to one.
+    /// # Arguments
+    /// * `measured_value` - measured temperature value    
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta =
             self.config.switch_off_temperature - self.config.switch_on_temperature;
@@ -156,6 +175,16 @@ impl Heating {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
+    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+    /// * `sql_interface` - Reference to generic SQL interface
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -290,7 +319,7 @@ impl Heating {
                             heater_state = ActuatorState::Off;
                         }
                     }
-                    if (measured_temperature < self.config.switch_on_temperature) {
+                    if measured_temperature < self.config.switch_on_temperature {
                         // switch on heater if not already on
                         if heater_state != ActuatorState::On {
                             switch_on_heater(

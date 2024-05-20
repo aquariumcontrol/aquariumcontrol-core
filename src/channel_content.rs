@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use std::fmt;
 
-/// This enum is used for internal thread messaging from control circuits to Controllino
+/// Enum is used for internal thread messaging from control circuits to Controllino.
 /// These values are nested into enum InternalCommand. They represent all actuation devices.
 #[derive(Clone, Debug)]
 pub enum AquariumDevice {
@@ -29,6 +29,9 @@ pub enum AquariumDevice {
 }
 
 impl fmt::Display for AquariumDevice {
+    /// Provides output of the enum values.
+    /// # Arguments
+    /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AquariumDevice::Skimmer => write!(f, "Skimmer"),
@@ -48,7 +51,7 @@ impl fmt::Display for AquariumDevice {
     }
 }
 
-/// This enum is used for internal thread messaging between data logger and GPIO handler
+/// Enum is used for internal thread messaging between data logger and GPIO handler
 /// The values indicate which information the GPIO handler thread shall return via channel.
 #[derive(Clone, Debug)]
 pub enum AquariumSignal {
@@ -63,6 +66,9 @@ pub enum AquariumSignal {
 }
 
 impl fmt::Display for AquariumSignal {
+    /// Function provides output of the enum values.
+    /// # Arguments
+    /// * `f` - configuration for formatting    
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AquariumSignal::WaterTemperature => write!(f, "WaterTemperature"),
@@ -76,7 +82,7 @@ impl fmt::Display for AquariumSignal {
     }
 }
 
-/// This enum is used for internal thread messaging
+/// Enum is used for internal thread messaging.
 #[derive(Clone, Debug)]
 pub enum InternalCommand {
     SwitchOn(AquariumDevice),
@@ -90,6 +96,9 @@ pub enum InternalCommand {
 }
 
 impl fmt::Display for InternalCommand {
+    /// Provides output of the enum values.
+    /// # Arguments
+    /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             InternalCommand::SwitchOn(_) => write!(f, "SwitchOn"),
@@ -104,6 +113,7 @@ impl fmt::Display for InternalCommand {
     }
 }
 
+/// Enum is used for representing the relay states.
 #[derive(PartialEq)]
 pub enum ActuatorState {
     On,
