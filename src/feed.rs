@@ -77,7 +77,7 @@ impl Feed {
         let mut loop_counter = 0;
 
         loop {
-            if self.config.active && (loop_counter % 10 == self.config.schedule_check_interval) {
+            if self.config.active && (loop_counter % self.config.schedule_check_interval == 0) {
                 println!("Feed: checking schedule...");
             }
             if check_pending_external_request(&rx_from_signal_handler) {
