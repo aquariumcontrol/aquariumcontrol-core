@@ -29,7 +29,7 @@ pub enum AquariumDevice {
 }
 
 impl fmt::Display for AquariumDevice {
-    /// Provides output of the enum values.
+    /// Provides output of the enum values for debugging purposes.
     /// # Arguments
     /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -66,7 +66,7 @@ pub enum AquariumSignal {
 }
 
 impl fmt::Display for AquariumSignal {
-    /// Function provides output of the enum values.
+    /// Function provides output of the enum values for debugging purposes.
     /// # Arguments
     /// * `f` - configuration for formatting    
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -96,7 +96,7 @@ pub enum InternalCommand {
 }
 
 impl fmt::Display for InternalCommand {
-    /// Provides output of the enum values.
+    /// Provides output of the enum values for debugging purposes.
     /// # Arguments
     /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

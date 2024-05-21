@@ -20,7 +20,7 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 
-/// This struct holds the configuration data for the refill control.
+/// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
@@ -40,10 +40,13 @@ pub struct RefillConfig {
     additional_refill_volume: f64,
 }
 
-/// function checks if there are new messages in the channel.
+/// Checks if there are new messages in the channel.
 /// if the message contains the quit command, then the function returns true, otherwise false.
 /// if the message contains the command to reset all errors, the function will set all error bits
 /// to false and return false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
+/// * `refill_errors` - mutable reference to the struct containing the error bits
 fn check_pending_external_request(
     rx_from_signal_handler: &Receiver<InternalCommand>,
     refill_errors: &mut RefillErrors,
@@ -77,6 +80,8 @@ fn check_pending_external_request(
     }
 }
 
+/// Trait for the execution of the refill once control has detected that water level is low.
+/// This trait allows running the main control with a mock implementation for testing.
 pub trait RefillExecutionTrait {
     fn execute_refill(
         &mut self,
@@ -93,6 +98,8 @@ pub trait RefillExecutionTrait {
     ) -> bool;
 }
 
+/// Implementation of the RefillExecutionTrait which contains the code for executing the refill once
+/// the main control has detected that the water level is low.
 pub struct RefillExecution;
 
 impl RefillExecutionTrait for RefillExecution {
@@ -237,8 +244,8 @@ impl RefillExecutionTrait for RefillExecution {
     }
 }
 
-/// This struct contains the communication between Refill thread and GpioHandler thread via channels.
-/// The struct holds attributes for the results and for error flags indicating unsuccesful communication.
+/// Contains the communication between Refill thread and GpioHandler thread via channels.
+/// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
 pub struct TankLevelSwitchSignals {
     tank_level_switch_position: bool,
     tank_level_switch_invalid: bool,
@@ -247,8 +254,11 @@ pub struct TankLevelSwitchSignals {
 }
 
 impl TankLevelSwitchSignals {
-    /// function executes the channel communication to update the tank level switch position signal
+    /// Executes the channel communication to update the tank level switch position signal
     /// as well as the tank level switch invalid signal.
+    /// # Arguments
+    /// * `tx_to_gpio` - sender part of the channel for communication to GPIO handler
+    /// * `rx_from_gpio` - receiver part of the channel for communication from GPIO handler
     fn update_tank_level_switch_signals(
         &mut self,
         tx_to_gpio: &Sender<InternalCommand>,
@@ -322,7 +332,7 @@ impl TankLevelSwitchSignals {
     }
 }
 
-/// This struct contains the error flags for the refill component.
+/// Contains the error flags for the refill component.
 pub struct RefillErrors {
     error_switch_stuck_high: bool,
     error_switch_stuck_low: bool,
@@ -330,7 +340,7 @@ pub struct RefillErrors {
     error_sql_update_failed: bool,
 }
 
-/// This struct contains the configuration and the implementation for the refill control.
+/// Contains the configuration and the implementation for the refill control.
 pub struct Refill {
     config: RefillConfig,
     sql_interface_refill: SqlInterfaceRefill,
@@ -339,6 +349,8 @@ pub struct Refill {
     refill_errors: RefillErrors,
 }
 
+/// Contains the data retrieved from SQL database.
+/// It is also used to communicate data to be updated in SQL database.
 struct RefillSqlData {
     duration_since_last_refill: i64,
     refill_volume_last_24h: f64,
@@ -348,6 +360,9 @@ struct RefillSqlData {
 }
 
 impl fmt::Display for RefillSqlData {
+    /// Function provides output of the struct values for debugging purposes.
+    /// # Arguments
+    /// * `f` - configuration for formatting    
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -364,7 +379,10 @@ impl fmt::Display for RefillSqlData {
 }
 
 impl Refill {
-    /// This function returns a new instance of Refill
+    /// Provides a struct of type Refill.
+    /// # Arguments
+    /// * `config` - configuration data for refill control
+    /// * `sql_interface_refill` - specific SQL interface for refill
     pub fn new(config: RefillConfig, sql_interface_refill: SqlInterfaceRefill) -> Refill {
         Self {
             config: config,
@@ -380,12 +398,14 @@ impl Refill {
         }
     }
 
-    /// function calculates a stabilized tank level switch position signal considering:
+    /// Calculates a stabilized tank level switch position signal considering:
     /// - if invalid bit of signal is true, then use the current value of the stabilized position signal.
     /// - if the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
     /// - if the the new signal is false (indicating low water level), then set increase the stabilization counter.
     /// - if the stabiliyation counter exceeds the configured limit, then set the counter to zero and set the stabilized
     /// signal to true indicating high water level.
+    /// # Arguments
+    /// * `tank_level_switch_signals` - struct containing the refill-relevant signal data
     fn calc_tank_level_switch_position_stabilized(
         &mut self,
         tank_level_switch_signals: &TankLevelSwitchSignals,
@@ -414,7 +434,7 @@ impl Refill {
         }
     }
 
-    /// retrieve the refill-related information from SQL database:
+    /// Retrieves the refill-related information from SQL database:
     /// - duration since last refill in seconds
     /// - volume refilled in last 24h
     /// - number of refill operations in last 24h
@@ -473,15 +493,19 @@ impl Refill {
         }
     }
 
-    /// function checks if the duration since the last refill operation eceeds a configurable limit.
-    /// if yes, then corresponding error flag is set.
+    /// Checks if the duration since the last refill operation eceeds a configurable limit.
+    /// If yes, then corresponding error flag is set.
+    /// # Arguments
+    /// * `duration_since_last_refill` - duration in seconds since last refill operation
     fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: i64) {
         self.refill_errors.error_switch_stuck_high =
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
 
-    // this function checks if historic refill data does not exceed limitations in terms of count and volume.
-    // the function returns a tuple of boolean variables
+    // Checks if historic refill data does not exceed limitations in terms of count and volume.
+    // The function returns a tuple of boolean variables.
+    /// # Arguments
+    /// * `sql_refill_data` - reference to data retrieved from SQL database    
     fn check_volume_count_time_limits(&self, sql_refill_data: &RefillSqlData) -> bool {
         let refill_check_volume_last_24h =
             sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
@@ -530,7 +554,16 @@ impl Refill {
             | refill_check_intervall_last_refill
     }
 
-    /// this function contains the main cycle of refill control
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
+    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `refill_execution` - Struct implementing the RefillExecutionTrait    
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,

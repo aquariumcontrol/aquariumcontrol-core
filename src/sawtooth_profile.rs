@@ -10,6 +10,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use serde_derive::Deserialize;
 use std::fmt;
 
+/// Holds the data for the calculation of the saw tooth profile.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct SawToothProfileConfig {
     phase1_length: u32,
@@ -18,6 +21,7 @@ pub struct SawToothProfileConfig {
     phase4_length: u32,
 }
 
+/// Contains the profile configuration and the implementation for the saw tooth profile.
 pub struct SawToothProfile {
     counter: u32,
     pub level_normalized: f32,
@@ -28,6 +32,9 @@ pub struct SawToothProfile {
 }
 
 impl fmt::Display for SawToothProfile {
+    /// Provides output of the struct for debugging purposes.
+    /// # Arguments
+    /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -49,12 +56,9 @@ impl fmt::Display for SawToothProfile {
 }
 
 impl SawToothProfile {
-    // function provides a new instance of SawToothProfile
-    ///
+    /// Provides a struct of type SawToothProfile.
     /// # Arguments
-    ///
     /// * `config` - struct of type SawToothProfileConfig with phase lengths in seconds
-    ///
     pub fn new(config: &SawToothProfileConfig) -> SawToothProfile {
         SawToothProfile {
             counter: 0,
@@ -71,7 +75,8 @@ impl SawToothProfile {
         }
     }
 
-    /// function shall be called once a second. It calculates the saw tooth profile.
+    /// Calculates the current value of the saw tooth profile.
+    /// Function shall be called once a second.
     /// It updates the counter and the normalized level of the saw tooth profile.
     pub fn execute(&mut self) {
         // if counter exceeds final limit, reset. Otherwise increment.

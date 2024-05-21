@@ -16,7 +16,7 @@ use std::time::Duration;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 
-/// This struct holds the configuration data for the monitors.
+/// Holds the configuration data for the monitors.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -24,8 +24,10 @@ pub struct MonitorsConfig {
     active: bool,
 }
 
-/// function checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
+/// Checks if there are new messages in the channel.
+/// If the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
 fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -49,15 +51,27 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
+/// Contains the configuration and the implementation for the monitors.
 pub struct Monitors {
     config: MonitorsConfig,
 }
 
 impl Monitors {
+    /// Provides a struct of type Monitors.
+    /// # Arguments
+    /// * `config` - configuration data for monitors
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self { config: config }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// * `mutex_device_scheduler_monitors` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
+    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         mutex_device_scheduler_monitors: Arc<Mutex<i32>>,

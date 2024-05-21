@@ -14,9 +14,30 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// This function handles the termination signal from operating system (SIGTERM)
+/// Handles the termination signal from operating system (SIGTERM).
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
+/// # Arguments
+/// * `tx_to_refill` - sender part of channel for communication to refill control
+/// * `rx_from_refill` - receiver part of channel for communication from refill control
+/// * `tx_to_heating` - sender part of channel for communication to heating control
+/// * `rx_from_heating` - receiver part of channel for communication from heating control
+/// * `tx_to_controllino` - sender part of channel for communication to Controllino
+/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
+/// * `tx_to_gpio` - sender part of channel for communication to GPIO handler
+/// * `rx_from_gpio` - receiver part of channel for communication from GPIO handler
+/// * `tx_to_datalogger` - sender part of channel for communication to data logger
+/// * `rx_from_datalogger` - receiver part of channel for communication from data logger
+/// * `tx_to_balling` - sender part of channel for communication to Balling dosing control
+/// * `rx_from_balling` - receiver part of channel for communication from Balling dosing control
+/// * `tx_to_ventilation` - sender part of channel for communication to ventilation control
+/// * `rx_from_ventilation` - receiver part of channel for communication from ventilation control
+/// * `tx_to_monitors` - sender part of channel for communication to monitors
+/// * `rx_from_monitors` - receiver part of channel for communication from monitors
+/// * `tx_to_feed` - sender part of channel for communication to feed control
+/// * `rx_from_feed` - receiver part of channel for communication from feed control
+/// * `tx_to_feed` - sender part of channel for communication to TcpCommunication wrapped in Option
+/// * `rx_from_feed` - receiver part of channel for communication from TcpCommunication wrapped in Option
 pub fn handle_signals(
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,

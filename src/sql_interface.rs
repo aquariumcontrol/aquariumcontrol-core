@@ -15,102 +15,103 @@ use serde_derive::Deserialize;
 
 use crate::version_information::VersionInformation;
 
-/// This module contains constants of all SQL queries.
+/// Contains constants of all SQL queries.
 pub mod sql_query_strings {
-    /// This query provides version retrieves checks if the current application is listed in the table of supported versions.
+    /// Provides version information to check if the current application is listed in the table of supported versions.
     /// It informs wether the version is supported and which hash is stored in the database for the version.
     pub const SQL_QUERY_VERSION_INFORMATION: &str =
         "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build;";
 
-    /// This query provides the current data base name.
+    /// Provides the current data base name.
     pub const SQL_QUERY_DATABASE: &str = "select database();";
 
-    /// This query is used to read all tables from the database.
+    /// Provides all tables from the database.
     pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
 
-    /// This query is used to read the current date (without time) from the database.
+    /// Provides the current date (without time) from the database.
     pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
 
-    /// This query is used to read the current timestamp from the database.
+    /// Provides the current timestamp from the database.
     pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
 
-    /// This query is used to insert data of one feed event into the database.
+    /// Inserts data of one feed event into the database.
     pub const SQL_QUERY_WRITE_FEED_EVENT: &str =
         "INSERT into feedlog (Timestamp, FeederOnTime, ProfileName, ProfileIdx) values(:timestamp, :feeder_run_time, :profile_name, :profile_id)";
 
-    /// This query is used to read the header of a feed pattern from the database.
+    /// Provides the header of a feed pattern from the database.
     pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
         "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id;";
 
-    /// This query is used to read one phase of a feed pattern from the database.
+    /// Provides one phase of a feed pattern from the database.
     pub const SQL_QUERY_READ_FEED_PHASE: &str = "SELECT Pause#Duration, Pause#Skimmer, Pause#MPmp1, Pause#MPmp2, Pause#APmp1, Pause#APmp2, \
                 Feed#Duration, Feed#Skimmer, Feed#MPmp1, Feed#MPmp2, Feed#APmp1, Feed#APmp2 FROM feedpatterns WHERE ProfileID=profile_id;";
 
-    /// This query is used to read the timestamp of the last refill event from the database.
+    /// Provides the timestamp of the last refill event from the database.
     pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
         "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
-    /// This query is used to check if the refill table is empty.
+    /// Checks if the refill table is empty.
     pub const SQL_QUERY_CHECK_REFILL_EMPTY: &str = "SELECT EXISTS(SELECT 1 FROM REFILL);";
 
-    /// This query is used to read the timestamp of the last Balling dosing event from the database.
+    /// Provides the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
         "SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
-    /// This query is used to write the last Balling dosing event to the database.    
+    /// Writes the last Balling dosing event to the database.    
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
         "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
 
+    /// Provides the Balling dosing pump configuration for one of the pumps.
     pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
         "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
 
-    /// This query is used to read the refill volume of the last hour from the data base.
+    /// Provides the refill volume of the last hour from the data base.
     /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR: &str =
         "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
 
-    /// This query is used to read the number of refill events of the last hour from the data base.
+    /// Provides the number of refill events of the last hour from the data base.
     /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
     pub const SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
 
-    /// This query is used to read the refill volume of the last day from the data base.
+    /// Provides the refill volume of the last day from the data base.
     /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
     pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
         "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
 
-    /// This query is used to read the number of refill events of the last day from the data base.
+    /// Provides the number of refill events of the last day from the data base.
     /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
     pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
 
-    /// This query is used to write the last refill event to the database.    
+    /// Writes the last refill event to the database.    
     pub const SQL_QUERY_WRITE_REFILL_EVENT: &str =
         "INSERT into refill(Timestamp, Duration, Volume, ErrorCode) values(:timestamp, :duration, :volume, :error_code);";
 
-    /// This query is used to read the duration in seconds until midnight from the database.
+    /// Provides the duration in seconds until midnight from the database.
     pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
         "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
 
-    /// This query is used to read the heating statistical data of the current day from the database.
+    /// Provides the heating statistical data of the current day from the database.
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
-    /// This query is used to read oldest feed schedule entry which lies in the past.
+    /// Provides the oldest feed schedule entry which lies in the past.
     pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str = "SELECT TimeStamp, ProfileName, IsDaily \
         FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
 
-    /// This query is used to update a feed schedule entry after having executing a feed pattern
+    /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall be repeated daily.
     pub const SQL_QUERY_UPDATE_FEEDSCHEDULE_ENTRY: &str =
         "UPDATE feedschedule SET Timestamp=:timestamp_new WHERE Timestamp=:timestamp_old;";
 
-    /// This query is used to update a feed schedule entry after having executing a feed pattern
+    /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall not be repeated daily.
     pub const SQL_QUERY_DELETE_FEEDSCHEDULE_ENTRY: &str =
         "DELETE FROM feedschedule WHERE Timestamp = :timestamp;";
 
-    /// This query is used to write the heating statistical data into the database.
+    /// Writes the heating statistical data into the database.
     /// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
     pub const SQL_QUERY_WRITE_HEATING_STATS: &str = "insert into heatingstats \
         (Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) \
@@ -126,7 +127,7 @@ pub mod sql_query_strings {
         WaterTempCounter=#WaterTempCounter, \
         HeatingControlRuntime=#HeatingControlRuntime;";
 
-    /// This query is used to write time-based data into the database.
+    /// Writes the time-based data into the database.
     pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         (Timestamp, \
         Temperature, TemperatureFiltered, \
@@ -150,21 +151,22 @@ pub mod sql_query_strings {
         SurfaceVentilation=#SurfaceVentilation, \
         AmbTemp=#AmbTemp, AmbHum=#AmbHum, Heater=#Heater;";
 
+    // Deletes the content of a specific table.
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
     #[allow(dead_code)]
     pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 
-    /// This query is used to read feed event from the database - used for testing only.
+    // Provides feed event from the database - used for testing only.
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
         "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
 
-    /// This query is used to read Balling dosing event from the database - used for testing only.
+    /// Provide Balling dosing event from the database - used for testing only.
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_BALLING_EVENT: &str =
         "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog;";
 
-    /// This query is used to read refill event from the database - used for testing only.
+    // Provides refill event from the database - used for testing only.
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_REFILL_EVENT: &str =
         "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
@@ -243,9 +245,9 @@ pub enum SqlInterfaceError {
     SingleDataFrameRequestNoSingleResponse(String),
 }
 
-/// This struct contains the configuration and the implementation of the SQL interface.
+/// Holds the configuration and the implementation of the SQL interface.
 pub struct SqlInterface {
-    /// The configuration data read from the .toml file.
+    /// Configuration data read from the .toml file
     pub config: SqlInterfaceConfig,
 
     /// Connection pool
@@ -256,7 +258,9 @@ pub struct SqlInterface {
 }
 
 impl SqlInterface {
-    /// The function creates an instance of SqlInterface.
+    /// Provides a struct of type SqlInterface.
+    /// # Arguments
+    /// * `config` - configuration data for SqlInterface
     pub fn new(config: SqlInterfaceConfig) -> Result<SqlInterface, SqlInterfaceError> {
         // Create connection pool
         let url = "mysql://".to_owned()
@@ -301,7 +305,13 @@ impl SqlInterface {
         }
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    /// Executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as String
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query as String
     fn get_single_string_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -337,7 +347,12 @@ impl SqlInterface {
         Ok(single_string_array[0].single_string.clone())
     }
 
-    /// The function executes an SQL statement and evaluates if the response is empty, a single string value or contains multiple results.
+    /// Executes an SQL statement which returns a hash based on version information.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as String
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `version_information` - version information provided in a struct of type VersionInformation
     pub fn get_hash_from_database(
         &mut self,
         version_information: &VersionInformation,
@@ -393,7 +408,12 @@ impl SqlInterface {
         }
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response consists of multiple (> 1) rows.
+    /// Executes an SQL statement given as parameter and evaluates if the response consists of multiple (> 1) rows.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as vector of type String
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `sql_query_string` - SQL query as String
     fn get_multiple_strings_from_database(
         &mut self,
         sql_query_string: &str,
@@ -430,7 +450,13 @@ impl SqlInterface {
         Ok(response_array)
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single integer value.
+    /// Executes an SQL statement given as parameter and evaluates if the response is a single integer value.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as i64
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query as String
     pub fn get_single_integer_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -466,7 +492,13 @@ impl SqlInterface {
         Ok(single_integer_array[0].single_integer)
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single float value.
+    /// Executes an SQL statement given as parameter and evaluates if the response is a single float value.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as i64
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query as String
     pub fn get_single_float_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -517,7 +549,15 @@ impl SqlInterface {
         }
     }
 
-    /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type.
+    /// Executes an SQL statement given as parameter to get a single String value
+    /// and tries to convert it to timestamp of type NaiveDateTime.
+    /// Depending on the result of the query and the conversion to NaiveDateTime,
+    /// the function provides wrapped in a result type either
+    /// - the timestamp as type NaiveDateTime
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query for retrieving timestamp as String
     pub fn get_timestamp(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -542,14 +582,26 @@ impl SqlInterface {
         }
     }
 
-    /// The function retrieves the current timestamp from SQL database.
+    /// Retrieves the current timestamp from SQL database and provides wrapped in Result type either
+    /// - the current timestamp as type NaiveDateTime
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query for retrieving timestamp as String
     pub fn get_current_timestamp(
         conn: &mut PooledConn,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
-
-    /// The function triggers SQL call for a single value and the response string is converted into NaiveDateTime type with modified formatting string.
+    
+    /// Executes an SQL statement given as parameter to get a single String value
+    /// and tries to convert it to timestamp of type NaiveDate.
+    /// Depending on the result of the query and the conversion to NaiveDate,
+    /// the function provides wrapped in a result type either
+    /// - the timestamp as type NaiveDate
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `sql_query_string` - SQL query for retrieving timestamp as String
     fn get_date(&mut self, sql_query_string: &str) -> Result<NaiveDate, SqlInterfaceError> {
         // trigger SQL call
         let timestamp_string =
@@ -575,12 +627,16 @@ impl SqlInterface {
         }
     }
 
-    /// The function retrieves the current date from SQL database.
+    /// Retrieves the current date from SQL database and provides wrapped in Result type either
+    /// - the current timestamp as type NaiveDate
+    /// - or an error code from the enum SqlInterfaceError
     pub fn get_current_date(&mut self) -> Result<NaiveDate, SqlInterfaceError> {
         self.get_date(sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
-    /// Get all tables from database
+    /// Retrieves the names of all tables in the SQL database provides wrapped in Result type either
+    /// - a vector of type String with all table names
+    /// - or an error code from the enum SqlInterfaceError
     pub fn get_tables(&mut self) -> Result<Vec<String>, SqlInterfaceError> {
         match self.get_multiple_strings_from_database(sql_query_strings::SQL_QUERY_READ_TABLES) {
             Ok(c) => Ok(c),
@@ -591,7 +647,12 @@ impl SqlInterface {
         }
     }
 
-    /// Compare two vectors of strings and check if all of the strings of the first vector are contained within the second vector.
+    /// Compares two vectors of strings.
+    /// The function checks if all of the strings of the first vector are contained within the second vector and 
+    /// returns a boolean value if this is the case.
+    /// # Arguments
+    /// * `required_tables` - vector of type String which contains the tables which shall exist
+    /// * `existing_tables` - vector of type String which contains the tables actually exist   
     fn compare_required_tables_existing_tables(
         required_tables: Vec<String>,
         existing_tables: Vec<String>,
@@ -604,7 +665,10 @@ impl SqlInterface {
         true
     }
 
-    /// Read all tables from the data base and check if all required tables are there.
+    /// Reads all tables from the data base and checks if all required tables are existing.
+    /// The function provides wrapped in Result type either
+    /// - Ok value
+    /// - or an error code from the enum SqlInterfaceError
     pub fn check_required_tables_existing(&mut self) -> Result<(), SqlInterfaceError> {
         let existing_tables = match self.get_tables() {
             Ok(c) => c,
@@ -627,8 +691,8 @@ impl SqlInterface {
         }
     }
 
-    /// the function empties the table
-    /// This function is used for testing purposes only across multiple crates.
+    // Empties the table provided as parameter.
+    // This function is used for testing purposes only across multiple crates.
     #[allow(dead_code)]
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
@@ -650,7 +714,7 @@ impl SqlInterface {
         }
     }
 
-    /// calculate a timestamp of type NaiveDateTime which lies a defined period into the past
+    /// Calculates a timestamp of type NaiveDateTime which lies in a defined period into the past.
     /// This function is used for testing purposes only across multiple crates.
     #[allow(dead_code)]
     pub fn get_naive_timestamp_from_past(
@@ -663,8 +727,8 @@ impl SqlInterface {
         timestamp_from_past.naive_local()
     }
 
-    /// calculates the time difference between a given timestamp of type NaiveDateTime
-    /// to the current local time in seconds
+    /// Calculates the time difference between a given timestamp of type NaiveDateTime
+    /// to the current local time in seconds.
     #[allow(dead_code)]
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
