@@ -73,6 +73,7 @@ impl Balling {
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
@@ -117,8 +118,8 @@ impl Balling {
 
             loop_counter += 1;
         }
-        // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        // Application received request to terminate, that is why the loop was left.
+        // Answer to thread which sent the request for termination, so that shutdown can proceed further.
         println!("Balling: Sending Quit confirmation to signal handler.");
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
@@ -129,7 +130,7 @@ impl Balling {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino).
+        // This thread has channel connection to underlying threads (Controllino).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
         let mut termination_command_received = false;

@@ -15,14 +15,14 @@ use crate::feedpattern::{FeedPhase, Feedpattern};
 use crate::sql_interface::{sql_query_strings, SqlInterfaceError};
 
 #[derive(Clone)]
-/// This struct holds the header information of a feed pattern.
+/// Holds the header information of a feed pattern.
 pub struct SqlFeedpatternHeader {
     pub profile_id: i32,
     pub profile_name: String,
 }
 
 #[derive(Clone)]
-/// This struct holds the data of one phase of a feed pattern as retrieved from SQL data base.
+/// Holds the data of one phase of a feed pattern as retrieved from SQL data base.
 /// The numeric data is post-processed to boolean in a subsequent step.
 pub struct SqlFeedPhase {
     pub pause_duration: i16,
@@ -39,7 +39,7 @@ pub struct SqlFeedPhase {
     pub feed_aux_pump_2: i16,
 }
 
-/// This struct holds the data of a feed schedule entry as retrieved from SQL data base.
+/// Holds the data of a feed schedule entry as retrieved from SQL data base.
 /// It is post-processed in a subsequent step.
 pub struct SqlFeedScheduleEntry {
     pub timestamp: String,
@@ -47,7 +47,7 @@ pub struct SqlFeedScheduleEntry {
     pub repeat_daily: i16,
 }
 
-/// This struct holds the data of a feed schedule entry derived from data read from SQL data base.
+/// Holds the data of a feed schedule entry derived from data read from SQL data base.
 #[derive(Debug, PartialEq)]
 pub struct FeedScheduleEntry {
     pub timestamp: NaiveDateTime,
@@ -55,19 +55,26 @@ pub struct FeedScheduleEntry {
     pub repeat_daily: bool,
 }
 
-/// This struct contains the configuration and the implementation of the SQL interface for Feed.
+/// Contains the configuration and the implementation of the SQL interface for Feed.
 pub struct SqlInterfaceFeed {
     /// Connection to database
     pub conn: PooledConn,
 }
 
 impl SqlInterfaceFeed {
-    /// The function creates an instance of SqlInterfaceFeed.
+    /// Provides a struct of type SqlInterfaceFeed.
+    /// # Arguments
+    /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
         SqlInterfaceFeed { conn }
     }
 
-    /// The function executes an SQL statement given to retrieve the header of a feed pattern
+    /// Retrieves the header of a feed pattern from SQL database.
+    /// It provides wrapped into Result type either
+    /// - the result of type SqlFeedpatternHeader
+    /// - or a value of enum SqlInterfaceError
+    /// # Arguments
+    /// * `profile_id` - ID of the feed profile    
     pub fn get_feedpattern_header_from_database(
         &mut self,
         profile_id: i32,
@@ -116,7 +123,10 @@ impl SqlInterfaceFeed {
         Ok(feedpattern_header.clone())
     }
 
-    /// The function executes an SQL statement to retrieve the feed pattern data of a specific phase
+    /// Retrieves the feed pattern data of a specific phase from SQL database.
+    /// # Arguments
+    /// * `profile_id` - ID of the feed profile    
+    /// * `phase_nr` - phase number of the feed profile   
     pub fn get_feed_phase_from_database(
         &mut self,
         profile_id: i32,
@@ -189,6 +199,11 @@ impl SqlInterfaceFeed {
     }
 
     /// The function retries the header and all phases of a feed pattern from the SQL database.
+    /// It provides wrapped into Result type either
+    /// - the result of type Feedpattern
+    /// - or a value of enum SqlInterfaceError
+    /// # Arguments
+    /// * `profile_id` - ID of the feed profile    
     pub fn get_single_feedpattern_from_database(
         &mut self,
         profile_id: i32,
@@ -231,7 +246,13 @@ impl SqlInterfaceFeed {
         })
     }
 
-    /// The function inserts one dataset of feed event into the database
+    /// Inserts one dataset of feed event into the database.
+    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    /// # Arguments
+    /// * `timestamp` - timestamp of feed event
+    /// * `feeder_run_time` - run time of feeder in seconds
+    /// * `profile_name` - name of the feed profile executed
+    /// * `profile_id` - ID of the feed profile executed
     pub fn insert_feed_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -259,7 +280,10 @@ impl SqlInterfaceFeed {
         }
     }
 
-    /// The function executes an SQL statement to retrieve the oldest feed schedule entry which lies in the past
+    /// Retrieve from SQL database the oldest feed schedule entry which lies in the past.
+    /// Function provides wrapped into Result type either
+    /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
+    /// - a value of enum SqlInterfaceError
     pub fn get_feedschedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
@@ -314,8 +338,10 @@ impl SqlInterfaceFeed {
         Ok(Some(feedschedule_entry))
     }
 
-    /// This function triggers the SQL queries to either update the existing feed schedule entry with
+    /// Triggers the SQL queries to either update the existing feed schedule entry with
     /// tomorrow's date or delete the entry.
+    /// # Arguments
+    /// * `feedschedule_entry` - reference to a struct of type FeedScheduleEntry for which the timestamp shall be updated.
     pub fn update_feedschedule_entry_in_database(
         &mut self,
         feedschedule_entry: &mut FeedScheduleEntry,

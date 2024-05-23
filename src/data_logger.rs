@@ -95,6 +95,7 @@ impl DataLogger {
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
     /// * `tx_to_gpio` - Sender part of channel for communication to Controllino
     /// * `rx_from_gpio` - Receiver part of channel for communication from Controllino

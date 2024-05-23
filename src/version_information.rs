@@ -13,7 +13,7 @@ pub const VERSION_MAJOR: i32 = 0;
 pub const VERSION_MINOR: i32 = 1;
 pub const VERSION_BUILD: i32 = 1;
 
-/// this struct hold data structure and implementation for retrieving and storing version information of the application
+/// Holds the data structure and implementation for retrieving and storing version information of the application.
 pub struct VersionInformation {
     pub major: i32,
     pub minor: i32,
@@ -22,7 +22,7 @@ pub struct VersionInformation {
 }
 
 impl VersionInformation {
-    /// The function creates an instance of VersionInformation.
+    /// Provides a struct of type VersionInformation.
     pub fn new() -> VersionInformation {
         // get fully qualified path and file name
         let pathfilename = match env::current_exe() {

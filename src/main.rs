@@ -7,7 +7,16 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#![deny(missing_docs)]
 //#![allow(warnings)]
+//! Aquarium control is an open-source application which is part of a control system for salt-water aquariums.
+//! It contains the following functionality:
+//! - Data acquisition of sensors (water temperature, pH, conductivity)
+//! - Fresh water refill
+//! - Heating control
+//! - Ventilation control
+//! - Automatic feeding
+
 mod balling;
 mod channel_content;
 mod config;
@@ -641,5 +650,5 @@ fn main() {
                 rx_controllino_from_signal_handler,
             );
         });
-    });
+    });    
 }

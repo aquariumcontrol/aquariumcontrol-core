@@ -20,7 +20,7 @@ use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 
-/// This struct holds the configuration data for the ventilation control.
+/// Holds the configuration data for the ventilation control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -32,8 +32,10 @@ pub struct VentilationConfig {
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 
-/// function checks if there are new messages in the channel.
+/// Checks if there are new messages in the channel.
 /// if the message contains the quit command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
 fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -57,7 +59,12 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
     }
 }
 
-/// function communicates to Controllino thread via channel to switch on the ventilation
+/// Communicates to Controllino thread via channel to switch on the ventilation
+/// # Arguments
+/// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
+/// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+/// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+/// * `tx_to_datalogger` - Sender part of channel for communication to data logger
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
@@ -93,7 +100,12 @@ fn switch_on_ventilation(
     }
 }
 
-/// function communicates to Controllino thread via channel to switch off the ventilation
+/// Communicates to Controllino thread via channel to switch off the ventilation
+/// # Arguments
+/// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
+/// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+/// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+/// * `tx_to_datalogger` - Sender part of channel for communication to data logger
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
@@ -128,20 +140,26 @@ fn switch_off_ventilation(
     }
 }
 
+/// Holds the configuration and the implementation for the ventilation control.
 pub struct Ventilation {
     config: VentilationConfig,
 }
 
 impl Ventilation {
+    /// Provides a struct of type Ventilation.
+    /// # Arguments
+    /// * `config` - configuration data for Ventilation control
     pub fn new(config: VentilationConfig) -> Ventilation {
         Self { config: config }
     }
 
+    /// Calculates a normalized controller deviation between measured value and target value in the range from zero to one.
+    /// # Arguments
+    /// * `measured_value` - measured temperature value    
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta =
             self.config.switch_on_temperature - self.config.switch_off_temperature;
         let measured_value_delta = measured_value - self.config.switch_off_temperature;
-        //println!("Ventilation: calc_normalized_control_deviation: measured_value_delta={} target_value_delta={}", measured_value_delta, target_value_delta);
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
         } else {
@@ -149,6 +167,16 @@ impl Ventilation {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
+    /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
+    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
+    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,

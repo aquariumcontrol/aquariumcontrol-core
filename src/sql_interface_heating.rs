@@ -13,7 +13,7 @@ use mysql::*;
 
 use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
-/// This struct holds the statistical data of heating for one day.
+/// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from SQL query which is then updated by the control application.
 pub struct HeatingStatsEntry {
     pub date: NaiveDate,
@@ -25,7 +25,7 @@ pub struct HeatingStatsEntry {
     pub heating_control_runtime: i64,
 }
 
-/// This struct holds the statistical data of heating for one day as retrieved from SQL database.
+/// Holds the statistical data of heating for one day as retrieved from SQL database.
 /// In next step, date is postprocessed to NaiveData type.
 pub struct HeatingStatsStringEntry {
     pub date: String,
@@ -37,19 +37,24 @@ pub struct HeatingStatsStringEntry {
     pub heating_control_runtime: i64,
 }
 
-/// This struct contains the configuration and the implementation of the SQL interface for heating.
+/// Contains the configuration and the implementation of the SQL interface for heating.
 pub struct SqlInterfaceHeating {
     /// Connection to database
     pub conn: PooledConn,
 }
 
 impl SqlInterfaceHeating {
-    /// The function creates an instance of SqlInterfaceBalling.
+    /// Provides a struct of type SqlInterfaceBalling.
+    /// # Arguments
+    /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceHeating {
         SqlInterfaceHeating { conn }
     }
 
-    /// The function executes an SQL statement given as parameter and evaluates if the response is a single heating stats entry.
+    /// Retrieves a single heating stats entry from SQL database.
+    /// It provides wrapped into Result type either
+    /// - struct of type HeatingStatsEntry in case of success
+    /// - or a value from enum SqlInterfaceError
     pub fn get_single_heating_stats_from_database(
         &mut self,
     ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
@@ -133,7 +138,12 @@ impl SqlInterfaceHeating {
         Ok(single_heating_stats_entry)
     }
 
-    /// The function inserts one dataset of heating statistics into the database
+    /// Inserts one dataset of heating statistics into the SQL database.
+    /// It provides wrapped into Result type either
+    /// - an empty Ok value 
+    /// - or a value from enum SqlInterfaceError
+    /// # Arguments
+    /// * `heating_stats_entry` - reference to struct HeatingStatsEntry providing the data which shall be inserted into the database.
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
@@ -198,7 +208,10 @@ impl SqlInterfaceHeating {
         }
     }
 
-    /// The function requests the duration until midnight in seconds.
+    /// Requests the duration until midnight in seconds.
+    /// It provides wrapped into Result type either
+    /// - the number of seconds until midnight
+    /// - or a value from enum SqlInterfaceError
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,

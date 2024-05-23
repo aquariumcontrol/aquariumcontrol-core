@@ -72,6 +72,7 @@ impl Feed {
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino

@@ -176,6 +176,7 @@ impl Heating {
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
     /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
     /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
     /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler

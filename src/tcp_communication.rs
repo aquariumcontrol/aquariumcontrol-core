@@ -20,7 +20,7 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
-/// This module contains constants representing commands received from control application.
+/// Contains constants representing commands received from control application.
 #[allow(dead_code)]
 mod command {
     pub const SETSINGLE: &str = "SETSINGLE";
@@ -32,7 +32,7 @@ mod command {
     pub const INITIALIZED: &str = "INITIALIZED";
 }
 
-/// This module contains constants representing the category received from control application.
+/// Contains constants representing the category received from control application.
 /// The category describes the device to which the command shall be applied.
 #[allow(dead_code)]
 mod category {
@@ -43,7 +43,7 @@ mod category {
     pub const REFILLCONTROL: &str = "REFILLCTRL";
 }
 
-/// This module contains constants representing the signal request received from control application.
+/// Contains constants representing the signal request received from control application.
 #[allow(dead_code)]
 mod signal {
     #[allow(dead_code)]
@@ -56,7 +56,7 @@ mod signal {
     pub const ATLASSCIENTIFICCONDUCTIVITY: &str = "conductivity";
 }
 
-/// This struct holds the configuration data for the TCP connection.
+/// Holds the configuration data for the TCP connection.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
@@ -65,25 +65,25 @@ pub struct TcpConnectionConfig {
     pub port: u16,
 }
 
+/// Contains the error values for unsuccessful attempt of opening TCP channel.
 #[derive(Debug)]
 pub enum TcpCommunicationError {
     ConnectionFailed(io::Error),
     //ReadMessageFailed(io::Error),
 }
 
+/// Contains configuration of implementation for opening, reading and closing TCP channel.
 pub struct TcpCommunication {
     write_stream: TcpStream,
     buf_reader: BufReader<TcpStream>,
 }
 
-impl TcpCommunication {
-    /// split a string into multiple words using space as delimiter and return the last word
-    fn get_last_word(sequence: &String) -> Option<&str> {
-        let words = sequence.split(" ").collect::<Vec<&str>>();
-        words.last().copied()
-    }
-
-    /// instantiate a struct of type TcpCommunication
+impl TcpCommunication  {
+    /// Provides wrapped into Result type either
+    /// - a struct of type TcpCommunication after a successful attempt to open the TCP channel
+    /// - or an error value from enum TcpCommunicationError
+    /// # Arguments
+    /// * `tcp_connection` - configuration data for TCP connection    
     pub fn new(
         tcp_connection: &TcpConnectionConfig,
     ) -> Result<TcpCommunication, TcpCommunicationError> {
@@ -104,9 +104,20 @@ impl TcpCommunication {
             buf_reader: BufReader::new(stream),
         })
     }
+    
+    /// Splits a string into multiple words using space as delimiter and returns the last word as type &str wrapped into type Option.
+    /// # Arguments
+    /// * `sequence` - reference to String which contains the sequence of words to be split
+    fn get_last_word(sequence: &String) -> Option<&str> {
+        let words = sequence.split(" ").collect::<Vec<&str>>();
+        words.last().copied()
+    }
 
-    /// function removes trailing newline or carriage return.
+
+    /// Removes trailing newline or carriage return.
     /// Code taken over from <https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning>
+    /// # Arguments
+    /// * `s` - reference to String which contains newline or carriage return.
     fn trim_newline(s: &mut String) {
         if s.ends_with('\n') {
             s.pop();
@@ -116,7 +127,10 @@ impl TcpCommunication {
         }
     }
 
-    /// communicate with simulator to change relay state
+    /// Communicates with simulator to change relay state.
+    /// # Arguments
+    /// * `relay_id` - numeric id of relay for which the state shall be changed
+    /// * `state` - value to be set: true represents On, false represents Off    
     fn change_relay(&mut self, relay_id: u16, state: bool) {
         let request: String;
         let relay_id_string = relay_id.to_string();
@@ -157,7 +171,10 @@ impl TcpCommunication {
         };
     }
 
-    /// communicate with simulator to get signal value
+    /// Communicates with simulator to get signal value.
+    /// It returns the value as type f32.
+    /// # Arguments
+    /// * `aquarium_signal` - enum value of type AquariumSignal which describes the signal for which the value shall be retrieved.
     fn get_signal(&mut self, aquarium_signal: AquariumSignal) -> f32 {
         let category = match aquarium_signal {
             AquariumSignal::WaterTemperature => category::ATLASSCIENTIFIC,
@@ -221,8 +238,10 @@ impl TcpCommunication {
         }
     }
 
-    /// function checks if there are new messages in the channel.
-    /// if the message contains the quit command, then the function returns true, otherwise false.
+    /// Checks if there are new messages in the channel.
+    /// If the message contains the quit command, then the function returns true, otherwise false.
+    /// # Arguments
+    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
     fn check_pending_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -251,6 +270,13 @@ impl TcpCommunication {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting.
+    /// # Arguments
+    /// * `rx_from_controllino_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
+    /// * `rx_from_gpio_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
+    /// * `tx_to_gpio_opt` - Sender part of channel for communication to signal handler wrapped in Option type
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler  
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler       
     pub fn execute(
         &mut self,
         rx_from_controllino_opt: Option<Receiver<InternalCommand>>,

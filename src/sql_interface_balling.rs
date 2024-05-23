@@ -15,13 +15,13 @@ use crate::sql_interface::sql_query_strings;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface::SqlInterfaceError;
 
-/// This struct contains the configuration and the implementation of the SQL interface for Balling.
+/// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
     /// Connection to database
     pub conn: PooledConn,
 }
 
-/// This struct contains set value data for each pump
+/// Contains set value data for each pump.
 pub struct BallingSetVal {
     /// ID of the pump
     pub pump_id: i32,
@@ -37,12 +37,17 @@ pub struct BallingSetVal {
 }
 
 impl SqlInterfaceBalling {
-    /// The function creates an instance of SqlInterfaceBalling.
+    /// Provides a struct of type SqlInterfaceBalling
+    /// # Arguments
+    /// * `config` - configuration data for Balling dosing control
     pub fn new(conn: PooledConn) -> SqlInterfaceBalling {
         SqlInterfaceBalling { conn }
     }
 
-    /// The function retrieves the timestamp of the last Balling dosing event from SQL database.
+    /// Retrieves the timestamp of the last Balling dosing event from SQL database and returns wrapped
+    /// into a Result type either:
+    /// - result as type NaiveDateTime or
+    /// - value of enum SqlInterfaceError
     fn get_last_balling_dosing_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_timestamp(
             &mut self.conn,
@@ -50,7 +55,7 @@ impl SqlInterfaceBalling {
         )
     }
 
-    /// The function request current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
+    /// Requests current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
     pub fn get_duration_since_last_balling_dosing(&mut self) -> Result<i64, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
             Ok(c) => c,
@@ -71,7 +76,11 @@ impl SqlInterfaceBalling {
         Ok(delta_time.num_seconds())
     }
 
-    /// The function inserts one dataset of Balling dosing event into the database
+    /// Inserts one dataset of Balling dosing event into the SQL database.
+    /// # Arguments
+    /// * `timestamp` - timestamp to be inserted as NaiveDateTime
+    /// * `pump_id` - id of the pump for which the Balling dosing event shall be logged
+    /// * `dosing_volue` - volume in ml which has been dosed into the aquarium
     pub fn insert_balling_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -97,8 +106,9 @@ impl SqlInterfaceBalling {
         }
     }
 
-    /// The function executes an SQL statement to retrieve Balling set values for a given pump id
+    /// Retrieves Balling set values from SQL database for a given pump id
     /// and evaluates if the response is a single data set.
+    /// * `pump_id` - id of the pump for which the Balling dosing event shall be retrieved
     pub fn get_single_balling_setval_from_database(
         &mut self,
         pump_id: i32,

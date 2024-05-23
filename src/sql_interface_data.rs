@@ -16,6 +16,10 @@ use crate::sql_interface::sql_query_strings;
 use crate::sql_interface::SqlInterfaceError;
 
 #[derive(Debug, PartialEq)]
+/// Contains the data to be logged wrapped into Option.
+/// For each signal, where the data could be not be acquired. The None value is used.
+/// The None value is represented as NULL in the SQL database.
+/// The struct only contains minimal implementation for development purposes.
 pub struct DataFrame {
     pub timestamp: NaiveDateTime,
     pub water_temperature: Option<f32>,
@@ -34,6 +38,9 @@ pub struct DataFrame {
     pub heater_status: Option<bool>,
 }
 
+/// Provides output of the enum values for debugging purposes.
+/// # Arguments
+/// * `f` - configuration for formatting
 impl fmt::Display for DataFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let none_string = "None".to_string();
@@ -138,20 +145,25 @@ impl fmt::Display for DataFrame {
     }
 }
 
-/// This struct contains the configuration and the implementation of the SQL interface for time-based data.
+/// Contains the configuration and the implementation of the SQL interface for time-based data.
 pub struct SqlInterfaceData {
     /// Connection to database
     pub conn: PooledConn,
 }
 
 impl SqlInterfaceData {
-    /// The function creates an instance of SqlInterfaceData.
+    /// Provides a struct of type SqlInterfaceData
+    /// # Arguments
+    /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceData {
         SqlInterfaceData { conn }
     }
 
-    /// The function writes all data inside the data frame to the SQL data base.
-    /// float variables with NaN or infinite (both positive and negative) are inserted as NULL into the database.
+    /// Writes all data inside the data frame to the SQL data base.
+    /// None values or float variables with NaN or infinite (both positive and negative) are inserted as NULL into the database.
+    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    /// # Arguments
+    /// * `data` - data to be written to database as type DataFrame
     pub fn write_data_frame_to_database(
         &mut self,
         data: &DataFrame,
