@@ -22,11 +22,13 @@ use crate::channel_content::InternalCommand;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct GpioHandlerConfig {
+    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
+    /// configuration data for GPIO handler
     config: GpioHandlerConfig,
 }
 

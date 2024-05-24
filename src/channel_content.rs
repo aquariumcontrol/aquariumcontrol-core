@@ -13,18 +13,43 @@ use std::fmt;
 /// These values are nested into enum InternalCommand. They represent all actuation devices.
 #[derive(Clone, Debug)]
 pub enum AquariumDevice {
+    // protein skimmer
     Skimmer,
+    
+    // main pump #1
     MainPump1,
+    
+    // main pump #2
     MainPump2,
+    
+    // auxiliary pump #1
     AuxPump1,
+    
+    // auxiliary pump #2
     AuxPump2,
+    
+    // heater
     Heater,
+    
+    // ventilation
     Ventilation,
+    
+    // refill pump
     RefillPump,
+    
+    // feeder motor
     Feeder,
+    
+    // Balling dosing pump #1
     PeristalticPump1,
+    
+    // Balling dosing pump #2
     PeristalticPump2,
+    
+    // Balling dosing pump #3
     PeristalticPump3,
+
+    // Balling dosing pump #4
     PeristalticPump4,
 }
 
@@ -55,13 +80,26 @@ impl fmt::Display for AquariumDevice {
 /// The values indicate which information the GPIO handler thread shall return via channel.
 #[derive(Clone, Debug)]
 pub enum AquariumSignal {
+    /// water temperature in °C
     WaterTemperature,
     #[allow(non_camel_case_types)]
+    
+    /// pH Value
     pH,
+    
+    /// conductivity im mS/cm
     Conductivity,
+    
+    /// ambient (air) temperature in °C
     AmbientTemperature,
+    
+    /// ambient humidity in %
     AmbientHumidity,
+    
+    /// position of tank level switch
     TankLevelSwitchPosition,
+    
+    /// status bit of tank level switch signal
     TankLevelSwitchInvalid,
 }
 
@@ -83,15 +121,31 @@ impl fmt::Display for AquariumSignal {
 }
 
 /// Enum is used for internal thread messaging.
+/// Note: Relay state and device state do not necessarily correlate.
 #[derive(Clone, Debug)]
 pub enum InternalCommand {
+    /// Switch on a device
     SwitchOn(AquariumDevice),
+    
+    /// Switch off a device
     SwitchOff(AquariumDevice),
+    
+    /// Set a relay
     SetRelay(u16),
+    
+    /// Unset a relay
     UnsetRelay(u16),
+    
+    /// Request a signal
     RequestSignal(AquariumSignal),
+    
+    /// Reset existing errors (used for refill control)
     ResetAllErrors,
+    
+    /// Quit the application - first step to terminate the application
     Quit,
+    
+    /// Terminate - second step to terminate the application
     Terminate,
 }
 
@@ -116,7 +170,12 @@ impl fmt::Display for InternalCommand {
 /// Enum is used for representing the relay states.
 #[derive(PartialEq)]
 pub enum ActuatorState {
+    /// Actuator is on
     On,
+    
+    /// Actuator is off
     Off,
+    
+    /// Application has not yet sent a command to the actuator
     Undefined,
 }

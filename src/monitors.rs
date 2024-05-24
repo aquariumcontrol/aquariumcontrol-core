@@ -21,6 +21,7 @@ use crate::channel_content::InternalCommand;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct MonitorsConfig {
+    /// monitors will only be active when the flag is set to true
     active: bool,
 }
 
@@ -53,6 +54,7 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 
 /// Contains the configuration and the implementation for the monitors.
 pub struct Monitors {
+    /// configuration data for monitors
     config: MonitorsConfig,
 }
 

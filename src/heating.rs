@@ -27,11 +27,32 @@ use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct HeatingConfig {
+    /// Control will only be active when the flag is set to true.
     active: bool,
+    
+    /// Temperature at which the heater is switched on for 100% of the time.
+    /// This temperature must be lower than switch_off_temperature.
     switch_on_temperature: f32,
+    
+    /// Temperature at which the heater is switched off for 100% of the time.
+    /// This temperature must be higher than switch_on_temperature.
     switch_off_temperature: f32,
+    
+    /// Flag to determine behavior in case the refill control has a problem
+    /// and the water level stays low for longer periods of time.
+    /// If this flag is true, then the heating control will switch off the heater
+    /// regardless of measured temperature in order to avoid overheating
+    /// of the fish tank or the heater itself.
+    /// Background: If water level is too low, temperature sensor may be exposed to ambient air in stead of water.
+    /// This condition results in wrong temperature reading and thus in wrong heater actuation.
+    /// Furthermore, the exposing the heater to air instead of water and switching it on
+    /// will not allow the heater to dissipate the heat and it therefore might suffer damage.
     stop_on_refill_error: bool,
+    
+    /// Number of seconds which need to pass with low water level before the heater is switched off
     stop_on_refill_error_delay: u32,
+    
+    /// Configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 
@@ -145,7 +166,10 @@ fn switch_off_heater(
 
 /// Contains the configuration and the implementation for the refill control.
 pub struct Heating {
+    /// configuration data for heating control
     config: HeatingConfig,
+    
+    /// SQL interface for heating control
     sql_interface_heating: SqlInterfaceHeating,
 }
 

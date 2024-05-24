@@ -18,23 +18,23 @@ use crate::channel_content::{AquariumDevice, InternalCommand};
 #[derive(Deserialize, Debug)]
 pub struct ControllinoConfig {
     /// Relay id of the protein skimmer
-    /// Caution: relay login (true/false) and device logic (off/on) is reverse.
+    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub skimmer_id: u16,
 
     /// Relay id of main pump #1
-    /// Caution: relay login (true/false) and device logic (off/on) is reverse.
+    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub main_pump1_id: u16,
 
     /// Relay id of main pump #2
-    /// Caution: relay login (true/false) and device logic (off/on) is reverse.
+    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub main_pump2_id: u16,
 
     /// Relay id of auxiliary pump #1
-    /// Caution: relay login (true/false) and device logic (off/on) is reverse.
+    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub aux_pump1_id: u16,
 
     /// Relay id of auxiliary pump #2
-    /// Caution: relay login (true/false) and device logic (off/on) is reverse.
+    /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub aux_pump2_id: u16,
 
     /// Relay id of refill pump
@@ -61,11 +61,13 @@ pub struct ControllinoConfig {
     /// Relay id of peristaltic pump #4
     pub peristaltic_pump4_id: u16,
 
+    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 }
 
 /// Contains the configuration and the implementation of the Controllino interface
 pub struct Controllino {
+    /// configuration data for Controllino
     pub config: ControllinoConfig,
 }
 

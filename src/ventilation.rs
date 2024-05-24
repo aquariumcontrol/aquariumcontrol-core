@@ -26,9 +26,19 @@ use crate::sawtooth_profile::SawToothProfileConfig;
 #[derive(Deserialize)]
 pub struct VentilationConfig {
     active: bool,
+    /// temperature at which the ventilation is switched on for 100% of the time
+    /// This temperature must be higher than switch_off_temperature
     switch_on_temperature: f32,
+
+    /// temperature at which the ventilation is switched off for 100% of the time
+    /// this temperature must be lower than switch_on_temperature
     switch_off_temperature: f32,
+
+    /// flag to determine the behavior of the control when the application is terminating
+    /// If this flag is true, the application will switch on the ventilation when exiting.    
     switch_on_ventilation_when_terminating: bool,
+    
+    /// configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
 }
 

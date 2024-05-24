@@ -26,9 +26,16 @@ use crate::sql_interface_data::SqlInterfaceData;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
+    /// interval of the data logger in seconds
     logging_interval: u64,
+    
+    /// filter coefficient for the filtered version of the water temperature signal
     filter_coefficient_water_temperature: IIRFilterConfig<()>,
+    
+    /// filter coefficient for the filtered version of the pH signal
     filter_coefficient_pH: IIRFilterConfig<()>,
+    
+    /// filter coefficient for the filtered version of the conductivity signal
     filter_coefficient_conductivity: IIRFilterConfig<()>,
 }
 
@@ -61,14 +68,22 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 
 /// Contains the configuration and the implementation for regular data logging to SQL database.
 pub struct DataLogger {
+    /// configuration data for the data logger
     config: DataLoggerConfig,
+    
+    /// filter for the water temperature signal
     filter_water_temperature: IIRFilter,
+    
+    /// filter for the pH signal
     filter_pH: IIRFilter,
+    
+    /// filter for the conductivity signal
     filter_conductivity: IIRFilter,
 }
 
 impl DataLogger {
     /// Returns a struct of type DataLogger
+    /// # Arguments
     /// * `config` - configuration data for data logger
     pub fn new(config: DataLoggerConfig) -> DataLogger {
         let filter_water_temperature = IIRFilter::new_requires_initial(
