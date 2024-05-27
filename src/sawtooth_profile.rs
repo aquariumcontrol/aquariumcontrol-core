@@ -15,19 +15,41 @@ use std::fmt;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct SawToothProfileConfig {
+    /// Phase 1 is a ramp from zero to one.
+    /// The length describes the number of iterations necessary to reach the end of the ramp.
     phase1_length: u32,
+
+    /// Phase 2 is a constant value of one.
+    /// The length describes for how many iterations this value is kept.
     phase2_length: u32,
+
+    /// Phase 3 is a ramp from one to zero.
+    /// The length describes the number of iterations necessary to reach the end of the ramp.
     phase3_length: u32,
+
+    /// Phase 4 is a constant value of zero.
+    /// The length describes for how many iterations this value is kept.    
     phase4_length: u32,
 }
 
 /// Contains the profile configuration and the implementation for the saw tooth profile.
 pub struct SawToothProfile {
+    /// This variable counts the number of iterations executed and is reset to zero when reaching the end of the profile.
     counter: u32,
+
+    /// Variable with values from zero to one. This is the output of the saw tooth profile component.
     pub level_normalized: f32,
+
+    /// This variable is set to the same value as the length of the first phase.
     phase1_counter_limit: u32,
+
+    /// This variable is set to the cumulated length of first and second phase.
     phase2_counter_limit: u32,
+
+    /// This variable is set to the cumulated length of the first three phases.
     phase3_counter_limit: u32,
+
+    /// This variable is set to the cumulated length of all phases.
     phase4_counter_limit: u32,
 }
 
