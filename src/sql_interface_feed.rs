@@ -25,17 +25,40 @@ pub struct SqlFeedpatternHeader {
 /// Holds the data of one phase of a feed pattern as retrieved from SQL data base.
 /// The numeric data is post-processed to boolean in a subsequent step.
 pub struct SqlFeedPhase {
+    /// duration of the pause before switching on the feeder motor in milliseconds
     pub pause_duration: i16,
+
+    /// flag indicating if the protein skimmer shall remain switched on during the pause
     pub pause_skimmer: i16,
+
+    /// flag indicating if the main pump #1 shall remain switched on during the pause
     pub pause_main_pump_1: i16,
+
+    /// flag indicating if the main pump #2 shall remain switched on during the pause
     pub pause_main_pump_2: i16,
+
+    /// flag indicating if the auxiliary pump #1 shall remain switched on during the pause
     pub pause_aux_pump_1: i16,
+
+    /// flag indicating if the auxiliary pump #2 shall remain switched on during the pause
     pub pause_aux_pump_2: i16,
+
+    /// duration of the feed after switching on the feeder motor in milliseconds
     pub feed_duration: i16,
+
+    /// flag indicating if the protein skimmer shall remain switched on during the feed phase
     pub feed_skimmer: i16,
+
+    /// flag indicating if the main pump #1 shall remain switched on during the feed phase
     pub feed_main_pump_1: i16,
+
+    /// flag indicating if the main pump #2 shall remain switched on during the feed phase
     pub feed_main_pump_2: i16,
+
+    /// flag indicating if the auxiliary pump #1 shall remain switched on during the feed phase
     pub feed_aux_pump_1: i16,
+
+    /// flag indicating if the auxiliary pump #2 shall remain switched on during the feed phase
     pub feed_aux_pump_2: i16,
 }
 
