@@ -23,12 +23,25 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 /// Contains constants representing commands received from control application.
 #[allow(dead_code)]
 mod command {
+    /// command to switch on a relay (not necessarily switching on a device)
     pub const SETSINGLE: &str = "SETSINGLE";
+
+    /// command to switch off a relay (not necessarily switching off a device)
     pub const UNSETSINGLE: &str = "UNSETSINGLE";
+
+    /// command to retrieve the status of Controllino (currently not used)
     pub const GETSTATUS: &str = "GETSTATUS";
+
+    /// command to switch on and off a relay for defined, short time period
     pub const PULSE: &str = "PULSE";
+
+    /// command to send an alive signal to the Controllino
     pub const HEARTBEAT: &str = "HEARTBEAT";
+
+    /// command to retrieve the status of a certain relay (currently not used)
     pub const READ: &str = "READ";
+
+    /// command to indicate that the main application has finished initialization (currently not used)    
     pub const INITIALIZED: &str = "INITIALIZED";
 }
 
@@ -36,10 +49,19 @@ mod command {
 /// The category describes the device to which the command shall be applied.
 #[allow(dead_code)]
 mod category {
+    /// Controllino is the relay actuator.
     pub const CONTROLLINO: &str = "CONTROLLINO";
+
+    /// DHT22 is the sensor for measuring ambient temperature and humidity.
     pub const DHT22: &str = "DHT22";
+
+    /// AtlasScientific is the group of sensors which includes water temperature, pH and conductivity.
     pub const ATLASSCIENTIFIC: &str = "ATLSSCNTFC";
+
+    /// The tank level switch is measured via GPIO.
     pub const TANKLEVELSWITCH: &str = "TNKLVLSWTCH";
+
+    /// This category addresses the refill control - it is used to reset errors from the outside.
     pub const REFILLCONTROL: &str = "REFILLCTRL";
 }
 
@@ -47,12 +69,25 @@ mod category {
 #[allow(dead_code)]
 mod signal {
     #[allow(dead_code)]
+    /// ambient air temperature in °C measured by DHT22
     pub const AMBIENTTEMPERATURE: &str = "AmbTemp";
+
+    /// ambient humidity in % measured by DHT22
     pub const AMBIENTHUMIDITY: &str = "AmbHum";
+
+    /// tank level switch position
     pub const TANKLEVELSWITCHPOSITION: &str = "TnkLvlSwtch";
+
+    /// tank level switch invalid    
     pub const TANKLEVELSWITCHINVALID: &str = "TnkLvlSwtchInvld";
+
+    /// water temperature in °C
     pub const ATLASSCIENTIFICTEMPERATURE: &str = "temperature";
+
+    /// pH value
     pub const ATLASSCIENTIFICPH: &str = "pH";
+
+    /// conductivity in uS/cm
     pub const ATLASSCIENTIFICCONDUCTIVITY: &str = "conductivity";
 }
 
@@ -61,24 +96,31 @@ mod signal {
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct TcpConnectionConfig {
+    /// host address (either IP address or DNS entry)
     pub ip_address: String,
+
+    /// numeric port number
     pub port: u16,
 }
 
 /// Contains the error values for unsuccessful attempt of opening TCP channel.
 #[derive(Debug)]
 pub enum TcpCommunicationError {
+    /// value indicates that error has occurred during TCP communication
     ConnectionFailed(io::Error),
     //ReadMessageFailed(io::Error),
 }
 
 /// Contains configuration of implementation for opening, reading and closing TCP channel.
 pub struct TcpCommunication {
+    /// the raw TCP stream
     write_stream: TcpStream,
+
+    /// buffered reader for TCP stream
     buf_reader: BufReader<TcpStream>,
 }
 
-impl TcpCommunication  {
+impl TcpCommunication {
     /// Provides wrapped into Result type either
     /// - a struct of type TcpCommunication after a successful attempt to open the TCP channel
     /// - or an error value from enum TcpCommunicationError
@@ -104,7 +146,7 @@ impl TcpCommunication  {
             buf_reader: BufReader::new(stream),
         })
     }
-    
+
     /// Splits a string into multiple words using space as delimiter and returns the last word as type &str wrapped into type Option.
     /// # Arguments
     /// * `sequence` - reference to String which contains the sequence of words to be split
@@ -112,7 +154,6 @@ impl TcpCommunication  {
         let words = sequence.split(" ").collect::<Vec<&str>>();
         words.last().copied()
     }
-
 
     /// Removes trailing newline or carriage return.
     /// Code taken over from <https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning>
