@@ -15,37 +15,37 @@ use std::fmt;
 pub enum AquariumDevice {
     // protein skimmer
     Skimmer,
-    
+
     // main pump #1
     MainPump1,
-    
+
     // main pump #2
     MainPump2,
-    
+
     // auxiliary pump #1
     AuxPump1,
-    
+
     // auxiliary pump #2
     AuxPump2,
-    
+
     // heater
     Heater,
-    
+
     // ventilation
     Ventilation,
-    
+
     // refill pump
     RefillPump,
-    
+
     // feeder motor
     Feeder,
-    
+
     // Balling dosing pump #1
     PeristalticPump1,
-    
+
     // Balling dosing pump #2
     PeristalticPump2,
-    
+
     // Balling dosing pump #3
     PeristalticPump3,
 
@@ -83,22 +83,22 @@ pub enum AquariumSignal {
     /// water temperature in °C
     WaterTemperature,
     #[allow(non_camel_case_types)]
-    
+
     /// pH Value
     pH,
-    
-    /// conductivity im mS/cm
+
+    /// conductivity im uS/cm
     Conductivity,
-    
+
     /// ambient (air) temperature in °C
     AmbientTemperature,
-    
+
     /// ambient humidity in %
     AmbientHumidity,
-    
+
     /// position of tank level switch
     TankLevelSwitchPosition,
-    
+
     /// status bit of tank level switch signal
     TankLevelSwitchInvalid,
 }
@@ -126,25 +126,25 @@ impl fmt::Display for AquariumSignal {
 pub enum InternalCommand {
     /// Switch on a device
     SwitchOn(AquariumDevice),
-    
+
     /// Switch off a device
     SwitchOff(AquariumDevice),
-    
+
     /// Set a relay
     SetRelay(u16),
-    
+
     /// Unset a relay
     UnsetRelay(u16),
-    
+
     /// Request a signal
     RequestSignal(AquariumSignal),
-    
+
     /// Reset existing errors (used for refill control)
     ResetAllErrors,
-    
+
     /// Quit the application - first step to terminate the application
     Quit,
-    
+
     /// Terminate - second step to terminate the application
     Terminate,
 }
@@ -172,10 +172,10 @@ impl fmt::Display for InternalCommand {
 pub enum ActuatorState {
     /// Actuator is on
     On,
-    
+
     /// Actuator is off
     Off,
-    
+
     /// Application has not yet sent a command to the actuator
     Undefined,
 }
