@@ -25,7 +25,7 @@ use crate::sql_interface_balling::SqlInterfaceBalling;
 pub struct BallingConfig {
     /// control will only be active when the flag is set to true
     active: bool,
-    
+
     /// interval for the main control in seconds
     schedule_check_interval: u32,
 }
@@ -61,7 +61,7 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
-    
+
     /// SQL database interface for Balling dosing control
     sql_interface_balling: SqlInterfaceBalling,
 }

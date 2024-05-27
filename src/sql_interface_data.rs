@@ -21,20 +21,49 @@ use crate::sql_interface::SqlInterfaceError;
 /// The None value is represented as NULL in the SQL database.
 /// The struct only contains minimal implementation for development purposes.
 pub struct DataFrame {
+    /// timestamp when the frame was captured
     pub timestamp: NaiveDateTime,
+
+    /// measured water temperature in °C
     pub water_temperature: Option<f32>,
+
+    /// filtered water temperature in °C
     pub water_temperature_filtered: Option<f32>,
+
+    /// measured pH value of water
     pub ph: Option<f32>,
+
+    /// filtered pH value of water
     pub ph_filtered: Option<f32>,
+
+    /// measured conductivity of water in uS/cm
     pub conductivity: Option<f32>,
+
+    /// filtered conductivity of water in uS/cm
     pub conductivity_filtered: Option<f32>,
+
+    /// conductivity in uS/cm compensated for temperature deviation
     pub conductivity_compensated: Option<f32>,
+
+    /// status bit indicating that fresh water refill is ongoing
     pub refill_in_progress: Option<bool>,
+
+    /// measured tank level switch position (true=high, false=low)
     pub tank_level_switch_position: Option<bool>,
+
+    /// tank level switch validity bit (true=invalid, false=valid)
     pub tank_level_switch_invalid: Option<bool>,
+
+    /// status bit indicating that ventilation is switched on
     pub surface_ventilation_status: Option<bool>,
+
+    /// measured ambient temoerature in °C
     pub ambient_temperature: Option<f32>,
+
+    /// measured ambient humidity in %
     pub ambient_humidity: Option<f32>,
+
+    /// status bit indicating that heater is switched on
     pub heater_status: Option<bool>,
 }
 

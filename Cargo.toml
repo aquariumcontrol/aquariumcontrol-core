@@ -22,9 +22,11 @@ spin_sleep = "1.2.0"
 toml = "0.8.10"
 sha256 = "1.0.3"
 signal-hook = "0.3.17"
+aquamarine = "0.5.0"
 [target.'cfg(linux)'.dependencies]
 rppal = "0.17.1"
 signal-hook = "0.3.17"
+aquamarine = "0.5.0"
 
 [dev-dependencies]
 assert_float_eq = "1"

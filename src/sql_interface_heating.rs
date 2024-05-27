@@ -16,24 +16,50 @@ use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from SQL query which is then updated by the control application.
 pub struct HeatingStatsEntry {
+    /// calendar date of the entry after having postprocessed the SQL data read as String
     pub date: NaiveDate,
+
+    /// energy used for heating on a specific date in kWh
     pub energy: f64,
+
+    /// average ambient temperature value on a specific date in °C
     pub ambient_temperature_average_value: f64,
+
+    /// counter how many samples were used to calculate the average value
     pub ambient_temperature_average_counter: i64,
+
+    /// average water temperature value on a specific date in °C
     pub water_temperature_average_value: f64,
+
+    /// counter how many samples were used to calculate the average value    
     pub water_temperature_average_counter: i64,
+
+    /// counter how many seconds the heating control was active on a specific dates
     pub heating_control_runtime: i64,
 }
 
 /// Holds the statistical data of heating for one day as retrieved from SQL database.
 /// In next step, date is postprocessed to NaiveData type.
 pub struct HeatingStatsStringEntry {
+    /// calendar date of the entry before postprocessing to NaiveDate
     pub date: String,
+
+    /// energy used for heating on a specific date in kWh    
     pub energy: f64,
+
+    /// average ambient temperature value on a specific date in °C
     pub ambient_temperature_average_value: f64,
+
+    /// counter how many samples were used to calculate the average value
     pub ambient_temperature_average_counter: i64,
+
+    /// average water temperature value on a specific date in °C
     pub water_temperature_average_value: f64,
+
+    /// counter how many samples were used to calculate the average value    
     pub water_temperature_average_counter: i64,
+
+    /// counter how many seconds the heating control was active on a specific dates
     pub heating_control_runtime: i64,
 }
 
@@ -140,7 +166,7 @@ impl SqlInterfaceHeating {
 
     /// Inserts one dataset of heating statistics into the SQL database.
     /// It provides wrapped into Result type either
-    /// - an empty Ok value 
+    /// - an empty Ok value
     /// - or a value from enum SqlInterfaceError
     /// # Arguments
     /// * `heating_stats_entry` - reference to struct HeatingStatsEntry providing the data which shall be inserted into the database.

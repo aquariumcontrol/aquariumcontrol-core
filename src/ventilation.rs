@@ -37,7 +37,7 @@ pub struct VentilationConfig {
     /// flag to determine the behavior of the control when the application is terminating
     /// If this flag is true, the application will switch on the ventilation when exiting.    
     switch_on_ventilation_when_terminating: bool,
-    
+
     /// configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
 }

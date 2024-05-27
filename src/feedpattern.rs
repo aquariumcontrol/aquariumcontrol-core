@@ -11,10 +11,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub struct Feedpattern {
     /// numeric ID of the feed profile
     pub profile_id: i32,
-    
+
     /// name of the feed profile
     pub profile_name: String,
-    
+
     /// vector of type FeedPhase
     pub feedphases: Vec<FeedPhase>,
 }
@@ -23,31 +23,31 @@ pub struct Feedpattern {
 pub struct FeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds
     pub pause_duration: i16,
-    
+
     /// flag indicating if the protein skimmer shall remain switched on during the pause
     pub pause_skimmer: bool,
-    
+
     /// flag indicating if the main pump #1 shall remain switched on during the pause
     pub pause_main_pump_1: bool,
-    
+
     /// flag indicating if the main pump #2 shall remain switched on during the pause
     pub pause_main_pump_2: bool,
-    
+
     /// flag indicating if the auxiliary pump #1 shall remain switched on during the pause
     pub pause_aux_pump_1: bool,
-    
+
     /// flag indicating if the auxiliary pump #2 shall remain switched on during the pause
     pub pause_aux_pump_2: bool,
-    
+
     /// duration of the feed after switching on the feeder motor in milliseconds
     pub feed_duration: i16,
-    
+
     /// flag indicating if the protein skimmer shall remain switched on during the feed phase
     pub feed_skimmer: bool,
-    
+
     /// flag indicating if the main pump #1 shall remain switched on during the feed phase
     pub feed_main_pump_1: bool,
-    
+
     /// flag indicating if the main pump #2 shall remain switched on during the feed phase
     pub feed_main_pump_2: bool,
 

@@ -27,45 +27,45 @@ use crate::sql_interface_refill::SqlInterfaceRefill;
 pub struct RefillConfig {
     /// control will only be active when the flag is set to true
     active: bool,
-    
+
     /// time interval in seconds which need to pass after initialization of the application before refill control is becoming active
     initial_wait_interval: i64,
-    
+
     /// interval for the main control in seconds    
     check_interval: i64,
-    
+
     /// maximum number of permitted refill operations within last 24h
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
     max_refill_count_24h: i64,
-    
+
     /// maximum permitted refill volume within last 24h
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
     max_refill_volume_24h: f64,
-    
+
     /// maximum number of permitted refill operations within last hour
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
     max_refill_count_hour: i64,
-    
+
     /// maximum permitted refill volume within last hour
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
     max_refill_volume_hour: f64,
-    
+
     /// minimum time which has to pass after a refill operation before a subsequent refill operation is started
     min_interval_last_refill: i64,
-    
+
     /// number of tank level switch position measurements which need to indicate a low level before the refill control assumes that the water level is low
     /// - Caution: Also consider the check_interval when calibrating this variable.
     tank_level_switch_position_high_stabilization_count: u32,
-    
+
     /// time interval in seconds which need to pass before the application recognizes a potential tank level switch fault
     max_duration_since_last_refill: i64,
-    
+
     /// flow of the refill pump in liters / second
     refill_pump_flow: f64,
-    
+
     /// maximum permitted refill volume in one refill operation
     max_refill_volume: f64,
-    
+
     /// refill volume which is added to the tank in a refill operation after the application recognizes tank level position high
     /// - Background: This volume shall avoid too frequent refill operations. Too high values may lead to unstable water level.
     /// It is reommended to calibrate a value which is a fraction of max_refill_volume.
@@ -373,6 +373,20 @@ pub struct RefillErrors {
 }
 
 /// Contains the configuration and the implementation for the refill control.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Architecture of the component is as follows:
+/// ```mermaid
+/// graph LR
+/// execute --> calc_tank_level_switch_position_stabilized;
+/// execute --> get_sql_refill_data;
+/// execute_refill --> check_pending_external_request;
+/// execute --> check_error_condition_switch_stuck_high;
+/// execute --> check_pending_external_request;
+/// execute --> update_tank_level_switch_signals;
+/// execute_refill --> update_tank_level_switch_signals;
+/// execute --> check_volume_count_time_limits;
+/// execute --> execute_refill;
+/// ```
 pub struct Refill {
     config: RefillConfig,
     sql_interface_refill: SqlInterfaceRefill,

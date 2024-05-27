@@ -28,34 +28,34 @@ use crate::ventilation::VentilationConfig;
 pub struct ConfigData {
     /// configuration of the SQL database interface
     pub sql_interface: SqlInterfaceConfig,
-    
+
     /// configuration of the TCP connection (e.g. for simulator)
     pub tcp_connection: TcpConnectionConfig,
-    
+
     /// configuration of the data logger
     pub data_logger: DataLoggerConfig,
-    
+
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,
-    
+
     /// configuration of the fresh water refill control
     pub refill: RefillConfig,
-    
+
     /// configuratino of the heating control
     pub heating: HeatingConfig,
-    
+
     /// configuration of the ventilation control
     pub ventilation: VentilationConfig,
-    
+
     /// configuration of the monitors
     pub monitors: MonitorsConfig,
-    
+
     /// configuration of the Balling dosing control
     pub balling: BallingConfig,
-    
+
     /// configuration of the feed control
     pub feed: FeedConfig,
-    
+
     /// configuration of the Controllino
     pub controllino: ControllinoConfig,
 }

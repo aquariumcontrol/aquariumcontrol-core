@@ -593,7 +593,7 @@ impl SqlInterface {
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
-    
+
     /// Executes an SQL statement given as parameter to get a single String value
     /// and tries to convert it to timestamp of type NaiveDate.
     /// Depending on the result of the query and the conversion to NaiveDate,
@@ -648,7 +648,7 @@ impl SqlInterface {
     }
 
     /// Compares two vectors of strings.
-    /// The function checks if all of the strings of the first vector are contained within the second vector and 
+    /// The function checks if all of the strings of the first vector are contained within the second vector and
     /// returns a boolean value if this is the case.
     /// # Arguments
     /// * `required_tables` - vector of type String which contains the tables which shall exist

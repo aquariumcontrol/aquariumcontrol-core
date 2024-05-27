@@ -28,13 +28,13 @@ use crate::sql_interface_data::SqlInterfaceData;
 pub struct DataLoggerConfig {
     /// interval of the data logger in seconds
     logging_interval: u64,
-    
+
     /// filter coefficient for the filtered version of the water temperature signal
     filter_coefficient_water_temperature: IIRFilterConfig<()>,
-    
+
     /// filter coefficient for the filtered version of the pH signal
     filter_coefficient_pH: IIRFilterConfig<()>,
-    
+
     /// filter coefficient for the filtered version of the conductivity signal
     filter_coefficient_conductivity: IIRFilterConfig<()>,
 }
@@ -70,13 +70,13 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 pub struct DataLogger {
     /// configuration data for the data logger
     config: DataLoggerConfig,
-    
+
     /// filter for the water temperature signal
     filter_water_temperature: IIRFilter,
-    
+
     /// filter for the pH signal
     filter_pH: IIRFilter,
-    
+
     /// filter for the conductivity signal
     filter_conductivity: IIRFilter,
 }

@@ -70,6 +70,55 @@ use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// creates the channels and sets up threads.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     refill[Refill] --> gpio_handler[GpioHandler]
+///     gpio_handler --> refill
+///     refill --> controllino[Controllino]
+///     controllino --> refill
+///     datalogger[DataLogger] --> gpio_handler
+///     gpio_handler --> datalogger
+///     refill --> datalogger
+///     signal_handler[SignalHandler] --> refill
+///     refill --> signal_handler
+///     signal_handler --> gpio_handler
+///     gpio_handler --> signal_handler
+///     signal_handler --> tcp_communication[TcpCommunication]
+///     tcp_communication --> signal_handler
+///     signal_handler --> controllino
+///     controllino --> signal_handler
+///     balling[Balling] --> signal_handler
+///     signal_handler --> balling
+///     feed[Feed] --> signal_handler
+///     signal_handler --> feed
+///     heating[Heating] --> signal_handler
+///     signal_handler --> heating
+///     ventilation[Ventilation] --> signal_handler
+///     signal_handler --> ventilation
+///     controllino --> tcp_communication
+///     gpio_handler --> tcp_communication
+///     tcp_communication --> gpio_handler
+///     balling --> controllino
+///     controllino --> balling
+///     feed --> controllino
+///     controllino --> feed
+///     heating --> datalogger
+///     heating --> controllino
+///     controllino --> heating
+///     ventilation --> datalogger
+///     ventilation --> controllino
+///     controllino --> ventilation
+///     monitors[Monitors] --> gpio_handler
+///     gpio_handler --> monitors
+///     monitors --> controllino
+///     controllino --> monitors
+///     monitors --> refill
+///     refill --> monitors
+/// ```
+
 fn main() {
     //env::set_var("RUST_BACKTRACE", "1");
     let config = read_config_file("/config/aquarium_control.toml".to_string());
@@ -650,5 +699,5 @@ fn main() {
                 rx_controllino_from_signal_handler,
             );
         });
-    });    
+    });
 }

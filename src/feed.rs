@@ -26,7 +26,7 @@ use crate::sql_interface_feed::SqlInterfaceFeed;
 pub struct FeedConfig {
     /// control will only be active when the flag is set to true
     active: bool,
-    
+
     /// interval for the main control in seconds    
     schedule_check_interval: u32,
 }
@@ -60,7 +60,7 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
 pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
-    
+
     /// SQL interface for the feed control
     sql_interface_feed: SqlInterfaceFeed,
 }
