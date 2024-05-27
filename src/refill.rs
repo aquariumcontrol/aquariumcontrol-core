@@ -842,7 +842,28 @@ pub mod tests {
             sql_interface,
         )
     }
-
+    
+    fn prepare_refill_tests_secondary() -> (ConfigData, Refill, SqlInterface) {
+        // prepare struct Refill for subsequent tests
+        // parallel usage of database leads to conflicts
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill_secondary.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+        let refill_config = config.refill.clone();
+        (
+            config,
+            Refill::new(refill_config, sql_interface_refill),
+            sql_interface,
+        )
+    }
+    
     struct RefillTestExecutionVoid;
 
     impl RefillExecutionTrait for RefillTestExecutionVoid {
@@ -1345,7 +1366,7 @@ pub mod tests {
     pub fn test_execute_conditions_sensor_signals() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
         // accelerate test case execution
         refill
             .config
