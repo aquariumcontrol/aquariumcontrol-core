@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
+use std::fmt;
 
 use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
@@ -89,6 +90,29 @@ impl HeatingStatsEntry {
         };
 
         self.heating_control_runtime += 1;
+    }
+}
+
+impl fmt::Display for HeatingStatsEntry {
+    /// Provides output of the struct values for debugging purposes.
+    /// # Arguments
+    /// * `f` - configuration for formatting
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Heating Stats Entry for {}: \n\
+                Water temperature: average={}°C, counter={} \n\
+                Ambient temperature: average={}°C, counter={} \n\
+                Energy: {}kWh\n\
+                Control runtime: {}s",
+            self.date,
+            self.water_temperature_average_value,
+            self.water_temperature_average_counter,
+            self.ambient_temperature_average_value,
+            self.ambient_temperature_average_counter,
+            self.energy,
+            self.heating_control_runtime
+        )
     }
 }
 

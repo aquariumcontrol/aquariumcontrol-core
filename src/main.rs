@@ -346,8 +346,10 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (_tx_controllino_to_monitors, rx_monitors_from_controllino): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (_tx_controllino_to_monitors, rx_monitors_from_controllino): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** signal handler <=> refill ***

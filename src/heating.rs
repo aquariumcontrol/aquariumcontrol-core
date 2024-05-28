@@ -20,15 +20,13 @@ use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
-use crate::sql_interface_heating::{
-    HeatingStatsEntry, SqlInterfaceHeating,
-};
+use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait HeatingStatsDataTransferTrait {
     fn transfer_heating_stats(
-        &self,
+        &mut self,
         data: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
         sql_interface: &mut SqlInterface,
@@ -39,7 +37,7 @@ pub struct HeatingStatsDataTransfer;
 
 impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     fn transfer_heating_stats(
-        &self,
+        &mut self,
         mut heating_stats_entry: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
         sql_interface: &mut SqlInterface,
@@ -244,6 +242,17 @@ impl Heating {
         }
     }
 
+    /// wraps function from sql_interface_heating and provides alternate value in case of error
+    fn get_duration_until_midnight(&mut self) -> i64 {
+        match self.sql_interface_heating.get_duration_until_midnight() {
+            Ok(c) => c,
+            Err(e) => {
+                println!("Heating: Could not get duration until midnight: {e:?}");
+                24 * 3600 // default value for time in seconds until midnight
+            }
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
@@ -279,14 +288,8 @@ impl Heating {
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
 
-        let mut duration_until_midnight =
-            match self.sql_interface_heating.get_duration_until_midnight() {
-                Ok(c) => c,
-                Err(e) => {
-                    println!("Heating: Could not get duration until midnight: {e:?}");
-                    100000 // default value for time in seconds until midnight
-                }
-            };
+        let mut duration_until_midnight = self.get_duration_until_midnight();
+
         println!(
             "Heating: Duration until midnight is {} seconds.",
             duration_until_midnight
@@ -303,17 +306,7 @@ impl Heating {
         };
         match heating_stats_opt {
             Some(ref heating_stats) => {
-                println!(
-                    "Heating stats entry: Date={}, Energy={}, Ambient Average={}, Ambient Counter={}, \
-                    Water Average={}, Water Counter={}, Control         time = {}",
-                    heating_stats.date.to_string(),
-                    heating_stats.energy,
-                    heating_stats.ambient_temperature_average_value,
-                    heating_stats.ambient_temperature_average_counter,
-                    heating_stats.water_temperature_average_value,
-                    heating_stats.water_temperature_average_counter,
-                    heating_stats.heating_control_runtime
-                );
+                println!("{}", heating_stats);
             }
             None => {
                 // do nothing
@@ -472,6 +465,7 @@ impl Heating {
                         &mut self.sql_interface_heating,
                         sql_interface,
                     );
+                    duration_until_midnight = self.get_duration_until_midnight();
                 }
             }
 
@@ -527,6 +521,7 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
+    use chrono::NaiveDate;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
@@ -544,16 +539,38 @@ pub mod tests {
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
 
-    pub struct HeatingStatsMockDataTransfer;
+    pub struct HeatingStatsMockDataTransfer {
+        heating_stats_entry: HeatingStatsEntry,
+    }
+
+    impl HeatingStatsMockDataTransfer {
+        pub fn new() -> HeatingStatsMockDataTransfer {
+            Self {
+                heating_stats_entry: HeatingStatsEntry {
+                    date: NaiveDate::from_ymd_opt(2010, 3, 11).unwrap(),
+                    energy: 0.0,
+                    ambient_temperature_average_value: 0.0,
+                    ambient_temperature_average_counter: 0,
+                    water_temperature_average_value: 0.0,
+                    water_temperature_average_counter: 0,
+                    heating_control_runtime: 0,
+                },
+            }
+        }
+    }
 
     impl HeatingStatsDataTransferTrait for HeatingStatsMockDataTransfer {
         fn transfer_heating_stats(
-            &self,
-            _heating_stats_entry: HeatingStatsEntry,
+            &mut self,
+            heating_stats_entry: HeatingStatsEntry,
             _sql_interface_heating: &mut SqlInterfaceHeating,
             _sql_interface: &mut SqlInterface,
         ) {
-            println!("Heating: Transferring statistical mock data to SQL database.");
+            self.heating_stats_entry = heating_stats_entry.clone();
+            println!(
+                "Heating: Received command to transfer mock data to SQL database: {}",
+                heating_stats_entry
+            );
         }
     }
 
@@ -601,7 +618,7 @@ pub mod tests {
         )
     }
 
-    fn test_execute_heating_receive_actuation_command_send_confirmation(
+    fn test_heating_receive_actuation_command_send_confirmation(
         rx_controllino_from_heating: &Receiver<InternalCommand>,
         tx_controllino_to_heating: &Sender<bool>,
     ) -> Option<InternalCommand> {
@@ -628,7 +645,23 @@ pub mod tests {
         command_received
     }
 
-    fn test_execute_heating_receive_information_for_datalogger(
+    fn run_main_cycle_with_stimuli(
+        iterations: u32,
+        rx_gpio_from_heating: &Receiver<InternalCommand>,
+        tx_gpio_to_heating: &Sender<f32>,
+        temperature_stimuli: f32,
+    ) {
+        for i in 0..iterations {
+            println!(
+                "Heating: run_main_cycle_with_sensor_signals running loop iteration #{}",
+                i
+            );
+            rx_gpio_from_heating.recv().unwrap();
+            let _ = tx_gpio_to_heating.send(temperature_stimuli);
+        }
+    }
+
+    fn test_heating_receive_information_for_datalogger(
         rx_datalogger_from_heating: &Receiver<bool>,
     ) {
         // receive information for data logger
@@ -664,7 +697,7 @@ pub mod tests {
     // checks if the Quit command is correctly processed
     // - application shall switch off heater before exiting
     #[test]
-    pub fn test_heating_execute_with_pending_quit_terminate_command() {
+    pub fn test_heating_with_pending_quit_terminate_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -685,16 +718,12 @@ pub mod tests {
             let start_time = SystemTime::now();
             scope.spawn(move || {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                let command_received_opt =
-                    test_execute_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                test_execute_heating_receive_information_for_datalogger(
-                    &rx_datalogger_from_heating,
+                let command_received_opt = test_heating_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
                 );
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
                 rx_signal_handler_from_heating.recv().unwrap();
-                //spin_sleeper.sleep(sleep_duration_100_millisec);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
 
                 // check if test object sent the right command
@@ -717,7 +746,7 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                let mut heating_stats_transfer = HeatingStatsMockDataTransfer;
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     tx_heating_to_gpio,
@@ -740,6 +769,83 @@ pub mod tests {
             println!(
                 "* [Heating] checking heating execution with pending quit/terminate command (time limit) succeeded."
             );
+        });
+    }
+
+    // checks if waiting for midnight is done correctly
+    #[test]
+    pub fn test_heating_wait_for_midnight() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+
+        // get initial data for calculation of reference value
+        let initial_heating_stats_entry = heating.sql_interface_heating.get_single_heating_stats_from_database().unwrap();
+
+        scope(|scope| {
+            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(10, &rx_gpio_from_heating, &tx_gpio_to_heating, 25.0);
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            });
+            scope.spawn(move || {
+                _ = test_heating_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+            scope.spawn(move || {
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_gpio,
+                    rx_heating_from_gpio,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_datalogger,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .heating_control_runtime
+                        - initial_heating_stats_entry.heating_control_runtime,
+                    3
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_counter
+                        - initial_heating_stats_entry.ambient_temperature_average_counter,
+                    3
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_counter
+                        - initial_heating_stats_entry.water_temperature_average_counter,
+                    3
+                );
+            });
+            println!("* [Heating] checking heating waiting for midnight succeeded.");
         });
     }
 }
