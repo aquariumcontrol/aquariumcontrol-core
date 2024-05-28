@@ -20,7 +20,10 @@ use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
-use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::sql_interface_heating::{
+    HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
+    SqlInterfaceHeatingMidnightCalculatorTrait,
+};
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -550,12 +553,12 @@ pub mod tests {
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::heating::Heating;
-    use crate::heating::HeatingConfig;
-    use crate::heating::HeatingStatsDataTransferTrait;
-    use crate::heating::HeatingStatsEntry;
+    use crate::heating::{Heating, HeatingConfig, HeatingStatsDataTransferTrait};
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_heating::SqlInterfaceHeating;
+    use crate::sql_interface_heating::{
+        HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
+        SqlInterfaceHeatingMidnightCalculatorTrait,
+    };
 
     pub struct HeatingStatsMockDataTransfer;
 
@@ -569,7 +572,7 @@ pub mod tests {
         }
     }
 
-    fn prepare_heating_tests() -> (ConfigData, Heating, SqlInterface) {
+    fn prepare_heating_tests_mock_midnight_calculator() -> (ConfigData, Heating, SqlInterface) {
         // prepare struct Heating for subsequent tests
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_heating.toml".to_string());
@@ -580,7 +583,13 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_heating = SqlInterfaceHeating::new(sql_interface.get_connection());
+        let sql_interface_heating_midnight_calculator = Box::new(
+            SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection()),
+        );
+        let mut sql_interface_heating = SqlInterfaceHeating::new(
+            sql_interface.get_connection(),
+            sql_interface_heating_midnight_calculator,
+        );
         let heating_config = config.heating.clone();
         (
             config,
@@ -655,8 +664,9 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        
         // channels for the test object. test environment only uses one of the channels
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests();
         let (tx_heating_to_gpio, _) = mpsc::channel();
         let (_, rx_heating_from_gpio) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
