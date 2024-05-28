@@ -37,6 +37,7 @@ mod sql_interface_data;
 mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
+mod sql_interface_schedule;
 mod tcp_communication;
 mod ventilation;
 mod version_information;

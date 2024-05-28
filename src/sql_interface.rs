@@ -151,6 +151,9 @@ pub mod sql_query_strings {
         SurfaceVentilation=#SurfaceVentilation, \
         AmbTemp=#AmbTemp, AmbHum=#AmbHum, Heater=#Heater;";
 
+    /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
+    pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
+
     // Deletes the content of a specific table.
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
     #[allow(dead_code)]
@@ -161,7 +164,7 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
         "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
 
-    /// Provide Balling dosing event from the database - used for testing only.
+    // Provide Balling dosing event from the database - used for testing only.
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_BALLING_EVENT: &str =
         "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog;";
@@ -230,6 +233,10 @@ pub enum SqlInterfaceError {
     SingleHeatingStatsRequestNoSingleResponse(String),
     SingleFeedpatternRequestFailure(String),
     SingleFeedpatternRequestNoSingleResponse(String),
+    ScheduleRequestFailure(String),
+    ScheduleTypeConversionFailure(String),
+    ScheduleStartTimeConversionFailure(String),
+    ScheduleStopTimeConversionFailure(String),
     TimestampConversionFailure(String),
     InsertHeatingStatsEntryFailure(String),
     InsertFeedEventFailure(String),

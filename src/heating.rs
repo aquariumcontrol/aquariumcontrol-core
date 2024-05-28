@@ -790,7 +790,10 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
 
         // get initial data for calculation of reference value
-        let initial_heating_stats_entry = heating.sql_interface_heating.get_single_heating_stats_from_database().unwrap();
+        let initial_heating_stats_entry = heating
+            .sql_interface_heating
+            .get_single_heating_stats_from_database()
+            .unwrap();
 
         scope(|scope| {
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
