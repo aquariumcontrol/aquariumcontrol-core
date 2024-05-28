@@ -13,7 +13,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::channel_content::AquariumSignal;
+//use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 
 /// Holds the configuration data for the monitors.
@@ -77,11 +77,11 @@ impl Monitors {
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
-        mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
+        _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
+        _tx_to_gpio: Sender<InternalCommand>,
+        _rx_from_gpio: Receiver<f32>,
+        _tx_to_controllino: Sender<InternalCommand>,
+        _rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {

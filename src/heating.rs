@@ -21,8 +21,7 @@ use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{
-    HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
-    SqlInterfaceHeatingMidnightCalculatorTrait,
+    HeatingStatsEntry, SqlInterfaceHeating,
 };
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
@@ -32,6 +31,7 @@ pub trait HeatingStatsDataTransferTrait {
         &self,
         data: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
+        sql_interface: &mut SqlInterface,
     );
 }
 
@@ -40,10 +40,27 @@ pub struct HeatingStatsDataTransfer;
 impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     fn transfer_heating_stats(
         &self,
-        heating_stats_entry: HeatingStatsEntry,
+        mut heating_stats_entry: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
+        sql_interface: &mut SqlInterface,
     ) {
         println!("Heating: Transferring statistical data to SQL database.");
+        // two subsequent sections.
+        let today = match sql_interface.get_current_date() {
+            Ok(c) => c,
+            Err(e) => {
+                println!("Heating: Could not get current date from SQL database: {e:?}");
+                println!("Heating: Warning - not inserting heating stats into database.");
+                return;
+            }
+        };
+
+        heating_stats_entry.date = today;
+
+        match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
+            Ok(_) => {}
+            Err(e) => println!("Heating: Could not insert heating statistics into database: {e:?}"),
+        };
     }
 }
 
@@ -252,7 +269,7 @@ impl Heating {
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let mut refill_error = false;
+        let mut _refill_error = false;
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
@@ -453,6 +470,7 @@ impl Heating {
                     heating_stats_transfer.transfer_heating_stats(
                         heating_stats_opt.clone().unwrap(),
                         &mut self.sql_interface_heating,
+                        sql_interface,
                     );
                 }
             }
@@ -471,36 +489,6 @@ impl Heating {
                 &tx_to_datalogger,
             );
         }
-
-        // @todo: this code needs to move to main control along with the
-        // two subsequent sections.
-        let today = match sql_interface.get_current_date() {
-            Ok(c) => c,
-            Err(_) => panic!("Could not get current date."),
-        };
-
-        // @todo: this is mock data for subsequent call to SQL.
-        // This numbers need to be replaced with data aquired during operation.
-        let heating_stats_entry = HeatingStatsEntry {
-            date: today.into(),
-            energy: 0.9,
-            ambient_temperature_average_value: 22.0,
-            ambient_temperature_average_counter: 72000,
-            water_temperature_average_value: 25.0,
-            water_temperature_average_counter: 78000,
-            heating_control_runtime: 64000,
-        };
-
-        // @todo: temporarily, this call is placed here to avoid warnings.
-        // with implementation of midnight timing and aquisition of data,
-        // this call needs to move to the central control cycle.
-        match self
-            .sql_interface_heating
-            .insert_heating_stats_entry(&heating_stats_entry)
-        {
-            Ok(_) => {}
-            Err(e) => panic!("Could not insert heating statistics into database: {e:?}"),
-        };
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
@@ -539,25 +527,21 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::DateTime;
-    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime};
 
     use crate::channel_content::AquariumDevice;
-    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::heating::{Heating, HeatingConfig, HeatingStatsDataTransferTrait};
-    use crate::sql_interface::SqlInterface;
+    use crate::heating::{Heating, HeatingStatsDataTransferTrait};
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
-        HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
-        SqlInterfaceHeatingMidnightCalculatorTrait,
+        HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
 
     pub struct HeatingStatsMockDataTransfer;
@@ -565,10 +549,30 @@ pub mod tests {
     impl HeatingStatsDataTransferTrait for HeatingStatsMockDataTransfer {
         fn transfer_heating_stats(
             &self,
-            heating_stats_entry: HeatingStatsEntry,
-            sql_interface_heating: &mut SqlInterfaceHeating,
+            _heating_stats_entry: HeatingStatsEntry,
+            _sql_interface_heating: &mut SqlInterfaceHeating,
+            _sql_interface: &mut SqlInterface,
         ) {
             println!("Heating: Transferring statistical mock data to SQL database.");
+        }
+    }
+
+    pub struct SqlInterfaceHeatingMockMidnightCalculator {
+        seconds_to_midnight: i64,
+    }
+
+    impl SqlInterfaceHeatingMockMidnightCalculator {
+        pub fn new(seconds_to_midnight: i64) -> SqlInterfaceHeatingMockMidnightCalculator {
+            Self {
+                seconds_to_midnight,
+            }
+        }
+    }
+
+    impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMockMidnightCalculator {
+        fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
+            Ok(self.seconds_to_midnight) // seconds to midnight after which heating stats are inserted into database
+                                         // for testing, we do not want to wait until midnight
         }
     }
 
@@ -583,10 +587,9 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_heating_midnight_calculator = Box::new(
-            SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection()),
-        );
-        let mut sql_interface_heating = SqlInterfaceHeating::new(
+        let sql_interface_heating_midnight_calculator =
+            Box::new(SqlInterfaceHeatingMockMidnightCalculator::new(3));
+        let sql_interface_heating = SqlInterfaceHeating::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
         );
@@ -602,7 +605,8 @@ pub mod tests {
         rx_controllino_from_heating: &Receiver<InternalCommand>,
         tx_controllino_to_heating: &Sender<bool>,
     ) -> Option<InternalCommand> {
-        let mut command_received = None;
+        let mut command_received: Option<InternalCommand>;
+
         // receive command from test object
         match rx_controllino_from_heating.recv() {
             Ok(command) => {
@@ -665,7 +669,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
-        
+
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, _) = mpsc::channel();
         let (_, rx_heating_from_gpio) = mpsc::channel();

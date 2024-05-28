@@ -87,9 +87,9 @@ impl Balling {
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
-        mutex_device_scheduler_balling: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
+        _mutex_device_scheduler_balling: Arc<Mutex<i32>>,
+        _tx_to_controllino: Sender<InternalCommand>,
+        _rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {

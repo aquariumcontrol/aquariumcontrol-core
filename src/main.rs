@@ -67,7 +67,6 @@ use crate::sql_interface_data::SqlInterfaceData;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
-use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculatorTrait;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
@@ -343,11 +342,11 @@ fn main() {
     // *******************************
 
     // *** monitors <=> controllino ***
-    let (tx_monitors_to_controllino, rx_controllino_from_monitors): (
+    let (tx_monitors_to_controllino, _rx_controllino_from_monitors): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_monitors, rx_monitors_from_controllino): (Sender<bool>, Receiver<bool>) =
+    let (_tx_controllino_to_monitors, rx_monitors_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
 
