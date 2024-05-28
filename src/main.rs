@@ -56,6 +56,7 @@ use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
+use crate::heating::HeatingStatsDataTransfer;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
 use crate::refill::RefillExecution;
@@ -611,6 +612,8 @@ fn main() {
         // Heating needs actuation of relay
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
+        let mut heating_stats_transfer = HeatingStatsDataTransfer;
+
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
@@ -622,6 +625,7 @@ fn main() {
                 rx_heating_from_signal_handler,
                 tx_heating_to_datalogger,
                 &mut sql_interface,
+                &mut heating_stats_transfer,
             );
         });
 

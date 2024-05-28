@@ -842,7 +842,7 @@ pub mod tests {
             sql_interface,
         )
     }
-    
+
     fn prepare_refill_tests_secondary() -> (ConfigData, Refill, SqlInterface) {
         // prepare struct Refill for subsequent tests
         // parallel usage of database leads to conflicts
@@ -863,7 +863,28 @@ pub mod tests {
             sql_interface,
         )
     }
-    
+
+    fn prepare_refill_tests_tertiary() -> (ConfigData, Refill, SqlInterface) {
+        // prepare struct Refill for subsequent tests
+        // parallel usage of database leads to conflicts
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill_tertiary.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+        let refill_config = config.refill.clone();
+        (
+            config,
+            Refill::new(refill_config, sql_interface_refill),
+            sql_interface,
+        )
+    }
+
     struct RefillTestExecutionVoid;
 
     impl RefillExecutionTrait for RefillTestExecutionVoid {
@@ -887,7 +908,8 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid() {
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid(
+    ) {
         //*** test if position signal is not updating when invalid signal is true ***
         let (_, mut refill, _) = prepare_refill_tests();
         // check transition false -> true
@@ -902,11 +924,12 @@ pub mod tests {
             refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, false);
         }
-        println!("* checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
+        println!("* [Refill] checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
     }
 
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid() {
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid(
+    ) {
         //*** test if position signal is not updating when invalid signal is true ***
         let (_, mut refill, _) = prepare_refill_tests();
         // check transition true -> false
@@ -921,11 +944,11 @@ pub mod tests {
             refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
-        println!("* checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
+        println!("* [Refill] checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
     }
 
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_false_true() {
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         //*** test if position signal is updating without delay when invalid signal is false ***
         let (_, mut refill, _) = prepare_refill_tests();
         // check transition true -> false
@@ -938,11 +961,11 @@ pub mod tests {
         refill.tank_level_switch_position_stabilized = false;
         refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
         assert_eq!(refill.tank_level_switch_position_stabilized, true);
-        println!("* checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
+        println!("* [Refill] checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
     }
 
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_true_false() {
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
         //*** test if position signal is updating with delay when invalid signal is false ***
         let (config, mut refill, _) = prepare_refill_tests();
         // check transition true -> false
@@ -962,11 +985,11 @@ pub mod tests {
         }
         refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
         assert_eq!(refill.tank_level_switch_position_stabilized, false);
-        println!("* checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
+        println!("* [Refill] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
     }
 
     #[test]
-    pub fn test_calc_tank_level_switch_position_stabilized_toggle_input() {
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_toggle_input() {
         //*** test if position signal is updating with delay when invalid signal is false ***
         let (config, mut refill, _) = prepare_refill_tests();
         // check transition true -> false
@@ -987,11 +1010,11 @@ pub mod tests {
             refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
             assert_eq!(refill.tank_level_switch_position_stabilized, true);
         }
-        println!("* checking no change true -> false for stabilized tank level position when toggling input succeeded.");
+        println!("* [Refill] checking no change true -> false for stabilized tank level position when toggling input succeeded.");
     }
 
     #[test]
-    pub fn test_check_pending_external_request_empty_channel() {
+    pub fn test_refill_check_pending_external_request_empty_channel() {
         let mut refill_errors = RefillErrors {
             error_switch_stuck_high: false,
             error_switch_stuck_low: false,
@@ -1008,13 +1031,13 @@ pub mod tests {
             false
         );
 
-        println!("* checking false result of check_pending_external_request when channel is empty succeeded.");
+        println!("* [Refill] checking false result of check_pending_external_request when channel is empty succeeded.");
     }
 
     #[test]
     // this test case checks the .check_pending_external_request method if it correctly processes the ResetAllErrors command
     // the test case checks the struct attribute after having executed the function
-    pub fn test_check_pending_external_request_reset_all_errors_command() {
+    pub fn test_refill_check_pending_external_request_reset_all_errors_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1051,7 +1074,7 @@ pub mod tests {
 
     #[test]
     // this test case checks the .check_pending_external_request method if it correctly processes the Quit command
-    pub fn test_check_pending_external_request_quit_command() {
+    pub fn test_refill_check_pending_external_request_quit_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1075,7 +1098,7 @@ pub mod tests {
                         &rx_refill_from_signal_handler,
                         &mut refill_errors,
                     ), true);
-                println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
+                println!("* [Refill] checking true result of check_pending_external_request when channel contains Quit command succeeded.");
             });
         });
     }
@@ -1083,7 +1106,7 @@ pub mod tests {
     #[test]
     // this test case checks if the .execute functions terminates without delays
     // when a quit/termination request is sent after starting the function
-    pub fn test_execute_with_pending_quit_terminate_command() {
+    pub fn test_refill_execute_with_pending_quit_terminate_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1128,7 +1151,7 @@ pub mod tests {
             let execution_duration = finish_time.duration_since(start_time).unwrap();
             all_asserts::assert_le!(execution_duration.as_millis(), 500);
             println!(
-                "* checking execution with pending quit/terminate command (time limit) succeeded."
+                "* [Refill] checking execution with pending quit/terminate command (time limit) succeeded."
             );
         });
     }
@@ -2218,7 +2241,7 @@ pub mod tests {
     #[test]
     // this test case executes execute_refill function and sets the sensor signal to high after defined number of iterations
     pub fn test_execute_refill_delayed_switch_high_and_quit_signal() {
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests_tertiary();
         let mut refill_execution = RefillExecution;
 
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();

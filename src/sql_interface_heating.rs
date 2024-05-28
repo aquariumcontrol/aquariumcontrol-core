@@ -15,6 +15,7 @@ use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from SQL query which is then updated by the control application.
+#[derive(Clone)]
 pub struct HeatingStatsEntry {
     /// calendar date of the entry after having postprocessed the SQL data read as String
     pub date: NaiveDate,
@@ -36,6 +37,59 @@ pub struct HeatingStatsEntry {
 
     /// counter how many seconds the heating control was active on a specific dates
     pub heating_control_runtime: i64,
+}
+
+impl HeatingStatsEntry {
+    /// add another sample for calculating the average values
+    pub fn update(
+        &mut self,
+        water_temperature_opt: Option<f64>,
+        ambient_temperature_opt: Option<f64>,
+        energy_increment: f64,
+    ) {
+        // add energy to sum of heating energy
+        self.energy += energy_increment;
+
+        // calculate new average water temperature value
+        self.water_temperature_average_value = match water_temperature_opt {
+            Some(water_temperature) => {
+                self.water_temperature_average_counter += 1;
+                if self.water_temperature_average_counter > 1 {
+                    // multiple samples existing, so mix value proportionally
+                    water_temperature / self.water_temperature_average_counter as f64
+                        + self.water_temperature_average_value
+                            * (1.0 - 1.0 / self.water_temperature_average_counter as f64)
+                } else {
+                    water_temperature
+                }
+            }
+            None => {
+                // do nothing - wait for next valid sample
+                self.water_temperature_average_value
+            }
+        };
+
+        // calculate new average ambient air temperature value
+        self.ambient_temperature_average_value = match ambient_temperature_opt {
+            Some(ambient_temperature) => {
+                self.ambient_temperature_average_counter += 1;
+                if self.ambient_temperature_average_counter > 1 {
+                    // multiple samples existing, so mix value proportionally
+                    ambient_temperature / self.ambient_temperature_average_counter as f64
+                        + self.ambient_temperature_average_value
+                            * (1.0 - 1.0 / self.ambient_temperature_average_counter as f64)
+                } else {
+                    ambient_temperature
+                }
+            }
+            None => {
+                // do nothing - wait for next valid sample
+                self.ambient_temperature_average_value
+            }
+        };
+
+        self.heating_control_runtime += 1;
+    }
 }
 
 /// Holds the statistical data of heating for one day as retrieved from SQL database.

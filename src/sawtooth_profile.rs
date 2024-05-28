@@ -13,7 +13,7 @@ use std::fmt;
 /// Holds the data for the calculation of the saw tooth profile.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct SawToothProfileConfig {
     /// Phase 1 is a ramp from zero to one.
     /// The length describes the number of iterations necessary to reach the end of the ramp.
