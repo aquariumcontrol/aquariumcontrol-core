@@ -237,6 +237,7 @@ pub enum SqlInterfaceError {
     ScheduleTypeConversionFailure(String),
     ScheduleStartTimeConversionFailure(String),
     ScheduleStopTimeConversionFailure(String),
+    ScheduleTypeNotFound(String),
     TimestampConversionFailure(String),
     InsertHeatingStatsEntryFailure(String),
     InsertFeedEventFailure(String),

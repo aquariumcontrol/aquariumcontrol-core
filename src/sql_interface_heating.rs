@@ -40,7 +40,7 @@ pub struct HeatingStatsEntry {
     pub heating_control_runtime: i64,
 }
 
-impl HeatingStatsEntry {
+impl HeatingStatsEntry {    
     /// add another sample for calculating the average values
     pub fn update(
         &mut self,
@@ -374,7 +374,6 @@ pub mod tests {
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
-        SqlInterfaceHeatingMidnightCalculatorTrait,
     };
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 

@@ -77,3 +77,7 @@ saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_leng
     
 [gpio_handler]
 use_simulator = true                                     # if true, then do not use real HW
+
+[schedule_check]
+schedule_check_interval = 300                           # interval in seconds for polling SQL database
+strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in database

@@ -147,6 +147,9 @@ pub enum InternalCommand {
 
     /// Terminate - second step to terminate the application
     Terminate,
+
+    /// ScheduleCheck - request permission to run based on time of day
+    ScheduleCheck,
 }
 
 impl fmt::Display for InternalCommand {
@@ -163,6 +166,7 @@ impl fmt::Display for InternalCommand {
             InternalCommand::ResetAllErrors => write!(f, "ResetAllErrors"),
             InternalCommand::Quit => write!(f, "Quit"),
             InternalCommand::Terminate => write!(f, "Terminate"),
+            InternalCommand::ScheduleCheck => write!(f, "ScheduleCheck"),
         }
     }
 }

@@ -18,6 +18,7 @@ use crate::gpio_handler::GpioHandlerConfig;
 use crate::heating::HeatingConfig;
 use crate::monitors::MonitorsConfig;
 use crate::refill::RefillConfig;
+use crate::schedule_check::ScheduleCheckConfig;
 use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
 use crate::ventilation::VentilationConfig;
@@ -58,6 +59,9 @@ pub struct ConfigData {
 
     /// configuration of the Controllino
     pub controllino: ControllinoConfig,
+
+    /// configure for schedule check
+    pub schedule_check: ScheduleCheckConfig,
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.

@@ -528,6 +528,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::{Duration, SystemTime};
+    use chrono::Local;
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
@@ -790,10 +791,23 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
 
         // get initial data for calculation of reference value
-        let initial_heating_stats_entry = heating
+        let initial_heating_stats_entry = match heating
             .sql_interface_heating
-            .get_single_heating_stats_from_database()
-            .unwrap();
+            .get_single_heating_stats_from_database() {
+                Ok(c) => c,
+                Err(_) => {
+                    // database responded with empty response - let's create empty entry
+                    HeatingStatsEntry {
+                        date: Local::now().date().naive_local(),
+                        energy: 0.0,
+                        ambient_temperature_average_value: 0.0,
+                        ambient_temperature_average_counter: 0,
+                        water_temperature_average_value: 0.0,
+                        water_temperature_average_counter: 0,
+                        heating_control_runtime: 0,
+                    }                
+                }
+            };
 
         scope(|scope| {
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));

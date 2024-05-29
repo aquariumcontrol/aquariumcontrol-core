@@ -30,6 +30,7 @@ mod iir_filter;
 mod monitors;
 mod refill;
 mod sawtooth_profile;
+mod schedule_check;
 mod signal_handler;
 mod sql_interface;
 mod sql_interface_balling;
