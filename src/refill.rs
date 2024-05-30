@@ -1171,7 +1171,7 @@ pub mod tests {
     #[test]
     // this test case checks if the .execute functions terminates without delays
     // when a quit/termination request is sent after starting the function
-    pub fn test_refill_execute_with_pending_quit_terminate_command() {
+    pub fn test_refill_with_pending_quit_terminate_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1266,7 +1266,7 @@ pub mod tests {
     // this test case checks the function update_tank_level_switch_signals
     // the test case provides values via channel and checks if the test object sets the
     // attributes correctly.
-    pub fn test_update_tank_level_switch_signals() {
+    pub fn test_refill_update_tank_level_switch_signals() {
         let sleep_duration_200_millisec = Duration::from_millis(200);
         let spin_sleeper = SpinSleeper::default();
         let mut tank_level_switch_signals = TankLevelSwitchSignals {
@@ -1349,7 +1349,7 @@ pub mod tests {
     #[test]
     // this test case executes one iteration of the loop of the .execute function without triggering a refill
     // it checks the timing of initial wait period and main control interval
-    pub fn test_execute_without_refill() {
+    pub fn test_refill_without_fill() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (config, mut refill, _) = prepare_refill_tests();
@@ -1500,7 +1500,7 @@ pub mod tests {
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function manipulating the sensor signals only
     // it checks if the test object correctly processes the conditions for refill execution
-    pub fn test_execute_conditions_sensor_signals() {
+    pub fn test_refill_conditions_sensor_signals() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
@@ -1633,7 +1633,7 @@ pub mod tests {
 
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_switch_stuck_low set
-    pub fn test_execute_conditions_historic_data_error_switch_stuck_low() {
+    pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
@@ -1759,7 +1759,7 @@ pub mod tests {
 
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_sql_update_failed
-    pub fn test_execute_conditions_historic_data_error_sql_update_failed() {
+    pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests();
@@ -1883,7 +1883,7 @@ pub mod tests {
 
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_sql_update_failed
-    pub fn test_execute_conditions_historic_data_error_recent_refill_event() {
+    pub fn test_refill_conditions_historic_data_error_recent_refill_event() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests();
@@ -2071,7 +2071,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function and immediately sets the sensor signal to high
-    pub fn test_execute_refill_immediate_switch_high() {
+    pub fn test_refill_execution_immediate_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2144,7 +2144,7 @@ pub mod tests {
     // this test case executes execute_refill function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
-    pub fn test_execute_refill_immediate_switch_high_and_quit_signal() {
+    pub fn test_refill_execution_immediate_switch_high_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2220,7 +2220,7 @@ pub mod tests {
     // this test case executes execute_refill function and immediately sets the sensor signal to high
     // additionally the test case also sets the invalid bit.
     // Additional refill shall be aborted.
-    pub fn test_execute_refill_immediate_switch_high_with_invalid_true() {
+    pub fn test_refill_execution_immediate_switch_high_with_invalid_true() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2287,7 +2287,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function and sets the sensor signal to high after defined number of iterations
-    pub fn test_execute_refill_delayed_switch_high() {
+    pub fn test_refill_execution_delayed_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2368,7 +2368,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function with simulation of level switch stuck at low position
-    pub fn test_execute_refill_switch_stuck_low() {
+    pub fn test_refill_execution_switch_stuck_low() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2436,7 +2436,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function and sets the sensor signal to high after defined number of iterations
-    pub fn test_execute_refill_delayed_switch_high_and_quit_signal() {
+    pub fn test_refill_execution_delayed_switch_high_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests_tertiary();
         let mut refill_execution = RefillExecution;
 
@@ -2513,7 +2513,7 @@ pub mod tests {
 
     #[test]
     // this test case executes execute_refill function and sets the sensor invalid signal to true after defined number of iterations
-    pub fn test_execute_refill_delayed_switch_high_with_invalid_true() {
+    pub fn test_refill_execution_delayed_switch_high_with_invalid_true() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 
@@ -2592,7 +2592,7 @@ pub mod tests {
     // this test case executes execute_refill function and sets the sensor invalid signal to true after defined number of iterations
     // Additionally, the test case sends the Quit signal.
     // Expected behavior is that refill operation ceases immediately after receiving Quit signal.
-    pub fn test_execute_refill_delayed_switch_high_with_invalid_true_and_quit_signal() {
+    pub fn test_refill_execution_delayed_switch_high_with_invalid_true_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut refill_execution = RefillExecution;
 

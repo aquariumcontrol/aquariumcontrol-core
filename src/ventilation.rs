@@ -445,4 +445,8 @@ pub mod tests {
     // Check if ventilation control is not acting when disabled (active=false in configuration file)
     #[test]
     pub fn test_ventilation_not_active() {}
+    
+    // Check if ventilation control is only actuating when quitting while schedule check provides negative result
+    #[test]
+    pub fn test_ventilation_block_by_schedule() {}
 }
