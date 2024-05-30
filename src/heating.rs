@@ -706,6 +706,8 @@ pub mod tests {
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -751,6 +753,8 @@ pub mod tests {
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,                    
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
@@ -783,6 +787,8 @@ pub mod tests {
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
@@ -829,8 +835,10 @@ pub mod tests {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
-                    rx_heating_from_signal_handler,
+                    rx_heating_from_signal_handler,                    
                     tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,                    
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );

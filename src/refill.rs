@@ -1121,6 +1121,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, _) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -1142,6 +1144,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_execution,
                 );
@@ -1269,6 +1273,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {
@@ -1350,6 +1356,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
@@ -1405,6 +1413,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1492,6 +1502,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
@@ -1519,6 +1531,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1596,6 +1610,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
@@ -1623,6 +1639,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1700,6 +1718,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
@@ -1728,6 +1748,8 @@ pub mod tests {
         let (_, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1835,6 +1857,8 @@ pub mod tests {
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
                     &mut refill_test_execution_void,
                 );
