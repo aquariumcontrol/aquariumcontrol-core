@@ -62,6 +62,7 @@ use crate::heating::HeatingStatsDataTransfer;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
 use crate::refill::RefillExecution;
+use crate::schedule_check::ScheduleCheck;
 use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
@@ -71,7 +72,6 @@ use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::sql_interface_schedule::SqlInterfaceSchedule;
-use crate::schedule_check::ScheduleCheck;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
@@ -150,7 +150,7 @@ fn main() {
     };
 
     let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
-    
+
     let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
     let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
@@ -318,14 +318,16 @@ fn main() {
     let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
-    
+
     // *** refill <=> schedule_check ***
     let (tx_refill_to_schedule_check, rx_schedule_check_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_schedule_check_to_refill, rx_refill_from_schedule_check): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_schedule_check_to_refill, rx_refill_from_schedule_check): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** heating <=> controllino ***
@@ -336,14 +338,16 @@ fn main() {
     let (tx_controllino_to_heating, rx_heating_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
-    
+
     // *** heating <=> schedule_check ***
     let (tx_heating_to_schedule_check, rx_schedule_check_from_heating): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_schedule_check_to_heating, rx_heating_from_schedule_check): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_schedule_check_to_heating, rx_heating_from_schedule_check): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** ventilation <=> controllino ***
@@ -356,7 +360,7 @@ fn main() {
         Receiver<bool>,
     ) = mpsc::channel();
     // *******************************
-    
+
     // *** ventilation <=> schedule_check ***
     let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation): (
         Sender<InternalCommand>,
@@ -376,7 +380,7 @@ fn main() {
     let (tx_controllino_to_feed, rx_feed_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
-    
+
     // *** balling <=> controllino ***
     let (tx_balling_to_controllino, rx_controllino_from_balling): (
         Sender<InternalCommand>,
@@ -385,14 +389,16 @@ fn main() {
     let (tx_controllino_to_balling, rx_balling_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
-    
+
     // *** balling <=> schedule_check ***
     let (tx_balling_to_schedule_check, rx_schedule_check_from_balling): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_schedule_check_to_balling, rx_balling_from_schedule_check): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_schedule_check_to_balling, rx_balling_from_schedule_check): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** monitors <=> controllino ***

@@ -216,7 +216,7 @@ impl SqlInterfaceSchedule {
 pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{sql_query_strings, SqlInterface};
+    use crate::sql_interface::{SqlInterface};
     use crate::sql_interface_schedule::{
         ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
     };

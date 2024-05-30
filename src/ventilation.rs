@@ -40,6 +40,10 @@ pub struct VentilationConfig {
 
     /// configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
+    
+    // strategy when schedule check does not allow operation:
+    // true=ventilation will be switched on; false=ventilation will be switched off
+    on_when_out_of_schedule: bool,
 }
 
 /// Checks if there are new messages in the channel.
@@ -187,6 +191,8 @@ impl Ventilation {
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+    /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
+    /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker                   
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
@@ -207,6 +213,7 @@ impl Ventilation {
         let mut measurement_error: bool;
         let mut loop_counter = 0;
         let mut ventilation_state: ActuatorState = ActuatorState::Undefined;
+        let mut schedule_check_result: bool = false;
 
         loop {
             // run the temperature control only once per second
@@ -237,63 +244,115 @@ impl Ventilation {
                         );
                     }
                 }
-
-                if (measured_temperature >= self.config.switch_off_temperature)
-                    && (measured_temperature <= self.config.switch_on_temperature)
-                {
-                    if (self.calc_normalized_control_deviation(measured_temperature)
-                        > saw_tooth_profile.level_normalized)
-                        && !measurement_error
-                    {
-                        // switch on ventilation if not already on
-                        if ventilation_state != ActuatorState::On {
-                            switch_on_ventilation(
-                                &mutex_device_scheduler_ventilation,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            ventilation_state = ActuatorState::On;
-                        }
-                    } else {
-                        // switch off ventilation if no already off
-                        if ventilation_state != ActuatorState::Off {
-                            switch_off_ventilation(
-                                &mutex_device_scheduler_ventilation,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            ventilation_state = ActuatorState::Off;
-                        }
+                
+                // schedule check to see if actuation is allowed
+                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                    Ok(_) => {
+                        // now listen for response
+                        schedule_check_result = match rx_from_schedule_check.recv() {
+                            Ok(c) => c,
+                            Err(e) => {
+                                println!(
+                                    "Ventilation: Error when reading channel content for schedule check: {e:?}"
+                                );
+                                false // assume we are not allowed to actuate when communication is not successful
+                            }
+                        };
                     }
-                } else {
-                    if measured_temperature > self.config.switch_on_temperature {
-                        // switch on ventilation if no already on
-                        if ventilation_state != ActuatorState::On {
-                            switch_on_ventilation(
-                                &mutex_device_scheduler_ventilation,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            ventilation_state = ActuatorState::On;
-                        }
-                    }
-                    if measured_temperature < self.config.switch_off_temperature {
-                        // switch off ventilation if not already off
-                        if ventilation_state != ActuatorState::Off {
-                            switch_off_ventilation(
-                                &mutex_device_scheduler_ventilation,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            ventilation_state = ActuatorState::Off;
-                        }
+                    Err(e) => {
+                        println!(
+                            "Ventilation: Error in channel communication to schedule check: {e:?}"
+                        );
                     }
                 }
 
+                if schedule_check_result {
+                    // actuation is allowed. proceed with control.
+                    if (measured_temperature >= self.config.switch_off_temperature)
+                        && (measured_temperature <= self.config.switch_on_temperature)
+                    {
+                        if (self.calc_normalized_control_deviation(measured_temperature)
+                            > saw_tooth_profile.level_normalized)
+                            && !measurement_error
+                        {
+                            // switch on ventilation if not already on
+                            if ventilation_state != ActuatorState::On {
+                                switch_on_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::On;
+                            }
+                        } else {
+                            // switch off ventilation if no already off
+                            if ventilation_state != ActuatorState::Off {
+                                switch_off_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::Off;
+                            }
+                        }
+                    } else {
+                        if measured_temperature > self.config.switch_on_temperature {
+                            // switch on ventilation if no already on
+                            if ventilation_state != ActuatorState::On {
+                                switch_on_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::On;
+                            }
+                        }
+                        if measured_temperature < self.config.switch_off_temperature {
+                            // switch off ventilation if not already off
+                            if ventilation_state != ActuatorState::Off {
+                                switch_off_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::Off;
+                            }
+                        }
+                    }
+                }
+                else {
+                    // schedule check said that we not allowed actuate
+                    match self.config.on_when_out_of_schedule {
+                        true => {
+                            // switch on heater if not already on
+                            if ventilation_state != ActuatorState::On {
+                                switch_on_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::On;
+                            }
+                        }
+                        false => {
+                            // switch off heater if not already off
+                            if ventilation_state != ActuatorState::Off {
+                                switch_off_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                ventilation_state = ActuatorState::Off;
+                            }
+                        }
+                    }
+                }
                 saw_tooth_profile.execute();
             }
 

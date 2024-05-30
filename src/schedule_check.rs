@@ -24,7 +24,7 @@ use crate::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSch
 pub struct ScheduleCheckConfig {
     /// interval for polling the SQL database
     schedule_check_interval: u32,
-    
+
     /// strategy if entry could not be found in database:
     /// - true allows actuation
     /// - false inhibits actuation
@@ -102,7 +102,7 @@ impl ScheduleCheck {
                     match schedule_entry {
                         Some(c) => c.check_if_allowed(),
                         None => self.config.strategy_if_schedule_not_found,
-                    }                
+                    }
                 },
                 _ => {
                     println!("ScheduleCheck: ignoring inapplicable command from signal handler.");
@@ -167,7 +167,10 @@ impl ScheduleCheck {
                 break;
             }
 
-            let schedule_entry_ventilation_opt = match self.sql_interface_schedule.find_schedule(ScheduleType::Ventilation) {
+            let schedule_entry_ventilation_opt = match self
+                .sql_interface_schedule
+                .find_schedule(ScheduleType::Ventilation)
+            {
                 Ok(c) => Some(c),
                 Err(e) => {
                     println!("ScheduleCheck: could not find schedule for Ventilation.");
@@ -180,7 +183,10 @@ impl ScheduleCheck {
                 schedule_entry_ventilation_opt,
             );
 
-            let schedule_entry_heating_opt = match self.sql_interface_schedule.find_schedule(ScheduleType::Heating) {
+            let schedule_entry_heating_opt = match self
+                .sql_interface_schedule
+                .find_schedule(ScheduleType::Heating)
+            {
                 Ok(c) => Some(c),
                 Err(e) => {
                     println!("ScheduleCheck: could not find schedule for Heating.");
@@ -192,8 +198,11 @@ impl ScheduleCheck {
                 &rx_from_heating,
                 schedule_entry_heating_opt,
             );
-            
-            let schedule_entry_refill_opt = match self.sql_interface_schedule.find_schedule(ScheduleType::Refill) {
+
+            let schedule_entry_refill_opt = match self
+                .sql_interface_schedule
+                .find_schedule(ScheduleType::Refill)
+            {
                 Ok(c) => Some(c),
                 Err(e) => {
                     println!("ScheduleCheck: could not find schedule for Refill.");
@@ -205,14 +214,17 @@ impl ScheduleCheck {
                 &rx_from_refill,
                 schedule_entry_refill_opt,
             );
-            
-            let schedule_entry_balling_opt = match self.sql_interface_schedule.find_schedule(ScheduleType::Balling) {
+
+            let schedule_entry_balling_opt = match self
+                .sql_interface_schedule
+                .find_schedule(ScheduleType::Balling)
+            {
                 Ok(c) => Some(c),
                 Err(e) => {
                     println!("ScheduleCheck: could not find schedule for Balling.");
                     None
                 }
-            };            
+            };
             self.check_pending_schedule_request(
                 &tx_to_balling,
                 &rx_from_balling,

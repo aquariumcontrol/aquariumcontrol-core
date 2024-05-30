@@ -97,6 +97,10 @@ pub struct HeatingConfig {
 
     /// Electrical power consumption of heater in Watt
     heater_power: f32,
+
+    // strategy when schedule check does not allow operation:
+    // true=heating will be switched on; false=heating will be switched off
+    on_when_out_of_schedule: bool,
 }
 
 /// Checks if there are new messages in the channel.
@@ -263,7 +267,10 @@ impl Heating {
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+    /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
+    /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     /// * `sql_interface` - Reference to generic SQL interface
+    /// * `heating_stats_transfer` - generic struct for transfer of statistical data to database
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -289,7 +296,7 @@ impl Heating {
         let mut measurement_error_ambient_temperature: bool;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
-
+        let mut schedule_check_result: bool = false;
         let mut duration_until_midnight = self.get_duration_until_midnight();
 
         println!(
@@ -376,59 +383,111 @@ impl Heating {
                     }
                 }
 
-                // main control happens here (comparison measured/target), actuation
-                if (measured_water_temperature >= self.config.switch_on_temperature)
-                    && (measured_water_temperature <= self.config.switch_off_temperature)
-                {
-                    if (self.calc_normalized_control_deviation(measured_water_temperature)
-                        < saw_tooth_profile.level_normalized)
-                        && !measurement_error_water_temperature
+                // schedule check to see if actuation is allowed
+                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                    Ok(_) => {
+                        // now listen for response
+                        schedule_check_result = match rx_from_schedule_check.recv() {
+                            Ok(c) => c,
+                            Err(e) => {
+                                println!(
+                                    "Heating: Error when reading channel content for schedule check: {e:?}"
+                                );
+                                false // assume we are not allowed to actuate when communication is not successful
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!(
+                            "Heating: Error in channel communication to schedule check: {e:?}"
+                        );
+                    }
+                }
+
+                if schedule_check_result {
+                    // schedule check said that acutation is allowed.
+                    // main control happens here (comparison measured/target), actuation
+                    if (measured_water_temperature >= self.config.switch_on_temperature)
+                        && (measured_water_temperature <= self.config.switch_off_temperature)
                     {
-                        // switch on heater if not already on
-                        if heater_state != ActuatorState::On {
-                            switch_on_heater(
-                                &mutex_device_scheduler_heating,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            heater_state = ActuatorState::On;
+                        if (self.calc_normalized_control_deviation(measured_water_temperature)
+                            < saw_tooth_profile.level_normalized)
+                            && !measurement_error_water_temperature
+                        {
+                            // switch on heater if not already on
+                            if heater_state != ActuatorState::On {
+                                switch_on_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::On;
+                            }
+                        } else {
+                            // switch off heater if not already off
+                            if heater_state != ActuatorState::Off {
+                                switch_off_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::Off;
+                            }
                         }
                     } else {
-                        // switch off heater if not already off
-                        if heater_state != ActuatorState::Off {
-                            switch_off_heater(
-                                &mutex_device_scheduler_heating,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            heater_state = ActuatorState::Off;
+                        if measured_water_temperature > self.config.switch_off_temperature {
+                            // switch off heater if not already off
+                            if heater_state != ActuatorState::Off {
+                                switch_off_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::Off;
+                            }
+                        }
+                        if measured_water_temperature < self.config.switch_on_temperature {
+                            // switch on heater if not already on
+                            if heater_state != ActuatorState::On {
+                                switch_on_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::On;
+                            }
                         }
                     }
                 } else {
-                    if measured_water_temperature > self.config.switch_off_temperature {
-                        // switch off heater if not already off
-                        if heater_state != ActuatorState::Off {
-                            switch_off_heater(
-                                &mutex_device_scheduler_heating,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            heater_state = ActuatorState::Off;
+                    // schedule check said that we not allowed actuate
+                    match self.config.on_when_out_of_schedule {
+                        true => {
+                            // switch on heater if not already on
+                            if heater_state != ActuatorState::On {
+                                switch_on_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::On;
+                            }
                         }
-                    }
-                    if measured_water_temperature < self.config.switch_on_temperature {
-                        // switch on heater if not already on
-                        if heater_state != ActuatorState::On {
-                            switch_on_heater(
-                                &mutex_device_scheduler_heating,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
-                                &tx_to_datalogger,
-                            );
-                            heater_state = ActuatorState::On;
+                        false => {
+                            // switch off heater if not already off
+                            if heater_state != ActuatorState::Off {
+                                switch_off_heater(
+                                    &mutex_device_scheduler_heating,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &tx_to_datalogger,
+                                );
+                                heater_state = ActuatorState::Off;
+                            }
                         }
                     }
                 }
@@ -523,14 +582,13 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDate;
+    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::{Duration, SystemTime};
-    use chrono::{Local,Datelike};
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
@@ -547,7 +605,7 @@ pub mod tests {
     }
 
     impl HeatingStatsMockDataTransfer {
-        pub fn new() -> HeatingStatsMockDataTransfer {                      
+        pub fn new() -> HeatingStatsMockDataTransfer {
             Self {
                 heating_stats_entry: HeatingStatsEntry::new(),
             }
@@ -668,6 +726,40 @@ pub mod tests {
         }
     }
 
+    // send via channel a value to the test object to indicate if actuation is permitted.
+    fn mock_schedule_check(
+        tx_schedule_check_to_heating: &Sender<bool>,
+        rx_schedule_check_from_heating: &Receiver<InternalCommand>,
+        value: bool
+    ) -> bool {
+        match rx_schedule_check_from_heating.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::ScheduleCheck => {
+                    // allow control to actuate
+                    let _ = tx_schedule_check_to_heating.send(value);
+                }
+                InternalCommand::Quit => {
+                    // test case has finished
+                    return true;
+                }
+                _ => {
+                    panic!("Heating: test object sent invalid command.");
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "Heating: Error in trying to receive command from test object: {e:?}"
+                        );
+                    }
+                }
+            }
+        }
+        false
+    }
+    
     // Check if the heater remains switched off during two cycles of the saw tooth profile.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
@@ -713,6 +805,19 @@ pub mod tests {
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
             let start_time = SystemTime::now();
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            // thread for test environment
             scope.spawn(move || {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let command_received_opt = test_heating_receive_actuation_command_send_confirmation(
@@ -742,7 +847,12 @@ pub mod tests {
                 }
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
             scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
@@ -754,10 +864,13 @@ pub mod tests {
                     rx_heating_from_signal_handler,
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
-                    rx_heating_from_schedule_check,                    
+                    rx_heating_from_schedule_check,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
+
+                let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
                 // check if heater actuation has taken place
                 let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
                 assert_eq!(*mutex_data, 1);
@@ -793,23 +906,36 @@ pub mod tests {
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
             .sql_interface_heating
-            .get_single_heating_stats_from_database() {
-                Ok(c) => c,
-                Err(_) => {
-                    // database responded with empty response - let's create empty entry
-                    HeatingStatsEntry {
-                        date: Local::now().date().naive_local(),
-                        energy: 0.0,
-                        ambient_temperature_average_value: 0.0,
-                        ambient_temperature_average_counter: 0,
-                        water_temperature_average_value: 0.0,
-                        water_temperature_average_counter: 0,
-                        heating_control_runtime: 0,
-                    }                
+            .get_single_heating_stats_from_database()
+        {
+            Ok(c) => c,
+            Err(_) => {
+                // database responded with empty response - let's create empty entry
+                HeatingStatsEntry {
+                    date: Local::now().date_naive(),
+                    energy: 0.0,
+                    ambient_temperature_average_value: 0.0,
+                    ambient_temperature_average_counter: 0,
+                    water_temperature_average_value: 0.0,
+                    water_temperature_average_counter: 0,
+                    heating_control_runtime: 0,
                 }
-            };
+            }
+        };
 
         scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });            
+            
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
             scope.spawn(move || {
@@ -827,6 +953,9 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+                    
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
@@ -835,14 +964,20 @@ pub mod tests {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
-                    rx_heating_from_signal_handler,                    
+                    rx_heating_from_signal_handler,
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
-                    rx_heating_from_schedule_check,                    
+                    rx_heating_from_schedule_check,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                println!("test_heating_wait_for_midnight: {}", heating_stats_transfer.heating_stats_entry);
+                
+                let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                
+                println!(
+                    "test_heating_wait_for_midnight: {}",
+                    heating_stats_transfer.heating_stats_entry
+                );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
