@@ -70,6 +70,8 @@ use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
 use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::schedule_check::ScheduleCheck;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
@@ -121,6 +123,16 @@ use crate::version_information::VersionInformation;
 ///     controllino --> monitors
 ///     monitors --> refill
 ///     refill --> monitors
+///     ventilation --> schedule_check[ScheduleCheck]
+///     schedule_check --> ventilation
+///     heating --> schedule_check
+///     schedule_check --> heating
+///     refill --> schedule_check
+///     schedule_check --> refill
+///     balling --> schedule_check
+///     schedule_check --> balling
+///     signal_handler --> schedule_check
+///     schedule_check --> signal_handler
 /// ```
 
 fn main() {
@@ -137,6 +149,8 @@ fn main() {
         }
     };
 
+    let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
+    
     let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
     let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
@@ -304,6 +318,15 @@ fn main() {
     let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
+    
+    // *** refill <=> schedule_check ***
+    let (tx_refill_to_schedule_check, rx_schedule_check_from_refill): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_schedule_check_to_refill, rx_refill_from_schedule_check): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
 
     // *** heating <=> controllino ***
     let (tx_heating_to_controllino, rx_controllino_from_heating): (
@@ -311,6 +334,15 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_controllino_to_heating, rx_heating_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+    
+    // *** heating <=> schedule_check ***
+    let (tx_heating_to_schedule_check, rx_schedule_check_from_heating): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_schedule_check_to_heating, rx_heating_from_schedule_check): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
 
@@ -324,6 +356,17 @@ fn main() {
         Receiver<bool>,
     ) = mpsc::channel();
     // *******************************
+    
+    // *** ventilation <=> schedule_check ***
+    let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // *******************************
 
     // *** feed <=> controllino ***
     let (tx_feed_to_controllino, rx_controllino_from_feed): (
@@ -333,13 +376,22 @@ fn main() {
     let (tx_controllino_to_feed, rx_feed_from_controllino): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
-
+    
     // *** balling <=> controllino ***
     let (tx_balling_to_controllino, rx_controllino_from_balling): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_controllino_to_balling, rx_balling_from_controllino): (Sender<bool>, Receiver<bool>) =
+        mpsc::channel();
+    // *******************************
+    
+    // *** balling <=> schedule_check ***
+    let (tx_balling_to_schedule_check, rx_schedule_check_from_balling): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_schedule_check_to_balling, rx_balling_from_schedule_check): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
 
@@ -413,6 +465,17 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // ***********************************
+
+    // *** signal handler <=> schedule_check ***
+    let (tx_signal_handler_to_schedule_check, rx_schedule_check_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_schedule_check_to_signal_handler, rx_signal_handler_from_schedule_check): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -518,7 +581,7 @@ fn main() {
 
     let mut gpio_handler = GpioHandler::new(config.gpio_handler);
     let mut controllino = Controllino::new(config.controllino);
-
+    let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
     let mut data_logger = DataLogger::new(config.data_logger);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
@@ -564,8 +627,25 @@ fn main() {
                 rx_signal_handler_from_monitors,
                 tx_signal_handler_to_feed,
                 rx_signal_handler_from_feed,
+                tx_signal_handler_to_schedule_check,
+                rx_signal_handler_from_schedule_check,
                 tx_signal_handler_to_tcp_opt,
                 rx_signal_handler_from_tcp_opt,
+            );
+        });
+
+        scope.spawn(move || {
+            schedule_check.execute(
+                tx_schedule_check_to_ventilation,
+                rx_schedule_check_from_ventilation,
+                tx_schedule_check_to_heating,
+                rx_schedule_check_from_heating,
+                tx_schedule_check_to_refill,
+                rx_schedule_check_from_refill,
+                tx_schedule_check_to_balling,
+                rx_schedule_check_from_balling,
+                tx_schedule_check_to_signal_handler,
+                rx_schedule_check_from_signal_handler,
             );
         });
 
@@ -615,6 +695,8 @@ fn main() {
                 rx_refill_from_controllino,
                 tx_refill_to_signal_handler,
                 rx_refill_from_signal_handler,
+                tx_refill_to_schedule_check,
+                rx_refill_from_schedule_check,
                 tx_refill_to_datalogger,
                 &mut refill_execution,
             );
@@ -635,6 +717,8 @@ fn main() {
                 tx_heating_to_signal_handler,
                 rx_heating_from_signal_handler,
                 tx_heating_to_datalogger,
+                tx_heating_to_schedule_check,
+                rx_heating_from_schedule_check,
                 &mut sql_interface,
                 &mut heating_stats_transfer,
             );
@@ -653,6 +737,8 @@ fn main() {
                 tx_ventilation_to_signal_handler,
                 rx_ventilation_from_signal_handler,
                 tx_ventilation_to_datalogger,
+                tx_ventilation_to_schedule_check,
+                rx_ventilation_from_schedule_check,
             );
         });
 
@@ -694,6 +780,8 @@ fn main() {
                 rx_balling_from_controllino,
                 tx_balling_to_signal_handler,
                 rx_balling_from_signal_handler,
+                tx_balling_to_schedule_check,
+                rx_balling_from_schedule_check,
             );
         });
 

@@ -620,6 +620,8 @@ impl Refill {
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        tx_to_schedule_check: Sender<InternalCommand>,
+        rx_from_schedule_check: Receiver<bool>,
         tx_to_datalogger: Sender<bool>,
         refill_execution: &mut impl RefillExecutionTrait,
     ) {

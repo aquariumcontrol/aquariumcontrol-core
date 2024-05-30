@@ -274,6 +274,8 @@ impl Heating {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_datalogger: Sender<bool>,
+        tx_to_schedule_check: Sender<InternalCommand>,
+        rx_from_schedule_check: Receiver<bool>,
         sql_interface: &mut SqlInterface,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {

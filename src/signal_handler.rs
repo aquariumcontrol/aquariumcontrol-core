@@ -57,6 +57,8 @@ pub fn handle_signals(
     rx_from_monitors: Receiver<bool>,
     tx_to_feed: Sender<InternalCommand>,
     rx_from_feed: Receiver<bool>,
+    tx_to_schedule_check: Sender<InternalCommand>,
+    rx_from_schedule_check: Receiver<bool>,
     tx_to_tcp_opt: Option<Sender<InternalCommand>>,
     rx_from_tcp_opt: Option<Receiver<bool>>,
 ) {
