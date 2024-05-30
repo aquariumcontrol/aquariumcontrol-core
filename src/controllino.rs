@@ -233,6 +233,7 @@ impl Controllino {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // @todo: else branch using real HW
+                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_refill.send(true) {
                         Ok(()) => {}
@@ -262,6 +263,7 @@ impl Controllino {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // @todo: else branch using real HW
+                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_heating.send(true) {
                         Ok(()) => {}
@@ -291,6 +293,7 @@ impl Controllino {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // @todo: else branch using real HW
+                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_ventilation.send(true) {
                         Ok(()) => {}
@@ -320,6 +323,7 @@ impl Controllino {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // @todo: else branch using real HW
+                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_balling.send(true) {
                         Ok(()) => {}
@@ -349,6 +353,7 @@ impl Controllino {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     }
                     // @todo: else branch using real HW
+                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_feed.send(true) {
                         Ok(()) => {}

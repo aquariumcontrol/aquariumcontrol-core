@@ -110,6 +110,7 @@ impl Feed {
         }
 
         // @todo: this is mock data generation, replace with actual data.
+        // see https://aquariumcontrol.atlassian.net/browse/KAN-18
         let feed_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match self
@@ -121,6 +122,7 @@ impl Feed {
         }
 
         // @todo: move call to inside control loop
+        // see https://aquariumcontrol.atlassian.net/browse/KAN-18
         match self
             .sql_interface_feed
             .get_feedschedule_entry_from_database()
