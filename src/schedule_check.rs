@@ -124,7 +124,7 @@ impl ScheduleCheck {
         ) {
             Ok(_) => { /* nothing to be done */ },
             Err(e) => {
-                println!("ScheduleCheck: Error in sending back message.");
+                println!("ScheduleCheck: Error in sending back message: {e:?}");
             }
         };
     }
@@ -173,7 +173,7 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Ventilation.");
+                    println!("ScheduleCheck: could not find schedule for Ventilation: {e:?}");
                     None
                 }
             };
@@ -189,7 +189,7 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Heating.");
+                    println!("ScheduleCheck: could not find schedule for Heating: {e:?}");
                     None
                 }
             };
@@ -205,7 +205,7 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Refill.");
+                    println!("ScheduleCheck: could not find schedule for Refill: {e:?}");
                     None
                 }
             };
@@ -221,7 +221,7 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Balling.");
+                    println!("ScheduleCheck: could not find schedule for Balling: {e:?}");
                     None
                 }
             };

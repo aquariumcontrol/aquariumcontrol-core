@@ -730,7 +730,7 @@ pub mod tests {
     fn mock_schedule_check(
         tx_schedule_check_to_heating: &Sender<bool>,
         rx_schedule_check_from_heating: &Receiver<InternalCommand>,
-        value: bool
+        value: bool,
     ) -> bool {
         match rx_schedule_check_from_heating.try_recv() {
             Ok(c) => match c {
@@ -759,7 +759,7 @@ pub mod tests {
         }
         false
     }
-    
+
     // Check if the heater remains switched off during two cycles of the saw tooth profile.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
@@ -869,7 +869,8 @@ pub mod tests {
                     &mut heating_stats_transfer,
                 );
 
-                let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
                 // check if heater actuation has taken place
                 let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
@@ -934,8 +935,8 @@ pub mod tests {
                     break;
                 }
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-            });            
-            
+            });
+
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
             // thread for mock GPIO
@@ -945,7 +946,7 @@ pub mod tests {
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
-            
+
             // thread for mock Controllino
             scope.spawn(move || {
                 _ = test_heating_receive_actuation_command_send_confirmation(
@@ -955,12 +956,12 @@ pub mod tests {
                 test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
-            
+
             // thread for test object
             scope.spawn(move || {
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                    
+
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
@@ -976,9 +977,10 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                
-                let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                
+
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
                 println!(
                     "test_heating_wait_for_midnight: {}",
                     heating_stats_transfer.heating_stats_entry
@@ -1008,7 +1010,7 @@ pub mod tests {
             println!("* [Heating] checking heating waiting for midnight succeeded.");
         });
     }
-    
+
     // Checks if negative schedule checker result is processed correctly
     #[test]
     pub fn test_heating_blocked_by_schedule() {
@@ -1059,8 +1061,8 @@ pub mod tests {
                     break;
                 }
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-            });            
-            
+            });
+
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
             // thread for mock GPIO
@@ -1070,7 +1072,7 @@ pub mod tests {
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
-            
+
             // thread for mock Controllino
             scope.spawn(move || {
                 _ = test_heating_receive_actuation_command_send_confirmation(
@@ -1080,12 +1082,12 @@ pub mod tests {
                 test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
-            
+
             // thread for test object
             scope.spawn(move || {
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                    
+
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
@@ -1101,11 +1103,12 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                
-                let _ = tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                
+
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
                 let actuation_count = *mutex_device_scheduler_heating.lock().unwrap();
-                
+
                 // check if heater is only actuated once (when quitting)
                 assert_eq!(actuation_count, 1);
             });

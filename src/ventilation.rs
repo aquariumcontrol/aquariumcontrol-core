@@ -40,7 +40,7 @@ pub struct VentilationConfig {
 
     /// configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
-    
+
     // strategy when schedule check does not allow operation:
     // true=ventilation will be switched on; false=ventilation will be switched off
     on_when_out_of_schedule: bool,
@@ -244,7 +244,7 @@ impl Ventilation {
                         );
                     }
                 }
-                
+
                 // schedule check to see if actuation is allowed
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
@@ -323,8 +323,7 @@ impl Ventilation {
                             }
                         }
                     }
-                }
-                else {
+                } else {
                     // schedule check said that we not allowed actuate
                     match self.config.on_when_out_of_schedule {
                         true => {
@@ -424,6 +423,117 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
+    use chrono::Local;
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::{Duration, SystemTime};
+
+    use crate::channel_content::AquariumDevice;
+    use crate::channel_content::InternalCommand;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
+    use crate::ventilation::Ventilation;
+
+    fn prepare_ventilation_tests() -> Ventilation {
+        // prepare struct Ventilation for subsequent tests
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+        Ventilation::new(config.ventilation)
+    }
+    // send via channel a value to the test object to indicate if actuation is permitted.
+    fn mock_schedule_check(
+        tx_schedule_check_to_ventilation: &Sender<bool>,
+        rx_schedule_check_from_ventilation: &Receiver<InternalCommand>,
+        value: bool,
+    ) -> bool {
+        match rx_schedule_check_from_ventilation.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::ScheduleCheck => {
+                    // allow control to actuate
+                    let _ = tx_schedule_check_to_ventilation.send(value);
+                }
+                InternalCommand::Quit => {
+                    // test case has finished
+                    return true;
+                }
+                _ => {
+                    panic!("Ventilation: test object sent invalid command.");
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                            "Ventilation: Error in trying to receive command from test object: {e:?}"
+                        );
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn run_main_cycle_with_stimuli(
+        iterations: u32,
+        rx_gpio_from_ventilation: &Receiver<InternalCommand>,
+        tx_gpio_to_ventilation: &Sender<f32>,
+        temperature_stimuli: f32,
+    ) {
+        for i in 0..iterations {
+            println!(
+                "Ventilation: run_main_cycle_with_sensor_signals running loop iteration #{}",
+                i
+            );
+            rx_gpio_from_ventilation.recv().unwrap();
+            let _ = tx_gpio_to_ventilation.send(temperature_stimuli);
+        }
+    }
+
+    fn test_ventilation_receive_information_for_datalogger(
+        rx_datalogger_from_ventilation: &Receiver<bool>,
+    ) {
+        // receive information for data logger
+        match rx_datalogger_from_ventilation.recv() {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Ventilation: error when receiving information for data logger: {e:?}");
+            }
+        }
+    }
+
+    fn test_ventilation_receive_actuation_command_send_confirmation(
+        rx_controllino_from_ventilation: &Receiver<InternalCommand>,
+        tx_controllino_to_ventilation: &Sender<bool>,
+    ) -> Option<InternalCommand> {
+        let mut command_received: Option<InternalCommand>;
+
+        // receive command from test object
+        match rx_controllino_from_ventilation.recv() {
+            Ok(command) => {
+                command_received = Some(command);
+            }
+            Err(e) => {
+                panic!(
+                    "Ventilation: Error when receiving actuation command from test object: {e:?}"
+                );
+            }
+        }
+
+        // send confirmation back
+        match tx_controllino_to_ventilation.send(true) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Ventilation: Error when sending back actuation command confirmation to test object: {e:?}");
+            }
+        }
+
+        command_received
+    }
 
     // Check if the ventilation remains switched off during two cycles of the saw tooth profile.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
@@ -445,8 +555,123 @@ pub mod tests {
     // Check if ventilation control is not acting when disabled (active=false in configuration file)
     #[test]
     pub fn test_ventilation_not_active() {}
-    
+
     // Check if ventilation control is only actuating when quitting while schedule check provides negative result
     #[test]
-    pub fn test_ventilation_block_by_schedule() {}
+    pub fn test_ventilation_block_by_schedule() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let mut ventilation = prepare_ventilation_tests();
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    26.5,
+                );
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    30.0,
+                );
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    0.0,
+                );
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino
+            scope.spawn(move || {
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_gpio,
+                    rx_ventilation_from_gpio,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                );
+
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+
+                let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
+
+                // check if ventilation is only actuated once (when quitting)
+                assert_eq!(actuation_count, 3);
+            });
+            println!("* [Ventilation] checking if schedule checker can block actuation.");
+        });
+    }
 }
