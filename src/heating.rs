@@ -300,8 +300,8 @@ impl Heating {
         {
             Ok(c) => Some(c),
             Err(e) => {
-                println!("Heating: Could not get heating stats from database:{e:?}");
-                None
+                println!("Heating: Could not get heating stats from database:{e:?} - creating new one for today");
+                Some(HeatingStatsEntry::new())
             }
         };
         match heating_stats_opt {
@@ -393,7 +393,7 @@ impl Heating {
                             heater_state = ActuatorState::On;
                         }
                     } else {
-                        // switch off heater if no already off
+                        // switch off heater if not already off
                         if heater_state != ActuatorState::Off {
                             switch_off_heater(
                                 &mutex_device_scheduler_heating,
@@ -406,7 +406,7 @@ impl Heating {
                     }
                 } else {
                     if measured_water_temperature > self.config.switch_off_temperature {
-                        // switch off heater if no already off
+                        // switch off heater if not already off
                         if heater_state != ActuatorState::Off {
                             switch_off_heater(
                                 &mutex_device_scheduler_heating,
@@ -528,7 +528,7 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::{Duration, SystemTime};
-    use chrono::Local;
+    use chrono::{Local,Datelike};
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
@@ -545,17 +545,9 @@ pub mod tests {
     }
 
     impl HeatingStatsMockDataTransfer {
-        pub fn new() -> HeatingStatsMockDataTransfer {
+        pub fn new() -> HeatingStatsMockDataTransfer {                      
             Self {
-                heating_stats_entry: HeatingStatsEntry {
-                    date: NaiveDate::from_ymd_opt(2010, 3, 11).unwrap(),
-                    energy: 0.0,
-                    ambient_temperature_average_value: 0.0,
-                    ambient_temperature_average_counter: 0,
-                    water_temperature_average_value: 0.0,
-                    water_temperature_average_counter: 0,
-                    heating_control_runtime: 0,
-                },
+                heating_stats_entry: HeatingStatsEntry::new(),
             }
         }
     }
@@ -840,6 +832,7 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
+                println!("test_heating_wait_for_midnight: {}", heating_stats_transfer.heating_stats_entry);
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry

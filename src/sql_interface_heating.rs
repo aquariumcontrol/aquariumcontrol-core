@@ -40,7 +40,27 @@ pub struct HeatingStatsEntry {
     pub heating_control_runtime: i64,
 }
 
-impl HeatingStatsEntry {    
+impl HeatingStatsEntry {
+    /// provides struct of type HeatingStatsEntry - used in case database has not entry for current date
+    pub fn new() -> HeatingStatsEntry {
+        let now = Local::now();
+        let year = now.year();
+        let month = now.month();
+        let day = now.day();
+        // Create NaiveDate from components - unwrap is safe in this context
+        let today: NaiveDate = NaiveDate::from_ymd_opt(year, month, day).unwrap();
+        
+        Self {
+            date: today,
+            energy: 0.0,
+            ambient_temperature_average_value: 0.0,        
+            ambient_temperature_average_counter: 0,
+            water_temperature_average_value: 0.0,
+            water_temperature_average_counter: 0,
+            heating_control_runtime: 0,
+        }
+    }
+    
     /// add another sample for calculating the average values
     pub fn update(
         &mut self,
