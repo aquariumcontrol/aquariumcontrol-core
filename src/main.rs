@@ -149,7 +149,7 @@ fn main() {
         }
     };
 
-    let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
+    let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
 
     let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 

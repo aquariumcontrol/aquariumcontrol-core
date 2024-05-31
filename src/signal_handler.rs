@@ -190,6 +190,23 @@ pub fn handle_signals(
         }
     }
 
+    // next, let's shut down the schedule checker
+    match tx_to_schedule_check.send(InternalCommand::Quit) {
+        Ok(_) => {
+            println!("signal_handler: Waiting for ScheduleCheck thread to shut down.");
+            // now listen for response
+            match rx_from_schedule_check.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("handle_signals: could not receive answer from ScheduleCheck thread {e:?}")
+                }
+            };
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to ScheduleCheck when sending Quit command: {e:?}");
+        }
+    }
+
     // next, let's shut down the data logging
     match tx_to_datalogger.send(InternalCommand::Quit) {
         Ok(_) => {

@@ -161,6 +161,7 @@ impl ScheduleCheck {
         loop {
             if loop_counter % self.config.schedule_check_interval * 10 == 0 {
                 println!("ScheduleCheck: polling SQL database.");
+                _ = self.sql_interface_schedule.read_schedule();
             }
 
             if check_pending_external_request(&rx_from_signal_handler) {
