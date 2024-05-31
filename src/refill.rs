@@ -1891,7 +1891,7 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_recent_refill_event() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
 
         // accelerate test case execution
         refill
@@ -1965,11 +1965,11 @@ pub mod tests {
                 run_main_cycle_with_sensor_signals(
                     refill
                         .config
-                        .tank_level_switch_position_high_stabilization_count + 2,
+                        .tank_level_switch_position_high_stabilization_count + 1,
                     &rx_gpio_from_refill,
                     &tx_gpio_to_refill,
                     false,
-                    false,
+                    true,
                 );
                 // give test object some time to process the signals sent via channels
                 spin_sleeper.sleep(sleep_duration_50_millisec);
@@ -1992,7 +1992,9 @@ pub mod tests {
                 // no error conditions - trigger refill execution
                 println!("Refill test_execute_conditions_historic_data_error_recent_refill_event: running check #2");
                 run_main_cycle_with_sensor_signals(
-                    1,
+                    refill
+                        .config
+                        .tank_level_switch_position_high_stabilization_count + 1,
                     &rx_gpio_from_refill,
                     &tx_gpio_to_refill,
                     false,
