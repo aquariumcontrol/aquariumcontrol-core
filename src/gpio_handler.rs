@@ -7,15 +7,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(target_os = "linux")]
+use rppal::gpio::Gpio;
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-#[cfg(target_os = "linux")]
-use {
-    rppal::gpio::Gpio,
-};
 
 use crate::channel_content::InternalCommand;
-use crate::channel_content::AquariumSignal;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -27,12 +24,28 @@ pub struct GpioHandlerConfig {
 
     /// replacement value for water temperature in case reading from I2C fails
     pub replacement_value_water_temperature: f32,
-    
+
     /// replacement value for pH in case reading from I2C fails
-    pub replacement_value_pH: f32,
-    
+    pub replacement_value_ph: f32,
+
     /// replacement value for conductivity in case reading from I2C fails
     pub replacement_value_conductivity: f32,
+}
+
+/// Holds the configuration data for the I2C interface.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
+/// Struct is intentionally placed here instead of create i2c_interface.
+#[derive(Deserialize, Debug)]
+pub struct I2cInterfaceConfig {
+    /// I2C address of Atlas Scientific pH sensor unit
+    address_atlas_scientific_ph: u16,
+
+    /// I2C address of Atlas Scientific conductivity sensor unit
+    address_atlas_scientific_conductivity: u16,
+
+    /// I2C address of Atlas Scientific temperature sensor unit    
+    address_atlas_scientific_temperature: u16,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
@@ -42,7 +55,7 @@ pub struct GpioHandler {
 
     /// I2C interface for communication with Atlas Scientific sensor units
     #[cfg(target_os = "linux")]
-    i2c_interface: I2cInterface,    
+    i2c_interface: I2cInterface,
 }
 
 impl GpioHandler {
@@ -50,19 +63,19 @@ impl GpioHandler {
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
-    pub fn new(config: GpioHandlerConfig) -> GpioHandler {
+    pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
         if !config.use_simulator {
             #[cfg(not(target_os = "linux"))]
             panic!("Usage of hardware not supported on this platform.");
         }
-        
-        #[cfg(target_os = "linux")]        
+
+        #[cfg(target_os = "linux")]
         let i2c_interface = I2cInterface::new();
-        
+
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
-            i2c: i2c,
+            i2c_interface: I2cInterface::new(i2c_config),
         }
     }
 
@@ -95,58 +108,56 @@ impl GpioHandler {
             }
         }
     }
-    
+
     /// Requests a response from the real hardware
     #[cfg(target_os = "linux")]
-    fn get_response_from_hardware(
-        &self,
-        internal_command: InternalCommand,
-    ) -> f32 {
+    fn get_response_from_hardware(&self, internal_command: InternalCommand) -> f32 {
         match internal_command {
-            InternalCommand::RequestSignal(signal) => {
-                match signal {
-                    AquariumSignal::WaterTemperature => {
-                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::WaterTemperature) {
-                            Ok(c) => c,
-                            Err(_) => config.replacement_value_water_temperature,
-                        }
-                    },
-                    AquariumSignal::pH => {
-                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
-                            Ok(c) => c,
-                            Err(_) => config.replacement_value_pH,
-                        }                        
-                    },
-                    AquariumSignal::Conductivity => {
-                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::Conductivity) {
-                            Ok(c) => c,
-                            Err(_) => config.replacement_value_conductivity,
-                        }                                                
-                    },
-                    AquariumSignal::AmbientTemperature => {0.0},
-                    AquariumSignal::AmbientHumidity => {0.0},
-                    AquariumSignal::TankLevelSwitchPosition => {0.0},
-                    AquariumSignal::TankLevelSwitchInvalid => {0.0},
-                    _ => {
-                        panic!("Signal request (not yet implemented)");
+            InternalCommand::RequestSignal(signal) => match signal {
+                AquariumSignal::WaterTemperature => {
+                    match self
+                        .i2c_interface
+                        .get_response_from_i2c(AquariumSignal::WaterTemperature)
+                    {
+                        Ok(c) => c,
+                        Err(_) => config.replacement_value_water_temperature,
                     }
                 }
-            }
+                AquariumSignal::pH => {
+                    match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
+                        Ok(c) => c,
+                        Err(_) => config.replacement_value_pH,
+                    }
+                }
+                AquariumSignal::Conductivity => {
+                    match self
+                        .i2c_interface
+                        .get_response_from_i2c(AquariumSignal::Conductivity)
+                    {
+                        Ok(c) => c,
+                        Err(_) => config.replacement_value_conductivity,
+                    }
+                }
+                AquariumSignal::AmbientTemperature => 0.0,
+                AquariumSignal::AmbientHumidity => 0.0,
+                AquariumSignal::TankLevelSwitchPosition => 0.0,
+                AquariumSignal::TankLevelSwitchInvalid => 0.0,
+                _ => {
+                    panic!("Signal request (not yet implemented)");
+                }
+            },
             _ => {
                 println!("GpioHandler: ignoring irrelevant internal commands.");
                 0.0
             }
         }
     }
-    
+
     #[cfg(not(target_os = "linux"))]
-    fn get_response_from_hardware(
-        &self,
-        internal_command: InternalCommand,
-    ) -> f32 {    
+    fn get_response_from_hardware(&self, internal_command: InternalCommand) -> f32 {
         panic!("Usage of hardware not supported on this platform.");
     }
-    
+
     /// Checks if there are new messages in the channel.
     /// If the message contains the quit command, then the function returns true, otherwise false.
     /// # Arguments
@@ -234,8 +245,7 @@ impl GpioHandler {
                     if self.config.use_simulator {
                         response_value =
                             Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
-                    }
-                    else {
+                    } else {
                         response_value = self.get_response_from_hardware(c);
                     }
                     match tx_to_data_logger.send(response_value) {

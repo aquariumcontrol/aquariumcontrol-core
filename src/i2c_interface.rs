@@ -14,31 +14,50 @@ use {
     rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
 
-use crate::channel_content::InternalCommand;
 use crate::channel_content::AquariumSignal;
+use crate::channel_content::InternalCommand;
 
 enum I2cError {
     I2cGenericError,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
-pub struct I2cInterface {    
+pub struct I2cInterface {
     /// I2C interface of rppal library
     #[cfg(target_os = "linux")]
     i2c: I2c,
+
+    config: I2cInterfaceConfig,
 }
 
 impl I2cInterface {
-    pub fn new() -> I2cInterface {
-        match I2c::new() {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("GpioHandler: Initialization of I2C interface failed.");
-            }
+    pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
+        I2cInterface {
+            i2c: {
+                match I2c::new() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        panic!("GpioHandler: Initialization of I2C interface failed.");
+                    }
+                }
+            },
+            config: config,
         }
     }
-    
-    pub fn get_response_from_i2c(signal: AquariumSignal) -> Result<f32, I2cError> {
+
+    pub fn get_response_from_i2c(&self, signal: AquariumSignal) -> Result<f32, I2cError> {
+        let i2c_address = match signal {
+            AquariumSignal::pH => self.config.address_atlas_scientific_ph,
+            AquariumSignal::Conductivity => self.config.address_atlas_scientific_conductivity,
+            AquariumSignal::WaterTemperature => self.config.address_atlas_scientific_temperature,
+        };
+        self.i2c.set_slave_address(i2c_address);
+
+        let send_buf: [u8] = [0; 8];
+        self.i2c.write(send_buf);
+
+        let read_buf: [u8] = [0; 8];
+        self.i2c.read(read_buf);
         Err(I2cError::I2cGenericError)
     }
 }

@@ -15,6 +15,7 @@ use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
 use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
+use crate::gpio_handler::I2cInterfaceConfig;
 use crate::heating::HeatingConfig;
 use crate::monitors::MonitorsConfig;
 use crate::refill::RefillConfig;
@@ -60,8 +61,11 @@ pub struct ConfigData {
     /// configuration of the Controllino
     pub controllino: ControllinoConfig,
 
-    /// configure for schedule check
+    /// configuration for schedule check
     pub schedule_check: ScheduleCheckConfig,
+
+    /// configuration of I2C interface
+    pub i2c_interface: I2cInterfaceConfig,
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.
