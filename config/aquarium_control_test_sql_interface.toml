@@ -56,6 +56,7 @@ stop_on_refill_error_delay = 6000                       # time in seconds after 
 heater_power = 200                                      # electrical power consumption of heater in Watt
 # configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
+on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 
 [feed]
 active = true
@@ -67,6 +68,7 @@ switch_on_temperature = 27.0                            # temperature, at which 
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_ventilation_when_terminating = true           # behavior when terminating the application
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
+on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 
 [balling]
 active = true

@@ -49,18 +49,18 @@ impl HeatingStatsEntry {
         let day = now.day();
         // Create NaiveDate from components - unwrap is safe in this context
         let today: NaiveDate = NaiveDate::from_ymd_opt(year, month, day).unwrap();
-        
+
         Self {
             date: today,
             energy: 0.0,
-            ambient_temperature_average_value: 0.0,        
+            ambient_temperature_average_value: 0.0,
             ambient_temperature_average_counter: 0,
             water_temperature_average_value: 0.0,
             water_temperature_average_counter: 0,
             heating_control_runtime: 0,
         }
     }
-    
+
     /// add another sample for calculating the average values
     pub fn update(
         &mut self,
