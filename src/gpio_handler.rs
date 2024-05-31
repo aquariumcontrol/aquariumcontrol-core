@@ -12,10 +12,10 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 #[cfg(target_os = "linux")]
 use {
     rppal::gpio::Gpio,
-    rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
 
 use crate::channel_content::InternalCommand;
+use crate::channel_content::AquariumSignal;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -24,12 +24,25 @@ use crate::channel_content::InternalCommand;
 pub struct GpioHandlerConfig {
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
+
+    /// replacement value for water temperature in case reading from I2C fails
+    pub replacement_value_water_temperature: f32,
+    
+    /// replacement value for pH in case reading from I2C fails
+    pub replacement_value_pH: f32,
+    
+    /// replacement value for conductivity in case reading from I2C fails
+    pub replacement_value_conductivity: f32,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
     /// configuration data for GPIO handler
     config: GpioHandlerConfig,
+
+    /// I2C interface for communication with Atlas Scientific sensor units
+    #[cfg(target_os = "linux")]
+    i2c_interface: I2cInterface,    
 }
 
 impl GpioHandler {
@@ -42,7 +55,15 @@ impl GpioHandler {
             #[cfg(not(target_os = "linux"))]
             panic!("Usage of hardware not supported on this platform.");
         }
-        GpioHandler { config: config }
+        
+        #[cfg(target_os = "linux")]        
+        let i2c_interface = I2cInterface::new();
+        
+        GpioHandler {
+            config: config,
+            #[cfg(target_os = "linux")]
+            i2c: i2c,
+        }
     }
 
     /// Requests a response from the simulator via TCP communication by sending
@@ -74,13 +95,58 @@ impl GpioHandler {
             }
         }
     }
-
-    /// Placeholder for future implementation of platform-specific code    
+    
+    /// Requests a response from the real hardware
     #[cfg(target_os = "linux")]
-    fn execute_linux_specific_code() {
-        println!("Linux specific code.");
+    fn get_response_from_hardware(
+        &self,
+        internal_command: InternalCommand,
+    ) -> f32 {
+        match internal_command {
+            InternalCommand::RequestSignal(signal) => {
+                match signal {
+                    AquariumSignal::WaterTemperature => {
+                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::WaterTemperature) {
+                            Ok(c) => c,
+                            Err(_) => config.replacement_value_water_temperature,
+                        }
+                    },
+                    AquariumSignal::pH => {
+                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
+                            Ok(c) => c,
+                            Err(_) => config.replacement_value_pH,
+                        }                        
+                    },
+                    AquariumSignal::Conductivity => {
+                        match self.i2c_interface.get_response_from_i2c(AquariumSignal::Conductivity) {
+                            Ok(c) => c,
+                            Err(_) => config.replacement_value_conductivity,
+                        }                                                
+                    },
+                    AquariumSignal::AmbientTemperature => {0.0},
+                    AquariumSignal::AmbientHumidity => {0.0},
+                    AquariumSignal::TankLevelSwitchPosition => {0.0},
+                    AquariumSignal::TankLevelSwitchInvalid => {0.0},
+                    _ => {
+                        panic!("Signal request (not yet implemented)");
+                    }
+                }
+            }
+            _ => {
+                println!("GpioHandler: ignoring irrelevant internal commands.");
+                0.0
+            }
+        }
     }
-
+    
+    #[cfg(not(target_os = "linux"))]
+    fn get_response_from_hardware(
+        &self,
+        internal_command: InternalCommand,
+    ) -> f32 {    
+        panic!("Usage of hardware not supported on this platform.");
+    }
+    
     /// Checks if there are new messages in the channel.
     /// If the message contains the quit command, then the function returns true, otherwise false.
     /// # Arguments
@@ -148,9 +214,6 @@ impl GpioHandler {
     ) {
         let mut response_value: f32 = 0.0;
 
-        #[cfg(target_os = "linux")]
-        execute_linux_specific_code();
-
         let tx_to_tcp: Sender<InternalCommand>;
         let rx_from_tcp: Receiver<f32>;
         if self.config.use_simulator && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
@@ -171,6 +234,9 @@ impl GpioHandler {
                     if self.config.use_simulator {
                         response_value =
                             Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    }
+                    else {
+                        response_value = self.get_response_from_hardware(c);
                     }
                     match tx_to_data_logger.send(response_value) {
                         Ok(()) => {}

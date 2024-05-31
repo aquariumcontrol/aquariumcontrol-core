@@ -78,7 +78,10 @@ saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_leng
 on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 
 [gpio_handler]
-use_simulator = true                                     # if true, then do not use real HW
+use_simulator = true                                    # if true, then do not use real HW
+replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
+replacement_value_pH = 8.0                              # replacement value for pH in case reading from I2C fails
+replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
 
 [schedule_check]
 schedule_check_interval = 300                           # interval in seconds for polling SQL database

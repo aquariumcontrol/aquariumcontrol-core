@@ -43,6 +43,9 @@ mod tcp_communication;
 mod ventilation;
 mod version_information;
 
+#[cfg(target_os = "linux")]
+mod i2c_interface;
+
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
