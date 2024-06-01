@@ -46,6 +46,39 @@ pub struct I2cInterfaceConfig {
 
     /// I2C address of Atlas Scientific temperature sensor unit    
     address_atlas_scientific_temperature: u16,
+
+    /// maximum number of read attempts
+    max_read_attempts: u16,
+
+    /// timeout for transactions in milliseconds
+    timeout_transaction: u32,
+
+    /// sleep time in milliseconds before after writing before reading from pH sensor unit
+    sleep_time_atlas_scientific_ph: u32,
+
+    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
+    sleep_time_atlas_scientific_conductivity: u32,
+
+    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
+    sleep_time_atlas_scientific_temperature: u32,
+
+    /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
+    max_val_atlas_scientific_ph: f32,
+
+    /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
+    min_val_atlas_scientific_ph: f32,
+
+    /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+    max_val_atlas_scientific_temperature: f32,
+
+    /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
+    min_val_atlas_scientific_temperature: f32,
+
+    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    max_val_atlas_scientific_conductivity: f32,
+
+    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    min_val_atlas_scientific_conductivity: f32,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.

@@ -87,6 +87,17 @@ replacement_value_conductivity = 50000                  # replacement value for 
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
 address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
 address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
+timeout_transaction = 100                               # timeout for transactions in milliseconds
+max_read_attempts = 10                                  # maximum number of read attempts
+sleep_time_atlas_scientific_ph = 900                    # sleep time in milliseconds before after writing before reading from pH sensor unit
+sleep_time_atlas_scientific_conductivity = 900          # sleep time in milliseconds before after writing before reading from conductivity sensor unit
+sleep_time_atlas_scientific_temperature = 600           # sleep time in milliseconds before after writing before reading from temperature sensor unit
+max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
+max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_temperature = 10.0             # minimum allowed value for temperature used to assess if the temperature sensor reading is valid,
+max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 
 [schedule_check]
 schedule_check_interval = 300                           # interval in seconds for polling SQL database
