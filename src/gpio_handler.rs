@@ -8,11 +8,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::Gpio;
+//use rppal::gpio::Gpio;
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crate::channel_content::InternalCommand;
+use crate::channel_content::AquariumSignal;
+use crate::i2c_interface::I2cInterface;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -39,46 +41,46 @@ pub struct GpioHandlerConfig {
 #[derive(Deserialize, Debug)]
 pub struct I2cInterfaceConfig {
     /// I2C address of Atlas Scientific pH sensor unit
-    address_atlas_scientific_ph: u16,
+    pub address_atlas_scientific_ph: u16,
 
     /// I2C address of Atlas Scientific conductivity sensor unit
-    address_atlas_scientific_conductivity: u16,
+    pub address_atlas_scientific_conductivity: u16,
 
     /// I2C address of Atlas Scientific temperature sensor unit    
-    address_atlas_scientific_temperature: u16,
+    pub address_atlas_scientific_temperature: u16,
 
     /// maximum number of read attempts
-    max_read_attempts: u16,
+    pub max_read_attempts: u16,
 
     /// timeout for transactions in milliseconds
-    timeout_transaction: u32,
+    pub timeout_transaction: u32,
 
     /// sleep time in milliseconds before after writing before reading from pH sensor unit
-    sleep_time_atlas_scientific_ph: u32,
+    pub sleep_time_atlas_scientific_ph: u64,
 
     /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
-    sleep_time_atlas_scientific_conductivity: u32,
+    pub sleep_time_atlas_scientific_conductivity: u64,
 
     /// sleep time in milliseconds before after writing before reading from temperature sensor unit
-    sleep_time_atlas_scientific_temperature: u32,
+    pub sleep_time_atlas_scientific_temperature: u64,
 
     /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    max_val_atlas_scientific_ph: f32,
+    pub max_val_atlas_scientific_ph: f32,
 
     /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    min_val_atlas_scientific_ph: f32,
+    pub min_val_atlas_scientific_ph: f32,
 
     /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    max_val_atlas_scientific_temperature: f32,
+    pub max_val_atlas_scientific_temperature: f32,
 
     /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    min_val_atlas_scientific_temperature: f32,
+    pub min_val_atlas_scientific_temperature: f32,
 
     /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    max_val_atlas_scientific_conductivity: f32,
+    pub max_val_atlas_scientific_conductivity: f32,
 
     /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    min_val_atlas_scientific_conductivity: f32,
+    pub min_val_atlas_scientific_conductivity: f32,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
@@ -101,9 +103,6 @@ impl GpioHandler {
             #[cfg(not(target_os = "linux"))]
             panic!("Usage of hardware not supported on this platform.");
         }
-
-        #[cfg(target_os = "linux")]
-        let i2c_interface = I2cInterface::new();
 
         GpioHandler {
             config: config,
@@ -144,7 +143,7 @@ impl GpioHandler {
 
     /// Requests a response from the real hardware
     #[cfg(target_os = "linux")]
-    fn get_response_from_hardware(&self, internal_command: InternalCommand) -> f32 {
+    fn get_response_from_hardware(&mut self, internal_command: InternalCommand) -> f32 {
         match internal_command {
             InternalCommand::RequestSignal(signal) => match signal {
                 AquariumSignal::WaterTemperature => {
@@ -153,13 +152,13 @@ impl GpioHandler {
                         .get_response_from_i2c(AquariumSignal::WaterTemperature)
                     {
                         Ok(c) => c,
-                        Err(_) => config.replacement_value_water_temperature,
+                        Err(_) => self.config.replacement_value_water_temperature,
                     }
                 }
                 AquariumSignal::pH => {
                     match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
                         Ok(c) => c,
-                        Err(_) => config.replacement_value_pH,
+                        Err(_) => self.config.replacement_value_ph,
                     }
                 }
                 AquariumSignal::Conductivity => {
@@ -168,7 +167,7 @@ impl GpioHandler {
                         .get_response_from_i2c(AquariumSignal::Conductivity)
                     {
                         Ok(c) => c,
-                        Err(_) => config.replacement_value_conductivity,
+                        Err(_) => self.config.replacement_value_conductivity,
                     }
                 }
                 AquariumSignal::AmbientTemperature => 0.0,
