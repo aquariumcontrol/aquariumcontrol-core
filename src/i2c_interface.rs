@@ -18,6 +18,7 @@ use {
 use crate::gpio_handler::I2cInterfaceConfig;
 
 /// error codes for evaluation of sensor unit response
+#[derive(Debug, PartialEq)]
 pub enum AtlasScientificError {
     /// first character in message sent from sensor unit does not match required magic number
     FirstCharacterNotMagic,
@@ -36,6 +37,7 @@ pub enum AtlasScientificError {
 }
 
 /// communication error codes
+#[derive(Debug, PartialEq)]
 pub enum I2cError {
     /// message could not be sent
     WriteFailure,
@@ -299,30 +301,44 @@ impl I2cInterface {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::channel_content::AquariumSignal;
-    use crate::gpio_handler::I2cInterfaceConfig;
-    use crate::i2c_interface::I2cInterface;
     use assert_float_eq::*;
+
+    use crate::channel_content::AquariumSignal;
+    use crate::config::ConfigData;
+    use crate::i2c_interface::AtlasScientificError;
+    use crate::i2c_interface::I2cInterface;
+    use crate::i2c_interface::atlas_scientific_constants;
+    use crate::read_config_file;
 
     // happy case for evaluating response from pH sensor unit
     #[test]
-    pub fn test_i2c_interface_check_response_valid_pH() {
-        let stimuli: [u8] = [
+    pub fn test_i2c_interface_check_response_valid_ph() {
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '8' as u8,
             atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
+            '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_float_absolute_eq!(check_response(stimuli, true), 8.0, 0.001);
+        let result = I2cInterface::check_response(stimuli, true);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 8.0, 0.001);
+            }
+            Err(e) => {
+                panic!("i2c_interfcae_check_response_valid_pH returned error: {e:?}");
+            }
+        }
     }
 
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
-    pub fn test_i2c_interface_check_response_invalid_pH_negative() {
-        let stimuli: [u8] = [
+    #[test]
+    pub fn test_i2c_interface_check_response_invalid_ph_negative() {
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '-' as u8,
             '8' as u8,
@@ -333,7 +349,7 @@ pub mod tests {
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_eq!(
-            check_response(stimuli, true),
+            I2cInterface::check_response(stimuli, true),
             Err(AtlasScientificError::ContainsInvalidCharacter)
         );
     }
@@ -341,22 +357,31 @@ pub mod tests {
     // happy case for evaluating response from conductivity sensor unit
     #[test]
     pub fn test_i2c_interface_check_response_valid_conductivity() {
-        let stimuli: [u8] = [
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '5' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
+            '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_float_absolute_eq!(check_response(stimuli, false), 50000.0, 0.001);
+        let result = I2cInterface::check_response(stimuli, false);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 50000.0, 0.001);
+            }
+            Err(e) => {
+                panic!("test_i2c_interface_check_response_valid_conductivity return error: {e:?}");
+            }
+        }
     }
 
     // happy case for evaluating response from temperature sensor unit
     #[test]
     pub fn test_i2c_interface_check_response_valid_temperature() {
-        let stimuli: [u8] = [
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
@@ -366,13 +391,21 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_float_absolute_eq!(check_response(stimuli, false), 25.0, 0.001);
+        let result = I2cInterface::check_response(stimuli, false);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 25.0, 0.001);
+            }
+            Err(e) => {
+                panic!("test_i2c_interface_check_response_valid_temperature return error: {e:?}");
+            }
+        }
     }
 
     // checking if incorrect magic number in the front of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_front() {
-        let stimuli: [u8] = [
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC - 1,
             '2' as u8,
             '5' as u8,
@@ -383,7 +416,7 @@ pub mod tests {
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_eq!(
-            check_response(stimuli, false),
+            I2cInterface::check_response(stimuli, false),
             Err(AtlasScientificError::FirstCharacterNotMagic)
         );
     }
@@ -391,7 +424,7 @@ pub mod tests {
     // checking if incorrect magic number in the rear part of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_rear() {
-        let stimuli: [u8] = [
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
@@ -399,10 +432,10 @@ pub mod tests {
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC - 1,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC + 1,
         ];
         assert_eq!(
-            check_response(stimuli, false),
+            I2cInterface::check_response(stimuli, false),
             Err(AtlasScientificError::LastCharacterNotMagic)
         );
     }
@@ -410,7 +443,7 @@ pub mod tests {
     // checking if incorrect sequence of numeric characters is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_conversion() {
-        let stimuli: [u8] = [
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
@@ -418,10 +451,10 @@ pub mod tests {
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC - 1,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_eq!(
-            check_response(stimuli, false),
+            I2cInterface::check_response(stimuli, false),
             Err(AtlasScientificError::ConversionFailure)
         );
     }
@@ -431,21 +464,33 @@ pub mod tests {
     pub fn test_i2c_interface_read_ph() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
-        i2c_interface = I2cInterface::new(config.i2c_interface);
-        assert_float_absolute_eq!(get_response_from_i2c(AquariumSignal::pH), 8.0, 3.0);
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+        let result = i2c_interface.get_response_from_i2c(AquariumSignal::pH);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 8.0, 3.0);
+            }
+            Err(e) => {
+                panic!("test_i2c_interface_read_ph return error: {e:?}");
+            }
+        }
     }
 
     // read from real hardware: Atlas Scientific conductivity sensor
     #[test]
-    pub fn test_i2c_interface_read_temperature() {
+    pub fn test_i2c_interface_read_conductivity() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
-        i2c_interface = I2cInterface::new(config.i2c_interface);
-        assert_float_absolute_eq!(
-            get_response_from_i2c(AquariumSignal::Conductivity),
-            50000.0,
-            10000.0
-        );
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+        let result = i2c_interface.get_response_from_i2c(AquariumSignal::Conductivity);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 50000.0, 10000.0);
+            }
+            Err(e) => {
+                panic!("test_i2c_interface_read_temperature returned error: {e:?}");
+            }
+        }
     }
 
     // read from real hardware: Atlas Scientific temperature sensor
@@ -453,11 +498,15 @@ pub mod tests {
     pub fn test_i2c_interface_read_temperature() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
-        i2c_interface = I2cInterface::new(config.i2c_interface);
-        assert_float_absolute_eq!(
-            get_response_from_i2c(AquariumSignal::WaterTemperature),
-            25.0,
-            10.0
-        );
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+        let result = i2c_interface.get_response_from_i2c(AquariumSignal::WaterTemperature);
+        match result {
+            Ok(c) => {
+                assert_float_absolute_eq!(c, 25.0, 10.0);
+            }
+            Err(e) => {
+                panic!("test_i2c_interface_read_temperature returned error: {e:?}");
+            }
+        }
     }
 }
