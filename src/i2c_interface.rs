@@ -7,18 +7,18 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::channel_content::AquariumSignal;
+use spin_sleep::SpinSleeper;
 use std::str;
+use std::time::Duration;
 use {
     rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
-use spin_sleep::SpinSleeper;
-use std::time::Duration;
-use crate::channel_content::AquariumSignal;
 
 use crate::gpio_handler::I2cInterfaceConfig;
 
 /// error codes for evaluation of sensor unit response
-enum AtlasScientificError {
+pub enum AtlasScientificError {
     /// first character in message sent from sensor unit does not match required magic number
     FirstCharacterNotMagic,
 
@@ -27,9 +27,6 @@ enum AtlasScientificError {
 
     /// message sent from sensor unit contains non-numeric characters in data section
     ContainsInvalidCharacter,
-
-    /// negative pH values do not make sense. Hence, pH sensor unit response is restricted a bit more
-    IllegalNegativeSign,
 
     /// error is masked by other checks. However signature of function to convert from u8 array slice to String throws an error.
     InvalidUtf8Sequence,
@@ -51,44 +48,47 @@ pub enum I2cError {
 
     /// wrapper for AtlasScientificError
     ResponseEvaluationFailure(AtlasScientificError),
+
+    /// address could not be set prior sending request to sensor
+    SetAddressError(u16),
 }
 
 mod atlas_scientific_constants {
     /// command sent to sensor unit for initiating response
-    pub const command_read: u8 = b'R';
+    pub const COMMAND_READ: u8 = b'R';
 
     /// length of message received from sensor unit (number of byte)
-    pub const message_size: usize = 8;
+    pub const MESSAGE_SIZE: usize = 8;
 
     /// location of first character to be checked inside message from sensor unit
-    pub const index_first_character: usize = 0;
+    pub const INDEX_FIRST_CHARACTER: usize = 0;
 
     /// start of data inside message from sensor unit
-    pub const index_content_start: usize = 1;
+    pub const INDEX_CONTENT_START: usize = 1;
 
     /// finish of data inside message from sensor unit
-    pub const index_penultimate_character: usize = 6;
+    pub const INDEX_PENULTIMATE_CHARACTER: usize = 6;
 
     /// location of last character to be checked inside message from sensor unit
-    pub const index_last_character: usize = 7;
+    pub const INDEX_LAST_CHARACTER: usize = 7;
 
     /// ASCII value for representation of zero figure
-    pub const ascii_val_zero: u8 = 48;
+    pub const ASCII_VAL_ZERO: u8 = 48;
 
     /// ASCII value for representation of figure nine
-    pub const ascii_val_nine: u8 = 57;
+    pub const ASCII_VAL_NINE: u8 = 57;
 
     /// decimal point
-    pub const decimal_point: u8 = b'.';
+    pub const DECIMAL_POINT: u8 = b'.';
 
     /// negative sign (note: positive sign does not occurr in message from sensor)
-    pub const negative_sign: u8 = b'-';
+    pub const NEGATIVE_SIGN: u8 = b'-';
 
     /// magic number at front position inside message which identifies valid response from sensor unit
-    pub const message_start_magic: u8 = 1;
+    pub const MESSAGE_START_MAGIC: u8 = 1;
 
     /// magic number at finish position inside message which identifies valid response from sensor unit
-    pub const message_finish_magic: u8 = 0;
+    pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
@@ -123,11 +123,11 @@ impl I2cInterface {
                 let i2c = match I2c::new() {
                     Ok(c) => c,
                     Err(e) => {
-                        panic!("i2c_interface: Initialization of I2C interface failed.");
+                        panic!("i2c_interface: Initialization of I2C interface failed: {e:?}");
                     }
                 };
                 match i2c.set_timeout(config.timeout_transaction) {
-                    Ok(_) => { i2c }
+                    Ok(_) => i2c,
                     Err(_) => {
                         panic!("i2c_interface: Could not set timeout for transactions.");
                     }
@@ -159,10 +159,10 @@ impl I2cInterface {
     /// * `negative_allowed` - flag indicating if a negative sign is allowed    
     fn is_numeric(character: u8, negative_allowed: bool) -> bool {
         match character {
-            atlas_scientific_constants::ascii_val_zero
-                ..=atlas_scientific_constants::ascii_val_nine => true,
-            decimal_point => true,
-            negative_sign => negative_allowed,
+            atlas_scientific_constants::ASCII_VAL_ZERO
+                ..=atlas_scientific_constants::ASCII_VAL_NINE => true,
+            atlas_scientific_constants::DECIMAL_POINT => true,
+            atlas_scientific_constants::NEGATIVE_SIGN => negative_allowed,
             _ => false,
         }
     }
@@ -174,25 +174,25 @@ impl I2cInterface {
     /// * `buf` - array of u8
     /// * `is_ph` - flag indicating if sensor unit is pH unit
     fn check_response(
-        buffer: [u8; atlas_scientific_constants::message_size],
+        buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
     ) -> Result<f32, AtlasScientificError> {
         // first check: first character not magic
-        if buffer[atlas_scientific_constants::index_first_character]
-            != atlas_scientific_constants::message_start_magic
+        if buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER]
+            != atlas_scientific_constants::MESSAGE_START_MAGIC
         {
             return Err(AtlasScientificError::FirstCharacterNotMagic);
         }
         // second check: last character not magic
-        if buffer[atlas_scientific_constants::index_last_character]
-            != atlas_scientific_constants::message_finish_magic
+        if buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER]
+            != atlas_scientific_constants::MESSAGE_FINISH_MAGIC
         {
             return Err(AtlasScientificError::LastCharacterNotMagic);
         }
 
         // get slice of array
-        let numeric_content = &buffer[atlas_scientific_constants::index_content_start
-            ..atlas_scientific_constants::index_penultimate_character];
+        let numeric_content = &buffer[atlas_scientific_constants::INDEX_CONTENT_START
+            ..atlas_scientific_constants::INDEX_PENULTIMATE_CHARACTER];
 
         // third check: all characters inbetween belong to a number
         for character in numeric_content {
@@ -225,11 +225,20 @@ impl I2cInterface {
             AquariumSignal::pH => self.config.address_atlas_scientific_ph,
             AquariumSignal::Conductivity => self.config.address_atlas_scientific_conductivity,
             AquariumSignal::WaterTemperature => self.config.address_atlas_scientific_temperature,
-            _ => { panic!("i2c_interface: invalid signal request"); }
+            _ => {
+                panic!("i2c_interface: invalid signal request");
+            }
         };
-        self.i2c.set_slave_address(i2c_address);
 
-        let send_buf: [u8; 1] = [atlas_scientific_constants::command_read; 1];
+        match self.i2c.set_slave_address(i2c_address) {
+            Ok(_) => { /* do nothing */ }
+            Err(_) => {
+                println!("i2c_interface: could not set address of device");
+                return Err(I2cError::SetAddressError(i2c_address));
+            }
+        }
+
+        let send_buf: [u8; 1] = [atlas_scientific_constants::COMMAND_READ; 1];
 
         match self.i2c.write(&send_buf) {
             Ok(c) => {
@@ -259,18 +268,18 @@ impl I2cInterface {
 
         self.spin_sleeper.sleep(sleep_duration);
 
-        let mut read_buffer: [u8; atlas_scientific_constants::message_size] =
-            [0; atlas_scientific_constants::message_size];
+        let mut read_buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE] =
+            [0; atlas_scientific_constants::MESSAGE_SIZE];
 
         match self.i2c.read(&mut read_buffer) {
-            Ok(_) => { /* do nothing */ },
+            Ok(_) => { /* do nothing */ }
             Err(_) => {
                 println!(
                     "i2c_interface: did not receive full response from sensor unit for {}",
                     signal
                 );
                 return Err(I2cError::InsufficientRead);
-            },
+            }
         }
 
         let is_ph = match signal {
@@ -299,13 +308,13 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_valid_pH() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '8' as u8,
-            atlas_scientific_constants::decimal_point,
+            atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_float_absolute_eq!(check_response(stimuli, true), 8.0, 0.001);
     }
@@ -314,18 +323,18 @@ pub mod tests {
     // checking if negative values are correctly identified
     pub fn test_i2c_interface_check_response_invalid_pH_negative() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '-' as u8,
             '8' as u8,
-            atlas_scientific_constants::decimal_point,
+            atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_eq!(
             check_response(stimuli, true),
-            Err(AtlasScientificError::IllegalNegativeSign)
+            Err(AtlasScientificError::ContainsInvalidCharacter)
         );
     }
 
@@ -333,13 +342,13 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_valid_conductivity() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '5' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_float_absolute_eq!(check_response(stimuli, false), 50000.0, 0.001);
     }
@@ -348,14 +357,14 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_valid_temperature() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::decimal_point,
+            atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_float_absolute_eq!(check_response(stimuli, false), 25.0, 0.001);
     }
@@ -364,14 +373,14 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_front() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic - 1,
+            atlas_scientific_constants::MESSAGE_START_MAGIC - 1,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::decimal_point,
+            atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
         assert_eq!(
             check_response(stimuli, false),
@@ -383,14 +392,14 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_rear() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::decimal_point,
+            atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic - 1,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC - 1,
         ];
         assert_eq!(
             check_response(stimuli, false),
@@ -402,14 +411,14 @@ pub mod tests {
     #[test]
     pub fn test_i2c_interface_check_response_invalid_conversion() {
         let stimuli: [u8] = [
-            atlas_scientific_constants::message_start_magic,
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
             '5' as u8,
-            atlas_scientific_constants::negative_sign,
+            atlas_scientific_constants::NEGATIVE_SIGN,
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::message_finish_magic - 1,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC - 1,
         ];
         assert_eq!(
             check_response(stimuli, false),

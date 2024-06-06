@@ -12,8 +12,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
-use crate::channel_content::InternalCommand;
 use crate::channel_content::AquariumSignal;
+use crate::channel_content::InternalCommand;
 use crate::i2c_interface::I2cInterface;
 
 /// Holds the configuration data for the GPIO handler.
@@ -174,9 +174,6 @@ impl GpioHandler {
                 AquariumSignal::AmbientHumidity => 0.0,
                 AquariumSignal::TankLevelSwitchPosition => 0.0,
                 AquariumSignal::TankLevelSwitchInvalid => 0.0,
-                _ => {
-                    panic!("Signal request (not yet implemented)");
-                }
             },
             _ => {
                 println!("GpioHandler: ignoring irrelevant internal commands.");
