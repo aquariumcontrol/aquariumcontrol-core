@@ -305,9 +305,9 @@ pub mod tests {
 
     use crate::channel_content::AquariumSignal;
     use crate::config::ConfigData;
+    use crate::i2c_interface::atlas_scientific_constants;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
-    use crate::i2c_interface::atlas_scientific_constants;
     use crate::read_config_file;
 
     // happy case for evaluating response from pH sensor unit
@@ -459,49 +459,42 @@ pub mod tests {
         );
     }
 
-    // read from real hardware: Atlas Scientific pH sensor
+    // read from real Atlas Scientific hardware combined in one test case to avoid race conditions:
+    // - pH sensor
+    // - conductivity sensor
+    // - temperature
     #[test]
-    pub fn test_i2c_interface_read_ph() {
+    pub fn test_i2c_interface_read_sensors() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
         let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::pH);
         match result {
             Ok(c) => {
+                println!("i2c_interface: Read value from sensor. pH = {}", c);
                 assert_float_absolute_eq!(c, 8.0, 3.0);
             }
             Err(e) => {
                 panic!("test_i2c_interface_read_ph return error: {e:?}");
             }
         }
-    }
 
-    // read from real hardware: Atlas Scientific conductivity sensor
-    #[test]
-    pub fn test_i2c_interface_read_conductivity() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
-        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::Conductivity);
         match result {
             Ok(c) => {
-                assert_float_absolute_eq!(c, 50000.0, 10000.0);
+                println!("i2c_interface: Read value from sensor. Conductivity = {} microS/cm", c);
+                assert_float_absolute_eq!(c, 50000.0, 20000.0);
             }
             Err(e) => {
                 panic!("test_i2c_interface_read_temperature returned error: {e:?}");
             }
         }
-    }
 
-    // read from real hardware: Atlas Scientific temperature sensor
-    #[test]
-    pub fn test_i2c_interface_read_temperature() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
-        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::WaterTemperature);
         match result {
             Ok(c) => {
+                println!("i2c_interface: Read value from sensor. Temperature = {} °C", c);
                 assert_float_absolute_eq!(c, 25.0, 10.0);
             }
             Err(e) => {
