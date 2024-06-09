@@ -8,11 +8,39 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use serde_derive::Deserialize;
+use serialport::SerialPort;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
-use serialport::SerialPort;
+use std::fmt;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
+
+/// This module contains constants representing commands received from control application.
+mod command {
+    pub const SETSINGLE: &str = "SETSINGLE";
+    pub const UNSETSINGLE: &str = "UNSETSINGLE";
+    pub const GETSTATUS: &str = "GETSTATUS";
+    pub const PULSE: &str = "PULSE";
+    pub const HEARTBEAT: &str = "HEARTBEAT";
+    pub const READ: &str = "READ";
+    pub const INITIALIZED: &str = "INITIALIZED";
+}
+
+/// Enum codifies the errors which the program may encounter in preparation or execution of communication with Controllino
+pub enum ControllinoError {
+    IrrelevantCommand(InternalCommand),
+}
+
+impl fmt::Debug for ControllinoError {
+    /// Provides output of the enum values for debugging purposes.
+    /// # Arguments
+    /// * `f` - configuration for formatting
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ControllinoError::IrrelevantCommand(c) => write!(f, "Irrelevant command {}", c),
+        }
+    }
+}
 
 /// Holds the configuration data for the Controllino interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -92,21 +120,25 @@ impl Controllino {
         let serial_port_opt: Option<Box<dyn SerialPort>>;
 
         if config.use_simulator {
-            let mut serial_port = match serialport::new(config.port_name.clone(), config.baud_rate).open() {
-                Ok(c) => c,
-                Err(e) => {
-                    panic!("controllino: failed to open serial port: {e:?}");
-                }                
-            };
-            
+            let mut serial_port =
+                match serialport::new(config.port_name.clone(), config.baud_rate).open() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        panic!("controllino: failed to open serial port: {e:?}");
+                    }
+                };
+
             let timeout_duration = Duration::from_millis(config.timeout_millis);
             match serial_port.set_timeout(timeout_duration) {
-                Ok(()) => { /* do nothing */ },
+                Ok(()) => { /* do nothing */ }
                 Err(_) => {
-                    panic!("controllino: could not set timeout of {} milliseconds.", config.timeout_millis);
+                    panic!(
+                        "controllino: could not set timeout of {} milliseconds.",
+                        config.timeout_millis
+                    );
                 }
             }
-            
+
             serial_port_opt = Some(serial_port);
         } else {
             serial_port_opt = None;
@@ -118,24 +150,102 @@ impl Controllino {
         }
     }
 
-    /// Provides a numeric relay id for communication with the device or with simulator
+    /// Provides one of two enum values of type InternalCommand wrapping the relay number.
+    /// The relay logic is considered here by choosing either SetRelay or UnsetRelay.
     /// # Arguments
+    /// * `internal_command` - enum value which is interpreted
     /// * `device` - enum value for which the function shall provide the relay id
-    fn get_relay_id(&self, device: AquariumDevice) -> u16 {
+    fn get_relay_command(
+        &self,
+        internal_command: &InternalCommand,
+        device: AquariumDevice,
+    ) -> Result<InternalCommand, ControllinoError> {
         match device {
-            AquariumDevice::Skimmer => self.config.skimmer_id,
-            AquariumDevice::MainPump1 => self.config.main_pump1_id,
-            AquariumDevice::MainPump2 => self.config.main_pump2_id,
-            AquariumDevice::AuxPump1 => self.config.aux_pump1_id,
-            AquariumDevice::AuxPump2 => self.config.aux_pump2_id,
-            AquariumDevice::Heater => self.config.heater_id,
-            AquariumDevice::Ventilation => self.config.ventilation_id,
-            AquariumDevice::RefillPump => self.config.refill_pump_id,
-            AquariumDevice::Feeder => self.config.feeder_id,
-            AquariumDevice::PeristalticPump1 => self.config.peristaltic_pump1_id,
-            AquariumDevice::PeristalticPump2 => self.config.peristaltic_pump2_id,
-            AquariumDevice::PeristalticPump3 => self.config.peristaltic_pump3_id,
-            AquariumDevice::PeristalticPump4 => self.config.peristaltic_pump4_id,
+            AquariumDevice::Skimmer => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.skimmer_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.skimmer_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::MainPump1 => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.main_pump1_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.main_pump1_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::MainPump2 => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.main_pump2_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.main_pump2_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::AuxPump1 => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.aux_pump1_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.aux_pump1_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::AuxPump2 => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.aux_pump2_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.aux_pump2_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::Heater => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.heater_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(self.config.heater_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::Ventilation => match internal_command {
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.ventilation_id))
+                },
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.ventilation_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::RefillPump => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.refill_pump_id)),
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.refill_pump_id))
+                }
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::Feeder => match internal_command {
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.feeder_id)),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(self.config.feeder_id)),
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::PeristalticPump1 => match internal_command {
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump1_id))
+                },
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump1_id))
+                }
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::PeristalticPump2 => match internal_command {
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump2_id))
+                },
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump2_id))
+                }
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::PeristalticPump3 => match internal_command {
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump3_id))
+                },
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump3_id))
+                }
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
+            AquariumDevice::PeristalticPump4 => match internal_command {
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump4_id))
+                },
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump4_id))
+                }
+                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+            },
         }
     }
 
@@ -151,23 +261,21 @@ impl Controllino {
         tx_to_tcp: &Sender<InternalCommand>,
         internal_command: InternalCommand,
     ) {
-        let relay_id: u16;
         match internal_command {
-            InternalCommand::SwitchOn(c) => {
-                relay_id = self.get_relay_id(c);
-                match tx_to_tcp.send(InternalCommand::SetRelay(relay_id)) {
-                    Ok(()) => {}
+            InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
+                let relay_command = match self.get_relay_command(&internal_command, c.clone()) {
+                    Ok(c) => c,
                     Err(e) => {
-                        panic!("Controllino: error when sending request for switching on relay #{} to TCP thread: {e:?}", relay_id);
+                        panic!("Controllino: Error in preparation of communication to simulator: {e:?}");
                     }
-                }
-            }
-            InternalCommand::SwitchOff(c) => {
-                relay_id = self.get_relay_id(c);
-                match tx_to_tcp.send(InternalCommand::UnsetRelay(relay_id)) {
+                };
+                match tx_to_tcp.send(relay_command.clone()) {
                     Ok(()) => {}
                     Err(e) => {
-                        panic!("Controllino: error when sending request for switching on relay #{} to TCP thread: {e:?}", relay_id);
+                        panic!(
+                            "Controllino: error when sending relay command {} to TCP thread: {e:?}",
+                            relay_command
+                        );
                     }
                 }
             }
@@ -180,6 +288,74 @@ impl Controllino {
         }
     }
 
+    /// Creates the command to be sent to Controllino as String
+    /// * `internal_command` - enum value used for identifying if relay shall be switched on or switched off
+    fn create_command_string(&self, internal_command: InternalCommand) -> Result<String, ControllinoError> {
+        match internal_command {
+            InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
+                let relay_command = match self.get_relay_command(&internal_command, c.clone()) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        return Err(e);
+                    }
+                };
+                let (relay_command_str, relay_id_string) = match relay_command {
+                    InternalCommand::SetRelay(relay_id) => {
+                        let relay_id_string = relay_id.to_string();
+                        (command::SETSINGLE, relay_id_string)
+                    },
+                    InternalCommand::UnsetRelay(relay_id) => {
+                        let relay_id_string = relay_id.to_string();
+                        (command::UNSETSINGLE, relay_id_string)
+                    },
+                    _ => {
+                        return Err(ControllinoError::IrrelevantCommand(internal_command));
+                    }
+                };
+                Ok("CONTROLLINO ".to_string() + relay_command_str + " " + &relay_id_string)
+            },
+            _ => {
+                Err(ControllinoError::IrrelevantCommand(internal_command))
+            }
+        }
+    }
+
+    /// Triggers actuation on real hardware via serial port communication
+    /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
+    /// considering relay id and relay logic.
+    /// # Arguments
+    /// * `serial_port` - Reference to SerialPort
+    /// * `internal_command` - enum value used for identifying content which shall be sent
+    fn actuate_in_real_hardware(
+        &self,
+        serial_port: &mut Box<dyn SerialPort>,
+        internal_command: InternalCommand,
+    ) {
+        match internal_command {
+            InternalCommand::SwitchOn(ref _c) | InternalCommand::SwitchOff(ref _c) => {
+                let command_string = match self.create_command_string(internal_command) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        println!("Controllino: encountered error in preparation of communication: {e:?}");
+                        return;
+                    }
+                };
+                let output_to_controllino = command_string.as_bytes();
+                match serial_port.write(output_to_controllino) {
+                    Ok(_) => { /* do nothing */ }
+                    Err(e) => {
+                        println!("Controllino: Error occurred when sending command ({}) to Controllino: {e:?}", command_string);
+                    }
+                }
+            }
+            _ => {
+                println!(
+                    "Controllino: ignoring irrelevant internal command {}.",
+                    internal_command.to_string()
+                );
+            }
+        }
+    }
     /// Function checks if there are new messages in the channel.
     /// if the message contains the quit command, then the function returns true, otherwise false.
     /// # Arguments
@@ -250,6 +426,19 @@ impl Controllino {
             tx_to_tcp = tx_to_tcp_opt.unwrap(); // this unwrap is safe because checked above.
         }
 
+        let mut serial_port: Box<dyn SerialPort>;
+        if !self.config.use_simulator && self.serial_port_opt.is_none() {
+            panic!("Controllino configured to run with real hardware, but no serial port connection provided.");
+        } else {
+            serial_port = match self.serial_port_opt.as_ref().unwrap().try_clone() {
+                // above unwrap is safe because checked further above.
+                Ok(c) => c,
+                Err(_) => {
+                    panic!("Controllino: Error occured when trying to clone serial port.");
+                }
+            }
+        }
+
         loop {
             if self.check_pending_external_request(&rx_from_signal_handler) {
                 break;
@@ -261,9 +450,9 @@ impl Controllino {
                     println!("Controllino: received request from Refill thread.");
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
+                    } else {
+                        self.actuate_in_real_hardware(&mut serial_port, c);
                     }
-                    // @todo: else branch using real HW
-                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_refill.send(true) {
                         Ok(()) => {}
@@ -291,9 +480,9 @@ impl Controllino {
                     println!("Controllino: received request from Heating thread.");
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
+                    } else {
+                        self.actuate_in_real_hardware(&mut serial_port, c);
                     }
-                    // @todo: else branch using real HW
-                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_heating.send(true) {
                         Ok(()) => {}
@@ -321,9 +510,9 @@ impl Controllino {
                     println!("Controllino: received request from Ventilation thread.");
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
+                    } else {
+                        self.actuate_in_real_hardware(&mut serial_port, c);
                     }
-                    // @todo: else branch using real HW
-                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_ventilation.send(true) {
                         Ok(()) => {}
@@ -351,9 +540,9 @@ impl Controllino {
                     println!("Controllino: received request from Balling thread.");
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
+                    } else {
+                        self.actuate_in_real_hardware(&mut serial_port, c);
                     }
-                    // @todo: else branch using real HW
-                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_balling.send(true) {
                         Ok(()) => {}
@@ -381,9 +570,9 @@ impl Controllino {
                     println!("Controllino: received request from Feed thread.");
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
+                    } else {
+                        self.actuate_in_real_hardware(&mut serial_port, c);
                     }
-                    // @todo: else branch using real HW
-                    // see https://aquariumcontrol.atlassian.net/browse/KAN-39
 
                     match tx_to_feed.send(true) {
                         Ok(()) => {}
