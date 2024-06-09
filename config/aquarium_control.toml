@@ -1,18 +1,21 @@
 [controllino]
-skimmer_id = 3
-main_pump1_id = 4
-main_pump2_id = 5
-aux_pump1_id = 6
-aux_pump2_id = 7
-feeder_id = 8
-refill_pump_id = 11
-heater_id = 2
-ventilation_id = 10
-peristaltic_pump1_id = 12
-peristaltic_pump2_id = 13
-peristaltic_pump3_id = 14
-peristaltic_pump4_id = 15
+skimmer_id = 3                                          # relay id for protein skimmer
+main_pump1_id = 4                                       # relay id for main pump #1
+main_pump2_id = 5                                       # relay id for main pump #2
+aux_pump1_id = 6                                        # relay id for auxiliary pump #1
+aux_pump2_id = 7                                        # relay id for auxiliary pump #2
+feeder_id = 8                                           # relay id for feeder
+refill_pump_id = 11                                     # relay id for refill pump
+heater_id = 2                                           # relay id for heater
+ventilation_id = 10                                     # relay id for surface ventilation
+peristaltic_pump1_id = 12                               # relay id for peristaltic pump #1
+peristaltic_pump2_id = 13                               # relay id for peristaltic pump #2
+peristaltic_pump3_id = 14                               # relay id for peristaltic pump #3
+peristaltic_pump4_id = 15                               # relay id for peristaltic pump #4
 use_simulator = true                                    # if true, then do not use real HW
+baud_rate = 9600                                        # baud rate for communication via serial port
+port_name = "/dev/ttyUSB0"                              # port name for communication via serial port
+timeout_millis = 10                                     # timeout in milliseconds for serial port communication
 
 [sql_interface]
 db_user = "aquarium"

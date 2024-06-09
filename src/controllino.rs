@@ -9,6 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Duration;
+use serialport::SerialPort;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
 
@@ -63,12 +65,23 @@ pub struct ControllinoConfig {
 
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
+
+    /// Baud rate for communication via serial port
+    pub baud_rate: u32,
+
+    /// Port name for communication via serial port
+    pub port_name: String,
+
+    /// timeout in milliseconds for serial port communication
+    pub timeout_millis: u64,
 }
 
 /// Contains the configuration and the implementation of the Controllino interface
 pub struct Controllino {
     /// configuration data for Controllino
     pub config: ControllinoConfig,
+
+    pub serial_port_opt: Option<Box<dyn SerialPort>>,
 }
 
 impl Controllino {
@@ -76,7 +89,33 @@ impl Controllino {
     /// # Arguments
     /// * `config` - configuration data for Controllino
     pub fn new(config: ControllinoConfig) -> Controllino {
-        Controllino { config }
+        let serial_port_opt: Option<Box<dyn SerialPort>>;
+
+        if config.use_simulator {
+            let mut serial_port = match serialport::new(config.port_name.clone(), config.baud_rate).open() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("controllino: failed to open serial port: {e:?}");
+                }                
+            };
+            
+            let timeout_duration = Duration::from_millis(config.timeout_millis);
+            match serial_port.set_timeout(timeout_duration) {
+                Ok(()) => { /* do nothing */ },
+                Err(_) => {
+                    panic!("controllino: could not set timeout of {} milliseconds.", config.timeout_millis);
+                }
+            }
+            
+            serial_port_opt = Some(serial_port);
+        } else {
+            serial_port_opt = None;
+        }
+
+        Controllino {
+            config: config,
+            serial_port_opt: serial_port_opt,
+        }
     }
 
     /// Provides a numeric relay id for communication with the device or with simulator
@@ -98,12 +137,6 @@ impl Controllino {
             AquariumDevice::PeristalticPump3 => self.config.peristaltic_pump3_id,
             AquariumDevice::PeristalticPump4 => self.config.peristaltic_pump4_id,
         }
-    }
-
-    /// Placeholder for future implementation of platform-specific code
-    #[cfg(target_os = "linux")]
-    fn execute_linux_specific_code() {
-        println!("Linux specific code.");
     }
 
     /// Triggers actuation on simulator via TCP communication
@@ -210,9 +243,6 @@ impl Controllino {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        #[cfg(target_os = "linux")]
-        execute_linux_specific_code();
-
         let tx_to_tcp: Sender<InternalCommand>;
         if self.config.use_simulator && tx_to_tcp_opt.is_none() {
             panic!("Controllino configured to run with simulator, but no channel to TCP thread provided.");
