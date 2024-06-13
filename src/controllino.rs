@@ -9,21 +9,102 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use serialport::SerialPort;
+use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
-use std::fmt;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
 
-/// This module contains constants representing commands received from control application.
-mod command {
-    pub const SETSINGLE: &str = "SETSINGLE";
-    pub const UNSETSINGLE: &str = "UNSETSINGLE";
-    pub const GETSTATUS: &str = "GETSTATUS";
-    pub const PULSE: &str = "PULSE";
-    pub const HEARTBEAT: &str = "HEARTBEAT";
-    pub const READ: &str = "READ";
-    pub const INITIALIZED: &str = "INITIALIZED";
+/// Contains constants for communication with Controllino
+mod controllino_constants {
+    /// the size of ControllinoMessage is delibereately set here because checksums are added to content of struct
+    pub const MESSAGE_SIZE: usize = 8;
+
+    /// command for setting a single relay
+    pub const COMMAND_SET_RELAY: char = 'S';
+
+    /// command for unsetting a single relay
+    pub const COMMAND_UNSET_RELAY: char = 'U';
+
+    /// command for pulsing a relay
+    pub const COMMAND_PULSE_RELAY: char = 'P';
+
+    /// command for getting relay status
+    pub const COMMAND_GET_RELAY_STATUS: char = 'G';
+
+    /// command for sending a heart beat from control application to Controllino
+    pub const COMMAND_HEARTBEAT: char = 'H';
+
+    /// command for setting a digital output    
+    pub const COMMAND_SET_DIGITAL_OUT: char = 'D';
+
+    /// command for unsetting a digital output    
+    pub const COMMAND_UNSET_DIGITAL_OUT: char = 'J';
+
+    /// command for getting digital IO status
+    pub const COMMAND_GET_DIGITAL_OUT_STATUS: char = 'G';
+}
+
+/// Container for message content sent to Controllino
+pub struct ControllinoMessageContent {
+    /// Set by control application with command sent to Controllino
+    pub command: char,
+
+    /// Set by control application with id (e.g. for relay) of an element sent to Controllino
+    pub id: u8,
+
+    /// Unused byte
+    pub reserved1: u8,
+
+    /// Set by Controllino with data sent back to control application
+    pub signal_from_controllino: i32,
+
+    /// Unused byte
+    pub reserved2: char,
+}
+
+impl ControllinoMessageContent {
+    /// provides a struct of type ControllinoMessage
+    /// # Arguments
+    /// * `command` - character representing command
+    /// * `id` - identifier for relay or digital out in case status change is requested
+    pub fn new(command: char, id: u8) -> ControllinoMessageContent {
+        ControllinoMessageContent {
+            command: command,
+            id: id,
+            reserved1: 0,
+            signal_from_controllino: 0,
+            reserved2: '0',
+        }
+    }
+}
+
+/// Data structure for message to be sent to Controllino
+pub struct ControllinoMessage {
+    pub data: [u8; controllino_constants::MESSAGE_SIZE],
+}
+
+impl ControllinoMessage {
+    pub fn new(content: ControllinoMessageContent) -> ControllinoMessage {
+        // transfer content into data structure and calculate checksum
+        let mut data: [u8; controllino_constants::MESSAGE_SIZE] = [0; controllino_constants::MESSAGE_SIZE];
+        data[0] = content.command as u8;
+        data[1] = content.id;
+        data[2] = content.reserved1;
+        data[3] = data[0] ^ data[1] ^ data[2];
+        data[4] = ((content.signal_from_controllino & 0xFF00) >> 8) as u8;
+        data[5] = (content.signal_from_controllino & 0x00FF) as u8;
+        data[6] = content.reserved2 as u8;
+        data[7] = data[4] ^ data[5] ^ data[6];
+
+        ControllinoMessage { data: data }
+    }
+
+    pub fn check(&self) -> bool {
+        // calculate the checksums and compare with data received
+        (self.data[3] == self.data[0] ^ self.data[1] ^ self.data[2])
+            && (self.data[7] == self.data[4] ^ self.data[5] ^ self.data[6])
+    }
 }
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with Controllino
@@ -49,47 +130,47 @@ impl fmt::Debug for ControllinoError {
 pub struct ControllinoConfig {
     /// Relay id of the protein skimmer
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub skimmer_id: u16,
+    pub skimmer_id: u8,
 
     /// Relay id of main pump #1
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub main_pump1_id: u16,
+    pub main_pump1_id: u8,
 
     /// Relay id of main pump #2
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub main_pump2_id: u16,
+    pub main_pump2_id: u8,
 
     /// Relay id of auxiliary pump #1
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub aux_pump1_id: u16,
+    pub aux_pump1_id: u8,
 
     /// Relay id of auxiliary pump #2
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
-    pub aux_pump2_id: u16,
+    pub aux_pump2_id: u8,
 
     /// Relay id of refill pump
-    pub refill_pump_id: u16,
+    pub refill_pump_id: u8,
 
     /// Relay id of heater
-    pub heater_id: u16,
+    pub heater_id: u8,
 
     /// Relay id of ventilation
-    pub ventilation_id: u16,
+    pub ventilation_id: u8,
 
     /// Relay id feeder
-    pub feeder_id: u16,
+    pub feeder_id: u8,
 
     /// Relay id of peristaltic pump #1
-    pub peristaltic_pump1_id: u16,
+    pub peristaltic_pump1_id: u8,
 
     /// Relay id of peristaltic pump #2
-    pub peristaltic_pump2_id: u16,
+    pub peristaltic_pump2_id: u8,
 
     /// Relay id of peristaltic pump #3
-    pub peristaltic_pump3_id: u16,
+    pub peristaltic_pump3_id: u8,
 
     /// Relay id of peristaltic pump #4
-    pub peristaltic_pump4_id: u16,
+    pub peristaltic_pump4_id: u8,
 
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
@@ -162,89 +243,147 @@ impl Controllino {
     ) -> Result<InternalCommand, ControllinoError> {
         match device {
             AquariumDevice::Skimmer => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.skimmer_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.skimmer_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.skimmer_id as u16))
+                }
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.skimmer_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::MainPump1 => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.main_pump1_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.main_pump1_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.main_pump1_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.main_pump1_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::MainPump2 => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.main_pump2_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.main_pump2_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.main_pump2_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.main_pump2_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::AuxPump1 => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.aux_pump1_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.aux_pump1_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.aux_pump1_id as u16))
+                }
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.aux_pump1_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::AuxPump2 => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(self.config.aux_pump2_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.aux_pump2_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.aux_pump2_id as u16))
+                }
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.aux_pump2_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::Heater => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.heater_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(self.config.heater_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.heater_id as u16))
+                }
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.heater_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::Ventilation => match internal_command {
-                InternalCommand::SwitchOn(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.ventilation_id))
-                },
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::SetRelay(self.config.ventilation_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.ventilation_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.ventilation_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::RefillPump => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.refill_pump_id)),
-                InternalCommand::SwitchOff(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.refill_pump_id))
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.refill_pump_id as u16))
                 }
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.refill_pump_id as u16,
+                )),
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::Feeder => match internal_command {
-                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(self.config.feeder_id)),
-                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(self.config.feeder_id)),
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => {
+                    Ok(InternalCommand::SetRelay(self.config.feeder_id as u16))
+                }
+                InternalCommand::SwitchOff(_) => {
+                    Ok(InternalCommand::UnsetRelay(self.config.feeder_id as u16))
+                }
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::PeristalticPump1 => match internal_command {
-                InternalCommand::SwitchOn(_) => {
-                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump1_id))
-                },
-                InternalCommand::SwitchOff(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump1_id))
-                }
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
+                    self.config.peristaltic_pump1_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.peristaltic_pump1_id as u16,
+                )),
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::PeristalticPump2 => match internal_command {
-                InternalCommand::SwitchOn(_) => {
-                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump2_id))
-                },
-                InternalCommand::SwitchOff(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump2_id))
-                }
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
+                    self.config.peristaltic_pump2_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.peristaltic_pump2_id as u16,
+                )),
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::PeristalticPump3 => match internal_command {
-                InternalCommand::SwitchOn(_) => {
-                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump3_id))
-                },
-                InternalCommand::SwitchOff(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump3_id))
-                }
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
+                    self.config.peristaltic_pump3_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.peristaltic_pump3_id as u16,
+                )),
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
             AquariumDevice::PeristalticPump4 => match internal_command {
-                InternalCommand::SwitchOn(_) => {
-                    Ok(InternalCommand::SetRelay(self.config.peristaltic_pump4_id))
-                },
-                InternalCommand::SwitchOff(_) => {
-                    Ok(InternalCommand::UnsetRelay(self.config.peristaltic_pump4_id))
-                }
-                _ =>  Err(ControllinoError::IrrelevantCommand(internal_command.clone())),
+                InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
+                    self.config.peristaltic_pump4_id as u16,
+                )),
+                InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
+                    self.config.peristaltic_pump4_id as u16,
+                )),
+                _ => Err(ControllinoError::IrrelevantCommand(
+                    internal_command.clone(),
+                )),
             },
         }
     }
@@ -288,9 +427,13 @@ impl Controllino {
         }
     }
 
-    /// Creates the command to be sent to Controllino as String
+    /// Creates the message to be sent to Controllino
+    /// # Arguments
     /// * `internal_command` - enum value used for identifying if relay shall be switched on or switched off
-    fn create_command_string(&self, internal_command: InternalCommand) -> Result<String, ControllinoError> {
+    fn create_command_message(
+        &self,
+        internal_command: InternalCommand,
+    ) -> Result<ControllinoMessage, ControllinoError> {
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
                 let relay_command = match self.get_relay_command(&internal_command, c.clone()) {
@@ -299,24 +442,25 @@ impl Controllino {
                         return Err(e);
                     }
                 };
-                let (relay_command_str, relay_id_string) = match relay_command {
+                let (relay_command_char, relay_id) = match relay_command {
                     InternalCommand::SetRelay(relay_id) => {
-                        let relay_id_string = relay_id.to_string();
-                        (command::SETSINGLE, relay_id_string)
-                    },
+                        // relay id is set inside this crate, so cast is safe
+                        (controllino_constants::COMMAND_SET_RELAY, relay_id as u8)
+                    }
                     InternalCommand::UnsetRelay(relay_id) => {
-                        let relay_id_string = relay_id.to_string();
-                        (command::UNSETSINGLE, relay_id_string)
-                    },
+                        // relay id is set inside this crate, so cast is safe
+                        (controllino_constants::COMMAND_UNSET_RELAY, relay_id as u8)
+                    }
                     _ => {
                         return Err(ControllinoError::IrrelevantCommand(internal_command));
                     }
                 };
-                Ok("CONTROLLINO ".to_string() + relay_command_str + " " + &relay_id_string)
-            },
-            _ => {
-                Err(ControllinoError::IrrelevantCommand(internal_command))
+                let controllino_message_content =
+                    ControllinoMessageContent::new(relay_command_char, relay_id);
+                let controllino_message = ControllinoMessage::new(controllino_message_content);
+                Ok(controllino_message)
             }
+            _ => Err(ControllinoError::IrrelevantCommand(internal_command)),
         }
     }
 
@@ -333,18 +477,27 @@ impl Controllino {
     ) {
         match internal_command {
             InternalCommand::SwitchOn(ref _c) | InternalCommand::SwitchOff(ref _c) => {
-                let command_string = match self.create_command_string(internal_command) {
+                let message = match self.create_command_message(internal_command) {
                     Ok(c) => c,
                     Err(e) => {
-                        println!("Controllino: encountered error in preparation of communication: {e:?}");
+                        println!(
+                            "Controllino: encountered error in preparation of communication: {e:?}"
+                        );
                         return;
                     }
                 };
-                let output_to_controllino = command_string.as_bytes();
-                match serial_port.write(output_to_controllino) {
+                match serial_port.write(&message.data) {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
-                        println!("Controllino: Error occurred when sending command ({}) to Controllino: {e:?}", command_string);
+                        println!("Controllino: Error occurred when sending command to Controllino: {e:?}");
+                    }
+                }
+
+                let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
+                match serial_port.read(serial_buf.as_mut_slice()) {
+                    Ok(_) => { /* do nothing */ }
+                    Err(_) => {
+                        println!("Controllino: Error when trying to receive response from device.");
                     }
                 }
             }
