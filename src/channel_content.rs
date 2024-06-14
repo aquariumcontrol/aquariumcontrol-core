@@ -11,7 +11,7 @@ use std::fmt;
 
 /// Enum is used for internal thread messaging from control circuits to Controllino.
 /// These values are nested into enum InternalCommand. They represent all actuation devices.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AquariumDevice {
     // protein skimmer
     Skimmer,
@@ -78,7 +78,7 @@ impl fmt::Display for AquariumDevice {
 
 /// Enum is used for internal thread messaging between data logger and GPIO handler
 /// The values indicate which information the GPIO handler thread shall return via channel.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AquariumSignal {
     /// water temperature in °C
     WaterTemperature,
@@ -122,7 +122,7 @@ impl fmt::Display for AquariumSignal {
 
 /// Enum is used for internal thread messaging.
 /// Note: Relay state and device state do not necessarily correlate.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InternalCommand {
     /// Switch on a device
     SwitchOn(AquariumDevice),
