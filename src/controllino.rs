@@ -18,6 +18,7 @@ use std::time::Duration;
 use crate::channel_content::{AquariumDevice, InternalCommand};
 
 /// Contains constants for communication with Controllino
+#[allow(unused)]
 mod controllino_constants {
     /// the size of ControllinoMessage is delibereately set here because checksums are added to content of struct
     pub const MESSAGE_SIZE: usize = 8;
@@ -64,24 +65,27 @@ pub struct ControllinoMessageContent {
     /// Unused byte
     pub reserved1: u8,
 
-    /// Set by Controllino with data sent back to control application
-    pub signal_from_controllino: i32,
+    /// Either used to communicate pulse duration in milliseconds to Controllino or
+    /// set by Controllino with data to be sent back to control application
+    pub payload: u16,
 
     /// Unused byte
     pub reserved2: char,
 }
 
 impl ControllinoMessageContent {
-    /// provides a struct of type ControllinoMessage
+    /// Provides a struct of type ControllinoMessage.
+    /// The struct serves as container for the data to be sent to Controllino.
+    /// It is used as input to generate a struct of type ControllinoMessage.
     /// # Arguments
     /// * `command` - character representing command
     /// * `id` - identifier for relay or digital out in case status change is requested
-    pub fn new(command: char, id: u8) -> ControllinoMessageContent {
+    pub fn new(command: char, id: u8, duration_millis: u16) -> ControllinoMessageContent {
         ControllinoMessageContent {
             command: command,
             id: id,
             reserved1: 0,
-            signal_from_controllino: 0,
+            payload: duration_millis,
             reserved2: '0',
         }
     }
@@ -94,6 +98,11 @@ pub struct ControllinoMessage {
 }
 
 impl ControllinoMessage {
+    /// Provides a struct of type ControllinoMessage.
+    /// This function transfers the content into an array of u8 and
+    /// calculates the checksums. The array is then sent to Controllino.
+    /// # Arguments
+    /// * `content` - struct of type ControllinoMessageContent
     pub fn new(content: ControllinoMessageContent) -> ControllinoMessage {
         // transfer content into data structure and calculate checksum
         let mut data: [u8; controllino_constants::MESSAGE_SIZE] =
@@ -102,18 +111,23 @@ impl ControllinoMessage {
         data[1] = content.id;
         data[2] = content.reserved1;
         data[3] = data[0] ^ data[1] ^ data[2];
-        data[4] = ((content.signal_from_controllino & 0xFF00) >> 8) as u8;
-        data[5] = (content.signal_from_controllino & 0x00FF) as u8;
+        data[4] = ((content.payload & 0xFF00) >> 8) as u8;
+        data[5] = (content.payload & 0x00FF) as u8;
         data[6] = content.reserved2 as u8;
         data[7] = data[4] ^ data[5] ^ data[6];
 
         ControllinoMessage { data: data }
     }
+}
 
-    pub fn check(&self) -> bool {
-        // calculate the checksums and compare with data received
-        (self.data[3] == self.data[0] ^ self.data[1] ^ self.data[2])
-            && (self.data[7] == self.data[4] ^ self.data[5] ^ self.data[6])
+impl fmt::Display for ControllinoMessage {
+    /// Provides output of the struct data for debugging purposes.
+    /// # Arguments
+    /// * `f` - configuration for formatting
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ControllinoMessage: [0]={} [1]={} [2]={} [3]={} [4]={} [5]={} [6]={} [7]={}",
+            self.data[0], self.data[1], self.data[2], self.data[3],
+            self.data[4], self.data[5], self.data[6], self.data[7])
     }
 }
 
@@ -121,6 +135,11 @@ impl ControllinoMessage {
 #[derive(PartialEq)]
 pub enum ControllinoError {
     IrrelevantCommand(InternalCommand),
+    FailureCommandMessageCreation,
+    WriteError,
+    ReadError,
+    IncorrectChecksum,
+    PulseNotAllowedForDevice(AquariumDevice),
 }
 
 impl fmt::Debug for ControllinoError {
@@ -130,6 +149,15 @@ impl fmt::Debug for ControllinoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ControllinoError::IrrelevantCommand(c) => write!(f, "Irrelevant command {}", c),
+            ControllinoError::FailureCommandMessageCreation => {
+                write!(f, "Failure command message creation")
+            }
+            ControllinoError::WriteError => write!(f, "Write Error"),
+            ControllinoError::ReadError => write!(f, "Read Error"),
+            ControllinoError::IncorrectChecksum => write!(f, "Incorrect Checksum"),
+            ControllinoError::PulseNotAllowedForDevice(c) => {
+                write!(f, "Pulse command not allowed for device {}", c)
+            }
         }
     }
 }
@@ -302,6 +330,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => {
                     Ok(InternalCommand::UnsetRelay(self.config.skimmer_id as u16))
                 }
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -313,6 +344,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.main_pump1_id as u16,
                 )),
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -324,6 +358,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.main_pump2_id as u16,
                 )),
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -334,6 +371,9 @@ impl Controllino {
                 }
                 InternalCommand::SwitchOff(_) => {
                     Ok(InternalCommand::UnsetRelay(self.config.aux_pump1_id as u16))
+                }
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
                 }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
@@ -346,6 +386,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => {
                     Ok(InternalCommand::UnsetRelay(self.config.aux_pump2_id as u16))
                 }
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -356,6 +399,9 @@ impl Controllino {
                 }
                 InternalCommand::SwitchOff(_) => {
                     Ok(InternalCommand::UnsetRelay(self.config.heater_id as u16))
+                }
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
                 }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
@@ -368,6 +414,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.ventilation_id as u16,
                 )),
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -379,6 +428,9 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.refill_pump_id as u16,
                 )),
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -389,6 +441,9 @@ impl Controllino {
                 }
                 InternalCommand::SwitchOff(_) => {
                     Ok(InternalCommand::UnsetRelay(self.config.feeder_id as u16))
+                }
+                InternalCommand::Pulse(d, _) => {
+                    Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
                 }
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
@@ -401,6 +456,10 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.peristaltic_pump1_id as u16,
                 )),
+                InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
+                    self.config.peristaltic_pump1_id as u16,
+                    *t,
+                )),
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -411,6 +470,10 @@ impl Controllino {
                 )),
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.peristaltic_pump2_id as u16,
+                )),
+                InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
+                    self.config.peristaltic_pump2_id as u16,
+                    *t,
                 )),
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
@@ -423,6 +486,10 @@ impl Controllino {
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.peristaltic_pump3_id as u16,
                 )),
+                InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
+                    self.config.peristaltic_pump3_id as u16,
+                    *t,
+                )),
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
                 )),
@@ -433,6 +500,10 @@ impl Controllino {
                 )),
                 InternalCommand::SwitchOff(_) => Ok(InternalCommand::UnsetRelay(
                     self.config.peristaltic_pump4_id as u16,
+                )),
+                InternalCommand::Pulse(_, t) => Ok(InternalCommand::PulseRelay(
+                    self.config.peristaltic_pump4_id as u16,
+                    *t,
                 )),
                 _ => Err(ControllinoError::IrrelevantCommand(
                     internal_command.clone(),
@@ -488,33 +559,63 @@ impl Controllino {
         internal_command: InternalCommand,
     ) -> Result<ControllinoMessage, ControllinoError> {
         match internal_command {
-            InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
+            InternalCommand::SwitchOn(ref c)
+            | InternalCommand::SwitchOff(ref c)
+            | InternalCommand::Pulse(ref c, _) => {
                 let relay_command = match self.get_relay_command(&internal_command, c.clone()) {
                     Ok(c) => c,
                     Err(e) => {
                         return Err(e);
                     }
                 };
-                let (relay_command_char, relay_id) = match relay_command {
+                let (relay_command_char, relay_id, duration_millis) = match relay_command {
                     InternalCommand::SetRelay(relay_id) => {
                         // relay id is set inside this crate, so cast is safe
-                        (controllino_constants::COMMAND_SET_RELAY, relay_id as u8)
+                        (controllino_constants::COMMAND_SET_RELAY, relay_id as u8, 0)
                     }
                     InternalCommand::UnsetRelay(relay_id) => {
                         // relay id is set inside this crate, so cast is safe
-                        (controllino_constants::COMMAND_UNSET_RELAY, relay_id as u8)
+                        (
+                            controllino_constants::COMMAND_UNSET_RELAY,
+                            relay_id as u8,
+                            0,
+                        )
+                    }
+                    InternalCommand::PulseRelay(relay_id, duration_millis) => {
+                        // relay id is set inside this crate, so cast is safe
+                        (
+                            controllino_constants::COMMAND_PULSE_RELAY,
+                            relay_id as u8,
+                            duration_millis,
+                        )
                     }
                     _ => {
                         return Err(ControllinoError::IrrelevantCommand(internal_command));
                     }
                 };
                 let controllino_message_content =
-                    ControllinoMessageContent::new(relay_command_char, relay_id);
+                    ControllinoMessageContent::new(relay_command_char, relay_id, duration_millis);
                 let controllino_message = ControllinoMessage::new(controllino_message_content);
                 Ok(controllino_message)
             }
             _ => Err(ControllinoError::IrrelevantCommand(internal_command)),
         }
+    }
+
+    /// Calculates the checksums of the byte sequence received from Controllino
+    /// and compares it with the checksums received
+    fn check_controllino_checksums(data: &[u8]) -> bool {
+        let first_checksum = data[0] ^ data[1] ^ data[2];
+        let second_checksum = data[4] ^ data[5] ^ data[6];
+        let ok_result = (data[3] == first_checksum) && (data[7] == second_checksum);
+        if !ok_result {
+            println!("check_controllino_checksums:");
+            println!("data[0]={} data[1]={} data[2]={} data[3]={}", data[0], data[1], data[2], data[3]);
+            println!("data[4]={} data[5]={} data[6]={} data[7]={}", data[4], data[5], data[6], data[7]);
+            println!("first checksum should have been {}", first_checksum);
+            println!("second checksum should have been {}", second_checksum);
+        }
+        ok_result
     }
 
     /// Triggers actuation on real hardware via serial port communication
@@ -527,25 +628,30 @@ impl Controllino {
         &self,
         serial_port: &mut Box<dyn SerialPort>,
         internal_command: InternalCommand,
-    ) {
+    ) -> Result<(), ControllinoError> {
         match internal_command {
-            InternalCommand::SwitchOn(ref _c) | InternalCommand::SwitchOff(ref _c) => {
+            InternalCommand::SwitchOn(ref _c)
+            | InternalCommand::SwitchOff(ref _c)
+            | InternalCommand::Pulse(ref _c, _) => {
                 // create message to be sent to Controllino
-                let message = match self.create_command_message(internal_command) {
+                let message = match self.create_command_message(internal_command.clone()) {
                     Ok(c) => c,
                     Err(e) => {
                         println!(
                             "Controllino: encountered error in preparation of communication: {e:?}"
                         );
-                        return;
+                        return Err(ControllinoError::FailureCommandMessageCreation);
                     }
                 };
 
+                println!("{}", message);
+                
                 // write message to Controllino
                 match serial_port.write(&message.data) {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         println!("Controllino: Error occurred when sending command to Controllino: {e:?}");
+                        return Err(ControllinoError::WriteError);
                     }
                 }
 
@@ -553,14 +659,31 @@ impl Controllino {
                 self.spin_sleeper
                     .sleep(self.controllino_processing_duration);
 
+                // for pulse command, also wait the pulse duration
+                match internal_command {
+                    InternalCommand::Pulse(_, t) => {
+                        let pulse_duration = Duration::from_millis(t as u64);
+                        self.spin_sleeper.sleep(pulse_duration);
+                    }
+                    _ => { /* do nothing */ }
+                }
+
                 // read response from Controllino
                 let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
-                match serial_port.read(serial_buf.as_mut_slice()) {
-                    Ok(_) => {
-                        // todo: check response from device
+                //match serial_port.read(serial_buf.as_mut_slice()) {
+                match serial_port.read_exact(serial_buf.as_mut_slice()) {
+                    Ok(()) => {
+                        //println!("message_length={}", message_length);
+                        if !Self::check_controllino_checksums(serial_buf.as_slice()) {
+                            println!("Controllino: Received response from device with incorrect checksums");
+                            return Err(ControllinoError::IncorrectChecksum);
+                        } else {
+                            Ok(())
+                        }
                     }
                     Err(_) => {
                         println!("Controllino: Error when trying to receive response from device.");
+                        return Err(ControllinoError::ReadError);
                     }
                 }
             }
@@ -569,6 +692,7 @@ impl Controllino {
                     "Controllino: ignoring irrelevant internal command {}.",
                     internal_command.to_string()
                 );
+                return Err(ControllinoError::IrrelevantCommand(internal_command));
             }
         }
     }
@@ -667,7 +791,12 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     } else {
-                        self.actuate_in_real_hardware(&mut serial_port, c);
+                        match self.actuate_in_real_hardware(&mut serial_port, c) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(_) => {
+                                // todo: react to error
+                            }
+                        }
                     }
 
                     match tx_to_refill.send(true) {
@@ -697,7 +826,12 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     } else {
-                        self.actuate_in_real_hardware(&mut serial_port, c);
+                        match self.actuate_in_real_hardware(&mut serial_port, c) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(_) => {
+                                // todo: react to error
+                            }
+                        }
                     }
 
                     match tx_to_heating.send(true) {
@@ -727,7 +861,12 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     } else {
-                        self.actuate_in_real_hardware(&mut serial_port, c);
+                        match self.actuate_in_real_hardware(&mut serial_port, c) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(_) => {
+                                // todo: react to error
+                            }
+                        }
                     }
 
                     match tx_to_ventilation.send(true) {
@@ -757,7 +896,12 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     } else {
-                        self.actuate_in_real_hardware(&mut serial_port, c);
+                        match self.actuate_in_real_hardware(&mut serial_port, c) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(_) => {
+                                // todo: react to error
+                            }
+                        }
                     }
 
                     match tx_to_balling.send(true) {
@@ -787,7 +931,12 @@ impl Controllino {
                     if self.config.use_simulator {
                         self.actuate_in_simulator(&tx_to_tcp, c);
                     } else {
-                        self.actuate_in_real_hardware(&mut serial_port, c);
+                        match self.actuate_in_real_hardware(&mut serial_port, c) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(_) => {
+                                // todo: react to error
+                            }
+                        }
                     }
 
                     match tx_to_feed.send(true) {
@@ -838,6 +987,7 @@ pub mod tests {
     use crate::channel_content::AquariumDevice::PeristalticPump2;
     use crate::channel_content::AquariumDevice::PeristalticPump3;
     use crate::channel_content::AquariumDevice::PeristalticPump4;
+    use crate::channel_content::AquariumDevice::Skimmer;
     use crate::channel_content::AquariumDevice::Ventilation;
 
     use crate::channel_content::InternalCommand;
@@ -846,6 +996,51 @@ pub mod tests {
     use crate::controllino::controllino_constants;
     use crate::controllino::Controllino;
     use crate::controllino::ControllinoError;
+
+    // Request Controllino to pulse all relays for peristaltic pumps
+    #[test]
+    pub fn test_pulse_all_peristaltic_pumps() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
+        let controllino = Controllino::new(config.controllino);
+
+        let mut serial_port: Box<dyn SerialPort>;
+        serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {
+            Ok(c) => c,
+            Err(_) => {
+                panic!("Controllino: Error occured when trying to clone serial port.");
+            }
+        };
+
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::Pulse(PeristalticPump1, 500),
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::Pulse(PeristalticPump2, 500),
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::Pulse(PeristalticPump3, 500),
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::Pulse(PeristalticPump4, 500),
+            ),
+            Ok(())
+        );
+    }
 
     // Request Controllino to switch on and off all relays sequentially
     #[test]
@@ -865,82 +1060,167 @@ pub mod tests {
             }
         };
 
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Ventilation));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Heater));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(MainPump1));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(MainPump2));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(AuxPump1));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(AuxPump2));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOn(PeristalticPump1),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Skimmer)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOn(PeristalticPump2),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Ventilation)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOn(PeristalticPump3),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Heater)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOn(PeristalticPump4),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(MainPump1)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Feeder));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Ventilation));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Heater));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(MainPump1));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(MainPump2));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(AuxPump1));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino
-            .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(AuxPump2));
-        spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOff(PeristalticPump1),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(MainPump2)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOff(PeristalticPump2),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(AuxPump1)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOff(PeristalticPump3),
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(AuxPump2)),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(
-            &mut serial_port,
-            InternalCommand::SwitchOff(PeristalticPump4),
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOn(PeristalticPump1),
+            ),
+            Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millisec);
-        controllino.actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Feeder));
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOn(PeristalticPump2),
+            ),
+            Ok(())
+        );
         spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOn(PeristalticPump3),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOn(PeristalticPump4),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOn(Feeder)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Skimmer)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOff(Ventilation)
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Heater)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(MainPump1)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(MainPump2)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(AuxPump1)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(AuxPump2)),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOff(PeristalticPump1),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOff(PeristalticPump2),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOff(PeristalticPump3),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino.actuate_in_real_hardware(
+                &mut serial_port,
+                InternalCommand::SwitchOff(PeristalticPump4),
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            controllino
+                .actuate_in_real_hardware(&mut serial_port, InternalCommand::SwitchOff(Feeder)),
+            Ok(())
+        );
     }
 
     #[test]
@@ -961,12 +1241,21 @@ pub mod tests {
     pub fn test_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {
         let mut config_to_controllino: ConfigData =
             read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
-        let mut config: ConfigData =
+        let config: ConfigData =
             read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
         config_to_controllino.controllino.use_simulator = true;
         let controllino = Controllino::new(config_to_controllino.controllino);
 
         // switching on all devices
+        let mut message = controllino
+            .create_command_message(InternalCommand::SwitchOn(Skimmer))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_SET_RELAY as u8
+        );
+        assert_eq!(message.data[1], config.controllino.skimmer_id as u8);
+
         let mut message = controllino
             .create_command_message(InternalCommand::SwitchOn(Ventilation))
             .unwrap();
@@ -1079,6 +1368,15 @@ pub mod tests {
         assert_eq!(message.data[1], config.controllino.feeder_id as u8);
 
         // switching off all devices
+        let mut message = controllino
+            .create_command_message(InternalCommand::SwitchOff(Skimmer))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_UNSET_RELAY as u8
+        );
+        assert_eq!(message.data[1], config.controllino.skimmer_id as u8);
+
         let mut message = controllino
             .create_command_message(InternalCommand::SwitchOff(Ventilation))
             .unwrap();
@@ -1196,6 +1494,115 @@ pub mod tests {
         println!(
             "message.data[4]={}\nmessage.data[5]={}\nmessage.data[6]={}\nmessage.data[7]={}",
             message.data[4], message.data[5], message.data[6], message.data[7]
+        );
+    }
+
+    #[test]
+    pub fn test_create_message_pulse() {
+        let mut config_to_controllino: ConfigData =
+            read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
+        config_to_controllino.controllino.use_simulator = true;
+        let controllino = Controllino::new(config_to_controllino.controllino);
+
+        // try to pulse all devices
+        let mut error_message =
+            controllino.create_command_message(InternalCommand::Pulse(Skimmer, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(Skimmer))
+        );
+
+        error_message =
+            controllino.create_command_message(InternalCommand::Pulse(Ventilation, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(Ventilation))
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(Heater, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(Heater))
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(MainPump1, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(MainPump1))
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(MainPump2, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(MainPump2))
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(AuxPump1, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(AuxPump1))
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(AuxPump2, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(AuxPump2))
+        );
+
+        let mut message = controllino
+            .create_command_message(InternalCommand::Pulse(PeristalticPump1, 1000))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_PULSE_RELAY as u8
+        );
+        assert_eq!(
+            message.data[1],
+            config.controllino.peristaltic_pump1_id as u8
+        );
+
+        message = controllino
+            .create_command_message(InternalCommand::Pulse(PeristalticPump2, 1000))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_PULSE_RELAY as u8
+        );
+        assert_eq!(
+            message.data[1],
+            config.controllino.peristaltic_pump2_id as u8
+        );
+
+        message = controllino
+            .create_command_message(InternalCommand::Pulse(PeristalticPump3, 1000))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_PULSE_RELAY as u8
+        );
+        assert_eq!(
+            message.data[1],
+            config.controllino.peristaltic_pump3_id as u8
+        );
+
+        message = controllino
+            .create_command_message(InternalCommand::Pulse(PeristalticPump4, 1000))
+            .unwrap();
+        assert_eq!(
+            message.data[0],
+            controllino_constants::COMMAND_PULSE_RELAY as u8
+        );
+        assert_eq!(
+            message.data[1],
+            config.controllino.peristaltic_pump4_id as u8
+        );
+
+        error_message = controllino.create_command_message(InternalCommand::Pulse(Feeder, 1000));
+        assert_eq!(
+            error_message,
+            Err(ControllinoError::PulseNotAllowedForDevice(Feeder))
         );
     }
 }
