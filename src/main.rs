@@ -21,7 +21,10 @@ mod balling;
 mod channel_content;
 mod config;
 mod controllino;
+mod controllino_actuate_hardware;
+mod controllino_actuate_simulator;
 mod data_logger;
+mod device_relay_logic;
 mod feed;
 mod feedpattern;
 mod gpio_handler;
@@ -54,6 +57,8 @@ use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
 use crate::controllino::Controllino;
+use crate::controllino_actuate_hardware::ControllinoActuateHardware;
+use crate::controllino_actuate_simulator::ControllinoActuateSimulator;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::gpio_handler::GpioHandler;
@@ -611,6 +616,46 @@ fn main() {
                     rx_tcp_from_signal_handler,
                 );
             });
+        };
+
+        if use_simulator {
+            scope.spawn(move || {
+                controllino.execute(
+                    tx_controllino_to_tcp_opt,
+                    tx_controllino_to_refill,
+                    rx_controllino_from_refill,
+                    tx_controllino_to_heating,
+                    rx_controllino_from_heating,
+                    tx_controllino_to_ventilation,
+                    rx_controllino_from_ventilation,
+                    tx_controllino_to_balling,
+                    rx_controllino_from_balling,
+                    tx_controllino_to_feed,
+                    rx_controllino_from_feed,
+                    tx_controllino_to_signal_handler,
+                    rx_controllino_from_signal_handler,
+                    &mut ControllinoActuateSimulator,
+                );
+            });
+        } else {
+            scope.spawn(move || {
+                controllino.execute(
+                    tx_controllino_to_tcp_opt,
+                    tx_controllino_to_refill,
+                    rx_controllino_from_refill,
+                    tx_controllino_to_heating,
+                    rx_controllino_from_heating,
+                    tx_controllino_to_ventilation,
+                    rx_controllino_from_ventilation,
+                    tx_controllino_to_balling,
+                    rx_controllino_from_balling,
+                    tx_controllino_to_feed,
+                    rx_controllino_from_feed,
+                    tx_controllino_to_signal_handler,
+                    rx_controllino_from_signal_handler,
+                    &mut ControllinoActuateHardware,
+                );
+            });
         }
 
         scope.spawn(move || {
@@ -788,24 +833,6 @@ fn main() {
                 rx_balling_from_signal_handler,
                 tx_balling_to_schedule_check,
                 rx_balling_from_schedule_check,
-            );
-        });
-
-        scope.spawn(move || {
-            controllino.execute(
-                tx_controllino_to_tcp_opt,
-                tx_controllino_to_refill,
-                rx_controllino_from_refill,
-                tx_controllino_to_heating,
-                rx_controllino_from_heating,
-                tx_controllino_to_ventilation,
-                rx_controllino_from_ventilation,
-                tx_controllino_to_balling,
-                rx_controllino_from_balling,
-                tx_controllino_to_feed,
-                rx_controllino_from_feed,
-                tx_controllino_to_signal_handler,
-                rx_controllino_from_signal_handler,
             );
         });
     });
