@@ -187,9 +187,13 @@ impl RelayActuationTrait for ControllinoActuateHardware {
     /// considering relay id and relay logic.
     /// # Arguments
     /// * `internal_command` - enum value used for identifying content which shall be sent
-    /// * `tx_to_tcp_opt` - channel for communication with simulator - not used in this implementation of the trait
+    /// * `_tx_to_tcp_opt` - channel for communication with simulator wrapped in Option - not used in this implementation of the trait
+    /// * `serial_port_opt` - serial port interface for communication via USB wrapped in Option
+    /// * `spin_sleeper_opt` - spin sleeper object for precise waiting wrapped in Option
+    /// * `controllino_processing_duration_opt` - spin sleeper object for precise waiting wrapped in Option
+    /// * `config` - Controllino configuration    
     fn actuate(
-        &self,
+        &mut self,
         internal_command: InternalCommand,
         _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
         serial_port_opt: &mut Option<Box<dyn SerialPort>>,
@@ -318,7 +322,7 @@ pub mod tests {
             }
         };
 
-        let actuator = ControllinoActuateHardware;
+        let mut actuator = ControllinoActuateHardware;
 
         let expect_info =
             "Controllino test_switch_on_off_pulse failed cloning serial port interface.";

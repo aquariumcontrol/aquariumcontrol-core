@@ -58,7 +58,7 @@ pub mod controllino_constants {
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
     fn actuate(
-        &self,
+        &mut self,
         internal_command: InternalCommand,
         tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
         serial_port_opt: &mut Option<Box<dyn SerialPort>>,
@@ -162,6 +162,34 @@ pub struct ControllinoConfig {
 
     /// time in milliseconds to wait for response
     pub controllino_processing_millis: u64,
+}
+
+pub struct ControllinoActuateVoid {
+    /// for testing purposes
+    execution_counter: u32,
+}
+
+impl RelayActuationTrait for ControllinoActuateVoid {
+    /// Mock function for testing
+    fn actuate(
+        &mut self,
+        _internal_command: InternalCommand,
+        _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
+        _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
+        _spin_sleeper_opt: &Option<SpinSleeper>,
+        _controllino_processing_duration_opt: &Option<Duration>,
+        _config: &ControllinoConfig,
+    ) -> Result<(), ControllinoError> {
+        self.execution_counter += 1;
+        Ok(())
+    }
+}
+
+impl ControllinoActuateVoid {
+    /// provides number of execution to test case for assertion        
+    pub fn get_execution_count(&self) -> u32 {
+        self.execution_counter
+    }
 }
 
 /// Contains the configuration and the implementation of the Controllino interface
@@ -524,5 +552,318 @@ impl Controllino {
                 println!("Controllino: Error in trying to send confirmation back to signal handler: {e:?}");
             }
         };
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+
+    use crate::channel_content::AquariumDevice;
+    use crate::channel_content::InternalCommand;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::controllino::Controllino;
+    use crate::controllino::ControllinoActuateVoid;
+
+    use std::sync::mpsc;
+    use std::thread::scope;
+    
+    #[test]
+    // test the channel communication of the .execute function of Controllino
+    pub fn test_controllino_channel_communication() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_controllino_simulator.toml".to_string());
+
+        let mut controllino = Controllino::new(config.controllino);
+
+        let (tx_controllino_to_tcp, _) = mpsc::channel();
+        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_balling_to_controllino, rx_controllino_from_balling) = mpsc::channel();
+        let (tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
+        let (tx_controllino_to_signal_handler, rx_signal_handler_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler) = mpsc::channel();
+       
+        scope(|scope| {
+
+            // thread for test environment
+            scope.spawn(move || {
+                let _ = tx_refill_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match rx_refill_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for refill thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_heating_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater));
+                match rx_heating_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for heating thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_ventilation_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation));
+                match rx_ventilation_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for ventilation thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump1));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump2));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump3));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::PeristalticPump4));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Feeder));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::MainPump1));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::MainPump2));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::AuxPump1));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::AuxPump2));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                 
+                let _ = tx_refill_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump));
+                match rx_refill_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for refill thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_heating_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater));
+                match rx_heating_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for heating thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_ventilation_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation));
+                match rx_ventilation_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for ventilation thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump1));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump2));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump3));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_balling_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::PeristalticPump4));
+                match rx_balling_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Balling dosing thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Feeder));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::MainPump1));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::MainPump2));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::AuxPump1));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }
+                
+                let _ = tx_feed_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::AuxPump2));
+                match rx_feed_from_controllino.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);    
+                    },
+                    Err(e) => {
+                        panic!("test_controllino_channel_communication: error when receiving answer for Feed thread: {e:?}");
+                    }
+                }               
+                
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                rx_signal_handler_from_controllino.recv().unwrap();
+            });
+
+            // thread for test object
+            scope.spawn(move || {
+                let mut mock_actuator = ControllinoActuateVoid {
+                    execution_counter: 0,
+                };
+
+                controllino.execute(
+                    Some(tx_controllino_to_tcp),
+                    tx_controllino_to_refill,
+                    rx_controllino_from_refill,
+                    tx_controllino_to_heating,
+                    rx_controllino_from_heating,
+                    tx_controllino_to_ventilation,
+                    rx_controllino_from_ventilation,
+                    tx_controllino_to_balling,
+                    rx_controllino_from_balling,
+                    tx_controllino_to_feed,
+                    rx_controllino_from_feed,
+                    tx_controllino_to_signal_handler,
+                    rx_controllino_from_signal_handler,
+                    &mut mock_actuator,
+                );
+                
+                // test object thread has ended. Assertion checks number of calls to actuator.
+                assert_eq!(mock_actuator.get_execution_count(), 24);
+            });
+        });
     }
 }

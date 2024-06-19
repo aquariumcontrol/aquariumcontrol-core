@@ -28,7 +28,7 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
     /// * `tx_to_tcp` - Reference to Sender part of communication channel with TcpCommunication
     /// * `internal_command` - enum value used for identifying content which shall be sent
     fn actuate(
-        &self,
+        &mut self,
         internal_command: InternalCommand,
         tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
         _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
