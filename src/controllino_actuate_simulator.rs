@@ -17,6 +17,7 @@ use crate::controllino::ControllinoError;
 use crate::controllino::RelayActuationTrait;
 use crate::device_relay_logic::get_relay_command;
 
+/// Contains trait implementation for system testing purposes.
 pub struct ControllinoActuateSimulator;
 
 impl RelayActuationTrait for ControllinoActuateSimulator {

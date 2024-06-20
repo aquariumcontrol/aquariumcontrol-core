@@ -60,6 +60,7 @@ impl ControllinoMessageContent {
 /// Data structure for message to be sent to Controllino
 #[derive(Debug, PartialEq)]
 pub struct ControllinoMessage {
+    /// represents the raw message transferred via serial port
     pub data: [u8; controllino_constants::MESSAGE_SIZE],
 }
 
@@ -179,6 +180,7 @@ fn create_command_message(
     }
 }
 
+/// Contains trait implementation for real-life operation.
 pub struct ControllinoActuateHardware;
 
 impl RelayActuationTrait for ControllinoActuateHardware {
@@ -303,6 +305,8 @@ pub mod tests {
     use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 
     #[test]
+    // Actuates on real hardware.
+    // Execution of this test case requires serial port connection to Controllino device.
     pub fn test_switch_on_off_pulse() {
         let sleep_duration_500_millisec = Duration::from_millis(500);
         let spin_sleeper = SpinSleeper::default();
@@ -668,6 +672,7 @@ pub mod tests {
     }
 
     #[test]
+    /// Tests if invalid command is rejected when preparing message for Controllino
     pub fn test_create_message_invalid_command() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
@@ -681,6 +686,9 @@ pub mod tests {
     }
 
     #[test]
+    // Tests the implementation of the relay logic.
+    // During the creation of the message to Controllino the application considers
+    // if relay needs to bet set or unset to switch on/off a device.
     pub fn test_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
@@ -935,12 +943,13 @@ pub mod tests {
     }
 
     #[test]
+    // Tests the message creation for pulse command.
+    // Pulse command is only permitted for a subset of the devices (e.g. peristaltic pumps).
     pub fn test_create_message_pulse() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
         );
 
-        // try to pulse all devices
         let mut error_message =
             create_command_message(InternalCommand::Pulse(Skimmer, 1000), &config.controllino);
         assert_eq!(

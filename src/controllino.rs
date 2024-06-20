@@ -164,8 +164,9 @@ pub struct ControllinoConfig {
     pub controllino_processing_millis: u64,
 }
 
+/// Contains mock trait implementation for unit testing purposes.
 pub struct ControllinoActuateVoid {
-    /// for testing purposes
+    /// execution counter for testing purposes
     execution_counter: u32,
 }
 
