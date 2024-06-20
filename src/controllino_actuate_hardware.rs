@@ -304,6 +304,16 @@ pub mod tests {
     use crate::controllino_actuate_hardware::create_command_message;
     use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 
+    #[cfg(target_os = "macos")]
+    fn get_platform_specific_configuration_file() -> String {
+        "/config/aquarium_control_test_controllino_macos.toml".to_string()
+    }
+    
+    #[cfg(target_os = "linux")]
+    fn get_platform_specific_configuration_file() -> String {
+        "/config/aquarium_control_test_controllino_linux.toml".to_string()
+    }
+    
     #[test]
     // Actuates on real hardware.
     // Execution of this test case requires serial port connection to Controllino device.
@@ -312,11 +322,11 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
+            read_config_file(get_platform_specific_configuration_file());
         let controllino = Controllino::new(config.controllino);
 
         let config2: ConfigData =
-            read_config_file("/config/aquarium_control_test_controllino_macos.toml".to_string());
+            read_config_file(get_platform_specific_configuration_file());
 
         let serial_port: Box<dyn SerialPort>;
         serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {
