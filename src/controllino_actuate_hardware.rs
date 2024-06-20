@@ -704,7 +704,8 @@ pub mod tests {
         );
         assert_eq!(message.data[1], config.controllino.skimmer_id as u8);
 
-        message = create_command_message(InternalCommand::SwitchOn(Ventilation), &config.controllino)
+        message =
+            create_command_message(InternalCommand::SwitchOn(Ventilation), &config.controllino)
                 .unwrap();
         assert_eq!(
             message.data[0],
