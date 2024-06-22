@@ -308,25 +308,23 @@ pub mod tests {
     fn get_platform_specific_configuration_file() -> String {
         "/config/aquarium_control_test_controllino_macos.toml".to_string()
     }
-    
+
     #[cfg(target_os = "linux")]
     fn get_platform_specific_configuration_file() -> String {
         "/config/aquarium_control_test_controllino_linux.toml".to_string()
     }
-    
+
     #[test]
     // Actuates on real hardware.
     // Execution of this test case requires serial port connection to Controllino device.
-    pub fn test_switch_on_off_pulse() {
+    pub fn test_controllino_switch_on_off_pulse() {
         let sleep_duration_500_millisec = Duration::from_millis(500);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData =
-            read_config_file(get_platform_specific_configuration_file());
+        let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
         let controllino = Controllino::new(config.controllino);
 
-        let config2: ConfigData =
-            read_config_file(get_platform_specific_configuration_file());
+        let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
 
         let serial_port: Box<dyn SerialPort>;
         serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {

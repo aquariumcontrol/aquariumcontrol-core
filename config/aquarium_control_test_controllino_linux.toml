@@ -14,9 +14,9 @@ peristaltic_pump3_id = 14                               # relay id for peristalt
 peristaltic_pump4_id = 15                               # relay id for peristaltic pump #4
 use_simulator = false                                   # if true, then do not use real HW
 baud_rate = 9600                                        # baud rate for communication via serial port
-port_name = "/dev/ttyUSB0"                              # port name for communication via serial port (for testing/operation on Linux)
+port_name = "/dev/ttyACM0"                              # port name for communication via serial port (for testing/operation on Linux)
 timeout_millis = 10                                     # timeout in milliseconds for serial port communication
-controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
+controllino_processing_millis = 20                      # time in milliseconds for Controllino to process command
 
 [sql_interface]
 db_user = "aquarium"

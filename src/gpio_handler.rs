@@ -75,12 +75,6 @@ impl GpioHandler {
         }
     }
 
-    /// Placeholder for future implementation of platform-specific code    
-    #[cfg(target_os = "linux")]
-    fn execute_linux_specific_code() {
-        println!("Linux specific code.");
-    }
-
     /// Checks if there are new messages in the channel.
     /// If the message contains the quit command, then the function returns true, otherwise false.
     /// # Arguments
@@ -147,9 +141,6 @@ impl GpioHandler {
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let mut response_value: f32 = 0.0;
-
-        #[cfg(target_os = "linux")]
-        execute_linux_specific_code();
 
         let tx_to_tcp: Sender<InternalCommand>;
         let rx_from_tcp: Receiver<f32>;

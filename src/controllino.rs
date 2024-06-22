@@ -164,35 +164,6 @@ pub struct ControllinoConfig {
     pub controllino_processing_millis: u64,
 }
 
-/// Contains mock trait implementation for unit testing purposes.
-pub struct ControllinoActuateVoid {
-    /// execution counter for testing purposes
-    execution_counter: u32,
-}
-
-impl RelayActuationTrait for ControllinoActuateVoid {
-    /// Mock function for testing
-    fn actuate(
-        &mut self,
-        _internal_command: InternalCommand,
-        _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        _spin_sleeper_opt: &Option<SpinSleeper>,
-        _controllino_processing_duration_opt: &Option<Duration>,
-        _config: &ControllinoConfig,
-    ) -> Result<(), ControllinoError> {
-        self.execution_counter += 1;
-        Ok(())
-    }
-}
-
-impl ControllinoActuateVoid {
-    /// provides number of execution to test case for assertion        
-    pub fn get_execution_count(&self) -> u32 {
-        self.execution_counter
-    }
-}
-
 /// Contains the configuration and the implementation of the Controllino interface
 pub struct Controllino {
     /// configuration data for Controllino
@@ -558,15 +529,50 @@ impl Controllino {
 
 #[cfg(test)]
 pub mod tests {
+    use std::sync::mpsc;
+    use std::thread::scope;
+    use std::time::Duration;
+    use spin_sleep::SpinSleeper;
+    use serialport::SerialPort;
+    use std::sync::mpsc::Sender;
+    
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::controllino::Controllino;
-    use crate::controllino::ControllinoActuateVoid;
+    use crate::controllino::ControllinoConfig;
+    use crate::controllino::ControllinoError;
+    use crate::controllino::RelayActuationTrait;
 
-    use std::sync::mpsc;
-    use std::thread::scope;
+    // Contains mock trait implementation for unit testing purposes.
+    pub struct ControllinoActuateVoid {
+        // execution counter for testing purposes
+        execution_counter: u32,
+    }
+
+    impl RelayActuationTrait for ControllinoActuateVoid {
+        // Mock function for testing
+        fn actuate(
+            &mut self,
+            _internal_command: InternalCommand,
+            _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
+            _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
+            _spin_sleeper_opt: &Option<SpinSleeper>,
+            _controllino_processing_duration_opt: &Option<Duration>,
+            _config: &ControllinoConfig,
+        ) -> Result<(), ControllinoError> {
+            self.execution_counter += 1;
+            Ok(())
+        }
+    }
+
+    impl ControllinoActuateVoid {
+        // provides number of execution to test case for assertion        
+        pub fn get_execution_count(&self) -> u32 {
+            self.execution_counter
+        }
+    }
 
     #[test]
     // test the channel communication of the .execute function of Controllino
