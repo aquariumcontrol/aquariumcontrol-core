@@ -51,7 +51,7 @@ pub enum I2cError {
     /// wrapper for AtlasScientificError
     ResponseEvaluationFailure(AtlasScientificError),
 
-    /// address could not be set prior sending request to sensor
+    /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
     SetAddressError(u16),
 }
 
