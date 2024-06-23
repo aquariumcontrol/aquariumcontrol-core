@@ -8,6 +8,7 @@ use crate::controllino::ControllinoError;
 /// # Arguments
 /// * `internal_command` - enum value which is interpreted
 /// * `device` - enum value for which the function shall provide the relay id
+/// * `config` - Controllino configuration read from .toml file
 pub fn get_relay_command(
     internal_command: &InternalCommand,
     device: AquariumDevice,
@@ -15,9 +16,9 @@ pub fn get_relay_command(
 ) -> Result<InternalCommand, ControllinoError> {
     match device {
         AquariumDevice::Skimmer => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.skimmer_id as u16)),
+            InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(config.skimmer_id as u16)),
             InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.skimmer_id as u16))
+                Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
                 Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
@@ -28,10 +29,10 @@ pub fn get_relay_command(
         },
         AquariumDevice::MainPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
+                Ok(InternalCommand::UnsetRelay(config.main_pump1_id as u16))
             }
             InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.main_pump1_id as u16))
+                Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
                 Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
@@ -42,10 +43,10 @@ pub fn get_relay_command(
         },
         AquariumDevice::MainPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
+                Ok(InternalCommand::UnsetRelay(config.main_pump2_id as u16))
             }
             InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.main_pump2_id as u16))
+                Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
                 Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
@@ -56,10 +57,10 @@ pub fn get_relay_command(
         },
         AquariumDevice::AuxPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
+                Ok(InternalCommand::UnsetRelay(config.aux_pump1_id as u16))
             }
             InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.aux_pump1_id as u16))
+                Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
                 Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
@@ -70,10 +71,10 @@ pub fn get_relay_command(
         },
         AquariumDevice::AuxPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
-                Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
+                Ok(InternalCommand::UnsetRelay(config.aux_pump2_id as u16))
             }
             InternalCommand::SwitchOff(_) => {
-                Ok(InternalCommand::UnsetRelay(config.aux_pump2_id as u16))
+                Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
                 Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
