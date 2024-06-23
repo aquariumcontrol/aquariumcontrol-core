@@ -529,13 +529,13 @@ impl Controllino {
 
 #[cfg(test)]
 pub mod tests {
+    use serialport::SerialPort;
+    use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
+    use std::sync::mpsc::Sender;
     use std::thread::scope;
     use std::time::Duration;
-    use spin_sleep::SpinSleeper;
-    use serialport::SerialPort;
-    use std::sync::mpsc::Sender;
-    
+
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
@@ -568,7 +568,7 @@ pub mod tests {
     }
 
     impl ControllinoActuateVoid {
-        // provides number of execution to test case for assertion        
+        // provides number of execution to test case for assertion
         pub fn get_execution_count(&self) -> u32 {
             self.execution_counter
         }

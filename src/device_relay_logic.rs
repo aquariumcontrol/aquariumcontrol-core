@@ -1,3 +1,12 @@
+/* Copyright 2024 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
 use crate::controllino::ControllinoConfig;
@@ -16,7 +25,9 @@ pub fn get_relay_command(
 ) -> Result<InternalCommand, ControllinoError> {
     match device {
         AquariumDevice::Skimmer => match internal_command {
-            InternalCommand::SwitchOn(_) => Ok(InternalCommand::UnsetRelay(config.skimmer_id as u16)),
+            InternalCommand::SwitchOn(_) => {
+                Ok(InternalCommand::UnsetRelay(config.skimmer_id as u16))
+            }
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
             }
