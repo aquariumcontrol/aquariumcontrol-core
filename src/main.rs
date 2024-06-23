@@ -43,6 +43,9 @@ mod tcp_communication;
 mod ventilation;
 mod version_information;
 
+#[cfg(target_os = "linux")]
+mod i2c_interface;
+
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
@@ -585,7 +588,7 @@ fn main() {
         false => None,
     };
 
-    let mut gpio_handler = GpioHandler::new(config.gpio_handler);
+    let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
     let mut data_logger = DataLogger::new(config.data_logger);

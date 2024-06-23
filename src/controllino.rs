@@ -210,9 +210,6 @@ impl Controllino {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        #[cfg(target_os = "linux")]
-        execute_linux_specific_code();
-
         let tx_to_tcp: Sender<InternalCommand>;
         if self.config.use_simulator && tx_to_tcp_opt.is_none() {
             panic!("Controllino configured to run with simulator, but no channel to TCP thread provided.");
