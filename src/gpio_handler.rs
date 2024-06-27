@@ -7,13 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(target_os = "linux")]
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
-use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
-use crate::i2c_interface::I2cInterface;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -182,7 +179,7 @@ impl GpioHandler {
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn get_response_from_hardware(&self, internal_command: InternalCommand) -> f32 {
+    fn get_response_from_hardware(&self, _internal_command: InternalCommand) -> f32 {
         panic!("Usage of hardware not supported on this platform.");
     }
 

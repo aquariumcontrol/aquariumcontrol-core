@@ -29,6 +29,7 @@ mod heating;
 mod iir_filter;
 mod monitors;
 mod refill;
+mod i2c_interface;
 mod sawtooth_profile;
 mod schedule_check;
 mod signal_handler;

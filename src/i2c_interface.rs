@@ -6,11 +6,12 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#![allow(dead_code)]
 
-use crate::channel_content::AquariumSignal;
 use spin_sleep::SpinSleeper;
 use std::str;
 use std::time::Duration;
+#[cfg(target_os = "linux")]
 use {
     rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
@@ -121,6 +122,7 @@ impl I2cInterface {
     /// * `config` - configuration for I2C interface
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
+            #[cfg(target_os = "linux")]
             i2c: {
                 let i2c = match I2c::new() {
                     Ok(c) => c,
@@ -139,7 +141,6 @@ impl I2cInterface {
             sleep_duration_conductivity: Duration::from_millis(
                 config.sleep_time_atlas_scientific_conductivity,
             ),
-
             sleep_duration_ph: Duration::from_millis(config.sleep_time_atlas_scientific_ph),
 
             sleep_duration_temperature: Duration::from_millis(
@@ -222,6 +223,7 @@ impl I2cInterface {
     /// - error code
     /// # Arguments
     /// * `signal` - enum value describing which sensor shall be read
+    #[cfg(target_os = "linux")]    
     pub fn get_response_from_i2c(&mut self, signal: AquariumSignal) -> Result<f32, I2cError> {
         let i2c_address = match signal {
             AquariumSignal::pH => self.config.address_atlas_scientific_ph,
@@ -464,6 +466,7 @@ pub mod tests {
     // - conductivity sensor
     // - temperature
     #[test]
+    #[cfg(target_os = "linux")]
     pub fn test_i2c_interface_read_sensors() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
