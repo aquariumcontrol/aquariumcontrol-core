@@ -294,10 +294,14 @@ impl Heating {
         let mut measurement_error_water_temperature: bool;
         let mut measured_ambient_temperature = 0.0;
         let mut measurement_error_ambient_temperature: bool;
+        let mut measured_tank_level_switch_position = 0.0;
+        let mut measured_tank_level_switch_invalid = 0.0;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
         let mut duration_until_midnight = self.get_duration_until_midnight();
+        let mut tank_level_low_counter = 0;
+        let mut energy_increment: f64 = 0.0;
 
         println!(
             "Heating: Duration until midnight is {} seconds.",
@@ -383,6 +387,65 @@ impl Heating {
                     }
                 }
 
+                // send request for water level switch position
+                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchPosition,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_gpio.recv() {
+                            Ok(c) => measured_tank_level_switch_position = c,
+                            Err(e) => {
+                                println!(
+                                    "Heating: Error when reading channel content for tank level switch position: {e:?}"
+                                );
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!(
+                            "Heating: Error in channel communication to GPIO handler \
+                            when requesting tank level switch position: {e:?}"
+                        );
+                    }
+                }
+
+                // send request for water level switch invalid
+                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchInvalid,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_gpio.recv() {
+                            Ok(c) => measured_tank_level_switch_invalid = c,
+                            Err(e) => {
+                                println!(
+                                    "Heating: Error when reading channel content for tank level switch invalid: {e:?}"
+                                );
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!(
+                            "Heating: Error in channel communication to GPIO handler \
+                            when requesting tank level switch invalid: {e:?}"
+                        );
+                    }
+                }
+
+                // check if tank level switch hints to potentially low water level
+                if (measured_tank_level_switch_invalid > 0.0)
+                    || (measured_tank_level_switch_position < 0.5)
+                {
+                    tank_level_low_counter += 1;
+                    println!(
+                        "Incremented tank_level_low_counter to {}",
+                        tank_level_low_counter
+                    );
+                } else {
+                    tank_level_low_counter = 0;
+                }
+
                 // schedule check to see if actuation is allowed
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
@@ -404,89 +467,106 @@ impl Heating {
                     }
                 }
 
-                if schedule_check_result {
-                    // schedule check said that actutation is allowed.
-                    // main control happens here (comparison measured/target), actuation
-                    if (measured_water_temperature >= self.config.switch_on_temperature)
-                        && (measured_water_temperature <= self.config.switch_off_temperature)
-                    {
-                        if (self.calc_normalized_control_deviation(measured_water_temperature)
-                            < saw_tooth_profile.level_normalized)
-                            && !measurement_error_water_temperature
+                if self.config.stop_on_refill_error
+                    && (tank_level_low_counter > self.config.stop_on_refill_error_delay)
+                {
+                    // tank level switch position has not been available or indicating low water level for too long time
+                    // switch off the heater if not already off in order to protect against overheating of the device
+                    if heater_state != ActuatorState::Off {
+                        switch_off_heater(
+                            &mutex_device_scheduler_heating,
+                            &tx_to_controllino,
+                            &rx_from_controllino,
+                            &tx_to_datalogger,
+                        );
+                        heater_state = ActuatorState::Off;
+                    }
+                } else {
+                    // component protection allows operation of the heater
+                    if schedule_check_result {
+                        // schedule check said that actutation is allowed.
+                        // main control happens here (comparison measured/target), actuation
+                        if (measured_water_temperature >= self.config.switch_on_temperature)
+                            && (measured_water_temperature <= self.config.switch_off_temperature)
                         {
-                            // switch on heater if not already on
-                            if heater_state != ActuatorState::On {
-                                switch_on_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::On;
+                            if (self.calc_normalized_control_deviation(measured_water_temperature)
+                                < saw_tooth_profile.level_normalized)
+                                && !measurement_error_water_temperature
+                            {
+                                // switch on heater if not already on
+                                if heater_state != ActuatorState::On {
+                                    switch_on_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::On;
+                                }
+                            } else {
+                                // switch off heater if not already off
+                                if heater_state != ActuatorState::Off {
+                                    switch_off_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::Off;
+                                }
                             }
                         } else {
-                            // switch off heater if not already off
-                            if heater_state != ActuatorState::Off {
-                                switch_off_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::Off;
+                            if measured_water_temperature > self.config.switch_off_temperature {
+                                // switch off heater if not already off
+                                if heater_state != ActuatorState::Off {
+                                    switch_off_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::Off;
+                                }
+                            }
+                            if measured_water_temperature < self.config.switch_on_temperature {
+                                // switch on heater if not already on
+                                if heater_state != ActuatorState::On {
+                                    switch_on_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::On;
+                                }
                             }
                         }
                     } else {
-                        if measured_water_temperature > self.config.switch_off_temperature {
-                            // switch off heater if not already off
-                            if heater_state != ActuatorState::Off {
-                                switch_off_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::Off;
+                        // schedule check said that we not allowed actuate
+                        match self.config.on_when_out_of_schedule {
+                            true => {
+                                // switch on heater if not already on
+                                if heater_state != ActuatorState::On {
+                                    switch_on_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::On;
+                                }
                             }
-                        }
-                        if measured_water_temperature < self.config.switch_on_temperature {
-                            // switch on heater if not already on
-                            if heater_state != ActuatorState::On {
-                                switch_on_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::On;
-                            }
-                        }
-                    }
-                } else {
-                    // schedule check said that we not allowed actuate
-                    match self.config.on_when_out_of_schedule {
-                        true => {
-                            // switch on heater if not already on
-                            if heater_state != ActuatorState::On {
-                                switch_on_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::On;
-                            }
-                        }
-                        false => {
-                            // switch off heater if not already off
-                            if heater_state != ActuatorState::Off {
-                                switch_off_heater(
-                                    &mutex_device_scheduler_heating,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                heater_state = ActuatorState::Off;
+                            false => {
+                                // switch off heater if not already off
+                                if heater_state != ActuatorState::Off {
+                                    switch_off_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    heater_state = ActuatorState::Off;
+                                }
                             }
                         }
                     }
@@ -508,10 +588,13 @@ impl Heating {
                             false => Some(measured_ambient_temperature as f64),
                         };
                         // update the heating statistics with recently aquired data
+                        if heater_state == ActuatorState::On {
+                            energy_increment = (self.config.heater_power / 3600.0) as f64;
+                        }
                         heating_stats.update(
                             water_temperature_opt,
                             ambient_temperature_opt,
-                            (self.config.heater_power / 3600.0) as f64,
+                            energy_increment,
                         );
                     }
                     None => {
@@ -697,6 +780,10 @@ pub mod tests {
         // receive command from test object
         match rx_controllino_from_heating.recv() {
             Ok(command) => {
+                println!(
+                    "test_heating_receive_actuation_command_send_confirmation: received {}",
+                    command
+                );
                 command_received = Some(command);
             }
             Err(e) => {
@@ -721,31 +808,42 @@ pub mod tests {
         tx_gpio_to_heating: &Sender<f32>,
         water_temperature_stimuli: f32,
         ambient_temperature_stimuli: f32,
+        tank_level_switch_position: f32,
+        tank_level_switch_invalid: f32,
     ) {
         for i in 0..iterations {
             println!(
                 "Heating: run_main_cycle_with_sensor_signals running loop iteration #{}",
                 i
             );
-            match rx_gpio_from_heating.recv() {
-                Ok(c) => match c {
-                    InternalCommand::RequestSignal(s) => match s {
-                        AquariumSignal::WaterTemperature => {
-                            let _ = tx_gpio_to_heating.send(water_temperature_stimuli);
-                        }
-                        AquariumSignal::AmbientTemperature => {
-                            let _ = tx_gpio_to_heating.send(ambient_temperature_stimuli);
-                        }
+            for _ in 0..4 {
+                // execute channel communication 4 times per iteration
+                match rx_gpio_from_heating.recv() {
+                    Ok(c) => match c {
+                        InternalCommand::RequestSignal(s) => match s {
+                            AquariumSignal::WaterTemperature => {
+                                let _ = tx_gpio_to_heating.send(water_temperature_stimuli);
+                            }
+                            AquariumSignal::AmbientTemperature => {
+                                let _ = tx_gpio_to_heating.send(ambient_temperature_stimuli);
+                            }
+                            AquariumSignal::TankLevelSwitchPosition => {
+                                let _ = tx_gpio_to_heating.send(tank_level_switch_position);
+                            }
+                            AquariumSignal::TankLevelSwitchInvalid => {
+                                let _ = tx_gpio_to_heating.send(tank_level_switch_invalid);
+                            }
+                            _ => {
+                                panic!("Received invalid signal request from test object.");
+                            }
+                        },
                         _ => {
-                            panic!("Received invalid signal request from test object.");
+                            panic!("Received invalid command from test object.");
                         }
                     },
                     _ => {
-                        panic!("Received invalid command from test object.");
+                        panic!("Error in communication with test object.");
                     }
-                },
-                _ => {
-                    panic!("Error in communication with test object.");
                 }
             }
         }
@@ -925,7 +1023,7 @@ pub mod tests {
 
     // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
-    pub fn test_heating_wait_for_midnight_calc_stats() {
+    pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -983,8 +1081,10 @@ pub mod tests {
                     10,
                     &rx_gpio_from_heating,
                     &tx_gpio_to_heating,
-                    25.0,
+                    20.0, // very cold temperature to force switching on heater
                     24.0,
+                    1.0,
+                    0.0,
                 );
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
@@ -993,11 +1093,13 @@ pub mod tests {
 
             // thread for mock Controllino
             scope.spawn(move || {
-                _ = test_heating_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                for _ in 0..1 {
+                    _ = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                }
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
@@ -1026,7 +1128,7 @@ pub mod tests {
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!(
-                    "test_heating_wait_for_midnight (previous): {}",
+                    "test_heating_wait_for_midnight_calc_stats_heater_on (previous): {}",
                     heating_stats_transfer.heating_stats_entry_previous,
                 );
                 assert_eq!(
@@ -1057,13 +1159,13 @@ pub mod tests {
                         .ambient_temperature_average_value
                 );
                 all_asserts::assert_le!(
-                    24.999,
+                    19.999,
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .water_temperature_average_value
                 );
                 all_asserts::assert_ge!(
-                    25.001,
+                    20.001,
                     heating_stats_transfer
                         .heating_stats_entry_previous
                         .water_temperature_average_value
@@ -1083,7 +1185,7 @@ pub mod tests {
                     3
                 );
                 println!(
-                    "test_heating_wait_for_midnight (current): {}",
+                    "test_heating_wait_for_midnight_calc_stats_heater_on (current): {}",
                     heating_stats_transfer.heating_stats_entry,
                 );
                 assert_eq!(
@@ -1091,16 +1193,10 @@ pub mod tests {
                         .heating_stats_entry
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
-                    2
+                    1
                 );
-                all_asserts::assert_le!(
-                    0.111111111,
-                    heating_stats_transfer.heating_stats_entry.energy
-                );
-                all_asserts::assert_ge!(
-                    0.111111112,
-                    heating_stats_transfer.heating_stats_entry.energy
-                );
+                all_asserts::assert_le!(0.0555, heating_stats_transfer.heating_stats_entry.energy);
+                all_asserts::assert_ge!(0.0556, heating_stats_transfer.heating_stats_entry.energy);
                 all_asserts::assert_le!(
                     23.999,
                     heating_stats_transfer
@@ -1114,13 +1210,13 @@ pub mod tests {
                         .ambient_temperature_average_value
                 );
                 all_asserts::assert_le!(
-                    24.999,
+                    19.999,
                     heating_stats_transfer
                         .heating_stats_entry
                         .water_temperature_average_value
                 );
                 all_asserts::assert_ge!(
-                    25.001,
+                    20.001,
                     heating_stats_transfer
                         .heating_stats_entry
                         .water_temperature_average_value
@@ -1130,17 +1226,235 @@ pub mod tests {
                         .heating_stats_entry
                         .ambient_temperature_average_counter
                         - initial_heating_stats_entry.ambient_temperature_average_counter,
-                    2
+                    1
                 );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry
                         .water_temperature_average_counter
                         - initial_heating_stats_entry.water_temperature_average_counter,
-                    2
+                    1
                 );
             });
-            println!("* [Heating] checking heating waiting for midnight succeeded.");
+            println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
+        });
+    }
+    // checks if waiting for midnight and statistical calculations are computed correctly
+    #[test]
+    pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+
+        // get initial data for calculation of reference value
+        let initial_heating_stats_entry = match heating
+            .sql_interface_heating
+            .get_single_heating_stats_from_database()
+        {
+            Ok(c) => c,
+            Err(_) => {
+                // database responded with empty response - let's create empty entry
+                HeatingStatsEntry {
+                    date: Local::now().date_naive(),
+                    energy: 0.0,
+                    ambient_temperature_average_value: 0.0,
+                    ambient_temperature_average_counter: 0,
+                    water_temperature_average_value: 0.0,
+                    water_temperature_average_counter: 0,
+                    heating_control_runtime: 0,
+                }
+            }
+        };
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    30.0, // very hot temperature to force switching off heater
+                    24.0,
+                    1.0,
+                    0.0,
+                );
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino
+            scope.spawn(move || {
+                for _ in 0..1 {
+                    _ = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                }
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_gpio,
+                    rx_heating_from_gpio,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!(
+                    "test_heating_wait_for_midnight_calc_stats_heater_off (previous): {}",
+                    heating_stats_transfer.heating_stats_entry_previous,
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .heating_control_runtime
+                        - initial_heating_stats_entry.heating_control_runtime,
+                    3
+                );
+                all_asserts::assert_le!(
+                    -0.001,
+                    heating_stats_transfer.heating_stats_entry_previous.energy
+                );
+                all_asserts::assert_ge!(
+                    0.001,
+                    heating_stats_transfer.heating_stats_entry_previous.energy
+                );
+                all_asserts::assert_le!(
+                    23.999,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    24.001,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_le!(
+                    29.999,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .water_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    30.001,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .water_temperature_average_value
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .ambient_temperature_average_counter
+                        - initial_heating_stats_entry.ambient_temperature_average_counter,
+                    3
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .water_temperature_average_counter
+                        - initial_heating_stats_entry.water_temperature_average_counter,
+                    3
+                );
+                println!(
+                    "test_heating_wait_for_midnight_calc_stats_heater_off (current): {}",
+                    heating_stats_transfer.heating_stats_entry,
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .heating_control_runtime
+                        - initial_heating_stats_entry.heating_control_runtime,
+                    1
+                );
+                all_asserts::assert_le!(-0.001, heating_stats_transfer.heating_stats_entry.energy);
+                all_asserts::assert_ge!(0.001, heating_stats_transfer.heating_stats_entry.energy);
+                all_asserts::assert_le!(
+                    23.999,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    24.001,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_le!(
+                    29.999,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    30.001,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_value
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_counter
+                        - initial_heating_stats_entry.ambient_temperature_average_counter,
+                    1
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_counter
+                        - initial_heating_stats_entry.water_temperature_average_counter,
+                    1
+                );
+            });
+            println!("* [Heating] checking heating waiting for midnight and stats calculation with heater off succeeded.");
         });
     }
 
@@ -1206,6 +1520,8 @@ pub mod tests {
                     &tx_gpio_to_heating,
                     15.0,
                     20.0,
+                    1.0,
+                    0.0,
                 );
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
@@ -1252,6 +1568,150 @@ pub mod tests {
                 assert_eq!(actuation_count, 1);
             });
             println!("* [Heating] checking if schedule checker can block actuation.");
+        });
+    }
+
+    // checks if component protection is executed
+    #[test]
+    pub fn test_heating_component_protection_when_tank_level_low() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+
+        // get initial data for calculation of reference value
+        let initial_heating_stats_entry = match heating
+            .sql_interface_heating
+            .get_single_heating_stats_from_database()
+        {
+            Ok(c) => c,
+            Err(_) => {
+                // database responded with empty response - let's create empty entry
+                HeatingStatsEntry {
+                    date: Local::now().date_naive(),
+                    energy: 0.0,
+                    ambient_temperature_average_value: 0.0,
+                    ambient_temperature_average_counter: 0,
+                    water_temperature_average_value: 0.0,
+                    water_temperature_average_counter: 0,
+                    heating_control_runtime: 0,
+                }
+            }
+        };
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    5,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    20.0, // low temperature to force switching on heater
+                    24.0,
+                    0.0, // low tank level
+                    1.0, // tank level valid
+                );
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    20.0, // low temperature to force switching on heater
+                    24.0,
+                    0.0, // low tank level
+                    1.0, // tank level valid
+                );
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino
+            scope.spawn(move || {
+                let mut heating_command;
+                heating_command = test_heating_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                match heating_command {
+                    Some(command) => {
+                        if command != InternalCommand::SwitchOn(AquariumDevice::Heater) {
+                            panic!("test_heating_component_protection_when_tank_level_low: received invalid combination of command and device from test object.");
+                        }
+                    },
+                    None => {
+                        panic!("test_heating_component_protection_when_tank_level_low: received no command from test object");
+                    }
+                }
+                heating_command = test_heating_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                match heating_command {
+                    Some(command) => {
+                        if command != InternalCommand::SwitchOff(AquariumDevice::Heater) {
+                            panic!("test_heating_component_protection_when_tank_level_low: received invalid combination of command and device from test object.");
+                        }
+                    },
+                    None => {
+                        panic!("test_heating_component_protection_when_tank_level_low: received no command from test object");
+                    }
+                }
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_gpio,
+                    rx_heating_from_gpio,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("* [Heating] checking heater component protection succeeded.");
+            });
         });
     }
 }
