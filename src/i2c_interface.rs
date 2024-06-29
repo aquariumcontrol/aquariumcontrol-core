@@ -223,7 +223,7 @@ impl I2cInterface {
     /// - error code
     /// # Arguments
     /// * `signal` - enum value describing which sensor shall be read
-    #[cfg(target_os = "linux")]    
+    #[cfg(target_os = "linux")]
     pub fn get_response_from_i2c(&mut self, signal: AquariumSignal) -> Result<f32, I2cError> {
         let i2c_address = match signal {
             AquariumSignal::pH => self.config.address_atlas_scientific_ph,
@@ -486,7 +486,10 @@ pub mod tests {
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::Conductivity);
         match result {
             Ok(c) => {
-                println!("i2c_interface: Read value from sensor. Conductivity = {} microS/cm", c);
+                println!(
+                    "i2c_interface: Read value from sensor. Conductivity = {} microS/cm",
+                    c
+                );
                 assert_float_absolute_eq!(c, 50000.0, 20000.0);
             }
             Err(e) => {
@@ -497,7 +500,10 @@ pub mod tests {
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::WaterTemperature);
         match result {
             Ok(c) => {
-                println!("i2c_interface: Read value from sensor. Temperature = {} °C", c);
+                println!(
+                    "i2c_interface: Read value from sensor. Temperature = {} °C",
+                    c
+                );
                 assert_float_absolute_eq!(c, 25.0, 10.0);
             }
             Err(e) => {

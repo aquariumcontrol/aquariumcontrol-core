@@ -26,10 +26,10 @@ mod feed;
 mod feedpattern;
 mod gpio_handler;
 mod heating;
+mod i2c_interface;
 mod iir_filter;
 mod monitors;
 mod refill;
-mod i2c_interface;
 mod sawtooth_profile;
 mod schedule_check;
 mod signal_handler;
@@ -43,6 +43,7 @@ mod sql_interface_schedule;
 mod tcp_communication;
 mod ventilation;
 mod version_information;
+mod water_injection;
 
 #[cfg(target_os = "linux")]
 mod i2c_interface;
@@ -65,7 +66,6 @@ use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
-use crate::refill::RefillExecution;
 use crate::schedule_check::ScheduleCheck;
 use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
@@ -79,6 +79,7 @@ use crate::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
+use crate::water_injection::WaterInjection;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
@@ -694,7 +695,7 @@ fn main() {
         // Refill needs actuation of relay
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
-        let mut refill_execution = RefillExecution;
+        let mut water_injection = WaterInjection;
 
         scope.spawn(move || {
             refill.execute(
@@ -708,7 +709,7 @@ fn main() {
                 tx_refill_to_schedule_check,
                 rx_refill_from_schedule_check,
                 tx_refill_to_datalogger,
-                &mut refill_execution,
+                &mut water_injection,
             );
         });
 

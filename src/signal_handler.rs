@@ -198,7 +198,9 @@ pub fn handle_signals(
             match rx_from_schedule_check.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from ScheduleCheck thread {e:?}")
+                    println!(
+                        "handle_signals: could not receive answer from ScheduleCheck thread {e:?}"
+                    )
                 }
             };
         }
