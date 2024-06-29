@@ -546,10 +546,10 @@ impl Heating {
                 &tx_to_datalogger,
             );
         }
-        
+
         // update the database with the heating stats data recorded
         // so far for this date
-        if  heating_stats_opt.is_some() {
+        if heating_stats_opt.is_some() {
             heating_stats_transfer.transfer_heating_stats(
                 heating_stats_opt.clone().unwrap(),
                 &mut self.sql_interface_heating,
@@ -594,6 +594,7 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
+    use assert_float_eq::assert_float_absolute_eq;
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
@@ -603,6 +604,7 @@ pub mod tests {
     use std::time::{Duration, SystemTime};
 
     use crate::channel_content::AquariumDevice;
+    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
@@ -717,15 +719,35 @@ pub mod tests {
         iterations: u32,
         rx_gpio_from_heating: &Receiver<InternalCommand>,
         tx_gpio_to_heating: &Sender<f32>,
-        temperature_stimuli: f32,
+        water_temperature_stimuli: f32,
+        ambient_temperature_stimuli: f32,
     ) {
         for i in 0..iterations {
             println!(
                 "Heating: run_main_cycle_with_sensor_signals running loop iteration #{}",
                 i
             );
-            rx_gpio_from_heating.recv().unwrap();
-            let _ = tx_gpio_to_heating.send(temperature_stimuli);
+            match rx_gpio_from_heating.recv() {
+                Ok(c) => match c {
+                    InternalCommand::RequestSignal(s) => match s {
+                        AquariumSignal::WaterTemperature => {
+                            let _ = tx_gpio_to_heating.send(water_temperature_stimuli);
+                        }
+                        AquariumSignal::AmbientTemperature => {
+                            let _ = tx_gpio_to_heating.send(ambient_temperature_stimuli);
+                        }
+                        _ => {
+                            panic!("Received invalid signal request from test object.");
+                        }
+                    },
+                    _ => {
+                        panic!("Received invalid command from test object.");
+                    }
+                },
+                _ => {
+                    panic!("Error in communication with test object.");
+                }
+            }
         }
         println!("run_main_cycle_with_stimuli finished.");
     }
@@ -901,9 +923,9 @@ pub mod tests {
         });
     }
 
-    // checks if waiting for midnight is done correctly
+    // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
-    pub fn test_heating_wait_for_midnight() {
+    pub fn test_heating_wait_for_midnight_calc_stats() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -957,7 +979,13 @@ pub mod tests {
 
             // thread for mock GPIO and mock signal handler
             scope.spawn(move || {
-                run_main_cycle_with_stimuli(10, &rx_gpio_from_heating, &tx_gpio_to_heating, 25.0);
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    25.0,
+                    24.0,
+                );
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
@@ -1008,6 +1036,38 @@ pub mod tests {
                         - initial_heating_stats_entry.heating_control_runtime,
                     3
                 );
+                all_asserts::assert_le!(
+                    0.16666666,
+                    heating_stats_transfer.heating_stats_entry_previous.energy
+                );
+                all_asserts::assert_ge!(
+                    0.16666667,
+                    heating_stats_transfer.heating_stats_entry_previous.energy
+                );
+                all_asserts::assert_le!(
+                    23.999,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    24.001,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_le!(
+                    24.999,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .water_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    25.001,
+                    heating_stats_transfer
+                        .heating_stats_entry_previous
+                        .water_temperature_average_value
+                );
                 assert_eq!(
                     heating_stats_transfer
                         .heating_stats_entry_previous
@@ -1032,6 +1092,38 @@ pub mod tests {
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
                     2
+                );
+                all_asserts::assert_le!(
+                    0.111111111,
+                    heating_stats_transfer.heating_stats_entry.energy
+                );
+                all_asserts::assert_ge!(
+                    0.111111112,
+                    heating_stats_transfer.heating_stats_entry.energy
+                );
+                all_asserts::assert_le!(
+                    23.999,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    24.001,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_value
+                );
+                all_asserts::assert_le!(
+                    24.999,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_value
+                );
+                all_asserts::assert_ge!(
+                    25.001,
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_value
                 );
                 assert_eq!(
                     heating_stats_transfer
@@ -1108,7 +1200,13 @@ pub mod tests {
 
             // thread for mock GPIO
             scope.spawn(move || {
-                run_main_cycle_with_stimuli(10, &rx_gpio_from_heating, &tx_gpio_to_heating, 15.0);
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    15.0,
+                    20.0,
+                );
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
