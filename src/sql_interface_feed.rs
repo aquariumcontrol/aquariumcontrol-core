@@ -66,6 +66,7 @@ pub struct SqlFeedPhase {
 /// It is post-processed in a subsequent step.
 pub struct SqlFeedScheduleEntry {
     pub timestamp: String,
+    pub profile_id: i32,
     pub profile_name: String,
     pub repeat_daily: i16,
 }
@@ -74,6 +75,7 @@ pub struct SqlFeedScheduleEntry {
 #[derive(Debug, PartialEq)]
 pub struct FeedScheduleEntry {
     pub timestamp: NaiveDateTime,
+    pub profile_id: i32,
     pub profile_name: String,
     pub repeat_daily: bool,
 }
@@ -281,7 +283,7 @@ impl SqlInterfaceFeed {
         timestamp: NaiveDateTime,
         feeder_run_time: f64,
         profile_name: String,
-        profile_id: i64,
+        profile_id: i32,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
         match self.conn.exec_drop::<_, _>(
@@ -315,9 +317,10 @@ impl SqlInterfaceFeed {
         let feedschedule_entry_array =
             match self
                 .conn
-                .query_map(sql_query, |(timestamp, profile_name, repeat_daily)| {
+                .query_map(sql_query, |(timestamp, profile_id, profile_name, repeat_daily)| {
                     SqlFeedScheduleEntry {
                         timestamp,
+                        profile_id,
                         profile_name,
                         repeat_daily,
                     }
@@ -354,6 +357,7 @@ impl SqlInterfaceFeed {
 
         let feedschedule_entry = FeedScheduleEntry {
             timestamp: timestamp,
+            profile_id: feedschedule_entry_array[0].profile_id,
             profile_name: feedschedule_entry_array[0].profile_name.clone(),
             repeat_daily: feedschedule_entry_array[0].repeat_daily != 0,
         };
@@ -466,7 +470,7 @@ pub mod tests {
 
     /// This query is used for testing: It creates a feed schedule entry. It is used only by tests of this crate, therefore it resides here.
     pub const SQL_QUERY_WRITE_FEEDSCHEDULE_ENTRY: &str = "INSERT INTO feedschedule VALUES \
-                (:timestamp,:profile_name,0,:repeat_daily);";
+                (:timestamp,:profile_id,:profile_name,0,:repeat_daily);";
 
     #[test]
     /// all test cases for this crate/SQL table combined in one function to avoid problems with multithreading
@@ -740,6 +744,7 @@ pub mod tests {
 
         // *** check trying to load feed schedule entry *****************************************
         let timestamp_reference = "2024-04-10 14:00:00";
+        let profile_id_reference = 1;
         let profile_name_reference = "test";
         let repeat_daily_reference = true;
 
@@ -748,6 +753,7 @@ pub mod tests {
             sql_query_string,
             params! {
             "timestamp" => timestamp_reference,
+            "profile_id" => profile_id_reference,
             "profile_name" => profile_name_reference,
             "repeat_daily" => repeat_daily_reference,
             },
@@ -768,6 +774,7 @@ pub mod tests {
                         NaiveDateTime::parse_from_str(timestamp_reference, "%Y-%m-%d %H:%M:%S")
                             .unwrap()
                     );
+                    assert_eq!(d.profile_id, profile_id_reference);
                     assert_eq!(d.profile_name, profile_name_reference);
                     assert_eq!(d.repeat_daily, repeat_daily_reference);
                     d
@@ -802,6 +809,7 @@ pub mod tests {
                         d.timestamp,
                         feedschedule_entry_before_update.timestamp + Duration::days(1)
                     );
+                    assert_eq!(d.profile_id, profile_id_reference);
                     assert_eq!(d.profile_name, profile_name_reference);
                     assert_eq!(d.repeat_daily, repeat_daily_reference);
                     d

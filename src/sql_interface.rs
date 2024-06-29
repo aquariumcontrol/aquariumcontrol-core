@@ -98,7 +98,7 @@ pub mod sql_query_strings {
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
     /// Provides the oldest feed schedule entry which lies in the past.
-    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str = "SELECT TimeStamp, ProfileName, IsDaily \
+    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str = "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
         FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
 
     /// Updates a feed schedule entry after having executing a feed pattern

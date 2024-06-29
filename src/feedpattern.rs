@@ -19,6 +19,20 @@ pub struct Feedpattern {
     pub feedphases: Vec<FeedPhase>,
 }
 
+impl Feedpattern {
+    /// Calculate the total run time of the feeder for the feed pattern.
+    /// Data is inserted into feed log.
+    pub fn calc_feeder_runtime(&self) -> f64 {
+        let mut feeder_run_time = 0.0;
+
+        for feedphase in &self.feedphases {
+            feeder_run_time += feedphase.feed_duration as f64;
+        }
+
+        feeder_run_time
+    }
+}
+
 /// Holds the configuration data of one feed phase.
 pub struct FeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds

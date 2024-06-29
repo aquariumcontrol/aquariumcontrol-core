@@ -24,6 +24,7 @@ mod controllino;
 mod data_logger;
 mod feed;
 mod feedpattern;
+mod food_injection;
 mod gpio_handler;
 mod heating;
 mod i2c_interface;
@@ -80,6 +81,7 @@ use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
 use crate::water_injection::WaterInjection;
+use crate::food_injection::FoodInjection;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
@@ -770,6 +772,7 @@ fn main() {
 
         // Feed needs actuation of relay
         let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
+        let mut food_injection = FoodInjection;
 
         scope.spawn(move || {
             feed.execute(
@@ -778,6 +781,7 @@ fn main() {
                 rx_feed_from_controllino,
                 tx_feed_to_signal_handler,
                 rx_feed_from_signal_handler,
+                &mut food_injection,
             );
         });
 
