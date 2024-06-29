@@ -203,7 +203,7 @@ pub mod tests {
     use crate::refill::tests::prepare_refill_tests;
     use crate::refill::tests::run_main_cycle_with_sensor_signals;
 
-    fn test_execute_refill_receive_actuation_command_send_confirmation(
+    fn test_water_injection_receive_actuation_command_send_confirmation(
         rx_controllino_from_refill: &Receiver<InternalCommand>,
         tx_controllino_to_refill: &Sender<bool>,
     ) {
@@ -224,7 +224,7 @@ pub mod tests {
         }
     }
 
-    fn test_execute_refill_receive_information_for_datalogger(
+    fn test_water_injection_receive_information_for_datalogger(
         rx_datalogger_from_refill: &Receiver<bool>,
     ) {
         // receive information for data logger
@@ -259,7 +259,7 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high
-    pub fn test_refill_execution_immediate_switch_high() {
+    pub fn test_water_injection_immediate_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -273,8 +273,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -293,12 +293,12 @@ pub mod tests {
                     false,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -332,7 +332,7 @@ pub mod tests {
     // this test case executes inject_water function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
-    pub fn test_refill_execution_immediate_switch_high_and_quit_signal() {
+    pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -346,8 +346,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -370,11 +370,11 @@ pub mod tests {
                     false,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -408,7 +408,7 @@ pub mod tests {
     // this test case executes inject_water function and immediately sets the sensor signal to high
     // additionally the test case also sets the invalid bit.
     // Additional refill shall be aborted.
-    pub fn test_refill_execution_immediate_switch_high_with_invalid_true() {
+    pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -422,8 +422,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -438,12 +438,12 @@ pub mod tests {
                     true,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -475,7 +475,7 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function and sets the sensor signal to high after defined number of iterations
-    pub fn test_refill_execution_delayed_switch_high() {
+    pub fn test_water_injection_delayed_switch_high() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -489,8 +489,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -519,12 +519,12 @@ pub mod tests {
                     false,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -556,7 +556,7 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function with simulation of level switch stuck at low position
-    pub fn test_refill_execution_switch_stuck_low() {
+    pub fn test_water_injection_switch_stuck_low() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -570,8 +570,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -587,12 +587,12 @@ pub mod tests {
                     false,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -624,7 +624,7 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function and sets the sensor signal to high after defined number of iterations
-    pub fn test_refill_execution_delayed_switch_high_and_quit_signal() {
+    pub fn test_water_injection_delayed_switch_high_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests_tertiary();
         let mut water_injection = WaterInjection;
 
@@ -638,8 +638,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -665,11 +665,11 @@ pub mod tests {
                     }
                 }
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -701,7 +701,7 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function and sets the sensor invalid signal to true after defined number of iterations
-    pub fn test_refill_execution_delayed_switch_high_with_invalid_true() {
+    pub fn test_water_injection_delayed_switch_high_with_invalid_true() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -715,8 +715,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
@@ -741,12 +741,12 @@ pub mod tests {
                     true,
                 );
 
-                test_execute_refill_receive_actuation_command_send_confirmation(
+                test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
@@ -780,7 +780,7 @@ pub mod tests {
     // this test case executes inject_water function and sets the sensor invalid signal to true after defined number of iterations
     // Additionally, the test case sends the Quit signal.
     // Expected behavior is that refill operation ceases immediately after receiving Quit signal.
-    pub fn test_refill_execution_delayed_switch_high_with_invalid_true_and_quit_signal() {
+    pub fn test_water_injection_delayed_switch_high_with_invalid_true_and_quit_signal() {
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection;
 
@@ -794,8 +794,8 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_execute_refill_receive_actuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
 
                 let target_number_iterations_main_fill = (0.15 / refill.config.refill_pump_flow) as u32 * 10 + 1;
                 // leave switch at low for some time
@@ -816,9 +816,9 @@ pub mod tests {
                     }
                 }
 
-                test_execute_refill_receive_actuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
+                test_water_injection_receive_actuation_command_send_confirmation(&rx_controllino_from_refill, &tx_controllino_to_refill);
 
-                test_execute_refill_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
             });
 
             // this scope is executing the test object
