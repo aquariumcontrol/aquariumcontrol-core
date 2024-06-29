@@ -405,7 +405,7 @@ impl Heating {
                 }
 
                 if schedule_check_result {
-                    // schedule check said that acutation is allowed.
+                    // schedule check said that actutation is allowed.
                     // main control happens here (comparison measured/target), actuation
                     if (measured_water_temperature >= self.config.switch_on_temperature)
                         && (measured_water_temperature <= self.config.switch_off_temperature)
@@ -526,6 +526,8 @@ impl Heating {
                         &mut self.sql_interface_heating,
                         sql_interface,
                     );
+                    // reset heating stats
+                    heating_stats_opt = Some(HeatingStatsEntry::new());
                     duration_until_midnight = self.get_duration_until_midnight();
                 }
             }
@@ -542,6 +544,16 @@ impl Heating {
                 &tx_to_controllino,
                 &rx_from_controllino,
                 &tx_to_datalogger,
+            );
+        }
+        
+        // update the database with the heating stats data recorded
+        // so far for this date
+        if  heating_stats_opt.is_some() {
+            heating_stats_transfer.transfer_heating_stats(
+                heating_stats_opt.clone().unwrap(),
+                &mut self.sql_interface_heating,
+                sql_interface,
             );
         }
 
@@ -601,12 +613,14 @@ pub mod tests {
     };
 
     pub struct HeatingStatsMockDataTransfer {
+        heating_stats_entry_previous: HeatingStatsEntry,
         heating_stats_entry: HeatingStatsEntry,
     }
 
     impl HeatingStatsMockDataTransfer {
         pub fn new() -> HeatingStatsMockDataTransfer {
             Self {
+                heating_stats_entry_previous: HeatingStatsEntry::new(),
                 heating_stats_entry: HeatingStatsEntry::new(),
             }
         }
@@ -619,6 +633,7 @@ pub mod tests {
             _sql_interface_heating: &mut SqlInterfaceHeating,
             _sql_interface: &mut SqlInterface,
         ) {
+            self.heating_stats_entry_previous = self.heating_stats_entry.clone();
             self.heating_stats_entry = heating_stats_entry.clone();
             println!(
                 "Heating: Received command to transfer mock data to SQL database: {}",
@@ -712,6 +727,7 @@ pub mod tests {
             rx_gpio_from_heating.recv().unwrap();
             let _ = tx_gpio_to_heating.send(temperature_stimuli);
         }
+        println!("run_main_cycle_with_stimuli finished.");
     }
 
     fn test_heating_receive_information_for_datalogger(
@@ -939,7 +955,7 @@ pub mod tests {
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock GPIO
+            // thread for mock GPIO and mock signal handler
             scope.spawn(move || {
                 run_main_cycle_with_stimuli(10, &rx_gpio_from_heating, &tx_gpio_to_heating, 25.0);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
@@ -977,34 +993,59 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-
+                println!("execution of test object finished.");
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!(
-                    "test_heating_wait_for_midnight: {}",
-                    heating_stats_transfer.heating_stats_entry
+                    "test_heating_wait_for_midnight (previous): {}",
+                    heating_stats_transfer.heating_stats_entry_previous,
                 );
                 assert_eq!(
                     heating_stats_transfer
-                        .heating_stats_entry
+                        .heating_stats_entry_previous
                         .heating_control_runtime
                         - initial_heating_stats_entry.heating_control_runtime,
                     3
                 );
                 assert_eq!(
                     heating_stats_transfer
-                        .heating_stats_entry
+                        .heating_stats_entry_previous
                         .ambient_temperature_average_counter
                         - initial_heating_stats_entry.ambient_temperature_average_counter,
                     3
                 );
                 assert_eq!(
                     heating_stats_transfer
-                        .heating_stats_entry
+                        .heating_stats_entry_previous
                         .water_temperature_average_counter
                         - initial_heating_stats_entry.water_temperature_average_counter,
                     3
+                );
+                println!(
+                    "test_heating_wait_for_midnight (current): {}",
+                    heating_stats_transfer.heating_stats_entry,
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .heating_control_runtime
+                        - initial_heating_stats_entry.heating_control_runtime,
+                    2
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .ambient_temperature_average_counter
+                        - initial_heating_stats_entry.ambient_temperature_average_counter,
+                    2
+                );
+                assert_eq!(
+                    heating_stats_transfer
+                        .heating_stats_entry
+                        .water_temperature_average_counter
+                        - initial_heating_stats_entry.water_temperature_average_counter,
+                    2
                 );
             });
             println!("* [Heating] checking heating waiting for midnight succeeded.");
