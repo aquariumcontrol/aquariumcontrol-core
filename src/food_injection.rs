@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 /*
 use chrono::Local;
 use spin_sleep::SpinSleeper;
@@ -24,6 +25,7 @@ use crate::feedpattern::Feedpattern;
 pub trait FoodInjectionTrait {
     fn inject_food(
         &mut self,
+        mutex_device_scheduler_feed: &Arc<Mutex<i32>>,
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -38,11 +40,12 @@ pub struct FoodInjection;
 impl FoodInjectionTrait for FoodInjection {
     fn inject_food(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        config: &FeedConfig,
-        feed_pattern: &Feedpattern,
+        _mutex_device_scheduler_feed: &Arc<Mutex<i32>>,
+        _tx_to_controllino: &Sender<InternalCommand>,
+        _rx_from_controllino: &Receiver<bool>,
+        _rx_from_signal_handler: &Receiver<InternalCommand>,
+        _config: &FeedConfig,
+        _feed_pattern: &Feedpattern,
     ) {
         // do nothing (yet)
     }

@@ -312,28 +312,25 @@ impl SqlInterfaceFeed {
     pub fn get_feedschedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
-        let sql_query = sql_query_strings::SQL_QUERY_READ_FEEDSCHEDULE_ENTRY;
+        let sql_query = sql_query_strings::SQL_QUERY_READ_FEED_SCHEDULE_ENTRY;
 
-        let feedschedule_entry_array =
-            match self
-                .conn
-                .query_map(sql_query, |(timestamp, profile_id, profile_name, repeat_daily)| {
-                    SqlFeedScheduleEntry {
-                        timestamp,
-                        profile_id,
-                        profile_name,
-                        repeat_daily,
-                    }
-                }) {
-                Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
-                        "Could not get feed schedule entry from SQL database with query:"
-                            .to_string()
-                            + sql_query,
-                    ));
-                }
-            };
+        let feedschedule_entry_array = match self.conn.query_map(
+            sql_query,
+            |(timestamp, profile_id, profile_name, repeat_daily)| SqlFeedScheduleEntry {
+                timestamp,
+                profile_id,
+                profile_name,
+                repeat_daily,
+            },
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
+                    "Could not get feed schedule entry from SQL database with query:".to_string()
+                        + sql_query,
+                ));
+            }
+        };
 
         // return none if query result is empty
         if feedschedule_entry_array.len() == 0 {
@@ -376,7 +373,7 @@ impl SqlInterfaceFeed {
         if feedschedule_entry.repeat_daily {
             // feed schedule shall be repeated daily, so update the entry with a date 24h in the future
             let sql_query_string =
-                sql_query_strings::SQL_QUERY_UPDATE_FEEDSCHEDULE_ENTRY.to_owned();
+                sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
             let timestamp_tomorrow = feedschedule_entry.timestamp + Duration::days(1);
             println!("Timestamp for tomorrow: {}", timestamp_tomorrow.to_string());
             match self.conn.exec_drop::<_, _>(
@@ -397,7 +394,7 @@ impl SqlInterfaceFeed {
         } else {
             // feed schedule shall not be repeated daily, delete the entry from the database
             let sql_query_string =
-                sql_query_strings::SQL_QUERY_DELETE_FEEDSCHEDULE_ENTRY.to_owned();
+                sql_query_strings::SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY.to_owned();
             match self.conn.exec_drop::<_, _>(
                 sql_query_string,
                 params! {
@@ -414,6 +411,42 @@ impl SqlInterfaceFeed {
                         ),
                     )
                 }
+            }
+        }
+    }
+
+    // Inserts one dataset of feed schedule entry into the database - for testing purposes.
+    // The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    // # Arguments
+    // * `timestamp` - timestamp of feed event
+    // * `feeder_run_time` - run time of feeder in seconds
+    // * `profile_name` - name of the feed profile executed
+    // * `profile_id` - ID of the feed profile executed
+    pub fn insert_feed_schedule_entry(
+        &mut self,
+        timestamp: NaiveDateTime,
+        profile_id: i32,
+        profile_name: String,
+        is_weekly: bool,
+        is_daily: bool,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "profile_id" => profile_id,
+            "profile_name" => profile_name,
+            "is_weekly" => is_weekly,
+            "is_daily" => is_daily,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                println!("{e:?}");
+                Err(SqlInterfaceError::InsertFeedEventFailure(
+                    "Error when inserting refill event into database.".to_string(),
+                ))
             }
         }
     }
@@ -469,7 +502,7 @@ pub mod tests {
                 19,0,0,0,0,0);";
 
     /// This query is used for testing: It creates a feed schedule entry. It is used only by tests of this crate, therefore it resides here.
-    pub const SQL_QUERY_WRITE_FEEDSCHEDULE_ENTRY: &str = "INSERT INTO feedschedule VALUES \
+    pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str = "INSERT INTO feedschedule VALUES \
                 (:timestamp,:profile_id,:profile_name,0,:repeat_daily);";
 
     #[test]
@@ -748,7 +781,7 @@ pub mod tests {
         let profile_name_reference = "test";
         let repeat_daily_reference = true;
 
-        let sql_query_string = SQL_QUERY_WRITE_FEEDSCHEDULE_ENTRY.to_string();
+        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {

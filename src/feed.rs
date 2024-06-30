@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
-use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::food_injection::FoodInjectionTrait;
+use crate::sql_interface_feed::SqlInterfaceFeed;
 
 /// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
@@ -84,7 +84,7 @@ impl Feed {
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler  
     pub fn execute(
         &mut self,
-        _mutex_device_scheduler_feed: Arc<Mutex<i32>>,
+        mutex_device_scheduler_feed: Arc<Mutex<i32>>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -117,22 +117,26 @@ impl Feed {
                                 // load feed pattern from database
                                 match self
                                     .sql_interface_feed
-                                    .get_single_feedpattern_from_database(feed_schedule_entry.profile_id)
-                                {
+                                    .get_single_feedpattern_from_database(
+                                        feed_schedule_entry.profile_id,
+                                    ) {
                                     Ok(feed_pattern) => {
                                         //*** execute feed pattern ***
                                         food_injection.inject_food(
+                                            &mutex_device_scheduler_feed,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
                                             &rx_from_signal_handler,
                                             &self.config,
-                                            &feed_pattern,                                                
+                                            &feed_pattern,
                                         );
+
                                         //*** update schedule ***
                                         match self
                                             .sql_interface_feed
-                                            .update_feedschedule_entry_in_database(&mut feed_schedule_entry)
-                                        {
+                                            .update_feedschedule_entry_in_database(
+                                                &mut feed_schedule_entry,
+                                            ) {
                                             Ok(()) => {
                                                 println!("Update feed schedule entry");
                                             }
@@ -169,7 +173,9 @@ impl Feed {
                         }
                     }
                     Err(e) => {
-                        println!("Could not retrieve feed schedule information from database: {e:?}");
+                        println!(
+                            "Could not retrieve feed schedule information from database: {e:?}"
+                        );
                     }
                 };
             }
@@ -214,5 +220,174 @@ impl Feed {
             };
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::{Duration};
+
+    use crate::channel_content::InternalCommand;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::feed::Feed;
+    use crate::feed::FeedConfig;
+    use crate::feedpattern::Feedpattern;
+    use crate::food_injection::FoodInjectionTrait;
+    use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_feed::SqlInterfaceFeed;
+
+    struct MockFoodInjection {
+        profile_ids_executed: Vec<i32>,
+    }
+
+    impl MockFoodInjection {
+        pub fn new() -> MockFoodInjection {
+            MockFoodInjection {
+                profile_ids_executed: Vec::new()
+            }
+        }
+        
+        pub fn pop_profile_id_executed(&mut self) -> Option<i32> {
+            self.profile_ids_executed.pop()
+        }
+    }
+    impl FoodInjectionTrait for MockFoodInjection {
+        fn inject_food(
+            &mut self,
+            _mutex_device_scheduler_feed: &Arc<Mutex<i32>>,
+            _tx_to_controllino: &Sender<InternalCommand>,
+            _rx_from_controllino: &Receiver<bool>,
+            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            _config: &FeedConfig,
+            feed_pattern: &Feedpattern,
+        ) {
+            // do nothing except for logging the profile id of the feed pattern
+            self.profile_ids_executed.push(feed_pattern.profile_id);
+            println!("inject_food (mock): logging profile id {}", feed_pattern.profile_id);
+        }
+    }
+
+    #[test]
+    pub fn test_feed_schedule_execution() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_8_seconds = Duration::from_millis(10000);
+        let spin_sleeper = SpinSleeper::default();
+
+        // channels for the test object
+        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+
+        let mut mock_food_injection = MockFoodInjection::new();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+
+        // empty the feed schedule table
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let time_stamp_feed_schedule_entry_one_time =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 2) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        let time_stamp_feed_schedule_entry_repeat =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 4)
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        // manipulation of database: inserting feed schedule entries with future timestamp
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_one_time,
+            1,
+            "testOneTime".to_string(),
+            false,
+            false,
+        ) {
+            Ok(()) => { /* do nothing */ },
+            Err(e) => {
+                panic!("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
+            }
+        };
+
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_repeat,
+            2,
+            "testRepeat".to_string(),
+            false,
+            true,
+        ) {
+            Ok(()) => { /* do nothing */ },
+            Err(e) => {
+                panic!("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
+            }            
+        };
+
+        // create test object
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
+
+        scope(|scope| {
+            let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+
+            // thread for mock signal handler
+            scope.spawn(move || {
+                spin_sleeper.sleep(sleep_duration_8_seconds);
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                rx_signal_handler_from_feed.recv().unwrap();
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed.clone(),
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    tx_feed_to_signal_handler,
+                    rx_feed_from_signal_handler,
+                    &mut mock_food_injection,
+                );
+
+                // check if the right profiles have been executed in the right order
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(2));
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(1));
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
+                
+                println!("* [Feed] checking feed schedule execution succeeded.");
+            });
+        });
     }
 }

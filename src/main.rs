@@ -62,6 +62,7 @@ use crate::config::read_config_file;
 use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
+use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
@@ -81,7 +82,6 @@ use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
 use crate::water_injection::WaterInjection;
-use crate::food_injection::FoodInjection;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
