@@ -772,7 +772,7 @@ fn main() {
 
         // Feed needs actuation of relay
         let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-        let mut food_injection = FoodInjection;
+        let mut food_injection = FoodInjection::new();
 
         scope.spawn(move || {
             feed.execute(

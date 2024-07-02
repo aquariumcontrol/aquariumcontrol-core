@@ -415,13 +415,14 @@ impl SqlInterfaceFeed {
         }
     }
 
-    // Inserts one dataset of feed schedule entry into the database - for testing purposes.
+    // Inserts one dataset of feed schedule entry into the database - for testing purposes only.
     // The function either returns an empty Ok value or a value of type SqlInterfaceError.
     // # Arguments
     // * `timestamp` - timestamp of feed event
     // * `feeder_run_time` - run time of feeder in seconds
     // * `profile_name` - name of the feed profile executed
     // * `profile_id` - ID of the feed profile executed
+    #[allow(dead_code)]
     pub fn insert_feed_schedule_entry(
         &mut self,
         timestamp: NaiveDateTime,

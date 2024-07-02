@@ -122,14 +122,16 @@ impl Feed {
                                     ) {
                                     Ok(feed_pattern) => {
                                         //*** execute feed pattern ***
+                                        let mut mutex_data =
+                                            mutex_device_scheduler_feed.lock().unwrap();
                                         food_injection.inject_food(
-                                            &mutex_device_scheduler_feed,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
                                             &rx_from_signal_handler,
                                             &self.config,
                                             &feed_pattern,
                                         );
+                                        *mutex_data += 1;
 
                                         //*** update schedule ***
                                         match self
@@ -230,7 +232,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::{Duration};
+    use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
@@ -249,18 +251,18 @@ pub mod tests {
     impl MockFoodInjection {
         pub fn new() -> MockFoodInjection {
             MockFoodInjection {
-                profile_ids_executed: Vec::new()
+                profile_ids_executed: Vec::new(),
             }
         }
-        
+
         pub fn pop_profile_id_executed(&mut self) -> Option<i32> {
             self.profile_ids_executed.pop()
         }
     }
+
     impl FoodInjectionTrait for MockFoodInjection {
         fn inject_food(
             &mut self,
-            _mutex_device_scheduler_feed: &Arc<Mutex<i32>>,
             _tx_to_controllino: &Sender<InternalCommand>,
             _rx_from_controllino: &Receiver<bool>,
             _rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -269,7 +271,10 @@ pub mod tests {
         ) {
             // do nothing except for logging the profile id of the feed pattern
             self.profile_ids_executed.push(feed_pattern.profile_id);
-            println!("inject_food (mock): logging profile id {}", feed_pattern.profile_id);
+            println!(
+                "inject_food (mock): logging profile id {}",
+                feed_pattern.profile_id
+            );
         }
     }
 
@@ -317,8 +322,7 @@ pub mod tests {
             };
 
         let time_stamp_feed_schedule_entry_repeat =
-            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 4)
-            {
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 4) {
                 Ok(c) => c,
                 Err(e) => {
                     panic!(
@@ -335,9 +339,11 @@ pub mod tests {
             false,
             false,
         ) {
-            Ok(()) => { /* do nothing */ },
+            Ok(()) => { /* do nothing */ }
             Err(e) => {
-                panic!("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
             }
         };
 
@@ -348,10 +354,12 @@ pub mod tests {
             false,
             true,
         ) {
-            Ok(()) => { /* do nothing */ },
+            Ok(()) => { /* do nothing */ }
             Err(e) => {
-                panic!("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
-            }            
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
         };
 
         // create test object
@@ -385,7 +393,7 @@ pub mod tests {
                 assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(2));
                 assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(1));
                 assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
-                
+
                 println!("* [Feed] checking feed schedule execution succeeded.");
             });
         });

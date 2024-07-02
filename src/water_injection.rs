@@ -12,8 +12,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use crate::channel_content::AquariumDevice;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumDevice, InternalCommand};
 use crate::refill::check_pending_external_request;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
@@ -23,6 +22,18 @@ use crate::sql_interface_refill::SqlInterfaceRefill;
 /// Trait for the execution of the refill once control has detected that water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait WaterInjectionTrait {
+    /// Actuates the refill pump for injecting water into the main tank.
+    /// # Arguments
+    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Reference to Receiver part of channel for communication from Controllino
+    /// * `tx_to_gpio` - Reference to sender part of channel for communication to GPIO handler
+    /// * `rx_from_gpio` - Reference to receiver part of channel for communication from GPIO handler
+    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `tank_level_switch_signals` - Reference to struct of type TankLevelSwitchSignals which implements the logic for signal interpretation
+    /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection            
+    /// * `config` - Reference to configuration of refill control   
+    /// * `sql_interface_refill` - Reference to SQL database interface for refill control
     fn inject_water(
         &mut self,
         tx_to_controllino: &Sender<InternalCommand>,
