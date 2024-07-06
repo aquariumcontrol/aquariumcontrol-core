@@ -592,6 +592,8 @@ fn main() {
         false => None,
     };
 
+    let mut food_injection = FoodInjection::new(&config.feed);
+
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
@@ -772,7 +774,6 @@ fn main() {
 
         // Feed needs actuation of relay
         let mutex_device_scheduler_feed = Arc::clone(&mutex_device_scheduler);
-        let mut food_injection = FoodInjection::new();
 
         scope.spawn(move || {
             feed.execute(

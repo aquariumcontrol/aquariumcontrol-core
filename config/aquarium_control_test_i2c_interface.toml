@@ -50,6 +50,7 @@ additional_refill_volume = 0.2                          # additional refill volu
 [feed]
 active = true
 schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
+device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 
 [ventilation]
 active = true

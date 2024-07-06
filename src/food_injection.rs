@@ -30,7 +30,6 @@ pub trait FoodInjectionTrait {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        config: &FeedConfig,
         feedpattern: &Feedpattern,
     );
 }
@@ -44,11 +43,13 @@ pub struct FoodInjection {
     aux_pump1_state: ActuatorState,
     aux_pump2_state: ActuatorState,
     feeder_state: ActuatorState,
+    spin_sleeper: SpinSleeper,
+    sleep_duration_device_switch: Duration,
 }
 
 impl FoodInjection {
     /// Provide a struct of type FoodInjection
-    pub fn new() -> FoodInjection {
+    pub fn new(config: &FeedConfig) -> FoodInjection {
         FoodInjection {
             skimmer_state: ActuatorState::Undefined,
             main_pump1_state: ActuatorState::Undefined,
@@ -56,6 +57,10 @@ impl FoodInjection {
             aux_pump1_state: ActuatorState::Undefined,
             aux_pump2_state: ActuatorState::Undefined,
             feeder_state: ActuatorState::Undefined,
+            spin_sleeper: SpinSleeper::default(),
+            sleep_duration_device_switch: Duration::from_millis(
+                config.device_switch_delay_millis as u64,
+            ),
         }
     }
 
@@ -71,6 +76,7 @@ impl FoodInjection {
         rx_from_controllino: &Receiver<bool>,
     ) {
         if self.skimmer_state != target_skimmer_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_skimmer_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Skimmer),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Skimmer),
@@ -86,16 +92,17 @@ impl FoodInjection {
                             self.skimmer_state = target_skimmer_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on skimmer: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on skimmer: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on skimmer: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on skimmer: {e:?}");
                 }
             }
         }
         if self.main_pump1_state != target_main_pump1_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_main_pump1_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump1),
@@ -111,16 +118,17 @@ impl FoodInjection {
                             self.main_pump1_state = target_main_pump1_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on main pump 1: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on main pump 1: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on main pump 1: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on main pump 1: {e:?}");
                 }
             }
         }
         if self.main_pump2_state != target_main_pump2_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_main_pump2_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump2),
@@ -136,16 +144,17 @@ impl FoodInjection {
                             self.main_pump2_state = target_main_pump2_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on main pump 2: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on main pump 2: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on main pump 2: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on main pump 2: {e:?}");
                 }
             }
         }
         if self.aux_pump1_state != target_aux_pump1_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_aux_pump1_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump1),
@@ -161,16 +170,17 @@ impl FoodInjection {
                             self.aux_pump1_state = target_aux_pump1_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on aux pump 1: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on aux pump 1: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on aux pump 1: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux pump 1: {e:?}");
                 }
             }
         }
         if self.aux_pump2_state != target_aux_pump2_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_aux_pump2_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump2),
@@ -186,16 +196,17 @@ impl FoodInjection {
                             self.aux_pump2_state = target_aux_pump2_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on aux pump 2: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on aux pump 2: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on aux pump 2: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux pump 2: {e:?}");
                 }
             }
         }
         if self.feeder_state != target_feeder_state {
+            self.spin_sleeper.sleep(self.sleep_duration_device_switch);
             let command = match target_feeder_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Feeder),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Feeder),
@@ -211,12 +222,12 @@ impl FoodInjection {
                             self.feeder_state = target_feeder_state;
                         }
                         Err(e) => {
-                            println!("Refill: Error when trying to receive answer from Controllino when switching on feeder: {e:?}")
+                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on feeder: {e:?}")
                         }
                     };
                 }
                 Err(e) => {
-                    println!("Refill: Error in channel communication to Controllino when switching on aux feeder: {e:?}");
+                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux feeder: {e:?}");
                 }
             }
         }
@@ -230,9 +241,12 @@ impl FoodInjection {
 pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
-            InternalCommand::Quit => true,
+            InternalCommand::Quit => {
+                println!("FeedInjection: Received Quit command");
+                true
+            },
             _ => {
-                println!("Feed: ignoring inapplicable command from signal handler.");
+                println!("FeedInjection: ignoring inapplicable command from signal handler.");
                 false
             }
         },
@@ -240,7 +254,7 @@ pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<Internal
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
-                    println!("Feed: Error in trying to receive command from signal handler: {e:?}");
+                    println!("FeedInjection: Error in trying to receive command from signal handler: {e:?}");
                 }
             }
             false
@@ -254,23 +268,23 @@ impl FoodInjectionTrait for FoodInjection {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _config: &FeedConfig,
         feedpattern: &Feedpattern,
     ) {
         let spin_sleeper = SpinSleeper::default();
-        let sleep_interval_millis: i16 = 100;
-        let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis as u64);
+        let sleep_interval_millis: i16 = 1;
+        let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut target_skimmer_state: ActuatorState;
         let mut target_main_pump1_state: ActuatorState;
         let mut target_main_pump2_state: ActuatorState;
         let mut target_aux_pump1_state: ActuatorState;
         let mut target_aux_pump2_state: ActuatorState;
         let mut sleep_counter_millis: i16;
-
+        let mut quit_command_received: bool = true;
+        
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
             if check_pending_external_request(rx_from_signal_handler) {
-                break;
+                break;  // exit outer loop
             }
 
             // keep feeder stopped
@@ -310,10 +324,16 @@ impl FoodInjectionTrait for FoodInjection {
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.pause_duration
-                && !check_pending_external_request(rx_from_signal_handler)
             {
+                quit_command_received = check_pending_external_request(rx_from_signal_handler);
+                if quit_command_received {
+                    break;  // exit inner loop
+                }
                 sleep_counter_millis += sleep_interval_millis;
-                spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
+                spin_sleeper.sleep(sleep_duration);
+            }
+            if quit_command_received {
+                break;  // exit outer loop
             }
 
             // run the feeder
@@ -353,12 +373,19 @@ impl FoodInjectionTrait for FoodInjection {
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.feed_duration
-                && !check_pending_external_request(rx_from_signal_handler)
             {
+                quit_command_received = check_pending_external_request(rx_from_signal_handler);
+                if quit_command_received {
+                    break;  // exit inner loop
+                }
                 sleep_counter_millis += sleep_interval_millis;
-                spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
+                spin_sleeper.sleep(sleep_duration);
+            }
+            if quit_command_received {
+                break;  // exit outer loop
             }
         }
+        
         self.switch_skimmer_pumps(
             ActuatorState::On,
             ActuatorState::On,
@@ -371,3 +398,261 @@ impl FoodInjectionTrait for FoodInjection {
         );
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::thread::scope;
+    use std::time::{UNIX_EPOCH, SystemTime};
+    use all_asserts::{assert_le, assert_ge};
+
+    use crate::channel_content::InternalCommand;
+    use crate::config::ConfigData;
+    use crate::feedpattern::FeedPhase;
+    use crate::feedpattern::Feedpattern;
+    use crate::food_injection::FoodInjection;
+    use crate::food_injection::FoodInjectionTrait;
+    use crate::read_config_file;
+    use crate::Feed;
+
+    fn test_food_injection_receive_actuation_command_send_confirmation(
+        tx_controllino_to_feed: &Sender<bool>,
+        rx_controllino_from_feed: &Receiver<InternalCommand>,
+    ) -> InternalCommand {
+        let command: InternalCommand;
+
+        // receive command from test object
+        match rx_controllino_from_feed.recv() {
+            Ok(c) => match c {
+                InternalCommand::SwitchOn(_) => command = c,
+                InternalCommand::SwitchOff(_) => command = c,
+                _ => {
+                    panic!("FoodInjection: Received invalid command from test object:");
+                }
+            },
+            Err(e) => {
+                panic!(
+                    "FoodInjection: Error when receiving actuation command from test object: {e:?}"
+                );
+            }
+        }
+
+        // send confirmation back
+        match tx_controllino_to_feed.send(true) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("FoodInjection: Error when sending back actuation command confirmation to test object: {e:?}");
+            }
+        }
+
+        command
+    }
+
+    #[test]
+    // this test cases executes the food injection without interruption from signal handler
+    pub fn test_food_injection_uninterrupted() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        let mut food_injection = FoodInjection::new(&config.feed);
+
+        let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
+        let (tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (_tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                let mut i: u32;
+                let mut counter_switch_on: i32 = 0;
+                let mut counter_switch_off: i32 = 0;
+
+                for i in 0..125 {
+                    println!("test_food_injection: loop #{}", i);
+                    match test_food_injection_receive_actuation_command_send_confirmation(
+                        &tx_controllino_to_feed,
+                        &rx_controllino_from_feed,
+                    ) {
+                        InternalCommand::SwitchOn(_) => {
+                            counter_switch_on += 1;
+                        }
+                        InternalCommand::SwitchOff(_) => {
+                            counter_switch_off += 1;
+                        }
+                        _ => {
+                            // Do nothing. This case is covered with panic in lower level.
+                        }
+                    }
+                }
+                println!(
+                    "counter_switch_on={} counter_switch_off={}",
+                    counter_switch_on, counter_switch_off
+                );
+                assert_eq!(counter_switch_on, 65);
+                assert_eq!(counter_switch_off, 60);
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let feedphase = FeedPhase::new(
+                    200, true, true, true, true, true, 200, false, false, false, false, false,
+                );
+                // Each phase will trigger switching on 6 devices and switching off 6 devices
+                let mut feedphases: Vec<FeedPhase> = Vec::new();
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                
+                // After all phases are executed, feeder will be switched off
+                // and 5 devices will be switched on
+                
+                let feedpattern = Feedpattern {
+                    profile_id: 1,
+                    profile_name: "Test1".to_string(),
+                    feedphases: feedphases,
+                };
+
+                let start_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap();
+                food_injection.inject_food(
+                    &tx_feed_to_controllino,
+                    &rx_feed_from_controllino,
+                    &rx_feed_from_signal_handler,
+                    &feedpattern,
+                );
+                let end_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap();
+
+                let execution_duration = end_time - start_time;
+
+                println!("execution_duration (milliseconds)= {}", execution_duration.as_millis());
+                
+                assert_ge!(execution_duration.as_millis(), 23500);
+                assert_le!(execution_duration.as_millis(), 29700);
+            });
+        });
+    }
+    
+    #[test]
+    // this test cases executes the food injection with interruption from signal handler
+    pub fn test_food_injection_interrupted() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        let mut food_injection = FoodInjection::new(&config.feed);
+
+        let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
+        let (tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+
+        scope(|scope| {
+            // this scope is providing the test environment
+            scope.spawn(move || {
+                let mut i: u32;
+                let mut counter_switch_on: i32 = 0;
+                let mut counter_switch_off: i32 = 0;
+
+                for i in 0..5 {
+                    println!("test_food_injection: loop #{}", i);
+                    match test_food_injection_receive_actuation_command_send_confirmation(
+                        &tx_controllino_to_feed,
+                        &rx_controllino_from_feed,
+                    ) {
+                        InternalCommand::SwitchOn(_) => {
+                            counter_switch_on += 1;
+                        }
+                        InternalCommand::SwitchOff(_) => {
+                            counter_switch_off += 1;
+                        }
+                        _ => {
+                            // Do nothing. This case is covered with panic in lower level.
+                        }
+                    }
+                }
+                println!("test_food_injection_interrupted: sending Quit signal");
+                _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                for i in 0..2 {
+                    println!("test_food_injection: loop #{}", i);
+                    match test_food_injection_receive_actuation_command_send_confirmation(
+                        &tx_controllino_to_feed,
+                        &rx_controllino_from_feed,
+                    ) {
+                        InternalCommand::SwitchOn(_) => {
+                            counter_switch_on += 1;
+                        }
+                        InternalCommand::SwitchOff(_) => {
+                            counter_switch_off += 1;
+                        }
+                        _ => {
+                            // Do nothing. This case is covered with panic in lower level.
+                        }
+                    }
+                }
+                println!(
+                    "counter_switch_on={} counter_switch_off={}",
+                    counter_switch_on, counter_switch_off
+                );
+                assert_eq!(counter_switch_on, 6);
+                assert_eq!(counter_switch_off, 1);
+            });
+
+            // this scope is executing the test object
+            scope.spawn(move || {
+                let feedphase = FeedPhase::new(
+                    200, true, true, true, true, true, 200, false, false, false, false, false,
+                );
+                // Each phase will trigger switching on 6 devices and switching off 6 devices
+                let mut feedphases: Vec<FeedPhase> = Vec::new();
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                feedphases.push(feedphase.clone());
+                
+                // After all phases are executed, feeder will be switched off
+                // and 5 devices will be switched on
+                
+                let feedpattern = Feedpattern {
+                    profile_id: 1,
+                    profile_name: "Test1".to_string(),
+                    feedphases: feedphases,
+                };
+
+                let start_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap();
+                food_injection.inject_food(
+                    &tx_feed_to_controllino,
+                    &rx_feed_from_controllino,
+                    &rx_feed_from_signal_handler,
+                    &feedpattern,
+                );
+                let end_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap();
+
+                let execution_duration = end_time - start_time;
+
+                println!("execution_duration (milliseconds)= {}", execution_duration.as_millis());
+                
+                assert_ge!(execution_duration.as_millis(), 1060);
+                assert_le!(execution_duration.as_millis(), 1085);
+            });
+        });
+    }
+    
+}
+

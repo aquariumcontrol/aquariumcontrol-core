@@ -27,6 +27,9 @@ pub struct FeedConfig {
 
     /// interval for the main control in seconds    
     schedule_check_interval: u32,
+
+    /// waiting time in milliseconds before switching on or off a device during feed
+    pub device_switch_delay_millis: u32,
 }
 
 /// Checks if there are new messages in the channel.
@@ -128,7 +131,6 @@ impl Feed {
                                             &tx_to_controllino,
                                             &rx_from_controllino,
                                             &rx_from_signal_handler,
-                                            &self.config,
                                             &feed_pattern,
                                         );
                                         *mutex_data += 1;
@@ -238,7 +240,6 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::feed::Feed;
-    use crate::feed::FeedConfig;
     use crate::feedpattern::Feedpattern;
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
@@ -266,7 +267,6 @@ pub mod tests {
             _tx_to_controllino: &Sender<InternalCommand>,
             _rx_from_controllino: &Receiver<bool>,
             _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _config: &FeedConfig,
             feed_pattern: &Feedpattern,
         ) {
             // do nothing except for logging the profile id of the feed pattern
