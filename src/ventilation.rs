@@ -429,7 +429,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
-    use std::time::{Duration, SystemTime};
+    use std::time::Duration;
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;

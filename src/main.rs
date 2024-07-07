@@ -27,8 +27,10 @@ mod data_logger;
 mod device_relay_logic;
 mod feed;
 mod feedpattern;
+mod food_injection;
 mod gpio_handler;
 mod heating;
+mod i2c_interface;
 mod iir_filter;
 mod monitors;
 mod refill;
@@ -45,6 +47,10 @@ mod sql_interface_schedule;
 mod tcp_communication;
 mod ventilation;
 mod version_information;
+mod water_injection;
+
+#[cfg(target_os = "linux")]
+mod i2c_interface;
 
 use chrono::NaiveDateTime;
 use std::sync::mpsc;
@@ -61,12 +67,12 @@ use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::controllino_actuate_simulator::ControllinoActuateSimulator;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
+use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
-use crate::refill::RefillExecution;
 use crate::schedule_check::ScheduleCheck;
 use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
@@ -80,6 +86,7 @@ use crate::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
+use crate::water_injection::WaterInjection;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
@@ -590,7 +597,9 @@ fn main() {
         false => None,
     };
 
-    let mut gpio_handler = GpioHandler::new(config.gpio_handler);
+    let mut food_injection = FoodInjection::new(&config.feed);
+
+    let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
     let mut data_logger = DataLogger::new(config.data_logger);
@@ -735,7 +744,7 @@ fn main() {
         // Refill needs actuation of relay
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
-        let mut refill_execution = RefillExecution;
+        let mut water_injection = WaterInjection;
 
         scope.spawn(move || {
             refill.execute(
@@ -749,7 +758,7 @@ fn main() {
                 tx_refill_to_schedule_check,
                 rx_refill_from_schedule_check,
                 tx_refill_to_datalogger,
-                &mut refill_execution,
+                &mut water_injection,
             );
         });
 
@@ -818,6 +827,7 @@ fn main() {
                 rx_feed_from_controllino,
                 tx_feed_to_signal_handler,
                 rx_feed_from_signal_handler,
+                &mut food_injection,
             );
         });
 

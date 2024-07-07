@@ -9,11 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-#[cfg(target_os = "linux")]
-use {
-    rppal::gpio::Gpio,
-    rppal::i2c::I2c, // required for communication with AtlasScientific sensors
-};
 
 use crate::channel_content::InternalCommand;
 
@@ -24,12 +19,74 @@ use crate::channel_content::InternalCommand;
 pub struct GpioHandlerConfig {
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
+
+    /// replacement value for water temperature in case reading from I2C fails
+    pub replacement_value_water_temperature: f32,
+
+    /// replacement value for pH in case reading from I2C fails
+    pub replacement_value_ph: f32,
+
+    /// replacement value for conductivity in case reading from I2C fails
+    pub replacement_value_conductivity: f32,
+}
+
+/// Holds the configuration data for the I2C interface.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
+/// Struct is intentionally placed here instead of create i2c_interface.
+#[derive(Deserialize, Debug)]
+pub struct I2cInterfaceConfig {
+    /// I2C address of Atlas Scientific pH sensor unit
+    pub address_atlas_scientific_ph: u16,
+
+    /// I2C address of Atlas Scientific conductivity sensor unit
+    pub address_atlas_scientific_conductivity: u16,
+
+    /// I2C address of Atlas Scientific temperature sensor unit    
+    pub address_atlas_scientific_temperature: u16,
+
+    /// maximum number of read attempts
+    pub max_read_attempts: u16,
+
+    /// timeout for transactions in milliseconds
+    pub timeout_transaction: u32,
+
+    /// sleep time in milliseconds before after writing before reading from pH sensor unit
+    pub sleep_time_atlas_scientific_ph: u64,
+
+    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
+    pub sleep_time_atlas_scientific_conductivity: u64,
+
+    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
+    pub sleep_time_atlas_scientific_temperature: u64,
+
+    /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
+    pub max_val_atlas_scientific_ph: f32,
+
+    /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
+    pub min_val_atlas_scientific_ph: f32,
+
+    /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+    pub max_val_atlas_scientific_temperature: f32,
+
+    /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
+    pub min_val_atlas_scientific_temperature: f32,
+
+    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    pub max_val_atlas_scientific_conductivity: f32,
+
+    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    pub min_val_atlas_scientific_conductivity: f32,
 }
 
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
     /// configuration data for GPIO handler
     config: GpioHandlerConfig,
+
+    /// I2C interface for communication with Atlas Scientific sensor units
+    #[cfg(target_os = "linux")]
+    i2c_interface: I2cInterface,
 }
 
 impl GpioHandler {
@@ -37,12 +94,17 @@ impl GpioHandler {
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
-    pub fn new(config: GpioHandlerConfig) -> GpioHandler {
+    pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
         if !config.use_simulator {
             #[cfg(not(target_os = "linux"))]
             panic!("Usage of hardware not supported on this platform.");
         }
-        GpioHandler { config: config }
+
+        GpioHandler {
+            config: config,
+            #[cfg(target_os = "linux")]
+            i2c_interface: I2cInterface::new(i2c_config),
+        }
     }
 
     /// Requests a response from the simulator via TCP communication by sending
@@ -73,6 +135,52 @@ impl GpioHandler {
                 0.0
             }
         }
+    }
+
+    /// Requests a response from the real hardware
+    #[cfg(target_os = "linux")]
+    fn get_response_from_hardware(&mut self, internal_command: InternalCommand) -> f32 {
+        match internal_command {
+            InternalCommand::RequestSignal(signal) => match signal {
+                AquariumSignal::WaterTemperature => {
+                    match self
+                        .i2c_interface
+                        .get_response_from_i2c(AquariumSignal::WaterTemperature)
+                    {
+                        Ok(c) => c,
+                        Err(_) => self.config.replacement_value_water_temperature,
+                    }
+                }
+                AquariumSignal::pH => {
+                    match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
+                        Ok(c) => c,
+                        Err(_) => self.config.replacement_value_ph,
+                    }
+                }
+                AquariumSignal::Conductivity => {
+                    match self
+                        .i2c_interface
+                        .get_response_from_i2c(AquariumSignal::Conductivity)
+                    {
+                        Ok(c) => c,
+                        Err(_) => self.config.replacement_value_conductivity,
+                    }
+                }
+                AquariumSignal::AmbientTemperature => 0.0,
+                AquariumSignal::AmbientHumidity => 0.0,
+                AquariumSignal::TankLevelSwitchPosition => 0.0,
+                AquariumSignal::TankLevelSwitchInvalid => 0.0,
+            },
+            _ => {
+                println!("GpioHandler: ignoring irrelevant internal commands.");
+                0.0
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn get_response_from_hardware(&self, _internal_command: InternalCommand) -> f32 {
+        panic!("Usage of hardware not supported on this platform.");
     }
 
     /// Checks if there are new messages in the channel.
@@ -162,6 +270,8 @@ impl GpioHandler {
                     if self.config.use_simulator {
                         response_value =
                             Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    } else {
+                        response_value = self.get_response_from_hardware(c);
                     }
                     match tx_to_data_logger.send(response_value) {
                         Ok(()) => {}

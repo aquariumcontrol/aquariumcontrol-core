@@ -98,17 +98,18 @@ pub mod sql_query_strings {
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
     /// Provides the oldest feed schedule entry which lies in the past.
-    pub const SQL_QUERY_READ_FEEDSCHEDULE_ENTRY: &str = "SELECT TimeStamp, ProfileName, IsDaily \
+    pub const SQL_QUERY_READ_FEED_SCHEDULE_ENTRY: &str =
+        "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
         FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
 
     /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall be repeated daily.
-    pub const SQL_QUERY_UPDATE_FEEDSCHEDULE_ENTRY: &str =
+    pub const SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY: &str =
         "UPDATE feedschedule SET Timestamp=:timestamp_new WHERE Timestamp=:timestamp_old;";
 
     /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall not be repeated daily.
-    pub const SQL_QUERY_DELETE_FEEDSCHEDULE_ENTRY: &str =
+    pub const SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY: &str =
         "DELETE FROM feedschedule WHERE Timestamp = :timestamp;";
 
     /// Writes the heating statistical data into the database.
@@ -173,6 +174,17 @@ pub mod sql_query_strings {
     #[allow(dead_code)]
     pub const SQL_QUERY_READ_REFILL_EVENT: &str =
         "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
+
+    /// Inserts data of one feed schedule entry into the database.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str =
+        "INSERT into feedschedule (Timestamp, ProfileId, ProfileName, IsWeekly, IsDaily) \
+         values(:timestamp, :profile_id, :profile_name, :is_weekly, :is_daily)";
+
+    /// Inserts data of one feed schedule entry into the database.
+    #[allow(dead_code)]
+    pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
+        "select date_add(current_timestamp(), interval #offset second);";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -595,11 +607,32 @@ impl SqlInterface {
     /// - or an error code from the enum SqlInterfaceError
     /// # Arguments
     /// * `conn` - connection to SQL database
-    /// * `sql_query_string` - SQL query for retrieving timestamp as String
     pub fn get_current_timestamp(
         conn: &mut PooledConn,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
+    }
+
+    /// Retrieves the current timestamp plus an offset in seconds from SQL database
+    /// and provides wrapped in Result type either
+    /// - the current timestamp as type NaiveDateTime
+    /// - or an error code from the enum SqlInterfaceError
+    /// This function is used for testing purposes only.
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `offset_seconds` - offset into the future in seconds for the timestamp to be calculated
+    #[allow(dead_code)]
+    pub fn get_current_timestamp_offset_seconds(
+        conn: &mut PooledConn,
+        offset_seconds: i32,
+    ) -> Result<NaiveDateTime, SqlInterfaceError> {
+        let offset_seconds_string = offset_seconds.to_string();
+        let sql_query_with_offset_resolved = str::replace(
+            sql_query_strings::SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS,
+            "#offset",
+            &offset_seconds_string,
+        );
+        Self::get_timestamp(conn, &sql_query_with_offset_resolved)
     }
 
     /// Executes an SQL statement given as parameter to get a single String value

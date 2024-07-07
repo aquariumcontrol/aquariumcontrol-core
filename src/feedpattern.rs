@@ -19,7 +19,22 @@ pub struct Feedpattern {
     pub feedphases: Vec<FeedPhase>,
 }
 
+impl Feedpattern {
+    /// Calculate the total run time of the feeder for the feed pattern.
+    /// Data is inserted into feed log.
+    pub fn calc_feeder_runtime(&self) -> f64 {
+        let mut feeder_run_time = 0.0;
+
+        for feedphase in &self.feedphases {
+            feeder_run_time += feedphase.feed_duration as f64;
+        }
+
+        feeder_run_time
+    }
+}
+
 /// Holds the configuration data of one feed phase.
+#[derive(Clone, Debug, PartialEq)]
 pub struct FeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds
     pub pause_duration: i16,
@@ -56,4 +71,38 @@ pub struct FeedPhase {
 
     /// flag indicating if the auxiliary pump #2 shall remain switched on during the feed phase
     pub feed_aux_pump_2: bool,
+}
+
+impl FeedPhase {
+    // Provides a struct of type FeedPhase - used only for testing
+    #[allow(dead_code)]
+    pub fn new(
+        pause_duration: i16,
+        pause_skimmer: bool,
+        pause_main_pump_1: bool,
+        pause_main_pump_2: bool,
+        pause_aux_pump_1: bool,
+        pause_aux_pump_2: bool,
+        feed_duration: i16,
+        feed_skimmer: bool,
+        feed_main_pump_1: bool,
+        feed_main_pump_2: bool,
+        feed_aux_pump_1: bool,
+        feed_aux_pump_2: bool,
+    ) -> FeedPhase {
+        FeedPhase {
+            pause_duration: pause_duration,
+            pause_skimmer: pause_skimmer,
+            pause_main_pump_1: pause_main_pump_1,
+            pause_main_pump_2: pause_main_pump_2,
+            pause_aux_pump_1: pause_aux_pump_1,
+            pause_aux_pump_2: pause_aux_pump_2,
+            feed_duration: feed_duration,
+            feed_skimmer: feed_skimmer,
+            feed_main_pump_1: feed_main_pump_1,
+            feed_main_pump_2: feed_main_pump_2,
+            feed_aux_pump_1: feed_aux_pump_1,
+            feed_aux_pump_2: feed_aux_pump_2,
+        }
+    }
 }
