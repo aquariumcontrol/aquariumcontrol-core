@@ -65,6 +65,7 @@ on_when_out_of_schedule = false                         # strategy when schedule
 [feed]
 active = true
 schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
+device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 
 [ventilation]
 active = true
@@ -81,8 +82,27 @@ schedule_check_interval = 60                            # check every 60 seconds
 [monitors]
 active = true
 
+[i2c_interface]
+address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
+address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
+address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
+timeout_transaction = 100                               # timeout for transactions in milliseconds
+max_read_attempts = 10                                  # maximum number of read attempts
+sleep_time_atlas_scientific_ph = 900                    # sleep time in milliseconds before after writing before reading from pH sensor unit
+sleep_time_atlas_scientific_conductivity = 900          # sleep time in milliseconds before after writing before reading from conductivity sensor unit
+sleep_time_atlas_scientific_temperature = 600           # sleep time in milliseconds before after writing before reading from temperature sensor unit
+max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
+max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_temperature = 10.0             # minimum allowed value for temperature used to assess if the temperature sensor reading is valid,
+max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+
 [gpio_handler]
 use_simulator = true                                     # if true, then do not use real HW
+replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
+replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
+replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
 
 [schedule_check]
 schedule_check_interval = 300                           # interval in seconds for polling SQL database

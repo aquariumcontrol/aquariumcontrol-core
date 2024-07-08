@@ -13,6 +13,10 @@ peristaltic_pump2_id = 13
 peristaltic_pump3_id = 14
 peristaltic_pump4_id = 15
 use_simulator = true                                    # if true, then do not use real HW
+baud_rate = 9600                                        # baud rate for communication via serial port
+port_name = "/dev/ttyACM0"                              # port name for communication via serial port (for testing/operation on Linux)
+timeout_millis = 10                                     # timeout in milliseconds for serial port communication
+controllino_processing_millis = 20                      # time in milliseconds for Controllino to process command
 
 [sql_interface]
 db_user = "aquarium"
@@ -83,6 +87,7 @@ use_simulator = true                                    # if true, then do not u
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
+
 [i2c_interface]
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
 address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
