@@ -677,7 +677,6 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
-    use assert_float_eq::assert_float_absolute_eq;
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
@@ -775,7 +774,7 @@ pub mod tests {
         rx_controllino_from_heating: &Receiver<InternalCommand>,
         tx_controllino_to_heating: &Sender<bool>,
     ) -> Option<InternalCommand> {
-        let mut command_received: Option<InternalCommand>;
+        let command_received: Option<InternalCommand>;
 
         // receive command from test object
         match rx_controllino_from_heating.recv() {
@@ -1476,27 +1475,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-
-        // get initial data for calculation of reference value
-        let initial_heating_stats_entry = match heating
-            .sql_interface_heating
-            .get_single_heating_stats_from_database()
-        {
-            Ok(c) => c,
-            Err(_) => {
-                // database responded with empty response - let's create empty entry
-                HeatingStatsEntry {
-                    date: Local::now().date_naive(),
-                    energy: 0.0,
-                    ambient_temperature_average_value: 0.0,
-                    ambient_temperature_average_counter: 0,
-                    water_temperature_average_value: 0.0,
-                    water_temperature_average_counter: 0,
-                    heating_control_runtime: 0,
-                }
-            }
-        };
-
+       
         scope(|scope| {
             // thread for schedule check
             scope.spawn(move || loop {
@@ -1589,26 +1568,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-
-        // get initial data for calculation of reference value
-        let initial_heating_stats_entry = match heating
-            .sql_interface_heating
-            .get_single_heating_stats_from_database()
-        {
-            Ok(c) => c,
-            Err(_) => {
-                // database responded with empty response - let's create empty entry
-                HeatingStatsEntry {
-                    date: Local::now().date_naive(),
-                    energy: 0.0,
-                    ambient_temperature_average_value: 0.0,
-                    ambient_temperature_average_counter: 0,
-                    water_temperature_average_value: 0.0,
-                    water_temperature_average_counter: 0,
-                    heating_control_runtime: 0,
-                }
-            }
-        };
 
         scope(|scope| {
             // thread for schedule check

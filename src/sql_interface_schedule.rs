@@ -228,16 +228,16 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
 
         match sql_interface_schedule.read_schedule() {
-            Ok(c) => {
+            Ok(_) => {
                 println!("Reading schedule succeeded checking content now.");
             }
             Err(e) => {
-                panic!("Reading schedule from SQL database failed.");
+                panic!("Reading schedule from SQL database failed: {e:?}");
             }
         }
 
@@ -279,9 +279,6 @@ pub mod tests {
                 ScheduleType::Refill => &schedule_entry_reference_refill,
                 ScheduleType::Ventilation => &schedule_entry_reference_ventilation,
                 ScheduleType::Heating => &schedule_entry_reference_heating,
-                _ => {
-                    panic!("SqlInterfaceSchedule: unknown schedule type loaded from database.");
-                }
             };
             assert_eq!(reference.start_time, schedule_entry.start_time);
             assert_eq!(reference.stop_time, schedule_entry.stop_time);

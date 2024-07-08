@@ -423,7 +423,6 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -431,11 +430,9 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::ventilation::Ventilation;
 
     fn prepare_ventilation_tests() -> Ventilation {
@@ -510,7 +507,7 @@ pub mod tests {
         rx_controllino_from_ventilation: &Receiver<InternalCommand>,
         tx_controllino_to_ventilation: &Sender<bool>,
     ) -> Option<InternalCommand> {
-        let mut command_received: Option<InternalCommand>;
+        let command_received: Option<InternalCommand>;
 
         // receive command from test object
         match rx_controllino_from_ventilation.recv() {

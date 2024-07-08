@@ -305,12 +305,9 @@ impl I2cInterface {
 pub mod tests {
     use assert_float_eq::*;
 
-    use crate::channel_content::AquariumSignal;
-    use crate::config::ConfigData;
     use crate::i2c_interface::atlas_scientific_constants;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
-    use crate::read_config_file;
 
     // happy case for evaluating response from pH sensor unit
     #[test]

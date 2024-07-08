@@ -414,7 +414,6 @@ pub mod tests {
     use crate::food_injection::FoodInjection;
     use crate::food_injection::FoodInjectionTrait;
     use crate::read_config_file;
-    use crate::Feed;
 
     fn test_food_injection_receive_actuation_command_send_confirmation(
         tx_controllino_to_feed: &Sender<bool>,
@@ -463,7 +462,6 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                let mut i: u32;
                 let mut counter_switch_on: i32 = 0;
                 let mut counter_switch_off: i32 = 0;
 
@@ -556,7 +554,6 @@ pub mod tests {
         scope(|scope| {
             // this scope is providing the test environment
             scope.spawn(move || {
-                let mut i: u32;
                 let mut counter_switch_on: i32 = 0;
                 let mut counter_switch_off: i32 = 0;
 
