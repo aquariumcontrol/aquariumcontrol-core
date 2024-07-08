@@ -130,11 +130,17 @@ pub enum InternalCommand {
     /// Switch off a device
     SwitchOff(AquariumDevice),
 
+    /// Pulse a device (switch on, pause, switch off)
+    Pulse(AquariumDevice, u16),
+
     /// Set a relay
     SetRelay(u16),
 
     /// Unset a relay
     UnsetRelay(u16),
+
+    /// Pulse a relay (switch on, pause, switch off)
+    PulseRelay(u16, u16),
 
     /// Request a signal
     RequestSignal(AquariumSignal),
@@ -160,8 +166,10 @@ impl fmt::Display for InternalCommand {
         match self {
             InternalCommand::SwitchOn(_) => write!(f, "SwitchOn"),
             InternalCommand::SwitchOff(_) => write!(f, "SwitchOff"),
+            InternalCommand::Pulse(_, _) => write!(f, "Pulse"),
             InternalCommand::SetRelay(_) => write!(f, "SetRelay"),
             InternalCommand::UnsetRelay(_) => write!(f, "UnsetRelay"),
+            InternalCommand::PulseRelay(_, _) => write!(f, "PulseRelay"),
             InternalCommand::RequestSignal(_) => write!(f, "RequestSignal"),
             InternalCommand::ResetAllErrors => write!(f, "ResetAllErrors"),
             InternalCommand::Quit => write!(f, "Quit"),

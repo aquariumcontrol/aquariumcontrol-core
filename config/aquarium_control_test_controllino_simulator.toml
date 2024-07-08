@@ -1,0 +1,89 @@
+[controllino]
+skimmer_id = 3                                          # relay id for protein skimmer
+main_pump1_id = 4                                       # relay id for main pump #1
+main_pump2_id = 5                                       # relay id for main pump #2
+aux_pump1_id = 6                                        # relay id for auxiliary pump #1
+aux_pump2_id = 7                                        # relay id for auxiliary pump #2
+feeder_id = 8                                           # relay id for feeder
+refill_pump_id = 11                                     # relay id for refill pump
+heater_id = 2                                           # relay id for heater
+ventilation_id = 10                                     # relay id for surface ventilation
+peristaltic_pump1_id = 12                               # relay id for peristaltic pump #1
+peristaltic_pump2_id = 13                               # relay id for peristaltic pump #2
+peristaltic_pump3_id = 14                               # relay id for peristaltic pump #3
+peristaltic_pump4_id = 15                               # relay id for peristaltic pump #4
+use_simulator = true                                    # if true, then do not use real HW
+baud_rate = 9600                                        # baud rate for communication via serial port
+port_name = "dummy"                                     # port name for communication via serial port (for testing on MacOs)
+timeout_millis = 10                                     # timeout in milliseconds for serial port communication
+controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
+
+[sql_interface]
+db_user = "aquarium"
+db_password = "4w4umx7AzdAwCXi7"
+db_host = "127.0.0.1"
+db_port = 3306
+db_name = "aquarium"
+db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
+
+[tcp_connection]
+ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes
+port = 35000                                            # port number for communication with control application for testing purposes
+
+[data_logger]
+logging_interval = 60                                   # log data every x seconds
+filter_coefficient_water_temperature = { filter_coefficient = 0.5 }
+filter_coefficient_pH = { filter_coefficient = 0.5 }
+filter_coefficient_conductivity = { filter_coefficient = 0.5 }
+
+[refill]
+active = true
+initial_wait_interval = 10                              # wait for x seconds before starting refill control
+check_interval = 60                                     # check tank level every x seconds
+max_refill_count_24h = 20                               # max. allowed refill operations per 24h
+max_refill_volume_24h = 6.0                             # max. allowed refill volume per 24h
+max_refill_count_hour = 5                               # max. allowed refill operations per hour
+max_refill_volume_hour = 2.0                            # max. allowed refill volume per hour
+min_interval_last_refill = 600                          # min. required time interval in seconds between two refill operations
+tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
+max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
+refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
+max_refill_volume = 2.0                                 # maximum allowed refill volume in one refill operation
+additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
+
+[heating]
+active = true
+switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
+switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
+stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
+stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
+heater_power = 200                                      # electrical power consumption of heater in Watt
+# configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
+on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
+
+[feed]
+active = true
+schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
+
+[ventilation]
+active = true
+switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
+switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
+switch_on_ventilation_when_terminating = true           # behavior when terminating the application
+saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
+on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
+
+[balling]
+active = true
+schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
+
+[monitors]
+active = true
+
+[gpio_handler]
+use_simulator = true                                     # if true, then do not use real HW
+
+[schedule_check]
+schedule_check_interval = 300                           # interval in seconds for polling SQL database
+strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in database
