@@ -55,7 +55,7 @@ pub mod sql_query_strings {
 
     /// Provides the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =
-        "SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
+        "SELECT Timestamp from ballingdosinglog as LSTTSTMP WHERE pumpid=#pump_id ORDER BY Timestamp DESC LIMIT 1;";
 
     /// Writes the last Balling dosing event to the database.    
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
@@ -367,6 +367,47 @@ impl SqlInterface {
         Ok(single_string_array[0].single_string.clone())
     }
 
+    /// Executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    /// Empty response is allowed.
+    /// Depending on the result of the query, the function provides wrapped in a result type either
+    /// - the response of the query as String as Optional
+    /// - Optional None
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query as String
+    fn get_single_optional_string_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<Option<String>, SqlInterfaceError> {
+        // Get single string value from database
+        let single_string_array = match conn.query_map(sql_query_string, |single_string| {
+            SingleString { single_string }
+        }) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::SingleStringRequestFailure(
+                    "Could not get single string from SQL database using query:".to_string()
+                        + sql_query_string,
+                ));
+            }
+        };
+
+        // check case if there is no response
+        if single_string_array.len() == 0 {
+            return Ok(Option::None);
+        }
+
+        // check error case if there is more than one response
+        if single_string_array.len() > 1 {
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
+                "SQL database responded with multiple responses to request to query:".to_string()
+                    + sql_query_string,
+            ));
+        }
+        Ok(Some(single_string_array[0].single_string.clone()))
+    }
+
     /// Executes an SQL statement which returns a hash based on version information.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as String
@@ -602,6 +643,51 @@ impl SqlInterface {
         }
     }
 
+    /// Executes an SQL statement given as parameter to get a single String value
+    /// and tries to convert it to timestamp of type NaiveDateTime.
+    /// Result may be empty.
+    /// Depending on the result of the query and the conversion to NaiveDateTime,
+    /// the function provides wrapped in a result type either
+    /// - the timestamp as type NaiveDateTime wrapped in Option
+    /// - Option None
+    /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query for retrieving timestamp as String
+    pub fn get_optional_timestamp(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
+        // trigger SQL call
+        let timestamp_string_opt =
+            match Self::get_single_optional_string_from_database(conn, sql_query_string) {
+                Ok(c) => c,
+                Err(e) => {
+                    if !cfg!(test) {
+                        println!("{e:?}");
+                    }
+                    return Err(e);
+                }
+            };
+
+        let result_opt = match timestamp_string_opt {
+            Some(timestamp_string) => {
+                // convert data type
+                match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S")
+                {
+                    Ok(c) => Some(c),
+                    Err(_) => {
+                        return Err(SqlInterfaceError::TimestampConversionFailure(
+                            "Error when converting timestamp: ".to_string() + &timestamp_string,
+                        ));
+                    }
+                }
+            }
+            Option::None => Option::None,
+        };
+
+        Ok(result_opt)
+    }
     /// Retrieves the current timestamp from SQL database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDateTime
     /// - or an error code from the enum SqlInterfaceError

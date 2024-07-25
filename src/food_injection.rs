@@ -244,7 +244,7 @@ pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<Internal
             InternalCommand::Quit => {
                 println!("FeedInjection: Received Quit command");
                 true
-            },
+            }
             _ => {
                 println!("FeedInjection: ignoring inapplicable command from signal handler.");
                 false
@@ -280,11 +280,11 @@ impl FoodInjectionTrait for FoodInjection {
         let mut target_aux_pump2_state: ActuatorState;
         let mut sleep_counter_millis: i16;
         let mut quit_command_received: bool = true;
-        
+
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
             if check_pending_external_request(rx_from_signal_handler) {
-                break;  // exit outer loop
+                break; // exit outer loop
             }
 
             // keep feeder stopped
@@ -323,17 +323,16 @@ impl FoodInjectionTrait for FoodInjection {
 
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
-            while sleep_counter_millis < feedphase.pause_duration
-            {
+            while sleep_counter_millis < feedphase.pause_duration {
                 quit_command_received = check_pending_external_request(rx_from_signal_handler);
                 if quit_command_received {
-                    break;  // exit inner loop
+                    break; // exit inner loop
                 }
                 sleep_counter_millis += sleep_interval_millis;
                 spin_sleeper.sleep(sleep_duration);
             }
             if quit_command_received {
-                break;  // exit outer loop
+                break; // exit outer loop
             }
 
             // run the feeder
@@ -372,20 +371,19 @@ impl FoodInjectionTrait for FoodInjection {
 
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
-            while sleep_counter_millis < feedphase.feed_duration
-            {
+            while sleep_counter_millis < feedphase.feed_duration {
                 quit_command_received = check_pending_external_request(rx_from_signal_handler);
                 if quit_command_received {
-                    break;  // exit inner loop
+                    break; // exit inner loop
                 }
                 sleep_counter_millis += sleep_interval_millis;
                 spin_sleeper.sleep(sleep_duration);
             }
             if quit_command_received {
-                break;  // exit outer loop
+                break; // exit outer loop
             }
         }
-        
+
         self.switch_skimmer_pumps(
             ActuatorState::On,
             ActuatorState::On,
@@ -401,11 +399,11 @@ impl FoodInjectionTrait for FoodInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use all_asserts::{assert_ge, assert_le};
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::thread::scope;
-    use std::time::{UNIX_EPOCH, SystemTime};
-    use all_asserts::{assert_le, assert_ge};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::channel_content::InternalCommand;
     use crate::config::ConfigData;
@@ -507,39 +505,38 @@ pub mod tests {
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
-                
+
                 // After all phases are executed, feeder will be switched off
                 // and 5 devices will be switched on
-                
+
                 let feedpattern = Feedpattern {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
                     feedphases: feedphases,
                 };
 
-                let start_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap();
+                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 food_injection.inject_food(
                     &tx_feed_to_controllino,
                     &rx_feed_from_controllino,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
-                let end_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap();
+                let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
                 let execution_duration = end_time - start_time;
 
-                println!("execution_duration (milliseconds)= {}", execution_duration.as_millis());
-                
+                println!(
+                    "execution_duration (milliseconds)= {}",
+                    execution_duration.as_millis()
+                );
+
                 assert_ge!(execution_duration.as_millis(), 23500);
                 assert_le!(execution_duration.as_millis(), 29700);
             });
         });
     }
-    
+
     #[test]
     // this test cases executes the food injection with interruption from signal handler
     pub fn test_food_injection_interrupted() {
@@ -618,38 +615,35 @@ pub mod tests {
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
-                
+
                 // After all phases are executed, feeder will be switched off
                 // and 5 devices will be switched on
-                
+
                 let feedpattern = Feedpattern {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
                     feedphases: feedphases,
                 };
 
-                let start_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap();
+                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 food_injection.inject_food(
                     &tx_feed_to_controllino,
                     &rx_feed_from_controllino,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
-                let end_time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap();
+                let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
                 let execution_duration = end_time - start_time;
 
-                println!("execution_duration (milliseconds)= {}", execution_duration.as_millis());
-                
+                println!(
+                    "execution_duration (milliseconds)= {}",
+                    execution_duration.as_millis()
+                );
+
                 assert_ge!(execution_duration.as_millis(), 1060);
                 assert_le!(execution_duration.as_millis(), 1085);
             });
         });
     }
-    
 }
-

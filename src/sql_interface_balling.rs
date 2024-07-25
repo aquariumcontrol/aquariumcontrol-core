@@ -48,15 +48,23 @@ impl SqlInterfaceBalling {
     /// into a Result type either:
     /// - result as type NaiveDateTime or
     /// - value of enum SqlInterfaceError
-    fn get_last_balling_dosing_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
-        SqlInterface::get_timestamp(
-            &mut self.conn,
+    fn get_last_balling_dosing_timestamp(
+        &mut self,
+        pump_id: i64,
+    ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
+        let sql_query = str::replace(
             sql_query_strings::SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP,
-        )
+            "#pump_id",
+            &pump_id.to_string(),
+        );
+        SqlInterface::get_optional_timestamp(&mut self.conn, &sql_query)
     }
 
     /// Requests current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
-    pub fn get_duration_since_last_balling_dosing(&mut self) -> Result<i64, SqlInterfaceError> {
+    pub fn get_duration_since_last_balling_dosing(
+        &mut self,
+        pump_id: i64,
+    ) -> Result<Option<i64>, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
             Ok(c) => c,
             Err(e) => {
@@ -64,16 +72,23 @@ impl SqlInterfaceBalling {
             }
         };
 
-        let last_balling_dosing_datetime = match self.get_last_balling_dosing_timestamp() {
+        let last_balling_dosing_datetime_opt = match self.get_last_balling_dosing_timestamp(pump_id)
+        {
             Ok(c) => c,
             Err(e) => {
                 return Err(e);
             }
         };
 
-        let delta_time = current_datetime - last_balling_dosing_datetime;
+        let result_opt = match last_balling_dosing_datetime_opt {
+            Some(last_balling_dosing_datetime) => {
+                let delta_time = current_datetime - last_balling_dosing_datetime;
+                Some(delta_time.num_seconds())
+            }
+            None => Option::None,
+        };
 
-        Ok(delta_time.num_seconds())
+        Ok(result_opt)
     }
 
     /// Inserts one dataset of Balling dosing event into the SQL database.
@@ -111,7 +126,7 @@ impl SqlInterfaceBalling {
     /// * `pump_id` - id of the pump for which the Balling dosing event shall be retrieved
     pub fn get_single_balling_setval_from_database(
         &mut self,
-        pump_id: i32,
+        pump_id: i64,
     ) -> Result<BallingSetVal, SqlInterfaceError> {
         let sql_query_string = str::replace(
             sql_query_strings::SQL_QUERY_READ_BALLING_SETVALS,
@@ -186,6 +201,7 @@ pub mod tests {
     #[test]
     /// all test cases for this crate/table combined in one function to avoid problems with multithreading
     pub fn test_sql_interface_balling_events() {
+        let pump_id = 1;
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -199,12 +215,8 @@ pub mod tests {
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
         assert_eq!(
-            sql_interface_balling.get_last_balling_dosing_timestamp(),
-            Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                "SQL database responded with empty response to query: \
-            SELECT Timestamp from ballingdosinglog as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
-                    .to_string()
-            ))
+            sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
+            Ok(None)
         );
         println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
         // **************************************************************************************
@@ -212,13 +224,13 @@ pub mod tests {
         // *** check timestamp of last Balling dosing - PASS ************************************
         let balling_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
+        match sql_interface_balling.insert_balling_event(balling_timestamp, pump_id, 0.5) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
         };
         assert_eq!(
-            sql_interface_balling.get_last_balling_dosing_timestamp(),
-            Ok(balling_timestamp)
+            sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
+            Ok(Some(balling_timestamp))
         );
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
         // **************************************************************************************
@@ -257,7 +269,7 @@ pub mod tests {
 
         // *** check duration since last Balling dosing - PASS **********************************
         let duration_since_last_balling_dosing =
-            match sql_interface_balling.get_duration_since_last_balling_dosing() {
+            match sql_interface_balling.get_duration_since_last_balling_dosing(1) {
                 Ok(c) => c,
                 Err(e) => panic!("Could not calculate duration since last Balling dosing: {e:?}"),
             };
@@ -266,7 +278,7 @@ pub mod tests {
                 .unwrap();
         assert_eq!(
             duration_since_last_balling_dosing,
-            reference_duration_since_last_balling_dosing
+            Some(reference_duration_since_last_balling_dosing)
         );
         println!("* checking duration since last Balling dosing succeeded.");
         // **************************************************************************************

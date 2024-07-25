@@ -1475,7 +1475,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-       
+
         scope(|scope| {
             // thread for schedule check
             scope.spawn(move || loop {
