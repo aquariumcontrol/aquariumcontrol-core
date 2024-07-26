@@ -1307,7 +1307,7 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
         // accelerate test case execution
         refill
             .config
