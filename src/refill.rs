@@ -674,6 +674,8 @@ pub mod tests {
     use crate::water_injection::WaterInjection;
     use crate::water_injection::WaterInjectionTrait;
 
+    use crate::water_injection::tests::prepare_refill_tests_tertiary;
+
     trait Output {
         fn output(&self) -> String;
     }
@@ -1687,12 +1689,16 @@ pub mod tests {
                 "Refill: run_main_cycle_with_sensor_signals running loop iteration #{}",
                 i
             );
+            println!("run_main_cycle_with_sensor_signals: Receiving from refill (1).");
             rx_gpio_from_refill.recv().unwrap();
+            println!("run_main_cycle_with_sensor_signals: Sending to refill (1).");
             let _ = tx_gpio_to_refill.send(match signal_position {
                 true => 1.0,
                 false => 0.0,
             });
+            println!("run_main_cycle_with_sensor_signals: Receiving from refill (2).");
             rx_gpio_from_refill.recv().unwrap();
+            println!("run_main_cycle_with_sensor_signals: Sending to refill (2).");
             let _ = tx_gpio_to_refill.send(match signal_invalid {
                 true => 1.0,
                 false => 0.0,
@@ -1705,7 +1711,7 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_recent_refill_event() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests_tertiary();
 
         // accelerate test case execution
         refill

@@ -140,7 +140,10 @@ impl Balling {
             }
         };
         if target_dosing_interval == 0 {
-            panic!("Invalid dosing interval for pump #{} in configuration.", pump_id);
+            panic!(
+                "Invalid dosing interval for pump #{} in configuration.",
+                pump_id
+            );
         }
 
         let duration_since_balling_dosing: u32 = match sql_interface_balling
@@ -170,7 +173,7 @@ impl Balling {
         let countdown = match target_dosing_interval.checked_sub(duration_since_balling_dosing) {
             None => 0,
             Some(diff) => diff,
-        };  
+        };
 
         println!(
             "Balling: Countdown for next Balling dosing of pump {} is {} seconds.",
@@ -252,17 +255,17 @@ impl Balling {
 
 #[cfg(test)]
 pub mod tests {
-//    use spin_sleep::SpinSleeper;
-//    use std::sync::mpsc;
-//    use std::sync::mpsc::{Receiver, Sender};
-//    use std::sync::{Arc, Mutex};
-//    use std::thread::scope;
-//    use std::time::Duration;
+    //    use spin_sleep::SpinSleeper;
+    //    use std::sync::mpsc;
+    //    use std::sync::mpsc::{Receiver, Sender};
+    //    use std::sync::{Arc, Mutex};
+    //    use std::thread::scope;
+    //    use std::time::Duration;
 
-//    use crate::channel_content::InternalCommand;
+    //    use crate::channel_content::InternalCommand;
+    use crate::balling::Balling;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::balling::Balling;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::SqlInterfaceBalling;
 
@@ -291,11 +294,11 @@ pub mod tests {
         // create test object
         let _ = Balling::new(config.balling, sql_interface_balling);
     }
-    
+
     #[test]
     pub fn test_balling_initialization_empty_dosing_log() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
+            read_config_file("/config/aquarium_control_test_balling_empty.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -322,7 +325,7 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump3, 0);
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
-    
+
     #[test]
     pub fn test_balling_initialization_full_dosing_log() {
         let config: ConfigData =
@@ -347,23 +350,31 @@ pub mod tests {
         let naive_datetime_200secs_ago = SqlInterface::get_naive_timestamp_from_past(0, 200);
         let naive_datetime_300secs_ago = SqlInterface::get_naive_timestamp_from_past(0, 300);
         let naive_datetime_400secs_ago = SqlInterface::get_naive_timestamp_from_past(0, 400);
-        
+
         // insert balling dosing events
         match sql_interface_balling.insert_balling_event(naive_datetime_100secs_ago, 1, 0.5) {
             Ok(_) => {}
-            Err(e) => panic!("Could not insert Balling dosing event for pump #1 into database: {e:?}"),
+            Err(e) => {
+                panic!("Could not insert Balling dosing event for pump #1 into database: {e:?}")
+            }
         };
         match sql_interface_balling.insert_balling_event(naive_datetime_200secs_ago, 2, 0.5) {
             Ok(_) => {}
-            Err(e) => panic!("Could not insert Balling dosing event for pump #2 into database: {e:?}"),
+            Err(e) => {
+                panic!("Could not insert Balling dosing event for pump #2 into database: {e:?}")
+            }
         };
         match sql_interface_balling.insert_balling_event(naive_datetime_300secs_ago, 3, 0.5) {
             Ok(_) => {}
-            Err(e) => panic!("Could not insert Balling dosing event for pump #3 into database: {e:?}"),
+            Err(e) => {
+                panic!("Could not insert Balling dosing event for pump #3 into database: {e:?}")
+            }
         };
         match sql_interface_balling.insert_balling_event(naive_datetime_400secs_ago, 4, 0.5) {
             Ok(_) => {}
-            Err(e) => panic!("Could not insert Balling dosing event for pump #4 into database: {e:?}"),
+            Err(e) => {
+                panic!("Could not insert Balling dosing event for pump #4 into database: {e:?}")
+            }
         };
 
         // create test object
@@ -375,5 +386,4 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump3, 0);
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
-    
 }
