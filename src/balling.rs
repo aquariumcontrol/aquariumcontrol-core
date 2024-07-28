@@ -12,10 +12,12 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use chrono::Local;
 
-//use crate::channel_content::ActuatorState;
-//use crate::channel_content::AquariumDevice;
+use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
+use crate::mineral_injection::MineralInjectionTrait;
+use crate::sql_interface_balling::BallingSetVal;
 use crate::sql_interface_balling::SqlInterfaceBalling;
 
 /// Holds the configuration data for the balling dosing control.
@@ -40,6 +42,9 @@ pub struct BallingConfig {
 
     /// inject Balling minerals with pump 4 after each period    
     dosing_interval_pump4: u32,
+
+    /// wait for a fixed period between dosings from different pumps
+    pub pump_switch_delay_millis: u32,
 }
 
 /// Checks if there are new messages in the channel.
@@ -96,6 +101,10 @@ impl Balling {
     /// * `config` - configuration data for Balling dosing control
     /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
     pub fn new(config: BallingConfig, mut sql_interface_balling: SqlInterfaceBalling) -> Balling {
+        if config.schedule_check_interval == 0 {
+            panic!("Balling: schedule check interval is zero - please assign a value > 0");
+        }
+
         let countdown_dosing_pump1 =
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1);
         let countdown_dosing_pump2 =
@@ -183,6 +192,90 @@ impl Balling {
         countdown
     }
 
+    /// Calculates target dosing duration based on set values read from database.
+    /// # Arguments
+    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
+    fn calc_target_dosing_duration_millis(balling_setval: &BallingSetVal) -> u32 {
+        if balling_setval.dosing_speed > 0.0 && balling_setval.dosing_volume > 0.0 {
+            let dosing_duration_seconds =
+                balling_setval.dosing_volume / balling_setval.dosing_speed;
+            (dosing_duration_seconds * 1000.0) as u32
+        } else {
+            0 // user set an invalid flow rate or invalid dosing volume -> no dosing
+        }
+    }
+
+    /// Calculates actual dosing volume based on actual dosing duration and pump flow.
+    /// # Arguments
+    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
+    /// * `actual_dosing_duration_millis` - actual dosing duration in milliseconds
+    fn calc_actual_dosing_volume(
+        balling_setval: &BallingSetVal,
+        actual_dosing_duration_millis: u32,
+    ) -> f32 {
+        if balling_setval.dosing_speed > 0.0 && actual_dosing_duration_millis > 0 {
+            (actual_dosing_duration_millis as f32) / 1000.0 * balling_setval.dosing_speed
+        } else {
+            0.0 // user set an invalid flow rate or invalid dosing volume -> no dosing
+        }
+    }
+
+    /// Executes the dosing for a specific pump including
+    /// - reading set values from data base
+    /// - invoking mineral injection
+    /// - writing result back to data base
+    /// # Arguments
+    /// * `pump_id` - id of the pump to be actuated.
+    /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
+    fn execute_dosing(
+        &mut self,
+        pump_id: u32,
+        pump_device: AquariumDevice,
+        mineral_injection: &mut impl MineralInjectionTrait,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        tx_to_controllino: &Sender<InternalCommand>,
+        rx_from_controllino: &Receiver<bool>,
+    ) -> bool {
+        let mut quit_command_received: bool = false;
+        let actual_dosing_duration_millis: u32;
+
+        match self
+            .sql_interface_balling
+            .get_single_balling_setval_from_database(1)
+        {
+            Ok(balling_setval) => {
+                let dosing_duration_millis =
+                    Self::calc_target_dosing_duration_millis(&balling_setval);
+                if dosing_duration_millis > 0 {
+                    (quit_command_received, actual_dosing_duration_millis) = mineral_injection
+                        .inject_mineral(
+                            tx_to_controllino,
+                            rx_from_controllino,
+                            rx_from_signal_handler,
+                            pump_device,
+                            dosing_duration_millis,
+                        );
+                    let actual_dosing_volume = Self::calc_actual_dosing_volume(
+                        &balling_setval,
+                        actual_dosing_duration_millis,
+                    );
+                    _ = self.sql_interface_balling.insert_balling_event(
+                        Local::now().naive_local(),
+                        pump_id.into(),
+                        actual_dosing_volume.into(),
+                    );
+                }
+            }
+            Err(e) => {
+                println!(
+                    "Balling: Encountered error when reading set values of pump #{}: {e:?}",
+                    pump_id
+                );
+            }
+        }
+        quit_command_received
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
@@ -194,21 +287,140 @@ impl Balling {
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     pub fn execute(
         &mut self,
-        _mutex_device_scheduler_balling: Arc<Mutex<i32>>,
-        _tx_to_controllino: Sender<InternalCommand>,
-        _rx_from_controllino: Receiver<bool>,
+        mutex_device_scheduler_balling: Arc<Mutex<i32>>,
+        tx_to_controllino: Sender<InternalCommand>,
+        rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
+        mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
+        let mut quit_command_received: bool;
+        let mut schedule_check_result = false;
 
         loop {
-            if self.config.active && (loop_counter % self.config.schedule_check_interval == 0) {
+            // @todo: check schedule
+            if self.config.active
+                && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
+            {
                 println!("Balling: executing main control.");
+
+                // schedule check to see if actuation is allowed
+                println!("Balling: initiating communication to schedule checker.");
+                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                    Ok(_) => {
+                        // now listen for response
+                        schedule_check_result = match rx_from_schedule_check.recv() {
+                            Ok(c) => c,
+                            Err(e) => {
+                                println!("Balling: Error when reading channel content for schedule check: {e:?}");
+                                false // assume we are not allowed to actuate when communication is not successful
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        println!(
+                            "Balling: Error in channel communication to schedule check: {e:?}"
+                        );
+                    }
+                }
+
+                //*** Peristaltic pump 1 ***
+                if self.countdown_dosing_pump1 <= 0 {
+                    if schedule_check_result {
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                            quit_command_received = self.execute_dosing(
+                                1,
+                                AquariumDevice::PeristalticPump1,
+                                mineral_injection,
+                                &rx_from_signal_handler,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                            );
+                            *mutex_data += 1;
+                        }
+                        if quit_command_received {
+                            break; // Quit command received during dosing
+                        }
+                    }
+                } else {
+                    self.countdown_dosing_pump1 -= 1;
+                }
+                //*** Peristaltic pump 2 ***
+                if self.countdown_dosing_pump2 <= 0 {
+                    if schedule_check_result {
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                            quit_command_received = self.execute_dosing(
+                                2,
+                                AquariumDevice::PeristalticPump2,
+                                mineral_injection,
+                                &rx_from_signal_handler,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                            );
+                            *mutex_data += 1;
+                        }
+                        if quit_command_received {
+                            break; // Quit command received during dosing
+                        }
+                    }
+                } else {
+                    self.countdown_dosing_pump2 -= 1;
+                }
+                //*** Peristaltic pump 3 ***
+                if self.countdown_dosing_pump3 <= 0 {
+                    if schedule_check_result {
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                            quit_command_received = self.execute_dosing(
+                                3,
+                                AquariumDevice::PeristalticPump3,
+                                mineral_injection,
+                                &rx_from_signal_handler,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                            );
+                            *mutex_data += 1;
+                        }
+                        if quit_command_received {
+                            break; // Quit command received during dosing
+                        }
+                    }
+                } else {
+                    self.countdown_dosing_pump3 -= 1;
+                }
+                //*** Peristaltic pump 4 ***
+                if self.countdown_dosing_pump4 <= 0 {
+                    if schedule_check_result {
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                            quit_command_received = self.execute_dosing(
+                                1,
+                                AquariumDevice::PeristalticPump4,
+                                mineral_injection,
+                                &rx_from_signal_handler,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                            );
+                            *mutex_data += 1;
+                        }
+                        if quit_command_received {
+                            break; // Quit command received during dosing
+                        }
+                    }
+                } else {
+                    self.countdown_dosing_pump4 -= 1;
+                }
             }
 
             if check_pending_external_request(&rx_from_signal_handler) {

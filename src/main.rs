@@ -32,6 +32,7 @@ mod gpio_handler;
 mod heating;
 mod i2c_interface;
 mod iir_filter;
+mod mineral_injection;
 mod monitors;
 mod refill;
 mod sawtooth_profile;
@@ -71,6 +72,7 @@ use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
+use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
 use crate::schedule_check::ScheduleCheck;
@@ -598,7 +600,7 @@ fn main() {
     };
 
     let mut food_injection = FoodInjection::new(&config.feed);
-
+    let mut mineral_injection = MineralInjection::new();
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
@@ -843,6 +845,7 @@ fn main() {
                 rx_balling_from_signal_handler,
                 tx_balling_to_schedule_check,
                 rx_balling_from_schedule_check,
+                &mut mineral_injection,
             );
         });
     });

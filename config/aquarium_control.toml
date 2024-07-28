@@ -71,6 +71,7 @@ dosing_interval_pump1 = 3600                            # inject Balling mineral
 dosing_interval_pump2 = 3200                            # inject Balling minerals with pump 2 after each period
 dosing_interval_pump3 = 2800                            # inject Balling minerals with pump 3 after each period
 dosing_interval_pump4 = 2400                            # inject Balling minerals with pump 4 after each period
+pump_switch_delay_millis = 500                          # waiting period between usage of different pumps
 
 [monitors]
 active = true

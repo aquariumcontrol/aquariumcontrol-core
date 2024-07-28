@@ -152,7 +152,9 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        println!("Water injection: Sending request to switch off refill pump to Controllino thread");
+        println!(
+            "Water injection: Sending request to switch off refill pump to Controllino thread"
+        );
         match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
             Ok(_) => {
                 // now listen for response
@@ -179,7 +181,7 @@ impl WaterInjectionTrait for WaterInjection {
             }
         }
         println!("Water injection: Sent information to data logger.");
-        
+
         // write result to data base
         match sql_interface_refill.insert_refill_event(
             Local::now().naive_local(),
@@ -711,7 +713,7 @@ pub mod tests {
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
-                
+
                 run_main_cycle_with_sensor_signals_and_abort(
                     &rx_runner_from_test_case,
                     &rx_gpio_from_refill,
@@ -748,7 +750,7 @@ pub mod tests {
 
                 // give control thread some time to process the Quit signal
                 spin_sleeper.sleep(sleep_duration_processing);
-                
+
                 // now we can stop the thread simulating the GPIO response               
                 match tx_test_case_to_runner.send(InternalCommand::Quit) {
                     Ok(_) => {},
