@@ -74,6 +74,13 @@ pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<Internal
 }
 
 impl MineralInjectionTrait for MineralInjection {
+    /// Switches on one of the peristaltic pumps for a defined period of time or until a Quit command is received from signal handler.
+    /// # Arguments
+    /// * `tx_to_controllino` - Reference to sender part of channel for communication with Controllino
+    /// * `rx_from_controllino` - Reference to receiver part of channel for communication with Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication with signal handler
+    /// * `mineral_pump` - parameter defining which pump shall be switched on
+    /// * `dosing_duration_millis` - dosing duration in milliseconds    
     fn inject_mineral(
         &mut self,
         tx_to_controllino: &Sender<InternalCommand>,
@@ -83,7 +90,7 @@ impl MineralInjectionTrait for MineralInjection {
         dosing_duration_millis: u32,
     ) -> (bool, u32) {
         let spin_sleeper = SpinSleeper::default();
-        let sleep_interval_millis: i16 = 1;
+        let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool = false;
         let mut dosing_counter = 0;
@@ -115,7 +122,7 @@ impl MineralInjectionTrait for MineralInjection {
             if dosing_counter >= dosing_duration_millis {
                 break; // stop dosing
             } else {
-                dosing_counter += dosing_duration_millis;
+                dosing_counter += sleep_interval_millis;
             }
         }
 
@@ -135,5 +142,160 @@ impl MineralInjectionTrait for MineralInjection {
         }
 
         (quit_command_received, dosing_counter)
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::thread::scope;
+    use std::time::Duration;
+    use all_asserts::assert_le;
+    use all_asserts::assert_ge;
+
+    use crate::channel_content::AquariumDevice;
+    use crate::channel_content::InternalCommand;
+    use crate::mineral_injection::MineralInjection;
+    use crate::mineral_injection::MineralInjectionTrait;
+
+    fn test_mineral_injection_receive_actuation_command_send_confirmation(
+        tx_controllino_to_mineral_injection: &Sender<bool>,
+        rx_controllino_from_mineral_injection: &Receiver<InternalCommand>,
+    ) -> InternalCommand {
+        let command: InternalCommand;
+
+        // receive command from test object
+        match rx_controllino_from_mineral_injection.recv() {
+            Ok(c) => match c {
+                InternalCommand::SwitchOn(_) => command = c,
+                InternalCommand::SwitchOff(_) => command = c,
+                _ => {
+                    panic!("MineralInjection: Received invalid command from test object:");
+                }
+            },
+            Err(e) => {
+                panic!(
+                    "MineralInjection: Error when receiving actuation command from test object: {e:?}"
+                );
+            }
+        }
+
+        // send confirmation back
+        match tx_controllino_to_mineral_injection.send(true) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("MineralInjection: Error when sending back actuation command confirmation to test object: {e:?}");
+            }
+        }
+
+        command
+    }
+
+    // this test cases executes the mineral injection without interruption from signal handler
+    #[test]
+    pub fn test_mineral_dosing_happy_case() {
+        let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
+            mpsc::channel();
+        let (_, rx_mineral_injection_from_signal_handler) =
+            mpsc::channel();
+
+        let mut mineral_injection = MineralInjection::new();
+
+        let target_dosing_duration_millis = 500;
+
+        scope(|scope| {
+            // thread for test environment
+            scope.spawn(move || {
+                // allow switching on peristaltic pump
+                test_mineral_injection_receive_actuation_command_send_confirmation(
+                    &tx_controllino_to_mineral_injection,
+                    &rx_controllino_from_mineral_injection,
+                );
+
+                // allow switching off peristaltic pump
+                test_mineral_injection_receive_actuation_command_send_confirmation(
+                    &tx_controllino_to_mineral_injection,
+                    &rx_controllino_from_mineral_injection,
+                );
+            });
+
+            // thread for test object
+            scope.spawn(move || {
+                let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
+                    .inject_mineral(
+                        &tx_mineral_injection_to_controllino,
+                        &rx_mineral_injection_from_controllino,
+                        &rx_mineral_injection_from_signal_handler,
+                        AquariumDevice::PeristalticPump1,
+                        target_dosing_duration_millis,
+                    );
+                assert_eq!(quit_command_received, false);
+                assert_eq!(actual_dosing_duration_millis, target_dosing_duration_millis);
+            });
+        });
+    }
+
+    // this test cases executes the mineral injection with interruption from signal handler
+    #[test]
+    pub fn test_mineral_dosing_interrupted() {
+        let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_mineral_injection, rx_mineral_injection_from_signal_handler) =
+            mpsc::channel();
+
+        let mut mineral_injection = MineralInjection::new();
+
+        let target_dosing_duration_millis = 500;
+
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_interval_millis: u32 = 100;
+        let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
+        scope(|scope| {
+            // thread for signal handler
+            scope.spawn(move || {
+                spin_sleeper.sleep(sleep_duration);
+                let _ = tx_signal_handler_to_mineral_injection.send(InternalCommand::Quit);
+            });
+
+            // thread for rest of test environment
+            scope.spawn(move || {
+                // allow switching on peristaltic pump
+                test_mineral_injection_receive_actuation_command_send_confirmation(
+                    &tx_controllino_to_mineral_injection,
+                    &rx_controllino_from_mineral_injection,
+                );
+
+                // allow switching off peristaltic pump
+                test_mineral_injection_receive_actuation_command_send_confirmation(
+                    &tx_controllino_to_mineral_injection,
+                    &rx_controllino_from_mineral_injection,
+                );
+            });
+
+            // thread for test object
+            scope.spawn(move || {
+                let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
+                    .inject_mineral(
+                        &tx_mineral_injection_to_controllino,
+                        &rx_mineral_injection_from_controllino,
+                        &rx_mineral_injection_from_signal_handler,
+                        AquariumDevice::PeristalticPump1,
+                        target_dosing_duration_millis,
+                    );
+                
+                let lower_bound_float: f32 = sleep_interval_millis as f32 * 0.9;
+                let lower_bound: u32 = lower_bound_float.round() as u32;
+                
+                assert_ge!(actual_dosing_duration_millis, lower_bound);
+                assert_le!(actual_dosing_duration_millis, sleep_interval_millis);
+                assert_eq!(quit_command_received, true);
+            });
+        });
     }
 }

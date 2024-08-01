@@ -7,12 +7,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use chrono::Local;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use chrono::Local;
 
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
@@ -246,6 +246,10 @@ impl Balling {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
+                println!(
+                    "Balling: Calculated target dosing duration of {} ms for pump #{}",
+                    dosing_duration_millis, pump_id
+                );
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
@@ -303,7 +307,6 @@ impl Balling {
         let mut schedule_check_result = false;
 
         loop {
-            // @todo: check schedule
             if self.config.active
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
@@ -321,6 +324,11 @@ impl Balling {
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
+                        if schedule_check_result {
+                            println!("Balling has permission from schedule checker.");
+                        } else {
+                            println!("Balling has no permission from schedule checker.");
+                        }
                     }
                     Err(e) => {
                         println!(
@@ -349,6 +357,7 @@ impl Balling {
                             break; // Quit command received during dosing
                         }
                     }
+                    self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
                 } else {
                     self.countdown_dosing_pump1 -= 1;
                 }
@@ -372,6 +381,7 @@ impl Balling {
                             break; // Quit command received during dosing
                         }
                     }
+                    self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                 } else {
                     self.countdown_dosing_pump2 -= 1;
                 }
@@ -395,6 +405,7 @@ impl Balling {
                             break; // Quit command received during dosing
                         }
                     }
+                    self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
                 } else {
                     self.countdown_dosing_pump3 -= 1;
                 }
@@ -405,7 +416,7 @@ impl Balling {
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
                             quit_command_received = self.execute_dosing(
-                                1,
+                                4,
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
                                 &rx_from_signal_handler,
@@ -418,12 +429,18 @@ impl Balling {
                             break; // Quit command received during dosing
                         }
                     }
+                    self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
                 } else {
                     self.countdown_dosing_pump4 -= 1;
                 }
             }
 
             if check_pending_external_request(&rx_from_signal_handler) {
+                println!("Balling: main loop: received Quit command exiting...");
+                println!("countdown_dosing_pump1={}", self.countdown_dosing_pump1);
+                println!("countdown_dosing_pump2={}", self.countdown_dosing_pump2);
+                println!("countdown_dosing_pump3={}", self.countdown_dosing_pump3);
+                println!("countdown_dosing_pump4={}", self.countdown_dosing_pump4);
                 break;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -467,19 +484,109 @@ impl Balling {
 
 #[cfg(test)]
 pub mod tests {
-    //    use spin_sleep::SpinSleeper;
-    //    use std::sync::mpsc;
-    //    use std::sync::mpsc::{Receiver, Sender};
-    //    use std::sync::{Arc, Mutex};
-    //    use std::thread::scope;
-    //    use std::time::Duration;
+    use spin_sleep::SpinSleeper;
+    use std::fmt;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::thread::scope;
+    use std::time::Duration;
 
-    //    use crate::channel_content::InternalCommand;
     use crate::balling::Balling;
+    use crate::channel_content::AquariumDevice;
+    use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
+    use crate::mineral_injection::MineralInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::SqlInterfaceBalling;
+
+    use crate::refill::tests::mock_schedule_check;
+    use crate::sql_interface_balling::BallingSetVal;
+
+    struct MockMineralInjection {
+        pump1_engagement_durations: Vec<u32>,
+        pump2_engagement_durations: Vec<u32>,
+        pump3_engagement_durations: Vec<u32>,
+        pump4_engagement_durations: Vec<u32>,
+    }
+
+    impl MockMineralInjection {
+        pub fn new() -> MockMineralInjection {
+            MockMineralInjection {
+                pump1_engagement_durations: Vec::new(),
+                pump2_engagement_durations: Vec::new(),
+                pump3_engagement_durations: Vec::new(),
+                pump4_engagement_durations: Vec::new(),
+            }
+        }
+    }
+
+    impl MineralInjectionTrait for MockMineralInjection {
+        fn inject_mineral(
+            &mut self,
+            _tx_to_controllino: &Sender<InternalCommand>,
+            _rx_from_controllino: &Receiver<bool>,
+            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            mineral_pump: AquariumDevice,
+            dosing_duration_millis: u32,
+        ) -> (bool, u32) {
+            // do nothing except for recording the dosing duration for the specific pump
+            match mineral_pump {
+                AquariumDevice::PeristalticPump1 => {
+                    self.pump1_engagement_durations.push(dosing_duration_millis);
+                }
+                AquariumDevice::PeristalticPump2 => {
+                    self.pump2_engagement_durations.push(dosing_duration_millis);
+                }
+                AquariumDevice::PeristalticPump3 => {
+                    self.pump3_engagement_durations.push(dosing_duration_millis);
+                }
+                AquariumDevice::PeristalticPump4 => {
+                    self.pump4_engagement_durations.push(dosing_duration_millis);
+                }
+                _ => {
+                    panic!("inject_mineral (mock) invoked with invalid device.");
+                }
+            }
+            println!(
+                "inject_mineral (mock): recording {}ms engagement for {}",
+                dosing_duration_millis, mineral_pump,
+            );
+            (false, dosing_duration_millis)
+        }
+    }
+
+    fn output_vector(id: u32, v: &Vec<u32>) -> String {
+        let mut output: String = "Pump #".into();
+        if v.is_empty() {
+            output += &id.to_string();
+            output += " has not been engaged.";
+        } else {
+            output += &id.to_string();
+            output += " engagement duration(s) (ms): ";
+            for duration in v {
+                output += &duration.to_string();
+                output += " ";
+            }
+        }
+        output
+    }
+
+    impl fmt::Display for MockMineralInjection {
+        /// Provides output of the struct debugging purposes.
+        /// # Arguments
+        /// * `f` - configuration for formatting
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                f,
+                "{}\n{}\n{}\n{}",
+                output_vector(1, &self.pump1_engagement_durations),
+                output_vector(2, &self.pump2_engagement_durations),
+                output_vector(3, &self.pump3_engagement_durations),
+                output_vector(4, &self.pump4_engagement_durations)
+            )
+        }
+    }
 
     #[test]
     #[should_panic]
@@ -538,21 +645,12 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
-    #[test]
-    pub fn test_balling_initialization_full_dosing_log() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
-
+    fn insert_past_dosing_events(
+        sql_interface: &mut SqlInterface,
+        sql_interface_balling: &mut SqlInterfaceBalling,
+    ) {
         // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+        match SqlInterface::truncate_table(sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -588,6 +686,22 @@ pub mod tests {
                 panic!("Could not insert Balling dosing event for pump #4 into database: {e:?}")
             }
         };
+    }
+
+    #[test]
+    pub fn test_balling_initialization_full_dosing_log() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         // create test object
         let balling = Balling::new(config.balling, sql_interface_balling);
@@ -597,5 +711,296 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump2, 0);
         assert_eq!(balling.countdown_dosing_pump3, 0);
         assert_eq!(balling.countdown_dosing_pump4, 0);
+    }
+
+    pub fn test_balling_dosing(
+        config_file_name: &str,
+        schedule_allows: bool,
+        execution_count_reference: i32,
+        duration_millis: u64,
+        pump1_engagement_durations_reference: usize,
+        pump2_engagement_durations_reference: usize,
+        pump3_engagement_durations_reference: usize,
+        pump4_engagement_durations_reference: usize,
+    ) {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
+        let spin_sleeper_schedule_check = SpinSleeper::default();
+        let spin_sleeper_test_environment = SpinSleeper::default();
+        let config: ConfigData = read_config_file(config_file_name.to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
+
+        let (tx_balling_to_controllino, _) = mpsc::channel();
+        let (_, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+
+        // create test object
+        let mut balling = Balling::new(config.balling, sql_interface_balling);
+
+        let mut mock_mineral_injection = MockMineralInjection::new();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_balling,
+                    &rx_schedule_check_from_balling,
+                    schedule_allows,
+                ) {
+                    break;
+                }
+                spin_sleeper_schedule_check.sleep(sleep_duration_50_millisec);
+            });
+
+            // thread for rest of test environment
+            scope.spawn(move || {
+                let execution_count: i32;
+                spin_sleeper_test_environment.sleep(sleep_duration_10_seconds);
+
+                // internal scope to for releasing mutex after read
+                {
+                    execution_count = *mutex_device_scheduler_environment.lock().unwrap();
+                }
+
+                println!("test_balling_dosing: execution_count={}", execution_count);
+                assert_eq!(execution_count, execution_count_reference);
+
+                // now we can send the quit command
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                rx_signal_handler_from_balling.recv().unwrap();
+                println!(
+                    "test_balling_dosing: Received confirmation of Quit command from test object."
+                );
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+            });
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_balling_to_schedule_check_for_test_case_finish =
+                    tx_balling_to_schedule_check.clone();
+
+                balling.execute(
+                    mutex_device_scheduler,
+                    tx_balling_to_controllino,
+                    rx_balling_from_controllino,
+                    tx_balling_to_signal_handler,
+                    rx_balling_from_signal_handler,
+                    tx_balling_to_schedule_check,
+                    rx_balling_from_schedule_check,
+                    &mut mock_mineral_injection,
+                );
+
+                let _ =
+                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("{}", mock_mineral_injection);
+
+                assert_eq!(
+                    mock_mineral_injection.pump1_engagement_durations.len(),
+                    pump1_engagement_durations_reference
+                );
+                assert_eq!(
+                    mock_mineral_injection.pump2_engagement_durations.len(),
+                    pump2_engagement_durations_reference
+                );
+                assert_eq!(
+                    mock_mineral_injection.pump3_engagement_durations.len(),
+                    pump3_engagement_durations_reference
+                );
+                assert_eq!(
+                    mock_mineral_injection.pump4_engagement_durations.len(),
+                    pump4_engagement_durations_reference
+                );
+            });
+        });
+    }
+
+    #[test]
+    pub fn test_balling_dosing_schedule_allows_single_dosing() {
+        test_balling_dosing(
+            "/config/aquarium_control_test_balling.toml",
+            true,
+            3,
+            10000,
+            0,
+            1,
+            1,
+            1,
+        );
+    }
+
+    #[test]
+    pub fn test_balling_dosing_schedule_forbids() {
+        test_balling_dosing(
+            "/config/aquarium_control_test_balling.toml",
+            false,
+            0,
+            10000,
+            0,
+            0,
+            0,
+            0,
+        );
+    }
+
+    #[test]
+    pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
+        test_balling_dosing(
+            "/config/aquarium_control_test_balling_multiple_dosings.toml",
+            true,
+            14,
+            20000,
+            5,
+            4,
+            3,
+            2,
+        );
+    }
+
+    #[test]
+    pub fn test_calc_target_dosing_duration_millis_happy_case() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 5.0,
+            dosing_volume: 5.0,
+            label: "test_calc_target_dosing_duration_millis_happy_case".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_target_dosing_duration_millis(&balling_setval),
+            1000
+        );
+    }
+
+    #[test]
+    pub fn test_calc_target_dosing_duration_millis_zero_dosing_speed() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 0.0,
+            dosing_volume: 5.0,
+            label: "test_calc_target_dosing_duration_millis_zero_dosing_speed".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_target_dosing_duration_millis(&balling_setval),
+            0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_target_dosing_duration_millis_negative_dosing_speed() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: -5.0,
+            dosing_volume: 5.0,
+            label: "test_calc_target_dosing_duration_millis_negative_dosing_speed".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_target_dosing_duration_millis(&balling_setval),
+            0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_target_dosing_duration_millis_zero_dosing_volume() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 5.0,
+            dosing_volume: 0.0,
+            label: "test_calc_target_dosing_duration_millis_zero_dosing_volume".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_target_dosing_duration_millis(&balling_setval),
+            0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_target_dosing_duration_millis_negative_dosing_volume() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 5.0,
+            dosing_volume: -5.0,
+            label: "test_calc_target_dosing_duration_millis_negative_dosing_volume".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_target_dosing_duration_millis(&balling_setval),
+            0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_actual_dosing_volume_happy_case() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 5.0,
+            dosing_volume: 5.0,
+            label: "test_calc_actual_dosing_volume_happy_case".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_actual_dosing_volume(&balling_setval, 1000),
+            5.0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_actual_dosing_volume_zero_dosing_speed() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 0.0,
+            dosing_volume: 5.0,
+            label: "test_calc_actual_dosing_volume_zero_dosing_speed".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_actual_dosing_volume(&balling_setval, 1000),
+            0.0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_actual_dosing_volume_negative_dosing_speed() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 0.0,
+            dosing_volume: 5.0,
+            label: "test_calc_actual_dosing_volume_negative_dosing_speed".to_string(),
+        };
+
+        assert_eq!(
+            Balling::calc_actual_dosing_volume(&balling_setval, 1000),
+            0.0
+        );
+    }
+
+    #[test]
+    pub fn test_calc_actual_dosing_volume_zero_actual_dosing_duration() {
+        let balling_setval = BallingSetVal {
+            pump_id: 1,
+            dosing_speed: 5.0,
+            dosing_volume: 5.0,
+            label: "test_calc_actual_dosing_volume_zero_actual_dosing_duration".to_string(),
+        };
+
+        assert_eq!(Balling::calc_actual_dosing_volume(&balling_setval, 0), 0.0);
     }
 }

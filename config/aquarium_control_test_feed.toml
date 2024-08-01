@@ -64,7 +64,7 @@ on_when_out_of_schedule = false                         # strategy when schedule
 
 [feed]
 active = true
-schedule_check_interval = 1                            # for testing, check every second if there is a matching entry in SQL database ready to be executed
+schedule_check_interval = 1                             # for testing, check every second if there is a matching entry in SQL database ready to be executed
 device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 
 [ventilation]
@@ -77,7 +77,7 @@ on_when_out_of_schedule = false                         # strategy when schedule
 
 [balling]
 active = true
-schedule_check_interval = 60                            # check every 60 seconds if there is a matching entry in SQL database ready to be executed
+schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
 dosing_interval_pump1 = 3600                            # inject Balling minerals with pump 1 after each period
 dosing_interval_pump2 = 3200                            # inject Balling minerals with pump 2 after each period
 dosing_interval_pump3 = 2800                            # inject Balling minerals with pump 3 after each period

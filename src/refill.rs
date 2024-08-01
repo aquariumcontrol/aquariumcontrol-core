@@ -693,7 +693,7 @@ pub mod tests {
     }
 
     // send via channel a value to the test object to indicate if actuation is permitted.
-    fn mock_schedule_check(
+    pub fn mock_schedule_check(
         tx_schedule_check_to_refill: &Sender<bool>,
         rx_schedule_check_from_refill: &Receiver<InternalCommand>,
         value: bool,
