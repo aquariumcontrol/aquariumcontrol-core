@@ -147,13 +147,13 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use all_asserts::assert_ge;
+    use all_asserts::assert_le;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::thread::scope;
     use std::time::Duration;
-    use all_asserts::assert_le;
-    use all_asserts::assert_ge;
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
@@ -200,8 +200,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
             mpsc::channel();
-        let (_, rx_mineral_injection_from_signal_handler) =
-            mpsc::channel();
+        let (_, rx_mineral_injection_from_signal_handler) = mpsc::channel();
 
         let mut mineral_injection = MineralInjection::new();
 
@@ -288,10 +287,10 @@ pub mod tests {
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,
                     );
-                
+
                 let lower_bound_float: f32 = sleep_interval_millis as f32 * 0.9;
                 let lower_bound: u32 = lower_bound_float.round() as u32;
-                
+
                 assert_ge!(actual_dosing_duration_millis, lower_bound);
                 assert_le!(actual_dosing_duration_millis, sleep_interval_millis);
                 assert_eq!(quit_command_received, true);

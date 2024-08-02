@@ -17,6 +17,7 @@ use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::gpio_handler::I2cInterfaceConfig;
 use crate::heating::HeatingConfig;
+use crate::messaging::MessagingConfig;
 use crate::monitors::MonitorsConfig;
 use crate::refill::RefillConfig;
 use crate::schedule_check::ScheduleCheckConfig;
@@ -66,6 +67,9 @@ pub struct ConfigData {
 
     /// configuration of I2C interface
     pub i2c_interface: I2cInterfaceConfig,
+
+    /// configuration of messaging (IPC)
+    pub messaging: MessagingConfig,
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.

@@ -32,6 +32,7 @@ mod gpio_handler;
 mod heating;
 mod i2c_interface;
 mod iir_filter;
+mod messaging;
 mod mineral_injection;
 mod monitors;
 mod refill;
@@ -72,6 +73,7 @@ use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
+use crate::messaging::Messaging;
 use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
 use crate::refill::Refill;
@@ -599,6 +601,7 @@ fn main() {
         false => None,
     };
 
+    let messaging = Messaging::new(config.messaging);
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
