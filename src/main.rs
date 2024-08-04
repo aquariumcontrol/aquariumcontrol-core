@@ -852,9 +852,9 @@ fn main() {
         });
         
         // IPC via messages
-        
         scope.spawn(move || {
             // read/send messages
+            #[cfg(target_os = "linux")]
             messaging.execute();
             
             // remove PID from file

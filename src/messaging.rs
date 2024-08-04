@@ -6,10 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use posixmq::PosixMq;
 use serde_derive::Deserialize;
 use std::fs;
 use std::process;
+#[cfg(target_os = "linux")]
+use posixmq::PosixMq;
 
 /// Holds the configuration data for the messaging.
 /// The configuration is loaded from the .toml configuration file.
@@ -27,6 +28,7 @@ pub struct Messaging {
     config: MessagingConfig,
 
     // Message queue
+    #[cfg(target_os = "linux")]
     mq: PosixMq,
 }
 
@@ -64,6 +66,7 @@ impl Messaging {
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("Messaging: Could not publish PID.");
 
+        #[cfg(target_os = "linux")]        
         let mq = match PosixMq::create(&config.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -76,10 +79,13 @@ impl Messaging {
 
         Messaging {
             config: config,
+            
+            #[cfg(target_os = "linux")]
             mq: mq,
         }
     }
 
+    #[cfg(target_os = "linux")]    
     pub fn execute(&self) {
         let mut msgbuf: [u8; 8] = [0; 8];
 
