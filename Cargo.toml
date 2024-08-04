@@ -24,7 +24,9 @@ sha256 = "1.0.3"
 signal-hook = "0.3.17"
 aquamarine = "0.5.0"
 serialport = "4.3.0"
-#rppal = "0.17.1"
+msg = "0.1.1"
+posixmq = "1.0.0"
+
 [target.'cfg(linux)'.dependencies]
 rppal = "0.17.1"
 signal-hook = "0.3.17"

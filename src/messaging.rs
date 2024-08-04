@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use msg::ftok;
+use ipc_rs::MessageQueue;
 use serde_derive::Deserialize;
 use std::fs;
 use std::process;
@@ -17,10 +19,19 @@ use std::process;
 pub struct MessagingConfig {
     /// filename used for publishing the PID
     pid_filename: String,
+
+    /// filename used for generating the messsage queue identifier
+    mq_filename: String,    
 }
 
 pub struct Messaging {
     config: MessagingConfig,
+
+    /// key generated from mq_filename to be used for creation of message queue
+    mq_key: u64,
+    
+    // Message queue
+    //queue: MessageQueue,
 }
 
 impl Messaging {
@@ -30,7 +41,6 @@ impl Messaging {
     /// If publishing does not work, then the application will panic.
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
-    /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
     pub fn new(config: MessagingConfig) -> Messaging {
         let file_data = fs::read_to_string(config.pid_filename.clone())
             .expect("Messaging: Unable to read PID file.");
@@ -54,7 +64,31 @@ impl Messaging {
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("Messaging: Could not publish PID.");
 
-        Messaging { config: config }
+        let mq_key = match ftok!(config.mq_filename.clone()) {
+                Some(c) => c,
+                None => {
+                    panic!("Messaging: could not create key from filename {}",
+                        config.mq_filename);
+                }
+        };
+  
+        /*      
+        let queue = match PosixMq::create(mq_key) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "Messaging: failure to create message queue using key {}, error={e:?}",
+                    mq_key
+                );
+            }
+        };
+        */
+        
+        Messaging {
+            config: config,
+            mq_key: mq_key,
+            // queue: queue,
+        }
     }
 
     /// Erases PID from previously generated file

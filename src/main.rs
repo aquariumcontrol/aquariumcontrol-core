@@ -852,4 +852,7 @@ fn main() {
             );
         });
     });
+    
+    // remove PID from file
+    messaging.erase_pid();
 }
