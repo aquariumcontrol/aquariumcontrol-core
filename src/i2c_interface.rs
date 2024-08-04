@@ -16,6 +16,7 @@ use {
     rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
 
+use crate::channel_content::AquariumSignal;
 use crate::gpio_handler::I2cInterfaceConfig;
 
 /// error codes for evaluation of sensor unit response
@@ -305,6 +306,9 @@ impl I2cInterface {
 pub mod tests {
     use assert_float_eq::*;
 
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::i2c_interface::AquariumSignal;
     use crate::i2c_interface::atlas_scientific_constants;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;

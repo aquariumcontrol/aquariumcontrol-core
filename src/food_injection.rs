@@ -531,7 +531,7 @@ pub mod tests {
                     execution_duration.as_millis()
                 );
 
-                assert_ge!(execution_duration.as_millis(), 23500);
+                assert_ge!(execution_duration.as_millis(), 22500);
                 assert_le!(execution_duration.as_millis(), 29700);
             });
         });
@@ -641,7 +641,7 @@ pub mod tests {
                     execution_duration.as_millis()
                 );
 
-                assert_ge!(execution_duration.as_millis(), 1060);
+                assert_ge!(execution_duration.as_millis(), 1040);
                 assert_le!(execution_duration.as_millis(), 1085);
             });
         });

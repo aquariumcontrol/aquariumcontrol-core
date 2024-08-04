@@ -6,8 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use msg::ftok;
-use ipc_rs::MessageQueue;
+use posixmq::PosixMq;
 use serde_derive::Deserialize;
 use std::fs;
 use std::process;
@@ -21,17 +20,14 @@ pub struct MessagingConfig {
     pid_filename: String,
 
     /// filename used for generating the messsage queue identifier
-    mq_filename: String,    
+    mq_filename: String,
 }
 
 pub struct Messaging {
     config: MessagingConfig,
 
-    /// key generated from mq_filename to be used for creation of message queue
-    mq_key: u64,
-    
     // Message queue
-    //queue: MessageQueue,
+    mq: PosixMq,
 }
 
 impl Messaging {
@@ -44,53 +40,70 @@ impl Messaging {
     pub fn new(config: MessagingConfig) -> Messaging {
         let file_data = fs::read_to_string(config.pid_filename.clone())
             .expect("Messaging: Unable to read PID file.");
-        let process_id_read: u32 = match file_data.trim().parse() {
-            Ok(c) => c,
-            Err(e) => {
+        let file_data_trimmed = file_data.trim();
+        
+        if !file_data_trimmed.is_empty() {
+            let process_id_read: u32 = match file_data_trimmed.parse() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "Messaging: PID file ({}) contains invalid content: {e:?}",
+                        config.pid_filename
+                    );
+                }
+            };
+            if process_id_read > 0 {
                 panic!(
-                    "Messaging: PID file ({}) contains invalid content: {e:?}",
+                    "Messaging: PID file ({}) already contains published PID.",
                     config.pid_filename
-                );
+                    );
             }
-        };
-        if process_id_read > 0 {
-            panic!(
-                "Messaging: PID file ({}) already contains published PID.",
-                config.pid_filename
-            );
         }
         let process_id_numeric: u32 = process::id();
         let process_id_string: String = process_id_numeric.to_string() + "\n";
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("Messaging: Could not publish PID.");
 
-        let mq_key = match ftok!(config.mq_filename.clone()) {
-                Some(c) => c,
-                None => {
-                    panic!("Messaging: could not create key from filename {}",
-                        config.mq_filename);
-                }
-        };
-  
-        /*      
-        let queue = match PosixMq::create(mq_key) {
+        let mq = match PosixMq::create(&config.mq_filename) {
             Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "Messaging: failure to create message queue using key {}, error={e:?}",
-                    mq_key
+                    "Messaging: failure to create message queue using {}, error={e:?}",
+                    &config.mq_filename
                 );
             }
         };
-        */
-        
+
         Messaging {
             config: config,
-            mq_key: mq_key,
-            // queue: queue,
+            mq: mq,
         }
     }
 
+    pub fn execute(&self) {
+        let mut msgbuf: [u8; 8] = [0; 8];
+
+        loop {
+            match self.mq.recv(&mut msgbuf) {
+                Ok((r1, r2)) => {
+                    println!("Messaging: POSIX message received with r1={}, r2={}:\n\
+                                [0] = {}\n\
+                                [1] = {}\n\
+                                [2] = {}\n\
+                                [3] = {}\n\
+                                [4] = {}\n\
+                                [5] = {}\n\
+                                [6] = {}\n\
+                                [7] = {}\n",
+                                r1, r2, msgbuf[0], msgbuf[1], msgbuf[2], msgbuf[3], msgbuf[4], msgbuf[5], msgbuf[6], msgbuf[7]);                                                            
+                },
+                Err(e) => {
+                    println!("Messaging: Error occurred when reading POSIX message: {e:?}");
+                },
+            }
+        }
+    }
+    
     /// Erases PID from previously generated file
     pub fn erase_pid(&self) {
         fs::write(self.config.pid_filename.clone(), "0".to_string())
@@ -107,7 +120,7 @@ pub mod tests {
     use std::process;
 
     #[test]
-    pub fn test_messaging_publish_PID() {
+    pub fn test_messaging_publish_pid() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_messaging.toml".to_string());
         let pid_filename = config.messaging.pid_filename.clone();

@@ -51,7 +51,7 @@ pub mod sql_query_strings {
         "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
     /// Checks if the refill table is empty.
-    pub const SQL_QUERY_CHECK_REFILL_EMPTY: &str = "SELECT EXISTS(SELECT 1 FROM REFILL);";
+    pub const SQL_QUERY_CHECK_REFILL_EMPTY: &str = "SELECT EXISTS(SELECT 1 FROM refill);";
 
     /// Provides the timestamp of the last Balling dosing event from the database.
     pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str =

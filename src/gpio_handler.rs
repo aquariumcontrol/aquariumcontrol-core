@@ -10,7 +10,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
+use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::i2c_interface::I2cInterface;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.

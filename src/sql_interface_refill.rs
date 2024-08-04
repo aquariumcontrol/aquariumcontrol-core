@@ -66,7 +66,8 @@ impl SqlInterfaceRefill {
 
     /// Checks if the SQL table of refill events is empty.
     /// It returns wrapped into Result type either
-    /// - a value of one if there is at least on entry in the database or
+    /// - a value of one if there is at least one entry in the table or
+    /// - a value of zero if there is not entry in the table or
     /// - a value from enum SqlInterfaceError
     pub fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(

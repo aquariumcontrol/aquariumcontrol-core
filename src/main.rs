@@ -30,7 +30,6 @@ mod feedpattern;
 mod food_injection;
 mod gpio_handler;
 mod heating;
-mod i2c_interface;
 mod iir_filter;
 mod messaging;
 mod mineral_injection;
@@ -851,8 +850,16 @@ fn main() {
                 &mut mineral_injection,
             );
         });
+        
+        // IPC via messages
+        
+        scope.spawn(move || {
+            // read/send messages
+            messaging.execute();
+            
+            // remove PID from file
+            messaging.erase_pid();
+        });
     });
-    
-    // remove PID from file
-    messaging.erase_pid();
+
 }

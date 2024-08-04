@@ -131,6 +131,7 @@ pub enum InternalCommand {
     SwitchOff(AquariumDevice),
 
     /// Pulse a device (switch on, pause, switch off)
+    #[allow(dead_code)]
     Pulse(AquariumDevice, u16),
 
     /// Set a relay
@@ -140,6 +141,7 @@ pub enum InternalCommand {
     UnsetRelay(u16),
 
     /// Pulse a relay (switch on, pause, switch off)
+    #[allow(dead_code)]
     PulseRelay(u16, u16),
 
     /// Request a signal

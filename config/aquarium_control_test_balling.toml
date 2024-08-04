@@ -23,7 +23,7 @@ db_user = "aquarium"
 db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
-db_name = "aquarium_test_tertiary"
+db_name = "aquarium_test"
 db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
 
 [tcp_connection]

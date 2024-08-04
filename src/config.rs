@@ -79,7 +79,13 @@ pub struct ConfigData {
 /// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 pub fn read_config_file(relative_path: String) -> ConfigData {
     use std::env;
-    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let out_dir = match env::var("CARGO_MANIFEST_DIR") {
+        Ok(c) => c,
+        Err(_) => {
+            println!("config: Could not read environment variable CARGO_MANIFEST_DIR. Using fallback path.");
+            "/usr/local/src/aquarium_control".to_string()
+        }
+    };
 
     let filename = out_dir + &relative_path;
 

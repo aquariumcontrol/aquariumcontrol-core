@@ -691,7 +691,7 @@ pub mod tests {
     #[test]
     pub fn test_balling_initialization_full_dosing_log() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
+            read_config_file("/config/aquarium_control_test_balling_1.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -833,7 +833,7 @@ pub mod tests {
     #[test]
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
-            "/config/aquarium_control_test_balling.toml",
+            "/config/aquarium_control_test_balling_2.toml",
             true,
             3,
             10000,
@@ -847,7 +847,7 @@ pub mod tests {
     #[test]
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
-            "/config/aquarium_control_test_balling.toml",
+            "/config/aquarium_control_test_balling_3.toml",
             false,
             0,
             10000,
