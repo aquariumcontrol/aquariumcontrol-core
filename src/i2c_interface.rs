@@ -308,8 +308,8 @@ pub mod tests {
 
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::i2c_interface::AquariumSignal;
     use crate::i2c_interface::atlas_scientific_constants;
+    use crate::i2c_interface::AquariumSignal;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
 

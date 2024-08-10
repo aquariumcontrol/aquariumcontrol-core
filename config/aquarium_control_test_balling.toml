@@ -116,3 +116,4 @@ strategy_if_schedule_not_found = true                   # strategy for allowing 
 [messaging]
 pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID
 mq_filename = "/var/local/aquarium-ctrl.mq"             # filename for generating token for message queue identification
+timeout_millis = 250					# timeout in milliseconds to check for shutdown requests

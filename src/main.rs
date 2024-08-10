@@ -148,6 +148,7 @@ use crate::water_injection::WaterInjection;
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
+///	signal_handler --> messaging[Messaging]
 /// ```
 
 fn main() {
@@ -264,6 +265,13 @@ fn main() {
     let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
 
     // create channels for communication between threads
+    // *** signal_handler => messaging ***
+    let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
     // *** data_logger <=> gpio ***
     let (tx_data_logger_to_gpio, rx_gpio_from_data_logger): (
         Sender<InternalCommand>,
@@ -669,10 +677,12 @@ fn main() {
                     &mut ControllinoActuateHardware,
                 );
             });
+            println!("main(01): Controllino terminated.");
         }
 
         scope.spawn(move || {
             handle_signals(
+                tx_signal_handler_to_messaging,
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,
                 tx_signal_handler_to_heating,
@@ -696,6 +706,7 @@ fn main() {
                 tx_signal_handler_to_tcp_opt,
                 rx_signal_handler_from_tcp_opt,
             );
+            println!("main(02): Signal handler terminated.");
         });
 
         scope.spawn(move || {
@@ -711,6 +722,7 @@ fn main() {
                 tx_schedule_check_to_signal_handler,
                 rx_schedule_check_from_signal_handler,
             );
+            println!("main(03): Schedule checker terminated.");
         });
 
         scope.spawn(move || {
@@ -730,6 +742,7 @@ fn main() {
                 tx_gpio_to_signal_handler,
                 rx_gpio_from_signal_handler,
             );
+            println!("main(04): GPIO handler terminated.");
         });
 
         scope.spawn(move || {
@@ -743,6 +756,7 @@ fn main() {
                 tx_datalogger_to_signal_handler,
                 rx_datalogger_from_signal_handler,
             );
+            println!("main(05): Data logger terminated.");
         });
 
         // Refill needs actuation of relay
@@ -764,6 +778,7 @@ fn main() {
                 tx_refill_to_datalogger,
                 &mut water_injection,
             );
+            println!("main(06): Refill terminated.");
         });
 
         // Heating needs actuation of relay
@@ -786,6 +801,7 @@ fn main() {
                 &mut sql_interface,
                 &mut heating_stats_transfer,
             );
+            println!("main(07): Heating terminated.");
         });
 
         // Ventilation needs actuation of relay
@@ -804,6 +820,7 @@ fn main() {
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
             );
+            println!("main(08): Ventilation terminated.");
         });
 
         // Monitors needs communication with Controllino device
@@ -819,6 +836,7 @@ fn main() {
                 tx_monitors_to_signal_handler,
                 rx_monitors_from_signal_handler,
             );
+            println!("main(09): Monitors terminated.");
         });
 
         // Feed needs actuation of relay
@@ -833,6 +851,7 @@ fn main() {
                 rx_feed_from_signal_handler,
                 &mut food_injection,
             );
+            println!("main(10): Feed terminated.");
         });
 
         // Balling dosing needs actuation of relays
@@ -849,17 +868,19 @@ fn main() {
                 rx_balling_from_schedule_check,
                 &mut mineral_injection,
             );
+            println!("main(11): Balling terminated.");
         });
-        
+
         // IPC via messages
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute();
-            
+            messaging.execute(rx_messaging_from_signal_handler);
+
             // remove PID from file
             messaging.erase_pid();
+
+            println!("main(12): Messaging terminated.");
         });
     });
-
 }

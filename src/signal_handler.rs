@@ -18,6 +18,7 @@ use std::time::Duration;
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
 /// # Arguments
+/// * `tx_to_messaging` - sender part of channel for communication to messaging
 /// * `tx_to_refill` - sender part of channel for communication to refill control
 /// * `rx_from_refill` - receiver part of channel for communication from refill control
 /// * `tx_to_heating` - sender part of channel for communication to heating control
@@ -39,6 +40,7 @@ use std::time::Duration;
 /// * `tx_to_feed` - sender part of channel for communication to TcpCommunication wrapped in Option
 /// * `rx_from_feed` - receiver part of channel for communication from TcpCommunication wrapped in Option
 pub fn handle_signals(
+    tx_to_messaging: Sender<InternalCommand>,
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
     tx_to_heating: Sender<InternalCommand>,
@@ -215,7 +217,9 @@ pub fn handle_signals(
             println!("signal_handler: Waiting for DataLogger thread to terminate.");
             // now listen for response
             match rx_from_datalogger.recv() {
-                Ok(_) => {}
+                Ok(_) => {
+                    println!("handle_signals: received Quit confirmation from data logger.");
+                }
                 Err(e) => {
                     println!(
                         "handle_signals: could not receive answer from datalogger thread {e:?}"
@@ -234,7 +238,9 @@ pub fn handle_signals(
             println!("signal_handler: Waiting for Controllino thread to terminate.");
             // now listen for response
             match rx_from_controllino.recv() {
-                Ok(_) => {}
+                Ok(_) => {
+                    println!("handle_signals: received Quit confirmation from Controllino.");
+                }
                 Err(e) => {
                     println!(
                         "handle_signals: could not receive answer from Controllino thread {e:?}"
@@ -356,6 +362,17 @@ pub fn handle_signals(
         }
         Err(e) => {
             println!("handle_signals: Error in channel communication to Refill when sending Terminate command: {e:?}");
+        }
+    }
+    println!("signal_handler: finished.");
+
+    // Messaging is checking for termination signal periodically.
+    match tx_to_messaging.send(InternalCommand::Terminate) {
+        Ok(_) => {
+            println!("signal_handler: Sent termination signal to Messaging thread.");
+        }
+        Err(e) => {
+            println!("handle_signals: Error in channel communication to Messaging when sending Terminate command: {e:?}");
         }
     }
 }

@@ -205,8 +205,6 @@ impl RelayActuationTrait for ControllinoActuateHardware {
     ) -> Result<(), ControllinoError> {
         // if unwrap panics, panic shall happen
         let spin_sleeper = spin_sleeper_opt.unwrap();
-        let controllino_processing_duration = controllino_processing_duration_opt.unwrap();
-        let serial_port = serial_port_opt.as_mut().unwrap();
 
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
@@ -225,17 +223,24 @@ impl RelayActuationTrait for ControllinoActuateHardware {
 
                 println!("{}", message);
 
-                // write message to Controllino
-                match serial_port.write(&message.data) {
-                    Ok(_) => { /* do nothing */ }
-                    Err(e) => {
-                        println!("Controllino: Error occurred when sending command to Controllino: {e:?}");
-                        return Err(ControllinoError::WriteError);
+                if config.active {
+                    // write message to Controllino
+                    let serial_port = serial_port_opt.as_mut().unwrap();
+                    match serial_port.write(&message.data) {
+                        Ok(_) => { /* do nothing */ }
+                        Err(e) => {
+                            println!("Controllino: Error occurred when sending command to Controllino: {e:?}");
+                            return Err(ControllinoError::WriteError);
+                        }
                     }
                 }
 
                 // give Controllino some time to process the command
-                spin_sleeper.sleep(controllino_processing_duration);
+                if config.active {
+                    let controllino_processing_duration =
+                        controllino_processing_duration_opt.unwrap();
+                    spin_sleeper.sleep(controllino_processing_duration);
+                }
 
                 // for pulse command, also wait the pulse duration
                 match internal_command {
@@ -246,22 +251,29 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                     _ => { /* do nothing */ }
                 }
 
-                // read response from Controllino
-                let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
-                match serial_port.read_exact(serial_buf.as_mut_slice()) {
-                    Ok(()) => {
-                        //println!("message_length={}", message_length);
-                        if !check_controllino_checksums(serial_buf.as_slice()) {
-                            println!("Controllino: Received response from device with incorrect checksums");
-                            return Err(ControllinoError::IncorrectChecksum);
-                        } else {
-                            Ok(())
+                if config.active {
+                    // read response from Controllino
+                    let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
+                    let serial_port = serial_port_opt.as_mut().unwrap();
+                    match serial_port.read_exact(serial_buf.as_mut_slice()) {
+                        Ok(()) => {
+                            //println!("message_length={}", message_length);
+                            if !check_controllino_checksums(serial_buf.as_slice()) {
+                                println!("Controllino: Received response from device with incorrect checksums");
+                                return Err(ControllinoError::IncorrectChecksum);
+                            } else {
+                                Ok(())
+                            }
+                        }
+                        Err(_) => {
+                            println!(
+                                "Controllino: Error when trying to receive response from device."
+                            );
+                            return Err(ControllinoError::ReadError);
                         }
                     }
-                    Err(_) => {
-                        println!("Controllino: Error when trying to receive response from device.");
-                        return Err(ControllinoError::ReadError);
-                    }
+                } else {
+                    Ok(())
                 }
             }
             _ => {

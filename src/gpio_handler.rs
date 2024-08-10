@@ -23,6 +23,9 @@ use crate::i2c_interface::I2cInterface;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct GpioHandlerConfig {
+    /// Flag to deactivate functionality for testing purposes
+    pub active: bool,
+
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
@@ -199,7 +202,10 @@ impl GpioHandler {
     ) -> bool {
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
-                InternalCommand::Quit => true,
+                InternalCommand::Quit => {
+                    println!("GpioHandler: Received Quit command.");
+                    true
+                }
                 _ => {
                     println!("GpioHandler: ignoring not applicable command from signal handler.");
                     false
@@ -256,13 +262,8 @@ impl GpioHandler {
     ) {
         let mut response_value: f32 = 0.0;
 
-        let tx_to_tcp: Sender<InternalCommand>;
-        let rx_from_tcp: Receiver<f32>;
-        if self.config.use_simulator && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
+        if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!("Gpiohandler configured to run with simulator, but no channel to TCP thread provided.");
-        } else {
-            tx_to_tcp = tx_to_tcp_opt.unwrap(); // this unwrap is safe because checked above.
-            rx_from_tcp = rx_from_tcp_opt.unwrap(); // this unwrap is safe because checked above.
         }
 
         loop {
@@ -273,11 +274,18 @@ impl GpioHandler {
             // *** communication with data logger ***
             match rx_from_data_logger.try_recv() {
                 Ok(c) => {
-                    if self.config.use_simulator {
-                        response_value =
-                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    if self.config.active {
+                        if self.config.use_simulator {
+                            response_value = Self::get_response_from_simulator(
+                                tx_to_tcp_opt.as_ref().unwrap(),
+                                rx_from_tcp_opt.as_ref().unwrap(),
+                                c,
+                            );
+                        } else {
+                            response_value = self.get_response_from_hardware(c);
+                        }
                     } else {
-                        response_value = self.get_response_from_hardware(c);
+                        response_value = 0.0;
                     }
                     match tx_to_data_logger.send(response_value) {
                         Ok(()) => {}
@@ -302,10 +310,17 @@ impl GpioHandler {
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
-                    if self.config.use_simulator {
-                        response_value =
-                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    if self.config.active {
+                        if self.config.use_simulator {
+                            response_value = Self::get_response_from_simulator(
+                                tx_to_tcp_opt.as_ref().unwrap(),
+                                rx_from_tcp_opt.as_ref().unwrap(),
+                                c,
+                            );
+                        }
+                        // @todo: implement communication with real HW
                     }
+                    println!("GpioHandler: Sending back to refill.");
                     match tx_to_refill.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
@@ -329,10 +344,17 @@ impl GpioHandler {
             // *** communication with heating control ***
             match rx_from_heating.try_recv() {
                 Ok(c) => {
-                    if self.config.use_simulator {
-                        response_value =
-                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    if self.config.active {
+                        if self.config.use_simulator {
+                            response_value = Self::get_response_from_simulator(
+                                tx_to_tcp_opt.as_ref().unwrap(),
+                                rx_from_tcp_opt.as_ref().unwrap(),
+                                c,
+                            );
+                        }
+                        // @todo: implement communication with real HW
                     }
+                    println!("GpioHandler: Sending back to Heating");
                     match tx_to_heating.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
@@ -356,10 +378,17 @@ impl GpioHandler {
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
-                    if self.config.use_simulator {
-                        response_value =
-                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    if self.config.active {
+                        if self.config.use_simulator {
+                            response_value = Self::get_response_from_simulator(
+                                tx_to_tcp_opt.as_ref().unwrap(),
+                                rx_from_tcp_opt.as_ref().unwrap(),
+                                c,
+                            );
+                        }
+                        // @todo: implement communication with real HW
                     }
+                    println!("GpioHandler: Sending back to Ventilation");
                     match tx_to_ventilation.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
@@ -383,10 +412,17 @@ impl GpioHandler {
             // *** communication with monitors ***
             match rx_from_monitors.try_recv() {
                 Ok(c) => {
-                    if self.config.use_simulator {
-                        response_value =
-                            Self::get_response_from_simulator(&tx_to_tcp, &rx_from_tcp, c);
+                    if self.config.active {
+                        if self.config.use_simulator {
+                            response_value = Self::get_response_from_simulator(
+                                tx_to_tcp_opt.as_ref().unwrap(),
+                                rx_from_tcp_opt.as_ref().unwrap(),
+                                c,
+                            );
+                        }
+                        // @todo: implement communication with real HW
                     }
+                    println!("GpioHandler: Sending back to Monitors");
                     match tx_to_monitors.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
@@ -408,6 +444,8 @@ impl GpioHandler {
             // **********************************
         }
 
+        println!("GpioHandler: Exited loop - sending back to signal handler");
+
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
@@ -416,5 +454,7 @@ impl GpioHandler {
                 println!("GpioHandler: Error in trying to send confirmation back to signal handler: {e:?}");
             }
         };
+
+        println!("GpioHandler finished.");
     }
 }

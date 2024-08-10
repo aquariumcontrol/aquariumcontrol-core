@@ -6,11 +6,38 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use serde_derive::Deserialize;
-use std::fs;
-use std::process;
 #[cfg(target_os = "linux")]
 use posixmq::PosixMq;
+use serde_derive::Deserialize;
+use std::fs;
+use std::io::ErrorKind;
+use std::process;
+use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::Duration;
+
+use crate::InternalCommand;
+
+#[repr(C)]
+pub struct Message {
+    message_type: i32,
+    domain: i32,
+    command: i32,
+    command_param1: i32,
+    command_param2: i32,
+}
+
+impl Message {
+    /// Provides empty message initialized with zeros
+    pub fn new() -> Message {
+        Message {
+            message_type: 0,
+            domain: 0,
+            command: 0,
+            command_param1: 0,
+            command_param2: 0,
+        }
+    }
+}
 
 /// Holds the configuration data for the messaging.
 /// The configuration is loaded from the .toml configuration file.
@@ -22,6 +49,37 @@ pub struct MessagingConfig {
 
     /// filename used for generating the messsage queue identifier
     mq_filename: String,
+
+    /// timeout for receiving messages in milliseconds
+    /// after each timeout, the application checks if a shutdown has been requested
+    timeout_millis: u64,
+}
+
+/// Checks if there are new messages in the channel.
+/// if the message contains the Terminate command, then the function returns true, otherwise false.
+/// # Arguments
+/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
+pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Terminate => true,
+            _ => {
+                println!("Messaging: ignoring inapplicable command from signal handler.");
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Messaging: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            false
+        }
+    }
 }
 
 pub struct Messaging {
@@ -43,7 +101,7 @@ impl Messaging {
         let file_data = fs::read_to_string(config.pid_filename.clone())
             .expect("Messaging: Unable to read PID file.");
         let file_data_trimmed = file_data.trim();
-        
+
         if !file_data_trimmed.is_empty() {
             let process_id_read: u32 = match file_data_trimmed.parse() {
                 Ok(c) => c,
@@ -58,7 +116,7 @@ impl Messaging {
                 panic!(
                     "Messaging: PID file ({}) already contains published PID.",
                     config.pid_filename
-                    );
+                );
             }
         }
         let process_id_numeric: u32 = process::id();
@@ -66,9 +124,12 @@ impl Messaging {
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("Messaging: Could not publish PID.");
 
-        #[cfg(target_os = "linux")]        
-        let mq = match PosixMq::create(&config.mq_filename) {
-            Ok(c) => c,
+        #[cfg(target_os = "linux")]
+        let mq = match PosixMq::open(&config.mq_filename) {
+            Ok(c) => {
+                println!("Messaging: Could open message queue.");
+                c
+            }
             Err(e) => {
                 panic!(
                     "Messaging: failure to create message queue using {}, error={e:?}",
@@ -79,37 +140,96 @@ impl Messaging {
 
         Messaging {
             config: config,
-            
+
             #[cfg(target_os = "linux")]
             mq: mq,
         }
     }
 
-    #[cfg(target_os = "linux")]    
-    pub fn execute(&self) {
-        let mut msgbuf: [u8; 8] = [0; 8];
+    #[cfg(target_os = "linux")]
+    pub fn execute(&self, rx_from_signal_handler: Receiver<InternalCommand>) {
+        let duration_timeout = Duration::from_millis(self.config.timeout_millis);
+
+        // identify maximum length of message queue
+        let mq_max_msg_len = match self.mq.attributes() {
+            Ok(c) => c.max_msg_len,
+            Err(e) => {
+                panic!("Messaging: Failed to open attributes ({e:?}");
+            }
+        };
+
+        let mut msgbuf = vec![0; mq_max_msg_len];
+        let mut msg = Message::new();
 
         loop {
-            match self.mq.recv(&mut msgbuf) {
+            match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
                 Ok((r1, r2)) => {
-                    println!("Messaging: POSIX message received with r1={}, r2={}:\n\
-                                [0] = {}\n\
-                                [1] = {}\n\
-                                [2] = {}\n\
-                                [3] = {}\n\
-                                [4] = {}\n\
-                                [5] = {}\n\
-                                [6] = {}\n\
-                                [7] = {}\n",
-                                r1, r2, msgbuf[0], msgbuf[1], msgbuf[2], msgbuf[3], msgbuf[4], msgbuf[5], msgbuf[6], msgbuf[7]);                                                            
-                },
+                    println!(
+                        "Messaging: POSIX message received with r1={}, r2={}.",
+                        r1, r2
+                    );
+                    println!("Messaging: Received message has size {}.", msgbuf.len());
+                    let zero_char: u8 = 0;
+                    for (position, non_zero_char) in msgbuf.iter().enumerate() {
+                        if *non_zero_char != zero_char {
+                            println!("[{}] {}", position, non_zero_char);
+                        }
+                    }
+                    if msgbuf.len() > 0 {
+                        let mut domain_buf: [u8; 4] = [0; 4];
+                        domain_buf[0] = msgbuf[4];
+                        domain_buf[1] = msgbuf[5];
+                        domain_buf[2] = msgbuf[6];
+                        domain_buf[3] = msgbuf[7];
+                        msg.domain = i32::from_le_bytes(domain_buf);
+
+                        let mut command_buf: [u8; 4] = [0; 4];
+                        command_buf[0] = msgbuf[8];
+                        command_buf[1] = msgbuf[9];
+                        command_buf[2] = msgbuf[10];
+                        command_buf[3] = msgbuf[11];
+                        msg.command = i32::from_le_bytes(command_buf);
+
+                        let mut command_param1_buf: [u8; 4] = [0; 4];
+                        command_param1_buf[0] = msgbuf[12];
+                        command_param1_buf[1] = msgbuf[13];
+                        command_param1_buf[2] = msgbuf[14];
+                        command_param1_buf[3] = msgbuf[15];
+                        msg.command_param1 = i32::from_le_bytes(command_param1_buf);
+
+                        let mut command_param2_buf: [u8; 4] = [0; 4];
+                        command_param2_buf[0] = msgbuf[16];
+                        command_param2_buf[1] = msgbuf[17];
+                        command_param2_buf[2] = msgbuf[18];
+                        command_param2_buf[3] = msgbuf[19];
+                        msg.command_param2 = i32::from_le_bytes(command_param2_buf);
+
+                        println!(
+                            "Messaging: domain={}, cmd={}, param1={}, param2={}",
+                            msg.domain, msg.command, msg.command_param1, msg.command_param2
+                        );
+                    } else {
+                        println!(
+                            "Messaging: Message has incorrect length ({}). Ignoring it.",
+                            msgbuf.len()
+                        );
+                    }
+                }
                 Err(e) => {
-                    println!("Messaging: Error occurred when reading POSIX message: {e:?}");
-                },
+                    match e.kind() {
+                        ErrorKind::TimedOut => { /* do nothing */ }
+                        _ => {
+                            println!("Messaging: Error occurred when reading POSIX message: {e:?}");
+                        }
+                    }
+                }
+            }
+            if check_pending_external_request(&rx_from_signal_handler) {
+                break;
             }
         }
     }
-    
+
     /// Erases PID from previously generated file
     pub fn erase_pid(&self) {
         fs::write(self.config.pid_filename.clone(), "0".to_string())
@@ -128,7 +248,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_publish_pid() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_messaging.toml".to_string());
+            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
         let pid_filename = config.messaging.pid_filename.clone();
         fs::write(pid_filename.clone(), "0".to_string())
             .expect("test_messaging_publish_PID: Could not erase PID.");

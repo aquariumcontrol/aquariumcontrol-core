@@ -104,6 +104,9 @@ impl fmt::Debug for ControllinoError {
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct ControllinoConfig {
+    /// Switch for testing purposes
+    pub active: bool,
+
     /// Relay id of the protein skimmer
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub skimmer_id: u8,
@@ -196,61 +199,66 @@ impl Controllino {
             let spin_sleeper = SpinSleeper::default();
             spin_sleeper_opt = Some(spin_sleeper);
 
-            let mut serial_port =
-                match serialport::new(config.port_name.clone(), config.baud_rate).open() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        panic!("controllino: failed to open serial port: {e:?}");
+            if config.active {
+                let mut serial_port =
+                    match serialport::new(config.port_name.clone(), config.baud_rate).open() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            panic!("controllino: failed to open serial port: {e:?}");
+                        }
+                    };
+
+                let timeout_duration = Duration::from_millis(config.timeout_millis);
+                match serial_port.set_timeout(timeout_duration) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(_) => {
+                        panic!(
+                            "controllino: could not set timeout of {} milliseconds.",
+                            config.timeout_millis
+                        );
                     }
-                };
-
-            let timeout_duration = Duration::from_millis(config.timeout_millis);
-            match serial_port.set_timeout(timeout_duration) {
-                Ok(()) => { /* do nothing */ }
-                Err(_) => {
-                    panic!(
-                        "controllino: could not set timeout of {} milliseconds.",
-                        config.timeout_millis
-                    );
                 }
+
+                // write to Data Terminal Ready pin: clear the signal
+                match serial_port.write_data_terminal_ready(false) {
+                    Ok(_) => {
+                        println!("Controllino: could reset DTR");
+                    }
+                    Err(e) => {
+                        panic!("Controllino: error when clearing DTR: {e:?}");
+                    }
+                }
+
+                // wait for device
+                let sleep_duration_after_dtr_reset =
+                    Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
+                spin_sleeper.sleep(sleep_duration_after_dtr_reset);
+
+                // flush the buffer
+                match serial_port.clear(ClearBuffer::All) {
+                    Ok(_) => {
+                        println!("Controllino: could clear buffer.");
+                    }
+                    Err(e) => {
+                        panic!("Controllino: error when clearing buffer: {e:?}");
+                    }
+                }
+
+                // wait for device
+                let sleep_duration_after_buffer_clear =
+                    Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
+                spin_sleeper.sleep(sleep_duration_after_buffer_clear);
+
+                let controllino_processing_millis = config.controllino_processing_millis;
+                let controllino_processing_duration =
+                    Duration::from_millis(controllino_processing_millis);
+                controllino_processing_duration_opt = Some(controllino_processing_duration);
+
+                serial_port_opt = Some(serial_port);
+            } else {
+                controllino_processing_duration_opt = None;
+                serial_port_opt = None;
             }
-
-            // write to Data Terminal Ready pin: clear the signal
-            match serial_port.write_data_terminal_ready(false) {
-                Ok(_) => {
-                    println!("Controllino: could reset DTR");
-                }
-                Err(e) => {
-                    panic!("Controllino: error when clearing DTR: {e:?}");
-                }
-            }
-
-            // wait for device
-            let sleep_duration_after_dtr_reset =
-                Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
-            spin_sleeper.sleep(sleep_duration_after_dtr_reset);
-
-            // flush the buffer
-            match serial_port.clear(ClearBuffer::All) {
-                Ok(_) => {
-                    println!("Controllino: could clear buffer.");
-                }
-                Err(e) => {
-                    panic!("Controllino: error when clearing buffer: {e:?}");
-                }
-            }
-
-            // wait for device
-            let sleep_duration_after_buffer_clear =
-                Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
-            spin_sleeper.sleep(sleep_duration_after_buffer_clear);
-
-            let controllino_processing_millis = config.controllino_processing_millis;
-            let controllino_processing_duration =
-                Duration::from_millis(controllino_processing_millis);
-            controllino_processing_duration_opt = Some(controllino_processing_duration);
-
-            serial_port_opt = Some(serial_port);
         }
 
         Controllino {
@@ -271,7 +279,10 @@ impl Controllino {
     ) -> bool {
         match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
-                InternalCommand::Quit => true,
+                InternalCommand::Quit => {
+                    println!("Controllino: Received Quit command.");
+                    true
+                }
                 _ => {
                     println!("Controllino: ignoring not applicable command from signal handler.");
                     false
