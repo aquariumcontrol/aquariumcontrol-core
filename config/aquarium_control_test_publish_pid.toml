@@ -1,4 +1,5 @@
 [controllino]
+active = true
 skimmer_id = 3                                          # relay id for protein skimmer
 main_pump1_id = 4                                       # relay id for main pump #1
 main_pump2_id = 5                                       # relay id for main pump #2
@@ -88,6 +89,7 @@ saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_leng
 on_when_out_of_schedule = false                         # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 
 [gpio_handler]
+active = true
 use_simulator = true                                    # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
@@ -115,5 +117,5 @@ strategy_if_schedule_not_found = true                   # strategy for allowing 
 
 [messaging]
 pid_filename = "/var/local/aquarium-ctrl-test.pid"      # filename for publishing PID
-mq_filename = "/aquarium_control"             		# filename for generating token for message queue identification
+mq_filename = "/aquarium_control.6UXp"        		# filename for generating token for message queue identification
 timeout_millis = 250                                    # timeout to check for shutdown requests

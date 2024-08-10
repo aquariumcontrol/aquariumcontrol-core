@@ -1,4 +1,5 @@
 [controllino]
+active = true
 skimmer_id = 3
 main_pump1_id = 4
 main_pump2_id = 5
@@ -88,6 +89,7 @@ pump_switch_delay_millis = 0                            # waiting period between
 active = true
 
 [gpio_handler]
+active = true
 use_simulator = true                                    # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails

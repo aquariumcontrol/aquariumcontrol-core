@@ -132,7 +132,7 @@ impl Messaging {
             }
             Err(e) => {
                 panic!(
-                    "Messaging: failure to create message queue using {}, error={e:?}",
+                    "Messaging: failure to open message queue using {}, error={e:?}",
                     &config.mq_filename
                 );
             }

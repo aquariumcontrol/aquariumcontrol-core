@@ -673,7 +673,7 @@ pub mod tests {
         println!("* checking inserting data frame into empty table succeeded");
         // *****************************************************************************************
 
-        // *** insert and load the same DataFrame again - PASS (check ON DUPLICATE funcationality **
+        // *** insert and load the same DataFrame again - PASS (check ON DUPLICATE functionality) **
         let dataframe_reference_2 = DataFrame {
             timestamp: dataframe_reference_1.timestamp,
             water_temperature: Some(26.5),
