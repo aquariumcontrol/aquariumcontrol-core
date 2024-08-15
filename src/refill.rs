@@ -72,17 +72,17 @@ pub struct RefillConfig {
 }
 
 /// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
-/// if the message contains the command to reset all errors, the function will set all error bits
-/// to false and return false.
+/// if the message contains the command to reset all errors, the function will reset all error bits.
 /// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
+/// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+/// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging
 /// * `refill_errors` - mutable reference to the struct containing the error bits
 pub fn check_pending_external_request(
     rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
     refill_errors: &mut RefillErrors,
-) -> bool {
-    match rx_from_signal_handler.try_recv() {
+) -> (bool, bool, bool) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             InternalCommand::ResetAllErrors => {
@@ -108,7 +108,39 @@ pub fn check_pending_external_request(
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Start => (true, false),
+            InternalCommand::Stop => (false, true),
+            InternalCommand::ResetAllErrors => {
+                refill_errors.reset_all_errors();
+                (false, false)
+            }
+            _ => {
+                println!("Refill: ignoring inapplicable command from messaging.");
+                (false, false)
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Refill: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            (false, false)
+        }
+    };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+    )
 }
 
 /// Contains the communication between Refill thread and GpioHandler thread via channels.
@@ -205,6 +237,16 @@ pub struct RefillErrors {
     pub error_switch_stuck_low: bool,
     pub error_receive_tank_level_switch_position: bool,
     pub error_sql_update_failed: bool,
+}
+
+impl RefillErrors {
+    /// Resets all error bits of the struct.
+    pub fn reset_all_errors(&mut self) {
+        self.error_switch_stuck_high = false;
+        self.error_switch_stuck_low = false;
+        self.error_receive_tank_level_switch_position = false;
+        self.error_sql_update_failed = false;
+    }
 }
 
 /// Contains the configuration and the implementation for the refill control.
@@ -383,6 +425,22 @@ impl Refill {
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
 
+    /// Calculates the inhibition flag depending on the commands received.
+    /// # Arguments
+    /// * `start_command_received` - flag indicating that start command has been received
+    /// * `stop_command_received` - flag indicating that stop command has been received
+    fn calc_inhibition_flag(start_command_received: bool, stop_command_received: bool) -> bool {
+        if stop_command_received {
+            println!("Refill: received Stop command. Inhibiting refill control.");
+            return true;
+        }
+        if start_command_received {
+            println!("Refill: received Start command. Restarting refill control.");
+            return false;
+        }
+        false
+    }
+
     // Checks if historic refill data does not exceed limitations in terms of count and volume.
     // The function returns a tuple of boolean variables.
     /// # Arguments
@@ -460,6 +518,7 @@ impl Refill {
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         tx_to_datalogger: Sender<bool>,
+        rx_from_messaging: Receiver<InternalCommand>,
         water_injection: &mut impl WaterInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -477,16 +536,26 @@ impl Refill {
         let mut sql_refill_data = self.get_sql_refill_data();
         println!("{}", sql_refill_data);
 
-        let mut quit_command_received = false;
+        let mut refill_inhibited = false;
+        let mut quit_command_received = false; // request to end the application has been received
+        let mut start_command_received; // request to (re-)start feed has been received
+        let mut stop_command_received; // request to (temporarily) stop feed has been received
 
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval * 10 {
                 i = i + 1;
-                quit_command_received = check_pending_external_request(
+                (
+                    quit_command_received,
+                    start_command_received,
+                    stop_command_received,
+                ) = check_pending_external_request(
                     &rx_from_signal_handler,
+                    &rx_from_messaging,
                     &mut self.refill_errors,
                 );
+                refill_inhibited =
+                    Self::calc_inhibition_flag(start_command_received, stop_command_received);
                 if quit_command_received {
                     break;
                 }
@@ -505,7 +574,7 @@ impl Refill {
                 break; // exit outer loop
             }
 
-            if self.config.active {
+            if self.config.active && !refill_inhibited {
                 // check for external requests while waiting for the check interval to pass
                 println!("Refill: executing main loop.");
 
@@ -603,10 +672,17 @@ impl Refill {
             i = 0;
             while i < self.config.check_interval * 10 {
                 i = i + 1;
-                quit_command_received = check_pending_external_request(
+                (
+                    quit_command_received,
+                    start_command_received,
+                    stop_command_received,
+                ) = check_pending_external_request(
                     &rx_from_signal_handler,
+                    &rx_from_messaging,
                     &mut self.refill_errors,
                 );
+                refill_inhibited =
+                    Self::calc_inhibition_flag(start_command_received, stop_command_received);
                 if quit_command_received {
                     break;
                 }
@@ -908,10 +984,15 @@ pub mod tests {
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
-        assert_eq!(
-            check_pending_external_request(&rx_refill_from_signal_handler, &mut refill_errors,),
-            false
+        let (_, rx_refill_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+            mpsc::channel();
+
+        let (quit_command_received, _, _) = check_pending_external_request(
+            &rx_refill_from_signal_handler,
+            &rx_refill_from_messaging,
+            &mut refill_errors,
         );
+        assert_eq!(quit_command_received, false);
 
         println!("* [Refill] checking false result of check_pending_external_request when channel is empty succeeded.");
     }
@@ -932,6 +1013,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {
@@ -1030,6 +1112,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
 
@@ -1065,6 +1148,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1169,6 +1253,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
 
@@ -1200,6 +1285,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1295,6 +1381,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
                 println!("test_execute_conditions_historic_data_error_switch_stuck_low: test object finished execution.");
@@ -1326,6 +1413,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1420,6 +1508,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
 
@@ -1437,6 +1526,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         let mut refill_errors = RefillErrors {
             error_switch_stuck_high: true,
@@ -1451,12 +1541,12 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(
-                    check_pending_external_request(
+                let (quit_command_received, _, _) = check_pending_external_request(
                         &rx_refill_from_signal_handler,
+                        &rx_refill_from_messaging,
                         &mut refill_errors,
-                        ),
-                    false);
+                        );
+                assert_eq!(quit_command_received, false);
                 println!("* checking true result of check_pending_external_request when channel contains Quit command succeeded.");
                 assert_eq!(refill_errors.error_switch_stuck_high, false);
                 assert_eq!(refill_errors.error_switch_stuck_low, false);
@@ -1481,6 +1571,7 @@ pub mod tests {
         };
 
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             scope.spawn(move || {
@@ -1488,11 +1579,12 @@ pub mod tests {
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
-                assert_eq!(
-                    check_pending_external_request(
+                let (quit_command_received, _, _) = check_pending_external_request(
                         &rx_refill_from_signal_handler,
-                        &mut refill_errors,
-                    ), true);
+                        &rx_refill_from_messaging,
+                        &mut refill_errors
+                    );
+                assert_eq!(quit_command_received, true);
                 println!("* [Refill] checking true result of check_pending_external_request when channel contains Quit command succeeded.");
             });
         });
@@ -1516,6 +1608,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, _) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -1559,6 +1652,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut water_injection,
                 );
 
@@ -1729,6 +1823,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1855,6 +1950,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
 
@@ -1886,6 +1982,8 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (_, rx_refill_from_messaging) = mpsc::channel();
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
@@ -1957,6 +2055,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
                     &mut refill_test_execution_void,
                 );
 

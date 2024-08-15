@@ -26,11 +26,14 @@ pub struct MonitorsConfig {
 }
 
 /// Checks if there are new messages in the channel.
-/// If the message contains the quit command, then the function returns true, otherwise false.
 /// # Arguments
 /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
+/// * `rx_from_messaging` - receiver part of channel for communication from messaging
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
+) -> (bool, bool, bool) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
@@ -49,7 +52,35 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Start => (true, false),
+            InternalCommand::Stop => (false, true),
+            _ => {
+                println!("Monitors: ignoring inapplicable command from messaging.");
+                (false, false)
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Monitors: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            (false, false)
+        }
+    };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+    )
 }
 
 /// Contains the configuration and the implementation for the monitors.
@@ -84,24 +115,43 @@ impl Monitors {
         _rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        rx_from_messaging: Receiver<InternalCommand>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
+        let mut quit_command_received: bool;
+        let mut start_command_received: bool;
+        let mut stop_command_received: bool;
+        let mut monitors_inhibited: bool = false;
 
         loop {
             if self.config.active && (loop_counter % 100 == 0) {
                 // run monitors every 10 seconds
                 println!("Monitors: Executing main control");
             }
-            if check_pending_external_request(&rx_from_signal_handler) {
+            (
+                quit_command_received,
+                start_command_received,
+                stop_command_received,
+            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            if quit_command_received {
                 break;
+            }
+            if stop_command_received {
+                println!("Monitors: main loop: received Stop command. Inhibiting monitoring.");
+                monitors_inhibited = true;
+            }
+            if start_command_received {
+                println!("Monitors: main loop: received Start command. Restarting monitoring.");
+                monitors_inhibited = false;
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             loop_counter += 1;
         }
+
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         println!("Monitors: Sending Quit confirmation to signal handler.");

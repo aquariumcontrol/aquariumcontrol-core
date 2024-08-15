@@ -12,14 +12,49 @@ use serde_derive::Deserialize;
 use std::fs;
 use std::io::ErrorKind;
 use std::process;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 use crate::InternalCommand;
 
-#[repr(C)]
+/// Contains constants of all domains addressed in IPC messages
+pub mod messaging_domains {
+    pub const REFILL: i32 = 1;
+    pub const VENTILATION: i32 = 3;
+    pub const FEED: i32 = 8;
+    pub const HEATING: i32 = 9;
+    pub const BALLING: i32 = 11;
+    pub const MONITORS: i32 = 12;
+}
+
+#[derive(PartialEq)]
+pub enum MessagingDomain {
+    Refill,
+    Ventilation,
+    Feed,
+    Heating,
+    Balling,
+    Monitors,
+    Unknown,
+}
+
+/// Contains constants of all commands provided in IPC messages
+pub mod messaging_commands {
+
+    /// used to reset errors in controllers (refill, monitors)
+    pub const RESET: i32 = 1;
+
+    /// used to stop controller (feed, balling, heating, ventilation, monitors)
+    pub const STOP: i32 = 3;
+
+    /// used to (re-) start controllers (feed, balling, heating, ventilation, monitors)
+    pub const START: i32 = 4;
+
+    /// used for triggering execution of feed profiles
+    pub const EXEC: i32 = 10;
+}
+
 pub struct Message {
-    message_type: i32,
     domain: i32,
     command: i32,
     command_param1: i32,
@@ -30,7 +65,6 @@ impl Message {
     /// Provides empty message initialized with zeros
     pub fn new() -> Message {
         Message {
-            message_type: 0,
             domain: 0,
             command: 0,
             command_param1: 0,
@@ -147,7 +181,16 @@ impl Messaging {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn execute(&self, rx_from_signal_handler: Receiver<InternalCommand>) {
+    pub fn execute(
+        &self,
+        rx_from_signal_handler: Receiver<InternalCommand>,
+        tx_to_refill: Sender<InternalCommand>,
+        tx_to_ventilation: Sender<InternalCommand>,
+        tx_to_heating: Sender<InternalCommand>,
+        tx_to_feed: Sender<InternalCommand>,
+        tx_to_balling: Sender<InternalCommand>,
+        tx_to_monitors: Sender<InternalCommand>,
+    ) {
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
         // identify maximum length of message queue
@@ -208,6 +251,64 @@ impl Messaging {
                             "Messaging: domain={}, cmd={}, param1={}, param2={}",
                             msg.domain, msg.command, msg.command_param1, msg.command_param2
                         );
+
+                        // interpret domain in message
+                        let domain: MessagingDomain = match msg.domain {
+                            messaging_domains::REFILL => MessagingDomain::Refill,
+                            messaging_domains::VENTILATION => MessagingDomain::Ventilation,
+                            messaging_domains::FEED => MessagingDomain::Feed,
+                            messaging_domains::HEATING => MessagingDomain::Heating,
+                            messaging_domains::BALLING => MessagingDomain::Balling,
+                            messaging_domains::MONITORS => MessagingDomain::Monitors,
+                            _ => {
+                                println!(
+                                    "Messaging: ignoring message for unknown domain {}",
+                                    msg.domain
+                                );
+                                MessagingDomain::Unknown
+                            }
+                        };
+
+                        // interpret command in message
+                        let command: InternalCommand = match msg.command {
+                            messaging_commands::RESET => InternalCommand::ResetAllErrors,
+                            messaging_commands::STOP => InternalCommand::Stop,
+                            messaging_commands::START => InternalCommand::Start,
+                            messaging_commands::EXEC => {
+                                InternalCommand::Execute(msg.command_param1)
+                            }
+                            _ => {
+                                println!(
+                                    "Messaging: ignoring message with unknown command {}",
+                                    msg.command
+                                );
+                                InternalCommand::Unknown
+                            }
+                        };
+
+                        // prepare and execute communication to domain
+                        if (domain != MessagingDomain::Unknown)
+                            && (command != InternalCommand::Unknown)
+                        {
+                            let tx_to_domain = match domain {
+                                MessagingDomain::Refill => &tx_to_refill,
+                                MessagingDomain::Ventilation => &tx_to_ventilation,
+                                MessagingDomain::Feed => &tx_to_feed,
+                                MessagingDomain::Heating => &tx_to_heating,
+                                MessagingDomain::Balling => &tx_to_balling,
+                                MessagingDomain::Monitors => &tx_to_monitors,
+                                MessagingDomain::Unknown => unreachable!(),
+                            };
+
+                            match tx_to_domain.send(command) {
+                                Ok(_) => { /* do nothing */ }
+                                Err(e) => {
+                                    println!(
+                                        "messaging: Error in channel communication to domain: {e:?}"
+                                    );
+                                }
+                            }
+                        }
                     } else {
                         println!(
                             "Messaging: Message has incorrect length ({}). Ignoring it.",

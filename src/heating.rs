@@ -104,11 +104,14 @@ pub struct HeatingConfig {
 }
 
 /// Checks if there are new messages in the channel.
-/// If the message contains the quit command, then the function returns true, otherwise false.
 /// # Arguments
 /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
+/// * `rx_from_messaging` - receiver part of channel for communication from messaging
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
+) -> (bool, bool, bool) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
@@ -127,7 +130,35 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Start => (true, false),
+            InternalCommand::Stop => (false, true),
+            _ => {
+                println!("Heating: ignoring inapplicable command from messaging.");
+                (false, false)
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Heating: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            (false, false)
+        }
+    };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+    )
 }
 
 /// Communicates to Controllino thread via channel to switch on the heater.
@@ -283,6 +314,7 @@ impl Heating {
         tx_to_datalogger: Sender<bool>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
+        rx_from_messaging: Receiver<InternalCommand>,
         sql_interface: &mut SqlInterface,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {
@@ -302,6 +334,7 @@ impl Heating {
         let mut duration_until_midnight = self.get_duration_until_midnight();
         let mut tank_level_low_counter = 0;
         let mut energy_increment: f64 = 0.0;
+        let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
 
         println!(
             "Heating: Duration until midnight is {} seconds.",
@@ -327,8 +360,21 @@ impl Heating {
         }
 
         loop {
-            if check_pending_external_request(&rx_from_signal_handler) {
+            let (
+                quit_command_received,  // request to end the application has been received
+                start_command_received, // request to (re-)start heating has been received
+                stop_command_received,  // request to (temporarily) stop heating has been received
+            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            if quit_command_received {
                 break;
+            }
+            if stop_command_received {
+                println!("Heating: main loop: received Stop command. Inhibiting heating.");
+                heating_inhibited = true;
+            }
+            if start_command_received {
+                println!("Heating: main loop: received Start command. Restarting heating.");
+                heating_inhibited = false;
             }
 
             // run the temperature control only once per second
@@ -483,9 +529,10 @@ impl Heating {
                     }
                 } else {
                     // component protection allows operation of the heater
-                    if schedule_check_result {
-                        // schedule check said that actutation is allowed.
-                        // main control happens here (comparison measured/target), actuation
+                    if schedule_check_result && !heating_inhibited {
+                        // Schedule check said that actuation is allowed.
+                        // Also, there is no inhibition from external request.
+                        // Main control happens here (comparison measured/target, actuation).
                         if (measured_water_temperature >= self.config.switch_on_temperature)
                             && (measured_water_temperature <= self.config.switch_off_temperature)
                         {
@@ -935,6 +982,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1000,6 +1048,7 @@ pub mod tests {
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
@@ -1038,6 +1087,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_, rx_heating_from_messaging) = mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
@@ -1119,6 +1169,7 @@ pub mod tests {
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
@@ -1256,6 +1307,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_, rx_heating_from_messaging) = mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
@@ -1337,6 +1389,7 @@ pub mod tests {
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
@@ -1475,6 +1528,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             // thread for schedule check
@@ -1534,6 +1588,7 @@ pub mod tests {
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
@@ -1568,6 +1623,7 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             // thread for schedule check
@@ -1662,6 +1718,7 @@ pub mod tests {
                     tx_heating_to_datalogger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );

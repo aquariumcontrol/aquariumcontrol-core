@@ -47,15 +47,18 @@ pub struct VentilationConfig {
 }
 
 /// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
 /// # Arguments
 /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
+/// * `rx_from_messaging` - receiver part of channel for communication from messaging
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
+) -> (bool, bool, bool) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
-                println!("Ventilation: ignoring inapplicable command from signal handler.");
+                println!("Heating: ignoring inapplicable command from signal handler.");
                 false
             }
         },
@@ -64,13 +67,41 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
                     println!(
-                        "Ventilation: Error in trying to receive command from signal handler: {e:?}"
+                        "Heating: Error in trying to receive command from signal handler: {e:?}"
                     );
                 }
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Start => (true, false),
+            InternalCommand::Stop => (false, true),
+            _ => {
+                println!("Heating: ignoring inapplicable command from messaging.");
+                (false, false)
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Heating: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            (false, false)
+        }
+    };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+    )
 }
 
 /// Communicates to Controllino thread via channel to switch on the ventilation
@@ -205,6 +236,7 @@ impl Ventilation {
         tx_to_datalogger: Sender<bool>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
+        rx_from_messaging: Receiver<InternalCommand>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -214,6 +246,7 @@ impl Ventilation {
         let mut loop_counter = 0;
         let mut ventilation_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
+        let mut ventilation_inhibited = false; // state of ventilation control determined by if start/stop command has been received
 
         loop {
             // run the temperature control only once per second
@@ -266,7 +299,7 @@ impl Ventilation {
                     }
                 }
 
-                if schedule_check_result {
+                if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
                     if (measured_temperature >= self.config.switch_off_temperature)
                         && (measured_temperature <= self.config.switch_on_temperature)
@@ -324,7 +357,7 @@ impl Ventilation {
                         }
                     }
                 } else {
-                    // schedule check said that we not allowed actuate
+                    // schedule check or external request said that we not allowed actuate
                     match self.config.on_when_out_of_schedule {
                         true => {
                             // switch on heater if not already on
@@ -359,8 +392,18 @@ impl Ventilation {
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-            if check_pending_external_request(&rx_from_signal_handler) {
+            let (quit_command_received, start_command_received, stop_command_received) =
+                check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            if quit_command_received {
                 break;
+            }
+            if stop_command_received {
+                println!("Ventilation: main loop: received Stop command. Inhibiting ventilation.");
+                ventilation_inhibited = true;
+            }
+            if start_command_received {
+                println!("Ventilation: main loop: received Start command. Restarting ventilation.");
+                ventilation_inhibited = false;
             }
         }
 
@@ -575,6 +618,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
+        let (_, rx_ventilation_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             // thread for schedule check
@@ -658,6 +702,7 @@ pub mod tests {
                     tx_ventilation_to_datalogger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
                 );
 
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish

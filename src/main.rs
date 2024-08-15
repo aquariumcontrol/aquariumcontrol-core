@@ -53,12 +53,10 @@ mod water_injection;
 #[cfg(target_os = "linux")]
 mod i2c_interface;
 
-use chrono::NaiveDateTime;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
-//use std::env;
 
 use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
@@ -149,6 +147,12 @@ use crate::water_injection::WaterInjection;
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
 ///	signal_handler --> messaging[Messaging]
+///	messaging[Messaging] --> refill
+///	messaging --> ventilation
+///	messaging --> heating
+///	messaging --> balling
+///	messaging --> feed
+///	messaging --> monitors
 /// ```
 
 fn main() {
@@ -167,9 +171,9 @@ fn main() {
 
     let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
 
-    let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-    let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+    let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
 
     let sql_interface_midnight_calculator =
         SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection());
@@ -179,7 +183,7 @@ fn main() {
         Box::new(sql_interface_midnight_calculator),
     );
 
-    let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+    let sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
@@ -222,51 +226,58 @@ fn main() {
         Err(e) => panic!("{e:?}"),
     }
 
-    let refill_timestamp =
-        NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
-        Ok(_) => {}
-        Err(e) => panic!("Could not insert refill event into database: {e:?}"),
-    };
-
-    let balling_timestamp =
-        NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-    match sql_interface_balling.insert_balling_event(balling_timestamp, 1, 0.5) {
-        Ok(_) => {}
-        Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
-    }
-    let balling_setval_pump1 =
-        match sql_interface_balling.get_single_balling_setval_from_database(1) {
-            Ok(c) => c,
-            Err(e) => panic!("Could not retrieve Balling set values from database: {e:?}"),
-        };
-
-    let feedpattern = match sql_interface_feed.get_single_feedpattern_from_database(1) {
-        Ok(c) => c,
-        Err(e) => panic!("Could not get feed pattern from database:{e:?}"),
-    };
-
     println!("Read the following tables from database:");
     for table in tables {
         println!("* {}", table);
     }
-    println!(
-        "Balling set values are: pump_id={}, dosing_speed={}, dosing_volume={}, label={}",
-        balling_setval_pump1.pump_id,
-        balling_setval_pump1.dosing_speed,
-        balling_setval_pump1.dosing_volume,
-        balling_setval_pump1.label
-    );
-    println!(
-        "Feed pattern: profile ID={} profile name={}",
-        feedpattern.profile_id, feedpattern.profile_name
-    );
 
     let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
 
     // create channels for communication between threads
     // *** signal_handler => messaging ***
     let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => refill ***
+    let (tx_messaging_to_refill, rx_refill_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => ventilation ***
+    let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => heating ***
+    let (tx_messaging_to_heating, rx_heating_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => feed ***
+    let (tx_messaging_to_feed, rx_feed_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => balling ***
+    let (tx_messaging_to_balling, rx_balling_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** messaging => monitors ***
+    let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
@@ -776,6 +787,7 @@ fn main() {
                 tx_refill_to_schedule_check,
                 rx_refill_from_schedule_check,
                 tx_refill_to_datalogger,
+                rx_refill_from_messaging,
                 &mut water_injection,
             );
             println!("main(06): Refill terminated.");
@@ -798,6 +810,7 @@ fn main() {
                 tx_heating_to_datalogger,
                 tx_heating_to_schedule_check,
                 rx_heating_from_schedule_check,
+                rx_heating_from_messaging,
                 &mut sql_interface,
                 &mut heating_stats_transfer,
             );
@@ -819,6 +832,7 @@ fn main() {
                 tx_ventilation_to_datalogger,
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
+                rx_ventilation_from_messaging,
             );
             println!("main(08): Ventilation terminated.");
         });
@@ -835,6 +849,7 @@ fn main() {
                 rx_monitors_from_controllino,
                 tx_monitors_to_signal_handler,
                 rx_monitors_from_signal_handler,
+                rx_monitors_from_messaging,
             );
             println!("main(09): Monitors terminated.");
         });
@@ -849,6 +864,7 @@ fn main() {
                 rx_feed_from_controllino,
                 tx_feed_to_signal_handler,
                 rx_feed_from_signal_handler,
+                rx_feed_from_messaging,
                 &mut food_injection,
             );
             println!("main(10): Feed terminated.");
@@ -866,6 +882,7 @@ fn main() {
                 rx_balling_from_signal_handler,
                 tx_balling_to_schedule_check,
                 rx_balling_from_schedule_check,
+                rx_balling_from_messaging,
                 &mut mineral_injection,
             );
             println!("main(11): Balling terminated.");
@@ -875,7 +892,15 @@ fn main() {
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(rx_messaging_from_signal_handler);
+            messaging.execute(
+                rx_messaging_from_signal_handler,
+                tx_messaging_to_refill,
+                tx_messaging_to_ventilation,
+                tx_messaging_to_heating,
+                tx_messaging_to_feed,
+                tx_messaging_to_balling,
+                tx_messaging_to_monitors,
+            );
 
             // remove PID from file
             messaging.erase_pid();

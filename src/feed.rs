@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
 use crate::food_injection::FoodInjectionTrait;
+use crate::sql_interface::SqlInterface;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 
 /// Holds the configuration data for the feed control.
@@ -33,11 +34,14 @@ pub struct FeedConfig {
 }
 
 /// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
 /// # Arguments
 /// * `rx_from_signal_handler` - receiver part of channel    
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
+/// * `rx_from_messaging` - receiver part of channel    
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
+) -> (bool, bool, bool, bool, i32) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
@@ -54,7 +58,39 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received, execute_command_received, profile_id) =
+        match rx_from_messaging.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Start => (true, false, false, 0),
+                InternalCommand::Stop => (false, true, false, 0),
+                InternalCommand::Execute(c) => (false, false, true, c),
+                _ => {
+                    println!("Heating: ignoring inapplicable command from messaging.");
+                    (false, false, false, 0)
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                        "Heating: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                    }
+                }
+                (false, false, false, 0)
+            }
+        };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+        execute_command_received,
+        profile_id,
+    )
 }
 
 /// Contains the configuration and the implementation for the feed control.
@@ -78,6 +114,62 @@ impl Feed {
         }
     }
 
+    /// Loads and executes a given feed profile.
+    /// # Arguments
+    /// * `profile_id` - ID of feed profile to be executed
+    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
+    /// * `food_injection` - Trait method for actuation to execute the feed profile
+    fn execute_feed(
+        &mut self,
+        profile_id: i32,
+        food_injection: &mut impl FoodInjectionTrait,
+        tx_to_controllino: &Sender<InternalCommand>,
+        rx_from_controllino: &Receiver<bool>,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) {
+        // load feed pattern from database
+        match self
+            .sql_interface_feed
+            .get_single_feedpattern_from_database(profile_id)
+        {
+            Ok(feed_pattern) => {
+                //*** execute feed pattern ***
+                food_injection.inject_food(
+                    &tx_to_controllino,
+                    &rx_from_controllino,
+                    &rx_from_signal_handler,
+                    &feed_pattern,
+                );
+
+                let current_timestamp =
+                    match SqlInterface::get_current_timestamp(&mut self.sql_interface_feed.conn) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            panic!("Feed: could not get current timestamp from database: {e:?}");
+                        }
+                    };
+
+                //*** insert feed event in log ***
+                match self.sql_interface_feed.insert_feed_event(
+                    current_timestamp,
+                    feed_pattern.calc_feeder_runtime(),
+                    feed_pattern.profile_name,
+                    profile_id,
+                ) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        panic!("Could not insert feed event into database: {e:?}")
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error when reading feed pattern from database: {e:?}");
+            }
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
@@ -85,6 +177,8 @@ impl Feed {
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler  
+    /// * `rx_from_messaging` - Receiver part of channel for communication from messaging  
+    /// * `food_injection` - Trait method for actuation to execute the feed profile  
     pub fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
@@ -92,14 +186,17 @@ impl Feed {
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        rx_from_messaging: Receiver<InternalCommand>,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
+        let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
 
         loop {
             if self.config.active
+                && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
                 println!("Feed: checking schedule...");
@@ -107,75 +204,48 @@ impl Feed {
                     .sql_interface_feed
                     .get_feedschedule_entry_from_database()
                 {
-                    Ok(c) => {
-                        match c {
-                            Some(mut feed_schedule_entry) => {
-                                println!(
-                                    "Feed schedule entry before update: \
+                    Ok(c) => match c {
+                        Some(mut feed_schedule_entry) => {
+                            println!(
+                                "Feed schedule entry before update: \
                                 timestamp={}, profile_name={}, repeat_daily={}",
-                                    feed_schedule_entry.timestamp,
-                                    feed_schedule_entry.profile_name,
-                                    feed_schedule_entry.repeat_daily
+                                feed_schedule_entry.timestamp,
+                                feed_schedule_entry.profile_name,
+                                feed_schedule_entry.repeat_daily
+                            );
+
+                            {
+                                // scope to limit lifetime of unlocked mutex
+                                let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
+
+                                self.execute_feed(
+                                    feed_schedule_entry.profile_id,
+                                    food_injection,
+                                    &tx_to_controllino,
+                                    &rx_from_controllino,
+                                    &rx_from_signal_handler,
                                 );
-                                // load feed pattern from database
+
+                                *mutex_data += 1;
+
+                                //*** update schedule ***
                                 match self
                                     .sql_interface_feed
-                                    .get_single_feedpattern_from_database(
-                                        feed_schedule_entry.profile_id,
-                                    ) {
-                                    Ok(feed_pattern) => {
-                                        //*** execute feed pattern ***
-                                        let mut mutex_data =
-                                            mutex_device_scheduler_feed.lock().unwrap();
-                                        food_injection.inject_food(
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &rx_from_signal_handler,
-                                            &feed_pattern,
-                                        );
-                                        *mutex_data += 1;
-
-                                        //*** update schedule ***
-                                        match self
-                                            .sql_interface_feed
-                                            .update_feedschedule_entry_in_database(
-                                                &mut feed_schedule_entry,
-                                            ) {
-                                            Ok(()) => {
-                                                println!("Update feed schedule entry");
-                                            }
-                                            Err(e) => {
-                                                println!("Error when updating feed schedule entry: {e:?}");
-                                            }
-                                        }
-
-                                        //*** insert feed event in log ***
-                                        match self.sql_interface_feed.insert_feed_event(
-                                            feed_schedule_entry.timestamp,
-                                            feed_pattern.calc_feeder_runtime(),
-                                            feed_schedule_entry.profile_name,
-                                            feed_schedule_entry.profile_id,
-                                        ) {
-                                            Ok(_) => {}
-                                            Err(e) => {
-                                                panic!("Could not insert feed event into database: {e:?}")
-                                            }
-                                        }
+                                    .update_feedschedule_entry_in_database(&mut feed_schedule_entry)
+                                {
+                                    Ok(()) => {
+                                        println!("Update feed schedule entry");
                                     }
                                     Err(e) => {
-                                        println!(
-                                            "Error when reading feed pattern from database: {e:?}"
-                                        );
+                                        println!("Error when updating feed schedule entry: {e:?}");
                                     }
                                 }
                             }
-                            None => {
-                                println!(
-                                    "Database has no feed schedule entry which lies in the past."
-                                );
-                            }
                         }
-                    }
+                        None => {
+                            println!("Database has no feed schedule entry which lies in the past.");
+                        }
+                    },
                     Err(e) => {
                         println!(
                             "Could not retrieve feed schedule information from database: {e:?}"
@@ -183,8 +253,41 @@ impl Feed {
                     }
                 };
             }
-            if check_pending_external_request(&rx_from_signal_handler) {
+
+            // check and process external requests
+            let (
+                quit_command_received,    // request to end the application has been received
+                start_command_received,   // request to (re-)start feed has been received
+                stop_command_received,    // request to (temporarily) stop feed has been received
+                execute_command_received, // request to execute a certain feed profile has been received
+                profile_id,               // id of feed profile to be executed
+            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            if quit_command_received {
                 break;
+            }
+            if stop_command_received {
+                println!("Feed: main loop: received Stop command. Inhibiting feed.");
+                feed_inhibited = true;
+            }
+            if start_command_received {
+                println!("Feed: main loop: received Start command. Restarting feed.");
+                feed_inhibited = false;
+            }
+            if execute_command_received {
+                {
+                    // scope to limit lifetime of unlocked mutex
+                    let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
+
+                    self.execute_feed(
+                        profile_id,
+                        food_injection,
+                        &tx_to_controllino,
+                        &rx_from_controllino,
+                        &rx_from_signal_handler,
+                    );
+
+                    *mutex_data += 1;
+                }
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -289,6 +392,7 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let (_, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -386,6 +490,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
+                    rx_feed_from_messaging,
                     &mut mock_food_injection,
                 );
 

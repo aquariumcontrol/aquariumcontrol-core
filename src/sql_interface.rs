@@ -688,6 +688,7 @@ impl SqlInterface {
 
         Ok(result_opt)
     }
+
     /// Retrieves the current timestamp from SQL database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDateTime
     /// - or an error code from the enum SqlInterfaceError

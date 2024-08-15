@@ -9,11 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use chrono::Local;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
-use crate::refill::check_pending_external_request;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
 use crate::refill::TankLevelSwitchSignals;
@@ -52,6 +51,36 @@ pub trait WaterInjectionTrait {
 /// Implementation of the WaterInjectionTrait which contains the code for executing the refill once
 /// the main control has detected that the water level is low.
 pub struct WaterInjection;
+
+impl WaterInjection {
+    /// Checks if there are new messages in the channel.
+    /// # Arguments
+    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    pub fn check_pending_external_request(
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> bool {
+        match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => true,
+                _ => {
+                    println!("WaterInjection: ignoring inapplicable command from signal handler.");
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        println!(
+                        "WaterInjection: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                    }
+                }
+                false
+            }
+        }
+    }
+}
 
 impl WaterInjectionTrait for WaterInjection {
     /// this function executes the refill operation
@@ -134,8 +163,7 @@ impl WaterInjectionTrait for WaterInjection {
                     additional_refill_volume_executed, config.additional_refill_volume
                 );
             }
-            quit_command_received =
-                check_pending_external_request(&rx_from_signal_handler, refill_errors);
+            quit_command_received = Self::check_pending_external_request(&rx_from_signal_handler);
             if quit_command_received {
                 println!("Water injection: received Quit command");
                 break;

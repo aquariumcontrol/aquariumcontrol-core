@@ -51,8 +51,12 @@ pub struct BallingConfig {
 /// if the message contains the quit command, then the function returns true, otherwise false.
 /// # Arguments
 /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
+/// * `rx_from_messaging` - receiver part of channel for communication from messaging
+fn check_pending_external_request(
+    rx_from_signal_handler: &Receiver<InternalCommand>,
+    rx_from_messaging: &Receiver<InternalCommand>,
+) -> (bool, bool, bool) {
+    let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
@@ -71,7 +75,35 @@ fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalComm
             }
             false
         }
-    }
+    };
+
+    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Start => (true, false),
+            InternalCommand::Stop => (false, true),
+            _ => {
+                println!("Balling: ignoring inapplicable command from messaging.");
+                (false, false)
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    println!(
+                        "Balling: Error in trying to receive command from signal handler: {e:?}"
+                    );
+                }
+            }
+            (false, false)
+        }
+    };
+
+    (
+        quit_command_received,
+        start_command_received,
+        stop_command_received,
+    )
 }
 
 /// Contains the configuration and the implementation for the Balling dosing control.
@@ -298,22 +330,27 @@ impl Balling {
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
+        rx_from_messaging: Receiver<InternalCommand>,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
-        let sleep_duration_hundred_millis = Duration::from_millis(100);
+        let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce frequency of channel polling
         let spin_sleeper = SpinSleeper::default();
-        let mut loop_counter = 0;
-        let mut quit_command_received: bool;
-        let mut schedule_check_result = false;
+        let mut loop_counter = 0; // used to reduce the frequency of DB requests
+        let mut quit_command_received: bool; // request to end the application has been received
+        let mut stop_command_received: bool; // request to (temporarily) stop dosing has been received
+        let mut start_command_received: bool; // request to (temporarily) stop dosing has been received
+        let mut dosing_inhibited: bool = false; // state of dosing control determined if start/stop command has been received
+        let mut schedule_check_result = false; // flag indicating if operation of Balling is permitted at this time of day
 
         loop {
             if self.config.active
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                println!("Balling: executing main control.");
+                // this code only executes when .toml file is configure accordingly (.active)
+                // and the monitoring period has passed (usually every 60secs)
 
                 // schedule check to see if actuation is allowed
-                println!("Balling: initiating communication to schedule checker.");
+                // println!("Balling: initiating communication to schedule checker.");
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         // now listen for response
@@ -339,7 +376,7 @@ impl Balling {
 
                 //*** Peristaltic pump 1 ***
                 if self.countdown_dosing_pump1 <= 0 {
-                    if schedule_check_result {
+                    if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
@@ -363,7 +400,7 @@ impl Balling {
                 }
                 //*** Peristaltic pump 2 ***
                 if self.countdown_dosing_pump2 <= 0 {
-                    if schedule_check_result {
+                    if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
@@ -387,7 +424,7 @@ impl Balling {
                 }
                 //*** Peristaltic pump 3 ***
                 if self.countdown_dosing_pump3 <= 0 {
-                    if schedule_check_result {
+                    if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
@@ -411,7 +448,7 @@ impl Balling {
                 }
                 //*** Peristaltic pump 4 ***
                 if self.countdown_dosing_pump4 <= 0 {
-                    if schedule_check_result {
+                    if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
                             let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
@@ -435,13 +472,22 @@ impl Balling {
                 }
             }
 
-            if check_pending_external_request(&rx_from_signal_handler) {
-                println!("Balling: main loop: received Quit command exiting...");
-                println!("countdown_dosing_pump1={}", self.countdown_dosing_pump1);
-                println!("countdown_dosing_pump2={}", self.countdown_dosing_pump2);
-                println!("countdown_dosing_pump3={}", self.countdown_dosing_pump3);
-                println!("countdown_dosing_pump4={}", self.countdown_dosing_pump4);
+            (
+                quit_command_received,
+                stop_command_received,
+                start_command_received,
+            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            if quit_command_received {
+                println!("Balling: main loop: received Quit command. Exiting...");
                 break;
+            }
+            if stop_command_received {
+                println!("Balling: main loop: received Stop command. Inhibiting dosing.");
+                dosing_inhibited = true;
+            }
+            if start_command_received {
+                println!("Balling: main loop: received Start command. Restarting dosing.");
+                dosing_inhibited = false;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
@@ -745,6 +791,7 @@ pub mod tests {
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+        let (_, rx_balling_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -802,6 +849,7 @@ pub mod tests {
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
+                    rx_balling_from_messaging,
                     &mut mock_mineral_injection,
                 );
 

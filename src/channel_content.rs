@@ -158,6 +158,18 @@ pub enum InternalCommand {
 
     /// ScheduleCheck - request permission to run based on time of day
     ScheduleCheck,
+
+    /// (Re-)start controller (Balling, Ventilation, Refill, Heating)
+    Start,
+
+    /// (Temporarily) stop controller (Balling, Ventilation, Refill, Heating)
+    Stop,
+
+    /// Execute a (feed) profile with a given ID
+    Execute(i32),
+
+    /// Default value used when unknown command is received via IPC message
+    Unknown,
 }
 
 impl fmt::Display for InternalCommand {
@@ -177,6 +189,10 @@ impl fmt::Display for InternalCommand {
             InternalCommand::Quit => write!(f, "Quit"),
             InternalCommand::Terminate => write!(f, "Terminate"),
             InternalCommand::ScheduleCheck => write!(f, "ScheduleCheck"),
+            InternalCommand::Start => write!(f, "Start"),
+            InternalCommand::Stop => write!(f, "Stop"),
+            InternalCommand::Execute(_) => write!(f, "Execute"),
+            InternalCommand::Unknown => write!(f, "Unknown"),
         }
     }
 }
