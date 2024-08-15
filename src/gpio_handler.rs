@@ -100,20 +100,31 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
+    #[cfg(target_os = "linux")]
     /// This function returns a struct of type GpioHandler.
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
+    /// * `i2c_config` - configuration data for I2C handler
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
+        GpioHandler {
+            config: config,
+            #[cfg(target_os = "linux")]
+            i2c_interface: I2cInterface::new(i2c_config),
+        }
+    }
+    
+    #[cfg(not(target_os = "linux"))]
+    /// This function returns a struct of type GpioHandler for development purposes.
+    /// # Arguments
+    /// * `config` - configuration data for GPIO handler
+    pub fn new(config: GpioHandlerConfig) -> GpioHandler {
         if !config.use_simulator {
-            #[cfg(not(target_os = "linux"))]
             panic!("Usage of hardware not supported on this platform.");
         }
 
         GpioHandler {
             config: config,
-            #[cfg(target_os = "linux")]
-            i2c_interface: I2cInterface::new(i2c_config),
         }
     }
 

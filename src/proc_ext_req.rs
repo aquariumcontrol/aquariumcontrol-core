@@ -15,7 +15,10 @@ use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
+
+#[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
+
 use crate::mineral_injection::MineralInjection;
 use crate::refill::Refill;
 use crate::schedule_check::ScheduleCheck;
@@ -292,6 +295,7 @@ impl ProcessExternalRequestTrait for GpioHandler {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl ProcessExternalRequestTrait for Messaging {
     /// Checks if there are new messages in the channel.
     /// Implementation for Messaging

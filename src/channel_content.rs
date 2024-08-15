@@ -147,6 +147,7 @@ pub enum InternalCommand {
     /// Request a signal
     RequestSignal(AquariumSignal),
 
+    #[allow(dead_code)]
     /// Reset existing errors (used for refill control)
     ResetAllErrors,
 
@@ -159,15 +160,19 @@ pub enum InternalCommand {
     /// ScheduleCheck - request permission to run based on time of day
     ScheduleCheck,
 
+    #[allow(dead_code)]
     /// (Re-)start controller (Balling, Ventilation, Refill, Heating)
     Start,
 
+    #[allow(dead_code)]
     /// (Temporarily) stop controller (Balling, Ventilation, Refill, Heating)
     Stop,
 
+    #[allow(dead_code)]
     /// Execute a (feed) profile with a given ID
     Execute(i32),
 
+    #[allow(dead_code)]
     /// Default value used when unknown command is received via IPC message
     Unknown,
 }

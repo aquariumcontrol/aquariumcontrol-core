@@ -114,6 +114,8 @@ schedule_check_interval = 300                           # interval in seconds fo
 strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in database
 
 [messaging]
-pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID
 mq_filename = "/var/local/aquarium-ctrl.mq"             # filename for generating token for message queue identification
-timeout_millis = 250					# timeout in milliseconds to check for shutdown requests
+timeout_millis = 250					                # timeout in milliseconds to check for shutdown requests
+
+[publish_pid]
+pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID

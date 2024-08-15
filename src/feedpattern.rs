@@ -75,7 +75,7 @@ pub struct FeedPhase {
 
 impl FeedPhase {
     // Provides a struct of type FeedPhase - used only for testing
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(
         pause_duration: i16,
         pause_skimmer: bool,

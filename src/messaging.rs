@@ -9,15 +9,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(target_os = "linux")]
 use posixmq::PosixMq;
 use serde_derive::Deserialize;
-use std::fs;
 use std::io::ErrorKind;
 use std::process;
+#[cfg(target_os = "linux")]
 use std::sync::mpsc::{Receiver, Sender};
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
 
+#[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
 pub mod messaging_domains {
     pub const REFILL: i32 = 1;
@@ -28,6 +30,7 @@ pub mod messaging_domains {
     pub const MONITORS: i32 = 12;
 }
 
+#[cfg(target_os = "linux")]
 #[derive(PartialEq)]
 pub enum MessagingDomain {
     Refill,
@@ -39,6 +42,7 @@ pub enum MessagingDomain {
     Unknown,
 }
 
+#[cfg(target_os = "linux")]
 /// Contains constants of all commands provided in IPC messages
 pub mod messaging_commands {
 
@@ -79,9 +83,6 @@ impl Message {
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct MessagingConfig {
-    /// filename used for publishing the PID
-    pid_filename: String,
-
     /// filename used for generating the messsage queue identifier
     mq_filename: String,
 
@@ -99,39 +100,10 @@ pub struct Messaging {
 }
 
 impl Messaging {
-    /// Checks if PID file already contains published PID.
-    /// If yes, then application will panic.
-    /// If no, then function publishes PID provides a struct of type Messaging.
-    /// If publishing does not work, then the application will panic.
+    /// Opens the message queue
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
+    /// * `config` - configuration data for Messaging
     pub fn new(config: MessagingConfig) -> Messaging {
-        let file_data = fs::read_to_string(config.pid_filename.clone())
-            .expect("Messaging: Unable to read PID file.");
-        let file_data_trimmed = file_data.trim();
-
-        if !file_data_trimmed.is_empty() {
-            let process_id_read: u32 = match file_data_trimmed.parse() {
-                Ok(c) => c,
-                Err(e) => {
-                    panic!(
-                        "Messaging: PID file ({}) contains invalid content: {e:?}",
-                        config.pid_filename
-                    );
-                }
-            };
-            if process_id_read > 0 {
-                panic!(
-                    "Messaging: PID file ({}) already contains published PID.",
-                    config.pid_filename
-                );
-            }
-        }
-        let process_id_numeric: u32 = process::id();
-        let process_id_string: String = process_id_numeric.to_string() + "\n";
-        fs::write(config.pid_filename.clone(), process_id_string)
-            .expect("Messaging: Could not publish PID.");
-
         #[cfg(target_os = "linux")]
         let mq = match PosixMq::open(&config.mq_filename) {
             Ok(c) => {
@@ -305,12 +277,6 @@ impl Messaging {
                 break;
             }
         }
-    }
-
-    /// Erases PID from previously generated file
-    pub fn erase_pid(&self) {
-        fs::write(self.config.pid_filename.clone(), "0".to_string())
-            .expect("Messaging: Could not erase PID.");
     }
 }
 

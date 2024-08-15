@@ -31,10 +31,13 @@ mod food_injection;
 mod gpio_handler;
 mod heating;
 mod iir_filter;
+
+#[cfg(target_os = "linux")]
 mod messaging;
 mod mineral_injection;
 mod monitors;
 mod proc_ext_req;
+mod publish_pid;
 mod refill;
 mod sawtooth_profile;
 mod schedule_check;
@@ -71,9 +74,11 @@ use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
+#[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
 use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
+use crate::publish_pid::PublishPid;
 use crate::refill::Refill;
 use crate::schedule_check::ScheduleCheck;
 use crate::signal_handler::handle_signals;
@@ -236,49 +241,92 @@ fn main() {
 
     // create channels for communication between threads
     // *** signal_handler => messaging ***
+    #[cfg(target_os = "linux")]
     let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (tx_signal_handler_to_messaging, _): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    
     // ****************************
 
     // *** messaging => refill ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_refill, rx_refill_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_refill_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     // ****************************
 
     // *** messaging => ventilation ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_ventilation_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     // ****************************
 
     // *** messaging => heating ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_heating, rx_heating_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_heating_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     // ****************************
 
     // *** messaging => feed ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_feed, rx_feed_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_feed_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     // ****************************
 
     // *** messaging => balling ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_balling, rx_balling_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_balling_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     // ****************************
 
     // *** messaging => monitors ***
+    #[cfg(target_os = "linux")]
     let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    #[cfg(not(target_os = "linux"))]
+    let (_, rx_monitors_from_messaging): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
@@ -620,10 +668,19 @@ fn main() {
         false => None,
     };
 
-    let mut messaging = Messaging::new(config.messaging);
+    let publish_pid = PublishPid::new(config.publish_pid);
+    
+    #[cfg(target_os = "linux")]
+    let mut messaging = Messaging::new(config.messaging);    
+    
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
+    
+    #[cfg(target_os = "linux")]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+    #[cfg(not(target_os = "linux"))]
+    let mut gpio_handler = GpioHandler::new(config.gpio_handler);
+    
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
     let mut data_logger = DataLogger::new(config.data_logger);
@@ -904,7 +961,7 @@ fn main() {
             );
 
             // remove PID from file
-            messaging.erase_pid();
+            publish_pid.erase_pid();
 
             println!("main(12): Messaging terminated.");
         });
