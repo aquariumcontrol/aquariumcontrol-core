@@ -8,10 +8,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Trait for the execution of the Balling mineral dosing.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -45,34 +46,6 @@ impl MineralInjection {
     }
 }
 
-/// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
-pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => {
-                println!("MineralInjection: Received Quit command");
-                true
-            }
-            _ => {
-                println!("MineralInjection: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!("MineralInjection: Error in trying to receive command from signal handler: {e:?}");
-                }
-            }
-            false
-        }
-    }
-}
-
 impl MineralInjectionTrait for MineralInjection {
     /// Switches on one of the peristaltic pumps for a defined period of time or until a Quit command is received from signal handler.
     /// # Arguments
@@ -92,7 +65,7 @@ impl MineralInjectionTrait for MineralInjection {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
-        let mut quit_command_received: bool = false;
+        let mut quit_command_received: bool;
         let mut dosing_counter = 0;
 
         match tx_to_controllino.send(InternalCommand::SwitchOn(mineral_pump.clone())) {
@@ -112,8 +85,9 @@ impl MineralInjectionTrait for MineralInjection {
 
         loop {
             // check if there is a quit request
-            if check_pending_external_request(rx_from_signal_handler) {
-                quit_command_received = true;
+            (quit_command_received, _, _) =
+                self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+            if quit_command_received {
                 break; // stop dosing
             }
 

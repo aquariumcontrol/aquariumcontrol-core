@@ -422,7 +422,7 @@ impl SqlInterfaceFeed {
     // * `feeder_run_time` - run time of feeder in seconds
     // * `profile_name` - name of the feed profile executed
     // * `profile_id` - ID of the feed profile executed
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn insert_feed_schedule_entry(
         &mut self,
         timestamp: NaiveDateTime,

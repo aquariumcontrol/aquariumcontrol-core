@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -19,6 +19,7 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the ventilation control.
 /// The configuration is loaded from the .toml configuration file.
@@ -44,64 +45,6 @@ pub struct VentilationConfig {
     // strategy when schedule check does not allow operation:
     // true=ventilation will be switched on; false=ventilation will be switched off
     on_when_out_of_schedule: bool,
-}
-
-/// Checks if there are new messages in the channel.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-/// * `rx_from_messaging` - receiver part of channel for communication from messaging
-fn check_pending_external_request(
-    rx_from_signal_handler: &Receiver<InternalCommand>,
-    rx_from_messaging: &Receiver<InternalCommand>,
-) -> (bool, bool, bool) {
-    let quit_command_received = match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("Heating: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    };
-
-    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Start => (true, false),
-            InternalCommand::Stop => (false, true),
-            _ => {
-                println!("Heating: ignoring inapplicable command from messaging.");
-                (false, false)
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            (false, false)
-        }
-    };
-
-    (
-        quit_command_received,
-        start_command_received,
-        stop_command_received,
-    )
 }
 
 /// Communicates to Controllino thread via channel to switch on the ventilation
@@ -189,6 +132,8 @@ fn switch_off_ventilation(
 pub struct Ventilation {
     config: VentilationConfig,
 }
+
+impl ProcessExternalRequestTrait for Ventilation {}
 
 impl Ventilation {
     /// Provides a struct of type Ventilation.
@@ -393,7 +338,7 @@ impl Ventilation {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             let (quit_command_received, start_command_received, stop_command_received) =
-                check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+                self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
             if quit_command_received {
                 break;
             }

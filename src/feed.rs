@@ -9,12 +9,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
 use crate::food_injection::FoodInjectionTrait;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 
@@ -33,66 +34,6 @@ pub struct FeedConfig {
     pub device_switch_delay_millis: u32,
 }
 
-/// Checks if there are new messages in the channel.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel    
-/// * `rx_from_messaging` - receiver part of channel    
-fn check_pending_external_request(
-    rx_from_signal_handler: &Receiver<InternalCommand>,
-    rx_from_messaging: &Receiver<InternalCommand>,
-) -> (bool, bool, bool, bool, i32) {
-    let quit_command_received = match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("Feed: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!("Feed: Error in trying to receive command from signal handler: {e:?}");
-                }
-            }
-            false
-        }
-    };
-
-    let (start_command_received, stop_command_received, execute_command_received, profile_id) =
-        match rx_from_messaging.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Start => (true, false, false, 0),
-                InternalCommand::Stop => (false, true, false, 0),
-                InternalCommand::Execute(c) => (false, false, true, c),
-                _ => {
-                    println!("Heating: ignoring inapplicable command from messaging.");
-                    (false, false, false, 0)
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                    }
-                }
-                (false, false, false, 0)
-            }
-        };
-
-    (
-        quit_command_received,
-        start_command_received,
-        stop_command_received,
-        execute_command_received,
-        profile_id,
-    )
-}
-
 /// Contains the configuration and the implementation for the feed control.
 pub struct Feed {
     /// configuration data for Feed control
@@ -100,6 +41,12 @@ pub struct Feed {
 
     /// SQL interface for the feed control
     sql_interface_feed: SqlInterfaceFeed,
+
+    /// communication from trait implementation: request to execute a certain feed profile has been received
+    pub execute_command_received: bool,
+
+    /// communication from trait implementation: id of feed profile to be executed requested externally
+    pub profile_id_requested: i32,
 }
 
 impl Feed {
@@ -111,6 +58,8 @@ impl Feed {
         Self {
             config: config,
             sql_interface_feed: sql_interface_feed,
+            execute_command_received: false,
+            profile_id_requested: -1,
         }
     }
 
@@ -256,12 +205,10 @@ impl Feed {
 
             // check and process external requests
             let (
-                quit_command_received,    // request to end the application has been received
-                start_command_received,   // request to (re-)start feed has been received
-                stop_command_received,    // request to (temporarily) stop feed has been received
-                execute_command_received, // request to execute a certain feed profile has been received
-                profile_id,               // id of feed profile to be executed
-            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+                quit_command_received,  // request to end the application has been received
+                start_command_received, // request to (re-)start feed has been received
+                stop_command_received,  // request to (temporarily) stop feed has been received
+            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
             if quit_command_received {
                 break;
             }
@@ -273,13 +220,13 @@ impl Feed {
                 println!("Feed: main loop: received Start command. Restarting feed.");
                 feed_inhibited = false;
             }
-            if execute_command_received {
+            if self.execute_command_received && self.profile_id_requested >= 0 {
                 {
                     // scope to limit lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
                     self.execute_feed(
-                        profile_id,
+                        self.profile_id_requested,
                         food_injection,
                         &tx_to_controllino,
                         &rx_from_controllino,

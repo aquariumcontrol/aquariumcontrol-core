@@ -16,6 +16,7 @@ use std::{
     time::Duration,
 };
 
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -279,38 +280,6 @@ impl TcpCommunication {
         }
     }
 
-    /// Checks if there are new messages in the channel.
-    /// If the message contains the quit command, then the function returns true, otherwise false.
-    /// # Arguments
-    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-    fn check_pending_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) -> bool {
-        match rx_from_signal_handler.try_recv() {
-            Ok(c) => {
-                match c {
-                    InternalCommand::Quit => true,
-                    _ => {
-                        println!("TcpCommunication: ignoring not applicable command from signal handler.");
-                        false
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "TcpCommunication: Error in trying to receive command from signal handler: {e:?}"
-                        );
-                    }
-                }
-                false
-            }
-        }
-    }
-
     /// Executes the main control in a loop until signal handler commands quitting.
     /// # Arguments
     /// * `rx_from_controllino_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
@@ -330,7 +299,9 @@ impl TcpCommunication {
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
-            if self.check_pending_external_request(&rx_from_signal_handler) {
+            let (quit_command_received, _, _) = self
+                .process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+            if quit_command_received {
                 break;
             }
 

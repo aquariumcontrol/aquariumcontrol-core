@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(test)]
 use chrono::LocalResult::{Ambiguous, None, Single};
 use chrono::*;
 use mysql::prelude::*;
@@ -157,34 +158,34 @@ pub mod sql_query_strings {
 
     // Deletes the content of a specific table.
     // This query is used for testing by multiple crates, therefore it resides here and not in the test module.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 
     // Provides feed event from the database - used for testing only.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
         "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
 
     // Provide Balling dosing event from the database - used for testing only.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub const SQL_QUERY_READ_BALLING_EVENT: &str =
         "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog;";
 
     // Provides refill event from the database - used for testing only.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub const SQL_QUERY_READ_REFILL_EVENT: &str =
         "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
 
     /// Inserts data of one feed schedule entry into the database.
-    #[allow(dead_code)]
+    #[cfg(test)]
+    pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
+        "select date_add(current_timestamp(), interval #offset second);";
+
+    /// Inserts data of one feed schedule entry into the database.
+    #[cfg(test)]
     pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str =
         "INSERT into feedschedule (Timestamp, ProfileId, ProfileName, IsWeekly, IsDaily) \
          values(:timestamp, :profile_id, :profile_name, :is_weekly, :is_daily)";
-
-    /// Inserts data of one feed schedule entry into the database.
-    #[allow(dead_code)]
-    pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
-        "select date_add(current_timestamp(), interval #offset second);";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -255,14 +256,15 @@ pub enum SqlInterfaceError {
     InsertFeedEventFailure(String),
     InsertRefillEventFailure(String),
     InsertBallingEventFailure(String),
-    TruncateTableFailure(String),
     FeedScheduleEntryRequestFailure(String),
     FeedScheduleEntryTimeStampConversionFailure(String),
     SqlInterfaceErrorFeedScheduleUpdateFailure(String),
     SingleBallingSetValRequestFailure(String),
     InsertDataFrameFailure(String),
-    #[allow(dead_code)]
+    #[cfg(test)]
     SingleDataFrameRequestNoSingleResponse(String),
+    #[cfg(test)]
+    TruncateTableFailure(String),
 }
 
 /// Holds the configuration and the implementation of the SQL interface.
@@ -708,7 +710,7 @@ impl SqlInterface {
     /// # Arguments
     /// * `conn` - connection to SQL database
     /// * `offset_seconds` - offset into the future in seconds for the timestamp to be calculated
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_current_timestamp_offset_seconds(
         conn: &mut PooledConn,
         offset_seconds: i32,
@@ -821,7 +823,7 @@ impl SqlInterface {
 
     // Empties the table provided as parameter.
     // This function is used for testing purposes only across multiple crates.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
         sql_table_name: String,
@@ -844,7 +846,7 @@ impl SqlInterface {
 
     /// Calculates a timestamp of type NaiveDateTime which lies in a defined period into the past.
     /// This function is used for testing purposes only across multiple crates.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_naive_timestamp_from_past(
         hours_in_past: i64,
         seconds_in_past: i64,
@@ -857,7 +859,7 @@ impl SqlInterface {
 
     /// Calculates the time difference between a given timestamp of type NaiveDateTime
     /// to the current local time in seconds.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
     ) -> Option<i64> {

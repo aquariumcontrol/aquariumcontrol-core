@@ -12,9 +12,10 @@ use serde_derive::Deserialize;
 use std::fs;
 use std::io::ErrorKind;
 use std::process;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
 
 /// Contains constants of all domains addressed in IPC messages
@@ -89,33 +90,6 @@ pub struct MessagingConfig {
     timeout_millis: u64,
 }
 
-/// Checks if there are new messages in the channel.
-/// if the message contains the Terminate command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Terminate => true,
-            _ => {
-                println!("Messaging: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Messaging: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    }
-}
-
 pub struct Messaging {
     config: MessagingConfig,
 
@@ -182,7 +156,7 @@ impl Messaging {
 
     #[cfg(target_os = "linux")]
     pub fn execute(
-        &self,
+        &mut self,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_refill: Sender<InternalCommand>,
         tx_to_ventilation: Sender<InternalCommand>,
@@ -325,7 +299,9 @@ impl Messaging {
                     }
                 }
             }
-            if check_pending_external_request(&rx_from_signal_handler) {
+            let (quit_command_received, _, _) =
+                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+            if quit_command_received {
                 break;
             }
         }

@@ -11,6 +11,7 @@ use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 #[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
@@ -192,39 +193,6 @@ impl GpioHandler {
         panic!("Usage of hardware not supported on this platform.");
     }
 
-    /// Checks if there are new messages in the channel.
-    /// If the message contains the quit command, then the function returns true, otherwise false.
-    /// # Arguments
-    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-    fn check_pending_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) -> bool {
-        match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Quit => {
-                    println!("GpioHandler: Received Quit command.");
-                    true
-                }
-                _ => {
-                    println!("GpioHandler: ignoring not applicable command from signal handler.");
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "GpioHandler: Error in trying to receive command from signal handler: {e:?}"
-                        );
-                    }
-                }
-                false
-            }
-        }
-    }
-
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// This function receives request from other threads and either actuates on real HW
     /// or communicates with simulator.
@@ -267,7 +235,9 @@ impl GpioHandler {
         }
 
         loop {
-            if self.check_pending_external_request(&rx_from_signal_handler) {
+            let (quit_command_received, _, _) =
+                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+            if quit_command_received {
                 break;
             }
 

@@ -18,6 +18,7 @@ use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::iir_filter::IIRFilter;
 use crate::iir_filter::IIRFilterConfig;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 
@@ -37,33 +38,6 @@ pub struct DataLoggerConfig {
 
     /// filter coefficient for the filtered version of the conductivity signal
     filter_coefficient_conductivity: IIRFilterConfig<()>,
-}
-
-/// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel    
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("DataLogger: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "DataLogger: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    }
 }
 
 /// Contains the configuration and the implementation for regular data logging to SQL database.
@@ -151,8 +125,9 @@ impl DataLogger {
             while i < self.config.logging_interval * 1000 {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_millisec);
-                if check_pending_external_request(&rx_from_signal_handler) {
-                    quit_command_received = true;
+                (quit_command_received, _, _) =
+                    self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                if quit_command_received {
                     break;
                 }
             }

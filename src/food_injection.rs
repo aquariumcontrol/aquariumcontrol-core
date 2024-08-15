@@ -8,12 +8,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::feed::FeedConfig;
 use crate::feedpattern::Feedpattern;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Trait for the execution of the feed pattern.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -234,34 +235,6 @@ impl FoodInjection {
     }
 }
 
-/// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
-pub fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => {
-                println!("FeedInjection: Received Quit command");
-                true
-            }
-            _ => {
-                println!("FeedInjection: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!("FeedInjection: Error in trying to receive command from signal handler: {e:?}");
-                }
-            }
-            false
-        }
-    }
-}
-
 impl FoodInjectionTrait for FoodInjection {
     fn inject_food(
         &mut self,
@@ -279,11 +252,13 @@ impl FoodInjectionTrait for FoodInjection {
         let mut target_aux_pump1_state: ActuatorState;
         let mut target_aux_pump2_state: ActuatorState;
         let mut sleep_counter_millis: i16;
-        let mut quit_command_received: bool = true;
+        let mut quit_command_received: bool;
 
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
-            if check_pending_external_request(rx_from_signal_handler) {
+            (quit_command_received, _, _) =
+                self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+            if quit_command_received {
                 break; // exit outer loop
             }
 
@@ -324,7 +299,8 @@ impl FoodInjectionTrait for FoodInjection {
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.pause_duration {
-                quit_command_received = check_pending_external_request(rx_from_signal_handler);
+                (quit_command_received, _, _) =
+                    self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
                 if quit_command_received {
                     break; // exit inner loop
                 }
@@ -372,7 +348,8 @@ impl FoodInjectionTrait for FoodInjection {
             // wait for determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.feed_duration {
-                quit_command_received = check_pending_external_request(rx_from_signal_handler);
+                (quit_command_received, _, _) =
+                    self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
                 if quit_command_received {
                     break; // exit inner loop
                 }

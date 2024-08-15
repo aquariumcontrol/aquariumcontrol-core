@@ -34,6 +34,7 @@ mod iir_filter;
 mod messaging;
 mod mineral_injection;
 mod monitors;
+mod proc_ext_req;
 mod refill;
 mod sawtooth_profile;
 mod schedule_check;
@@ -619,7 +620,7 @@ fn main() {
         false => None,
     };
 
-    let messaging = Messaging::new(config.messaging);
+    let mut messaging = Messaging::new(config.messaging);
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);

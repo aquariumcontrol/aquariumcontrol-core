@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,6 +17,7 @@ use crate::channel_content::ActuatorState;
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
@@ -101,64 +102,6 @@ pub struct HeatingConfig {
     // strategy when schedule check does not allow operation:
     // true=heating will be switched on; false=heating will be switched off
     on_when_out_of_schedule: bool,
-}
-
-/// Checks if there are new messages in the channel.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-/// * `rx_from_messaging` - receiver part of channel for communication from messaging
-fn check_pending_external_request(
-    rx_from_signal_handler: &Receiver<InternalCommand>,
-    rx_from_messaging: &Receiver<InternalCommand>,
-) -> (bool, bool, bool) {
-    let quit_command_received = match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("Heating: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    };
-
-    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Start => (true, false),
-            InternalCommand::Stop => (false, true),
-            _ => {
-                println!("Heating: ignoring inapplicable command from messaging.");
-                (false, false)
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            (false, false)
-        }
-    };
-
-    (
-        quit_command_received,
-        start_command_received,
-        stop_command_received,
-    )
 }
 
 /// Communicates to Controllino thread via channel to switch on the heater.
@@ -250,6 +193,8 @@ pub struct Heating {
     /// SQL interface for heating control
     sql_interface_heating: SqlInterfaceHeating,
 }
+
+impl ProcessExternalRequestTrait for Heating {}
 
 impl Heating {
     /// Provides a struct of type Heating.
@@ -364,7 +309,7 @@ impl Heating {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start heating has been received
                 stop_command_received,  // request to (temporarily) stop heating has been received
-            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
             if quit_command_received {
                 break;
             }

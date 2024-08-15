@@ -12,9 +12,8 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
-//use crate::channel_content::ActuatorState;
-//use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 
 /// Holds the configuration data for the schedule checker.
@@ -29,33 +28,6 @@ pub struct ScheduleCheckConfig {
     /// - true allows actuation
     /// - false inhibits actuation
     strategy_if_schedule_not_found: bool,
-}
-
-/// Checks if there are new messages in the channel from signal handler.
-/// If the message contains the quit command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-fn check_pending_external_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
-    match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("ScheduleCheck: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "ScheduleCheck: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    }
 }
 
 /// Contains the configuration and the implementation for the schedule checker.
@@ -164,7 +136,9 @@ impl ScheduleCheck {
                 _ = self.sql_interface_schedule.read_schedule();
             }
 
-            if check_pending_external_request(&rx_from_signal_handler) {
+            let (quit_command_received, _, _) =
+                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+            if quit_command_received {
                 break;
             }
 

@@ -10,13 +10,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::Local;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::InternalCommand;
 use crate::mineral_injection::MineralInjectionTrait;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_balling::BallingSetVal;
 use crate::sql_interface_balling::SqlInterfaceBalling;
 
@@ -47,65 +48,6 @@ pub struct BallingConfig {
     pub pump_switch_delay_millis: u32,
 }
 
-/// Checks if there are new messages in the channel.
-/// if the message contains the quit command, then the function returns true, otherwise false.
-/// # Arguments
-/// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
-/// * `rx_from_messaging` - receiver part of channel for communication from messaging
-fn check_pending_external_request(
-    rx_from_signal_handler: &Receiver<InternalCommand>,
-    rx_from_messaging: &Receiver<InternalCommand>,
-) -> (bool, bool, bool) {
-    let quit_command_received = match rx_from_signal_handler.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Quit => true,
-            _ => {
-                println!("Balling: ignoring inapplicable command from signal handler.");
-                false
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Balling: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            false
-        }
-    };
-
-    let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
-        Ok(c) => match c {
-            InternalCommand::Start => (true, false),
-            InternalCommand::Stop => (false, true),
-            _ => {
-                println!("Balling: ignoring inapplicable command from messaging.");
-                (false, false)
-            }
-        },
-        Err(e) => {
-            match e {
-                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                TryRecvError::Disconnected => {
-                    println!(
-                        "Balling: Error in trying to receive command from signal handler: {e:?}"
-                    );
-                }
-            }
-            (false, false)
-        }
-    };
-
-    (
-        quit_command_received,
-        start_command_received,
-        stop_command_received,
-    )
-}
-
 /// Contains the configuration and the implementation for the Balling dosing control.
 pub struct Balling {
     /// configuration data for Balling dosing control
@@ -126,6 +68,8 @@ pub struct Balling {
     /// Count down in seconds until next Balling dosing for pump 4
     pub countdown_dosing_pump4: u32,
 }
+
+impl ProcessExternalRequestTrait for Balling {}
 
 impl Balling {
     /// Provides a struct of type Balling.
@@ -476,7 +420,7 @@ impl Balling {
                 quit_command_received,
                 stop_command_received,
                 start_command_received,
-            ) = check_pending_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
             if quit_command_received {
                 println!("Balling: main loop: received Quit command. Exiting...");
                 break;
