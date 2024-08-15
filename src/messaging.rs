@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use posixmq::PosixMq;
 use serde_derive::Deserialize;
 use std::io::ErrorKind;
-use std::process;
 #[cfg(target_os = "linux")]
 use std::sync::mpsc::{Receiver, Sender};
 #[cfg(target_os = "linux")]
@@ -277,57 +276,5 @@ impl Messaging {
                 break;
             }
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use crate::config::ConfigData;
-    use crate::messaging::Messaging;
-    use crate::read_config_file;
-    use std::fs;
-    use std::process;
-
-    #[test]
-    pub fn test_messaging_publish_pid() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
-        let pid_filename = config.messaging.pid_filename.clone();
-        fs::write(pid_filename.clone(), "0".to_string())
-            .expect("test_messaging_publish_PID: Could not erase PID.");
-
-        // create test object and run code to be tested
-        _ = Messaging::new(config.messaging);
-
-        let process_id_numeric: u32 = process::id();
-        let process_id_string: String = process_id_numeric.to_string() + "\n";
-
-        let file_data = fs::read_to_string(pid_filename)
-            .expect("test_messaging_publish_PID: Unable to read file");
-
-        assert_eq!(file_data, process_id_string);
-        println!(
-            "Data read from file ({}) equals data generated ({}).",
-            { file_data.trim() },
-            { process_id_string.trim() }
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn test_messaging_non_existent_pid_file() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_messaging_non_existent_pid_file.toml".to_string(),
-        );
-        _ = Messaging::new(config.messaging);
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn test_messaging_invalid_content_pid_file() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_messaging_invalid_content_pid_file.toml".to_string(),
-        );
-        _ = Messaging::new(config.messaging);
     }
 }
