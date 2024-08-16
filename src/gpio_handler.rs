@@ -113,7 +113,7 @@ impl GpioHandler {
             i2c_interface: I2cInterface::new(i2c_config),
         }
     }
-    
+
     #[cfg(not(target_os = "linux"))]
     /// This function returns a struct of type GpioHandler for development purposes.
     /// # Arguments
@@ -123,9 +123,7 @@ impl GpioHandler {
             panic!("Usage of hardware not supported on this platform.");
         }
 
-        GpioHandler {
-            config: config,
-        }
+        GpioHandler { config: config }
     }
 
     /// Requests a response from the simulator via TCP communication by sending

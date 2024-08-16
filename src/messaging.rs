@@ -75,6 +75,35 @@ impl Message {
             command_param2: 0,
         }
     }
+    
+    #[test]
+    /// create message represented as raw byte array for testing
+    pub fn create_message_buf() -> &mut[u8] {
+        let mut buf: [u8, 20] = [0, 20];
+        let domain_buf = self.domain.to_le_bytes();
+        let command_buf = self.domain.to_le_bytes();
+        let command_param1 = self.domain.to_le_bytes();
+        let command_param2 = self.domain.to_let_bytes();
+        
+        buf[4] = domain_buf[0];
+        buf[5] = domain_buf[0];
+        buf[6] = domain_buf[0];
+        buf[7] = domain_buf[0];
+        buf[8] = command_buf[0];
+        buf[9] = command_buf[0];
+        buf[10] = command_buf[0];
+        buf[11] = command_buf[0];
+        buf[12] = command_param1[0];
+        buf[13] = command_param1[0];
+        buf[14] = command_param1[0];
+        buf[15] = command_param1[0];
+        buf[16] = command_param2[0];
+        buf[17] = command_param2[0];
+        buf[18] = command_param2[0];
+        buf[19] = command_param2[0];
+        
+        buf
+    }
 }
 
 /// Holds the configuration data for the messaging.
@@ -277,4 +306,220 @@ impl Messaging {
             }
         }
     }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::ventilation::tests::mock_schedule_check;
+    use crate::ventilation::tests::run_main_cycle_with_stimuli;
+    use crate::ventilation::tests::test_ventilation_receive_actuation_command_send_confirmation;
+    use crate::ventilation::tests::test_ventilation_receive_information_for_datalogger;
+
+    #[cfg(target_os = "linux")]
+    // Test case runs ventilation control and triggers inhibition by sending stop message.
+    // After verification that ventilation is stopped,
+    // test case sends start message and verifies if ventilation control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_ventilation() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.mq_filename).unwrap();
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::VENTILATION;
+        msg_start.command = messaging_commands::START;
+        
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::VENTILATION;
+        msg_stop.command = messaging_commands::STOP;
+        
+        let mut ventilation = Ventilation::new(config.ventilation)
+
+        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_signal_handler_to_messaging, rx_messaging_from_signal_handler) =
+            mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, rx_monitors_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for mock schedule check: runs until it receives Quit command
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
+            scope.spawn(move || {
+                
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    26.5,
+                );
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    30.0,
+                );
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    0.0,
+                );
+                
+                // sending IPC message
+                mq_stimuli.send(0 msg_stop.create_message_buf());
+                
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino, DataLogger
+            scope.spawn(move || {
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                test_ventilation_receive_information_for_datalogger(
+                    &rx_datalogger_from_ventilation,
+                );
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object #1 - messaging
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            });
+
+            // thread for test object #2
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_gpio,
+                    rx_ventilation_from_gpio,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
+                );
+
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+
+                let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
+
+                // check if ventilation is only actuated once (when quitting)
+                assert_eq!(actuation_count, 3);
+            });
+            println!("* [Messaging] checking if messaging can stop and start ventilation");
+        });
+    }
+
+    #[cfg(target_os = "linux")]
+    // Test case runs Balling dosing control and triggers inhibition by sending stop message.
+    // After verification that Balling dosing is stopped,
+    // test case sends start message and verifies if Balling dosing control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_balling_dosing() {}
+
+    #[cfg(target_os = "linux")]
+    // Test case runs heating control and triggers inhibition by sending stop message.
+    // After verification that heating is stopped,
+    // test case sends start message and verifies if heating control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_heating_dosing() {}
+
+    #[cfg(target_os = "linux")]
+    // Test case runs feed control and triggers inhibition by sending stop message.
+    // After verification that feed is stopped,
+    // test case sends start message and verifies if feed control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_heating_dosing() {}
+
+    #[cfg(target_os = "linux")]
+    // Test case runs feed control and triggers execution of a specific feed profile
+    // by sending "execute" message.
+    #[test]
+    pub fn test_messaging_executes_feed_profile() {}
+
+    #[cfg(target_os = "linux")]
+    // Test case runs refill control and triggers inhibition by sending stop message.
+    // After verification that refill is stopped,
+    // test case sends start message and verifies if feed control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_refill() {}
+
+    #[cfg(target_os = "linux")]
+    // Test case runs refill control and triggers reset of error by sending "ResetAllErrors" message.
+    #[test]
+    pub fn test_messaging_resets_refill_errors() {}
 }

@@ -16,9 +16,9 @@ use std::{
     time::Duration,
 };
 
-use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 /// Contains constants representing commands received from control application.
@@ -299,8 +299,8 @@ impl TcpCommunication {
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
-            let (quit_command_received, _, _) = self
-                .process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+            let (quit_command_received, _, _) =
+                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
             if quit_command_received {
                 break;
             }

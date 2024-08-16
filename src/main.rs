@@ -251,7 +251,7 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    
+
     // ****************************
 
     // *** messaging => refill ***
@@ -261,10 +261,8 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     #[cfg(not(target_os = "linux"))]
-    let (_, rx_refill_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
+    let (_, rx_refill_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
     // ****************************
 
     // *** messaging => ventilation ***
@@ -287,10 +285,8 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     #[cfg(not(target_os = "linux"))]
-    let (_, rx_heating_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
+    let (_, rx_heating_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
     // ****************************
 
     // *** messaging => feed ***
@@ -300,10 +296,8 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     #[cfg(not(target_os = "linux"))]
-    let (_, rx_feed_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
+    let (_, rx_feed_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
     // ****************************
 
     // *** messaging => balling ***
@@ -313,10 +307,8 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     #[cfg(not(target_os = "linux"))]
-    let (_, rx_balling_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
+    let (_, rx_balling_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
     // ****************************
 
     // *** messaging => monitors ***
@@ -326,10 +318,8 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     #[cfg(not(target_os = "linux"))]
-    let (_, rx_monitors_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
+    let (_, rx_monitors_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
     // ****************************
 
     // *** data_logger <=> gpio ***
@@ -669,18 +659,18 @@ fn main() {
     };
 
     let publish_pid = PublishPid::new(config.publish_pid);
-    
+
     #[cfg(target_os = "linux")]
-    let mut messaging = Messaging::new(config.messaging);    
-    
+    let mut messaging = Messaging::new(config.messaging);
+
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
-    
+
     #[cfg(target_os = "linux")]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     #[cfg(not(target_os = "linux"))]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler);
-    
+
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
     let mut data_logger = DataLogger::new(config.data_logger);

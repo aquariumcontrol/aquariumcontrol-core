@@ -57,9 +57,7 @@ impl PublishPid {
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("PublishPid: Could not publish PID.");
 
-        PublishPid {
-            config: config,
-        }
+        PublishPid { config: config }
     }
 
     /// Erases PID from previously generated file
@@ -91,8 +89,8 @@ pub mod tests {
         let process_id_numeric: u32 = process::id();
         let process_id_string: String = process_id_numeric.to_string() + "\n";
 
-        let file_data = fs::read_to_string(pid_filename)
-            .expect("test_publish_PID: Unable to read file");
+        let file_data =
+            fs::read_to_string(pid_filename).expect("test_publish_PID: Unable to read file");
 
         assert_eq!(file_data, process_id_string);
         println!(

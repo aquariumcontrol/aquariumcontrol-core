@@ -17,9 +17,9 @@ use crate::channel_content::ActuatorState;
 use crate::channel_content::AquariumDevice;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
-use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the ventilation control.
 /// The configuration is loaded from the .toml configuration file.
@@ -429,6 +429,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
         Ventilation::new(config.ventilation)
     }
+
     // send via channel a value to the test object to indicate if actuation is permitted.
     fn mock_schedule_check(
         tx_schedule_check_to_ventilation: &Sender<bool>,

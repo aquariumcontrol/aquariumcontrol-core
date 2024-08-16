@@ -74,10 +74,9 @@ pub struct ConfigData {
     #[cfg(target_os = "linux")]
     /// configuration of messaging (IPC)
     pub messaging: MessagingConfig,
-    
+
     /// configuration of PID publication
     pub publish_pid: PublishPidConfig,
-    
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.

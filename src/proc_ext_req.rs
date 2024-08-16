@@ -22,8 +22,8 @@ use crate::messaging::Messaging;
 use crate::mineral_injection::MineralInjection;
 use crate::refill::Refill;
 use crate::schedule_check::ScheduleCheck;
-use crate::water_injection::WaterInjection;
 use crate::tcp_communication::TcpCommunication;
+use crate::water_injection::WaterInjection;
 
 pub trait ProcessExternalRequestTrait {
     /// Checks if there are new messages in the channels.
