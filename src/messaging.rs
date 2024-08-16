@@ -75,33 +75,34 @@ impl Message {
             command_param2: 0,
         }
     }
-    
-    #[test]
+
+    #[cfg(test)]
     /// create message represented as raw byte array for testing
-    pub fn create_message_buf() -> &mut[u8] {
-        let mut buf: [u8, 20] = [0, 20];
+    pub fn create_message_buf(&self) -> Vec<u8> {
+        let mut buf = vec![0; 20];
         let domain_buf = self.domain.to_le_bytes();
-        let command_buf = self.domain.to_le_bytes();
-        let command_param1 = self.domain.to_le_bytes();
-        let command_param2 = self.domain.to_let_bytes();
-        
+        let command_buf = self.command.to_le_bytes();
+        let command_param1_buf = self.command_param1.to_le_bytes();
+        let command_param2_buf = self.command_param2.to_le_bytes();
+
+        // transfer partial arrays to array for complete message
         buf[4] = domain_buf[0];
-        buf[5] = domain_buf[0];
-        buf[6] = domain_buf[0];
-        buf[7] = domain_buf[0];
+        buf[5] = domain_buf[1];
+        buf[6] = domain_buf[2];
+        buf[7] = domain_buf[3];
         buf[8] = command_buf[0];
-        buf[9] = command_buf[0];
-        buf[10] = command_buf[0];
-        buf[11] = command_buf[0];
-        buf[12] = command_param1[0];
-        buf[13] = command_param1[0];
-        buf[14] = command_param1[0];
-        buf[15] = command_param1[0];
-        buf[16] = command_param2[0];
-        buf[17] = command_param2[0];
-        buf[18] = command_param2[0];
-        buf[19] = command_param2[0];
-        
+        buf[9] = command_buf[1];
+        buf[10] = command_buf[2];
+        buf[11] = command_buf[3];
+        buf[12] = command_param1_buf[0];
+        buf[13] = command_param1_buf[1];
+        buf[14] = command_param1_buf[2];
+        buf[15] = command_param1_buf[3];
+        buf[16] = command_param2_buf[0];
+        buf[17] = command_param2_buf[1];
+        buf[18] = command_param2_buf[2];
+        buf[19] = command_param2_buf[3];
+
         buf
     }
 }
@@ -310,10 +311,27 @@ impl Messaging {
 
 #[cfg(test)]
 pub mod tests {
+    use posixmq::PosixMq;
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::Duration;
+
+    use crate::channel_content::AquariumDevice;
+    use crate::channel_content::InternalCommand;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::messaging::messaging_commands;
+    use crate::messaging::messaging_domains;
+    use crate::messaging::Message;
+    use crate::messaging::Messaging;
     use crate::ventilation::tests::mock_schedule_check;
     use crate::ventilation::tests::run_main_cycle_with_stimuli;
     use crate::ventilation::tests::test_ventilation_receive_actuation_command_send_confirmation;
     use crate::ventilation::tests::test_ventilation_receive_information_for_datalogger;
+    use crate::ventilation::Ventilation;
 
     #[cfg(target_os = "linux")]
     // Test case runs ventilation control and triggers inhibition by sending stop message.
@@ -327,17 +345,29 @@ pub mod tests {
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
-        let mq_stimuli = match PosixMq::open(&config.mq_filename).unwrap();
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                println!("Messaging: Could open message queue.");
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "Messaging: failure to open message queue for test using {}, error={e:?}",
+                    &config.messaging.mq_filename
+                );
+            }
+        };
 
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::VENTILATION;
         msg_start.command = messaging_commands::START;
-        
+
         let mut msg_stop = Message::new();
         msg_stop.domain = messaging_domains::VENTILATION;
         msg_stop.command = messaging_commands::STOP;
-        
-        let mut ventilation = Ventilation::new(config.ventilation)
+
+        let mut ventilation = Ventilation::new(config.ventilation);
+        let mut messaging = Messaging::new(config.messaging);
 
         let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
         let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
@@ -352,15 +382,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
         let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_signal_handler_to_messaging, rx_messaging_from_signal_handler) =
-            mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_ventilation_to_schedule_check_for_test_case_finish =
+            tx_ventilation_to_schedule_check.clone();
 
         scope(|scope| {
             // thread for mock schedule check: runs until it receives Quit command
@@ -379,65 +410,78 @@ pub mod tests {
 
             // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
             scope.spawn(move || {
-                
-                run_main_cycle_with_stimuli(
-                    4,
-                    &rx_gpio_from_ventilation,
-                    &tx_gpio_to_ventilation,
-                    26.5,
-                );
                 run_main_cycle_with_stimuli(
                     4,
                     &rx_gpio_from_ventilation,
                     &tx_gpio_to_ventilation,
                     30.0,
                 );
+
+                // sending IPC message requesting stop of ventilation control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
                 run_main_cycle_with_stimuli(
                     4,
                     &rx_gpio_from_ventilation,
                     &tx_gpio_to_ventilation,
-                    0.0,
+                    30.0,
                 );
-                
-                // sending IPC message
-                mq_stimuli.send(0 msg_stop.create_message_buf());
-                
+
+                // sending IPC message requesting stop of ventilation control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                run_main_cycle_with_stimuli(
+                    4,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    30.0,
+                );
+
+                // requesting ventilation control to quit
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 rx_signal_handler_from_ventilation.recv().unwrap();
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
             });
 
             // thread for mock Controllino, DataLogger
             scope.spawn(move || {
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                let command1 = test_ventilation_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                assert_eq!(command1, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                let state1 = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                assert_eq!(state1, true);
+                
+                let command2 = test_ventilation_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                assert_eq!(command2, Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation)));                
+                let state2 = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                assert_eq!(state2, false);
+                
+                let command3 = test_ventilation_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                assert_eq!(command3, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                let state3 = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
+                assert_eq!(state3, true);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
             // thread for test object #1 - messaging
             scope.spawn(move || {
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
-
                 messaging.execute(
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
@@ -451,9 +495,6 @@ pub mod tests {
 
             // thread for test object #2
             scope.spawn(move || {
-                let tx_ventilation_to_schedule_check_for_test_case_finish =
-                    tx_ventilation_to_schedule_check.clone();
-
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     tx_ventilation_to_gpio,
@@ -494,7 +535,7 @@ pub mod tests {
     // test case sends start message and verifies if heating control
     // resumes operation.
     #[test]
-    pub fn test_messaging_stops_starts_heating_dosing() {}
+    pub fn test_messaging_stops_starts_heating() {}
 
     #[cfg(target_os = "linux")]
     // Test case runs feed control and triggers inhibition by sending stop message.
@@ -502,7 +543,7 @@ pub mod tests {
     // test case sends start message and verifies if feed control
     // resumes operation.
     #[test]
-    pub fn test_messaging_stops_starts_heating_dosing() {}
+    pub fn test_messaging_stops_starts_feed() {}
 
     #[cfg(target_os = "linux")]
     // Test case runs feed control and triggers execution of a specific feed profile

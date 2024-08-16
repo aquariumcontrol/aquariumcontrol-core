@@ -101,7 +101,11 @@ pub struct HeatingConfig {
 
     // strategy when schedule check does not allow operation:
     // true=heating will be switched on; false=heating will be switched off
-    on_when_out_of_schedule: bool,
+    switch_on_when_out_of_schedule: bool,
+
+    // strategy when external request for stopping heating control has been received:
+    // true=heating will be switched on; false=heating will be switched off
+    switch_on_when_external_stop: bool,
 }
 
 /// Communicates to Controllino thread via channel to switch on the heater.
@@ -534,30 +538,60 @@ impl Heating {
                             }
                         }
                     } else {
-                        // schedule check said that we not allowed actuate
-                        match self.config.on_when_out_of_schedule {
-                            true => {
-                                // switch on heater if not already on
-                                if heater_state != ActuatorState::On {
-                                    switch_on_heater(
-                                        &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &tx_to_datalogger,
-                                    );
-                                    heater_state = ActuatorState::On;
+                        if heating_inhibited {
+                            // external request to stop heating control has been received
+                            match self.config.switch_on_when_external_stop {
+                                true => {
+                                    // switch on heater if not already on
+                                    if heater_state != ActuatorState::On {
+                                        switch_on_heater(
+                                            &mutex_device_scheduler_heating,
+                                            &tx_to_controllino,
+                                            &rx_from_controllino,
+                                            &tx_to_datalogger,
+                                        );
+                                        heater_state = ActuatorState::On;
+                                    }
+                                }
+                                false => {
+                                    // switch off heater if not already off
+                                    if heater_state != ActuatorState::Off {
+                                        switch_off_heater(
+                                            &mutex_device_scheduler_heating,
+                                            &tx_to_controllino,
+                                            &rx_from_controllino,
+                                            &tx_to_datalogger,
+                                        );
+                                        heater_state = ActuatorState::Off;
+                                    }
                                 }
                             }
-                            false => {
-                                // switch off heater if not already off
-                                if heater_state != ActuatorState::Off {
-                                    switch_off_heater(
-                                        &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &tx_to_datalogger,
-                                    );
-                                    heater_state = ActuatorState::Off;
+                        } else {
+                            // schedule check said that we not allowed actuate
+                            match self.config.switch_on_when_out_of_schedule {
+                                true => {
+                                    // switch on heater if not already on
+                                    if heater_state != ActuatorState::On {
+                                        switch_on_heater(
+                                            &mutex_device_scheduler_heating,
+                                            &tx_to_controllino,
+                                            &rx_from_controllino,
+                                            &tx_to_datalogger,
+                                        );
+                                        heater_state = ActuatorState::On;
+                                    }
+                                }
+                                false => {
+                                    // switch off heater if not already off
+                                    if heater_state != ActuatorState::Off {
+                                        switch_off_heater(
+                                            &mutex_device_scheduler_heating,
+                                            &tx_to_controllino,
+                                            &rx_from_controllino,
+                                            &tx_to_datalogger,
+                                        );
+                                        heater_state = ActuatorState::Off;
+                                    }
                                 }
                             }
                         }

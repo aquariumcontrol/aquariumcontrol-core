@@ -37,14 +37,18 @@ pub struct VentilationConfig {
 
     /// flag to determine the behavior of the control when the application is terminating
     /// If this flag is true, the application will switch on the ventilation when exiting.    
-    switch_on_ventilation_when_terminating: bool,
+    switch_on_when_terminating: bool,
 
     /// configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
 
     // strategy when schedule check does not allow operation:
     // true=ventilation will be switched on; false=ventilation will be switched off
-    on_when_out_of_schedule: bool,
+    switch_on_when_out_of_schedule: bool,
+
+    // strategy when external request for stopping ventilation control has been received:
+    // true=ventilation will be switched on; false=ventilation will be switched off
+    switch_on_when_external_stop: bool,
 }
 
 /// Communicates to Controllino thread via channel to switch on the ventilation
@@ -246,6 +250,7 @@ impl Ventilation {
 
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
+                    println!("Ventilation: control is active");
                     if (measured_temperature >= self.config.switch_off_temperature)
                         && (measured_temperature <= self.config.switch_on_temperature)
                     {
@@ -264,7 +269,7 @@ impl Ventilation {
                                 ventilation_state = ActuatorState::On;
                             }
                         } else {
-                            // switch off ventilation if no already off
+                            // switch off ventilation if not already off
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
@@ -277,7 +282,8 @@ impl Ventilation {
                         }
                     } else {
                         if measured_temperature > self.config.switch_on_temperature {
-                            // switch on ventilation if no already on
+                            println!("Ventilation: Measured temperature is high (greater than upper bound of control window).");
+                            // switch on ventilation if not already on
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
@@ -289,6 +295,7 @@ impl Ventilation {
                             }
                         }
                         if measured_temperature < self.config.switch_off_temperature {
+                            println!("Ventilation: Measured temperature is low (smaller than lower bound of control window).");
                             // switch off ventilation if not already off
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
@@ -302,30 +309,62 @@ impl Ventilation {
                         }
                     }
                 } else {
-                    // schedule check or external request said that we not allowed actuate
-                    match self.config.on_when_out_of_schedule {
-                        true => {
-                            // switch on heater if not already on
-                            if ventilation_state != ActuatorState::On {
-                                switch_on_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                ventilation_state = ActuatorState::On;
+                    if ventilation_inhibited {
+                        println!("Ventilation: Control is inhibited by external request.");
+                        // external request for stopping ventilation control has been received
+                        match self.config.switch_on_when_external_stop {
+                            true => {
+                                // switch on heater if not already on
+                                if ventilation_state != ActuatorState::On {
+                                    switch_on_ventilation(
+                                        &mutex_device_scheduler_ventilation,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    ventilation_state = ActuatorState::On;
+                                }
+                            }
+                            false => {
+                                // switch off heater if not already off
+                                if ventilation_state != ActuatorState::Off {
+                                    switch_off_ventilation(
+                                        &mutex_device_scheduler_ventilation,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    ventilation_state = ActuatorState::Off;
+                                }
                             }
                         }
-                        false => {
-                            // switch off heater if not already off
-                            if ventilation_state != ActuatorState::Off {
-                                switch_off_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &tx_to_datalogger,
-                                );
-                                ventilation_state = ActuatorState::Off;
+                    } else {
+                        println!("Ventilation: Control is inhibited by schedule check.");
+                        // schedule check requires stop of ventilation control
+                        match self.config.switch_on_when_out_of_schedule {
+                            true => {
+                                // switch on heater if not already on
+                                if ventilation_state != ActuatorState::On {
+                                    switch_on_ventilation(
+                                        &mutex_device_scheduler_ventilation,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    ventilation_state = ActuatorState::On;
+                                }
+                            }
+                            false => {
+                                // switch off heater if not already off
+                                if ventilation_state != ActuatorState::Off {
+                                    switch_off_ventilation(
+                                        &mutex_device_scheduler_ventilation,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &tx_to_datalogger,
+                                    );
+                                    ventilation_state = ActuatorState::Off;
+                                }
                             }
                         }
                     }
@@ -352,7 +391,7 @@ impl Ventilation {
             }
         }
 
-        if self.config.switch_on_ventilation_when_terminating {
+        if self.config.switch_on_when_terminating {
             // switch on ventilation if not already on
             if ventilation_state != ActuatorState::On {
                 switch_on_ventilation(
@@ -431,7 +470,7 @@ pub mod tests {
     }
 
     // send via channel a value to the test object to indicate if actuation is permitted.
-    fn mock_schedule_check(
+    pub fn mock_schedule_check(
         tx_schedule_check_to_ventilation: &Sender<bool>,
         rx_schedule_check_from_ventilation: &Receiver<InternalCommand>,
         value: bool,
@@ -464,7 +503,7 @@ pub mod tests {
         false
     }
 
-    fn run_main_cycle_with_stimuli(
+    pub fn run_main_cycle_with_stimuli(
         iterations: u32,
         rx_gpio_from_ventilation: &Receiver<InternalCommand>,
         tx_gpio_to_ventilation: &Sender<f32>,
@@ -480,19 +519,19 @@ pub mod tests {
         }
     }
 
-    fn test_ventilation_receive_information_for_datalogger(
+    pub fn test_ventilation_receive_information_for_datalogger(
         rx_datalogger_from_ventilation: &Receiver<bool>,
-    ) {
+    ) -> bool {
         // receive information for data logger
         match rx_datalogger_from_ventilation.recv() {
-            Ok(_) => {}
+            Ok(c) => {c}
             Err(e) => {
                 panic!("Ventilation: error when receiving information for data logger: {e:?}");
             }
         }
     }
 
-    fn test_ventilation_receive_actuation_command_send_confirmation(
+    pub fn test_ventilation_receive_actuation_command_send_confirmation(
         rx_controllino_from_ventilation: &Receiver<InternalCommand>,
         tx_controllino_to_ventilation: &Sender<bool>,
     ) -> Option<InternalCommand> {
@@ -612,21 +651,21 @@ pub mod tests {
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                _ = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
                 _ = test_ventilation_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                _ = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
                 _ = test_ventilation_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                test_ventilation_receive_information_for_datalogger(
+                _ = test_ventilation_receive_information_for_datalogger(
                     &rx_datalogger_from_ventilation,
                 );
             });
