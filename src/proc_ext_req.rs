@@ -25,6 +25,11 @@ use crate::schedule_check::ScheduleCheck;
 use crate::tcp_communication::TcpCommunication;
 use crate::water_injection::WaterInjection;
 
+/// The trait implements processing of repeated patterns of channel communication from signal handler and from messaging.
+/// Default implementation is used by Balling dosing control, heating control, ventilation control and monitors.
+/// The following modules use specific implementations of this trait: Refill control, Data logger,
+/// Food injection, Water injection, Mineral injection, Schedule check, Controllino, Gpio handler,
+/// Feed, Messaging, TCP communication.
 pub trait ProcessExternalRequestTrait {
     /// Checks if there are new messages in the channels.
     /// # Arguments
@@ -101,13 +106,6 @@ impl ProcessExternalRequestTrait for Refill {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
-                InternalCommand::ResetAllErrors => {
-                    self.refill_errors.error_switch_stuck_high = false;
-                    self.refill_errors.error_switch_stuck_low = false;
-                    self.refill_errors.error_receive_tank_level_switch_position = false;
-                    self.refill_errors.error_sql_update_failed = false;
-                    false
-                }
                 _ => {
                     println!("Refill: ignoring inapplicable command from signal handler.");
                     false

@@ -55,6 +55,7 @@ pub enum I2cError {
     SetAddressError(u16),
 }
 
+/// numeric values used in communication with Atlas Scientific sensor units
 mod atlas_scientific_constants {
     /// command sent to sensor unit for initiating response
     pub const COMMAND_READ: u8 = b'R';

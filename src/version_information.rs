@@ -9,15 +9,27 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use std::env;
 
+/// Major version number
 pub const VERSION_MAJOR: i32 = 0;
+
+/// Minor version number
 pub const VERSION_MINOR: i32 = 1;
+
+/// Build number
 pub const VERSION_BUILD: i32 = 1;
 
 /// Holds the data structure and implementation for retrieving and storing version information of the application.
 pub struct VersionInformation {
+    /// Major version number (used to identify major changes between releases)
     pub major: i32,
+    
+    /// Minor version number (used to identify minor changes between releases)
     pub minor: i32,
+    
+    /// Build numer (increases with every published build)
     pub build: i32,
+    
+    /// Hash serves as fingerprint to match SW with database configuration
     pub hash: String,
 }
 

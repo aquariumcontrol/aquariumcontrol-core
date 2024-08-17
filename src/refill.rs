@@ -1249,7 +1249,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1298,7 +1298,14 @@ pub mod tests {
                     execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
                 }
 
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::ResetAllErrors);
+                // reset errors
+                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
+                        error when trying to reset refill errors from previous test runs: {e:?}");
+                    },
+                }
 
                 // no error conditions - trigger refill execution
                 println!("Refill test_execute_conditions_historic_data_error_switch_stuck_low: running check #2");
@@ -1377,7 +1384,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1408,6 +1415,7 @@ pub mod tests {
                 let execution_count1: i32;
                 let execution_count2: i32;
 
+                
                 // when reaching main control cycle, test object will request signal updates
                 // this test will run with error flag enabled
                 println!("Refill test_execute_conditions_historic_data_error_sql_update_failed: running check #1");
@@ -1426,7 +1434,14 @@ pub mod tests {
                     execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
                 }
 
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::ResetAllErrors);
+                // reset previous errors
+                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!("test_refill_conditions_historic_data_error_sql_update_failed:\
+                        error when trying to reset refill errors from previous test runs: {e:?}");
+                    },
+                }
 
                 // no error conditions - trigger refill execution
                 println!("Refill test_execute_conditions_historic_data_error_sql_update_failed: running check #2");
@@ -1437,6 +1452,7 @@ pub mod tests {
                     false,
                     false,
                 );
+
                 // give test object some time to process the signals sent via channels
                 spin_sleeper.sleep(sleep_duration_50_millisec);
                 {
@@ -1489,8 +1505,8 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (_, rx_refill_from_messaging) = mpsc::channel();
+        let (_, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
 
         let refill_errors = RefillErrors {
             error_switch_stuck_high: true,
@@ -1503,7 +1519,14 @@ pub mod tests {
 
         scope(|scope| {
             scope.spawn(move || {
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::ResetAllErrors);
+                // reset errors
+                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
+                        error when trying to reset refill errors from previous test runs: {e:?}");
+                    },
+                }
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
             scope.spawn(move || {
@@ -1794,7 +1817,7 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -1863,7 +1886,14 @@ pub mod tests {
                     execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
                 }
 
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::ResetAllErrors);
+                // reset previous errors
+                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
+                        error when trying to reset refill errors from previous test runs: {e:?}");
+                    },
+                }
 
                 // empty the refill table
                 match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {

@@ -19,6 +19,8 @@ pub struct PublishPidConfig {
     pid_filename: String,
 }
 
+/// Contains the struct for configuration data and provides implementation for
+/// publication of process id (Pid).
 pub struct PublishPid {
     config: PublishPidConfig,
 }
