@@ -511,7 +511,7 @@ pub mod tests {
     ) {
         for i in 0..iterations {
             println!(
-                "Ventilation: run_main_cycle_with_sensor_signals running loop iteration #{}",
+                "run_main_cycle_with_stimuli: run_main_cycle_with_sensor_signals running loop iteration #{}",
                 i
             );
             rx_gpio_from_ventilation.recv().unwrap();
@@ -519,41 +519,41 @@ pub mod tests {
         }
     }
 
-    pub fn test_ventilation_receive_information_for_datalogger(
-        rx_datalogger_from_ventilation: &Receiver<bool>,
+    pub fn test_receive_information_for_datalogger(
+        rx_datalogger_from_control: &Receiver<bool>,
     ) -> bool {
         // receive information for data logger
-        match rx_datalogger_from_ventilation.recv() {
-            Ok(c) => {c}
+        match rx_datalogger_from_control.recv() {
+            Ok(c) => c,
             Err(e) => {
-                panic!("Ventilation: error when receiving information for data logger: {e:?}");
+                panic!("test_receive_information_for_datalogger: error when receiving information for data logger: {e:?}");
             }
         }
     }
 
-    pub fn test_ventilation_receive_actuation_command_send_confirmation(
-        rx_controllino_from_ventilation: &Receiver<InternalCommand>,
-        tx_controllino_to_ventilation: &Sender<bool>,
+    pub fn test_receive_actuation_command_send_confirmation(
+        rx_controllino_from_control: &Receiver<InternalCommand>,
+        tx_controllino_to_control: &Sender<bool>,
     ) -> Option<InternalCommand> {
         let command_received: Option<InternalCommand>;
 
         // receive command from test object
-        match rx_controllino_from_ventilation.recv() {
+        match rx_controllino_from_control.recv() {
             Ok(command) => {
                 command_received = Some(command);
             }
             Err(e) => {
                 panic!(
-                    "Ventilation: Error when receiving actuation command from test object: {e:?}"
+                    "test_receive_actuation_command_send_confirmation: Error when receiving actuation command from test object: {e:?}"
                 );
             }
         }
 
         // send confirmation back
-        match tx_controllino_to_ventilation.send(true) {
+        match tx_controllino_to_control.send(true) {
             Ok(_) => {}
             Err(e) => {
-                panic!("Ventilation: Error when sending back actuation command confirmation to test object: {e:?}");
+                panic!("test_receive_actuation_command_send_confirmation: Error when sending back actuation command confirmation to test object: {e:?}");
             }
         }
 
@@ -647,27 +647,21 @@ pub mod tests {
 
             // thread for mock Controllino
             scope.spawn(move || {
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                _ = test_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                _ = test_ventilation_receive_information_for_datalogger(
-                    &rx_datalogger_from_ventilation,
-                );
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                _ = test_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                _ = test_ventilation_receive_information_for_datalogger(
-                    &rx_datalogger_from_ventilation,
-                );
-                _ = test_ventilation_receive_actuation_command_send_confirmation(
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                _ = test_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                _ = test_ventilation_receive_information_for_datalogger(
-                    &rx_datalogger_from_ventilation,
-                );
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
 

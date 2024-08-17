@@ -771,7 +771,9 @@ pub mod tests {
         }
     }
 
-    fn prepare_heating_tests_mock_midnight_calculator() -> (ConfigData, Heating, SqlInterface) {
+    pub fn prepare_heating_tests_mock_midnight_calculator(
+        seconds_to_midnight: i64,
+    ) -> (ConfigData, Heating, SqlInterface) {
         // prepare struct Heating for subsequent tests
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_heating.toml".to_string());
@@ -782,8 +784,9 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_heating_midnight_calculator =
-            Box::new(SqlInterfaceHeatingMockMidnightCalculator::new(3));
+        let sql_interface_heating_midnight_calculator = Box::new(
+            SqlInterfaceHeatingMockMidnightCalculator::new(seconds_to_midnight),
+        );
         let sql_interface_heating = SqlInterfaceHeating::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
@@ -949,7 +952,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, _) = mpsc::channel();
@@ -1054,7 +1057,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -1274,7 +1277,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -1495,7 +1498,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -1590,7 +1593,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator();
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
