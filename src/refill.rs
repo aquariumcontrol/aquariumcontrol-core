@@ -1415,7 +1415,6 @@ pub mod tests {
                 let execution_count1: i32;
                 let execution_count2: i32;
 
-                
                 // when reaching main control cycle, test object will request signal updates
                 // this test will run with error flag enabled
                 println!("Refill test_execute_conditions_historic_data_error_sql_update_failed: running check #1");
@@ -1521,11 +1520,13 @@ pub mod tests {
             scope.spawn(move || {
                 // reset errors
                 match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
-                    Ok(_) => { /* do nothing */ },
+                    Ok(_) => { /* do nothing */ }
                     Err(e) => {
-                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
-                        error when trying to reset refill errors from previous test runs: {e:?}");
-                    },
+                        panic!(
+                            "test_refill_conditions_historic_data_error_recent_refill_event:\
+                        error when trying to reset refill errors from previous test runs: {e:?}"
+                        );
+                    }
                 }
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);

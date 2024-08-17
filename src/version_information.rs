@@ -22,13 +22,13 @@ pub const VERSION_BUILD: i32 = 1;
 pub struct VersionInformation {
     /// Major version number (used to identify major changes between releases)
     pub major: i32,
-    
+
     /// Minor version number (used to identify minor changes between releases)
     pub minor: i32,
-    
+
     /// Build numer (increases with every published build)
     pub build: i32,
-    
+
     /// Hash serves as fingerprint to match SW with database configuration
     pub hash: String,
 }

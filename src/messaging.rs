@@ -9,12 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(target_os = "linux")]
 use posixmq::PosixMq;
 use serde_derive::Deserialize;
+use std::fmt;
 use std::io::ErrorKind;
 #[cfg(target_os = "linux")]
 use std::sync::mpsc::{Receiver, Sender};
 #[cfg(target_os = "linux")]
 use std::time::Duration;
-use std::fmt;
 
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
@@ -24,19 +24,19 @@ use crate::InternalCommand;
 pub mod messaging_domains {
     /// value represents the refill control as domain
     pub const REFILL: i32 = 1;
-    
+
     /// value represents the ventilation control as domain
     pub const VENTILATION: i32 = 3;
-    
+
     /// value represents the feed control as domain
     pub const FEED: i32 = 8;
-    
+
     /// value represents the heating control as domain
     pub const HEATING: i32 = 9;
-    
+
     /// value represents the Balling dosing control as domain
     pub const BALLING: i32 = 11;
-    
+
     /// value represents the monitoring as domain
     pub const MONITORS: i32 = 12;
 }
@@ -47,22 +47,22 @@ pub mod messaging_domains {
 pub enum MessagingDomain {
     /// refill control
     Refill,
-    
+
     /// ventilation control
     Ventilation,
-    
+
     /// feed control
     Feed,
-    
+
     /// heating control
     Heating,
-    
+
     /// Balling dosing control
     Balling,
-    
+
     /// monitors
     Monitors,
-    
+
     /// in case numeric value in message could not be assigned to one of the above
     Unknown,
 }
@@ -318,7 +318,7 @@ impl Messaging {
                                 MessagingDomain::Monitors => &tx_to_monitors,
                                 MessagingDomain::Unknown => unreachable!(),
                             };
-                            
+
                             println!("Messaging: Sending message to domain {}", domain);
 
                             match tx_to_domain.send(command) {
@@ -364,25 +364,28 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    use crate::balling::tests::MockMineralInjection;
+    use crate::balling::Balling;
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
+    use crate::feed::tests::MockFoodInjection;
+    use crate::feed::Feed;
     use crate::heating::tests::prepare_heating_tests_mock_midnight_calculator;
     use crate::heating::tests::HeatingStatsMockDataTransfer;
     use crate::messaging::messaging_commands;
     use crate::messaging::messaging_domains;
     use crate::messaging::Message;
     use crate::messaging::Messaging;
+    use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_balling::SqlInterfaceBalling;
+    use crate::sql_interface_feed::SqlInterfaceFeed;
     use crate::ventilation::tests::mock_schedule_check;
     use crate::ventilation::tests::run_main_cycle_with_stimuli;
     use crate::ventilation::tests::test_receive_actuation_command_send_confirmation;
     use crate::ventilation::tests::test_receive_information_for_datalogger;
     use crate::ventilation::Ventilation;
-    use crate::balling::Balling;
-    use crate::balling::tests::MockMineralInjection;
-    use crate::sql_interface_balling::SqlInterfaceBalling;
-    use crate::sql_interface::SqlInterface;
 
     #[cfg(target_os = "linux")]
     // Test case runs ventilation control and triggers inhibition by sending stop message.
@@ -590,8 +593,9 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling_multiple_dosings.toml".to_string());
+        let config: ConfigData = read_config_file(
+            "/config/aquarium_control_test_balling_multiple_dosings.toml".to_string(),
+        );
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => {
                 println!("Messaging: Could open message queue.");
@@ -604,13 +608,13 @@ pub mod tests {
                 );
             }
         };
-        
+
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
-        };        
+        };
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         let mut msg_start = Message::new();
@@ -628,21 +632,17 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
-        
+
         // create test objects
         let mut balling = Balling::new(config.balling, sql_interface_balling);
         let mut messaging = Messaging::new(config.messaging);
 
         let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
         let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) =
-            mpsc::channel();
-        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) =
-            mpsc::channel();
-        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) =
-            mpsc::channel();
-        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) =
-            mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
         let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
@@ -670,11 +670,11 @@ pub mod tests {
             });
 
             let mutex_device_scheduler_balling_test_object = Arc::new(Mutex::new(0));
-            let mutex_device_scheduler_balling_test_environment = mutex_device_scheduler_balling_test_object.clone();
+            let mutex_device_scheduler_balling_test_environment =
+                mutex_device_scheduler_balling_test_object.clone();
 
             // thread IPC messaging - this scope controls execution of the test case
             scope.spawn(move || {
-
                 // wait for 1 second to make sure test object can receive message
                 for _ in 0..10 {
                     spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -682,14 +682,16 @@ pub mod tests {
 
                 // sending IPC message requesting stop of Balling dosing control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
-                
+
                 // wait for 10 seconds. If test object does not follow stop request,
                 // then dosings will happen in this period.
                 for _ in 0..100 {
                     spin_sleeper.sleep(sleep_duration_100_millisec);
                 }
 
-                let actuation_count_1 = *mutex_device_scheduler_balling_test_environment.lock().unwrap();
+                let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
 
                 // check amount of actuations (after stop request)
                 assert_eq!(actuation_count_1, 4);
@@ -703,7 +705,9 @@ pub mod tests {
                     spin_sleeper.sleep(sleep_duration_100_millisec);
                 }
 
-                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment.lock().unwrap();
+                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
 
                 // check amount of actuations (after start request)
                 assert_eq!(actuation_count_2, 9);
@@ -743,15 +747,13 @@ pub mod tests {
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
                     rx_balling_from_messaging,
-                    &mut mock_mineral_injection
+                    &mut mock_mineral_injection,
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);
 
-                let _ = tx_balling_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-
+                let _ =
+                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
             });
-            
 
             println!(
                 "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
@@ -941,7 +943,176 @@ pub mod tests {
     // test case sends start message and verifies if feed control
     // resumes operation.
     #[test]
-    pub fn test_messaging_stops_starts_feed() {}
+    pub fn test_messaging_stops_starts_feed() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                println!("Messaging: Could open message queue.");
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "Messaging: failure to open message queue for test using {}, error={e:?}",
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::FEED;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::FEED;
+        msg_stop.command = messaging_commands::STOP;
+
+        // empty the feed schedule
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let time_stamp_feed_schedule_entry =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 4) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        // manipulation of database: inserting feed schedule entries with future timestamp
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry,
+            1,
+            "testOneTime".to_string(),
+            false,
+            false,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        // create test objects
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let mut mock_food_injection = MockFoodInjection::new();
+
+        scope(|scope| {
+            let mutex_device_scheduler_feed_test_object = Arc::new(Mutex::new(0));
+            let mutex_device_scheduler_feed_test_environment =
+                mutex_device_scheduler_feed_test_object.clone();
+
+            // thread IPC messaging - this scope controls execution of the test case
+            scope.spawn(move || {
+                // wait for 1 second to make sure test object can receive message
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                // sending IPC message requesting stop of feed control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                // wait for 10 seconds. If test object does not follow stop request,
+                // then dosings will happen in this period.
+                for _ in 0..100 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                let actuation_count_1 =
+                    *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+
+                // check amount of actuations (after stop request)
+                assert_eq!(actuation_count_1, 0);
+
+                // sending IPC message requesting restart of feed control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                // wait for 10 seconds. If test object follows start request,
+                // then dosings will happen in this period.
+                for _ in 0..100 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                let actuation_count_2 =
+                    *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+
+                // check amount of actuations (after start request)
+                assert_eq!(actuation_count_2, 1);
+
+                // requesting feed control to quit
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                rx_signal_handler_from_feed.recv().unwrap();
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object #1 - messaging
+            scope.spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            });
+
+            // thread for test object #2
+            scope.spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed_test_object.clone(),
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    tx_feed_to_signal_handler,
+                    rx_feed_from_signal_handler,
+                    rx_feed_from_messaging,
+                    &mut mock_food_injection,
+                );
+                println!("MockFoodInjection:\n{}", mock_food_injection);
+            });
+
+            println!("* [Messaging] checking if messaging can stop and start feed succeeded.");
+        });
+    }
 
     #[cfg(target_os = "linux")]
     // Test case runs feed control and triggers execution of a specific feed profile

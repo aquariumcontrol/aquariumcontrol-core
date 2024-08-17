@@ -280,6 +280,7 @@ impl Feed {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
+    use std::fmt;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
@@ -295,8 +296,8 @@ pub mod tests {
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::SqlInterfaceFeed;
 
-    struct MockFoodInjection {
-        profile_ids_executed: Vec<i32>,
+    pub struct MockFoodInjection {
+        pub profile_ids_executed: Vec<i32>,
     }
 
     impl MockFoodInjection {
@@ -325,6 +326,25 @@ pub mod tests {
                 "inject_food (mock): logging profile id {}",
                 feed_pattern.profile_id
             );
+        }
+    }
+
+    impl fmt::Display for MockFoodInjection {
+        /// Provides output of the struct for debugging purposes.
+        /// # Arguments
+        /// * `f` - configuration for formatting
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let mut output: String = "Feed profile IDs: ".into();
+            if self.profile_ids_executed.is_empty() {
+                output = "No food has been injected.".to_string();
+            } else {
+                for id in &self.profile_ids_executed {
+                    output += "#";
+                    output += &id.to_string();
+                    output += " ";
+                }
+            }
+            write!(f, "{}", output)
         }
     }
 
