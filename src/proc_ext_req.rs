@@ -83,6 +83,9 @@ pub trait ProcessExternalRequestTrait {
             }
         };
 
+        //println!("ProcessExternalRequestTrait: quit_command_received={}, start_command_received={}, stop_command_received={}",
+        //    quit_command_received, start_command_received, stop_command_received);
+
         (
             quit_command_received,
             start_command_received,

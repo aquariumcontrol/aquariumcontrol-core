@@ -418,8 +418,8 @@ impl Balling {
 
             (
                 quit_command_received,
-                stop_command_received,
                 start_command_received,
+                stop_command_received,
             ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
             if quit_command_received {
                 println!("Balling: main loop: received Quit command. Exiting...");
@@ -493,7 +493,7 @@ pub mod tests {
     use crate::refill::tests::mock_schedule_check;
     use crate::sql_interface_balling::BallingSetVal;
 
-    struct MockMineralInjection {
+    pub struct MockMineralInjection {
         pump1_engagement_durations: Vec<u32>,
         pump2_engagement_durations: Vec<u32>,
         pump3_engagement_durations: Vec<u32>,
