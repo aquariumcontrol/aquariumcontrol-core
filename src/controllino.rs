@@ -168,7 +168,24 @@ pub struct ControllinoConfig {
     pub controllino_processing_millis: u64,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation of the Controllino interface
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     controllino[Controllino] --> tcp_communication[TCP communication]
+///     controllino --> refill[Refill control]
+///     refill --> controllino
+///     controllino --> heating[Heating control]
+///     heating --> controllino
+///     controllino --> balling[Balling dosing control]
+///     balling --> controllino
+///     controllino --> feed[Feed control]
+///     feed --> controllino
+///     controllino --> signal_handler[Signal handler]
+///     signal_handler --> controllino
+/// ```
+        
 pub struct Controllino {
     /// configuration data for Controllino
     pub config: ControllinoConfig,

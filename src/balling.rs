@@ -53,7 +53,7 @@ pub struct BallingConfig {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     balling[Balling] --> signal_handler[Signal handler]
+///     balling[Balling dosing control] --> signal_handler[Signal handler]
 ///     signal_handler --> balling
 ///     balling --> controllino[Controllino]
 ///     controllino --> balling
