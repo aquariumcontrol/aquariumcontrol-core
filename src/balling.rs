@@ -48,7 +48,21 @@ pub struct BallingConfig {
     pub pump_switch_delay_millis: u32,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     balling[Balling] --> signal_handler[Signal handler]
+///     signal_handler --> balling
+///     balling --> controllino[Controllino]
+///     controllino --> balling
+///     balling --> datalogger[Data logger]
+///     balling --> schedule_check[Schedule check]
+///     schedule_check --> balling
+///	    messaging[Messaging] --> balling
+/// ```
+
 pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
