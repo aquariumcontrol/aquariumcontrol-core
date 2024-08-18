@@ -200,6 +200,7 @@ fn switch_off_heater(
 ///     controllino --> heating
 ///     heating --> signal_handler[Signal handler]
 ///     signal_handler --> heating
+///     heating --> data_logger[Data logger]
 ///     heating --> schedule_check[Schedule check]
 ///     schedule_check --> heating
 ///     messaging[Messaging] --> heating
