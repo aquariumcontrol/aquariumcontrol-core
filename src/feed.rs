@@ -39,12 +39,15 @@ pub struct FeedConfig {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     feed[Feed control] --> controllino[Controllino]
-///     controllino --> feed
+///     feed[Feed control] --> food_injection[Food injection] --> controllino[Controllino]
+///     controllino --> food_injection
 ///     feed --> signal_handler[Signal handler]
 ///     signal_handler --> feed
+///     signal_handler --> food_injection
 ///     messaging[Messaging] --> feed
 /// ```
+/// Communication channel to Controllino is forwarded to implementation of FoodInjectionTrait.
+/// Signal handler is communicating both directly with feed as well with implementation of FoodInjectionTrait.
 
 pub struct Feed {
     /// configuration data for Feed control

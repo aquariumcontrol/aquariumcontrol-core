@@ -35,8 +35,17 @@ pub trait FoodInjectionTrait {
     );
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct implements the FoodInjectionTrait for executing the feed pattern.
 /// It also contains state attributes for the actuators.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     food_injection[Food injection] --> controllino[Controllino]
+///     controllino --> food_injection
+///     signal_handler[Signal handler] --> food_injection
+/// ```
+
 pub struct FoodInjection {
     skimmer_state: ActuatorState,
     main_pump1_state: ActuatorState,
