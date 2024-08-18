@@ -112,7 +112,18 @@ pub enum TcpCommunicationError {
     //ReadMessageFailed(io::Error),
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains configuration of implementation for opening, reading and closing TCP channel.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     controllino[Controllino] --> tcp_communication[TCP communication]
+///     gpio_handler[GPIO handler] --> tcp_communication
+///     tcp_communication --> gpio_handler
+///     tcp_communication --> signal_handler[Signal handler]
+///     signal_handler --> tcp_communication
+/// ```
+
 pub struct TcpCommunication {
     /// the raw TCP stream
     write_stream: TcpStream,
