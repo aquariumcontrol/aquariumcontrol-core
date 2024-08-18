@@ -40,7 +40,20 @@ pub struct DataLoggerConfig {
     filter_coefficient_conductivity: IIRFilterConfig<()>,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for regular data logging to SQL database.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     data_logger[Data logger] --> gpio_handler[GPIO handler]
+///     gpio_handler --> data_logger
+///     refill[Refill control] --> data_logger
+///     heating[Heating control] --> data_logger
+///     ventilation[Ventilation control] --> data_logger
+///     data_logger --> signal_handler[Signal handler]
+///     signal_handler[Signal handler] --> data_logger
+/// ```
+       
 pub struct DataLogger {
     /// configuration data for the data logger
     config: DataLoggerConfig,
