@@ -75,7 +75,7 @@ pub trait ProcessExternalRequestTrait {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
                         println!(
-                        "ProcessExternalRequestTrait: Error in trying to receive command from signal handler: {e:?}"
+                        "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
                     );
                     }
                 }
@@ -145,7 +145,7 @@ impl ProcessExternalRequestTrait for Refill {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
                         println!(
-                            "Refill: Error in trying to receive command from signal handler: {e:?}"
+                            "Refill: Error in trying to receive command from messaging: {e:?}"
                         );
                     }
                 }
@@ -180,7 +180,7 @@ fn process_external_request_without_messaging(
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
                     println!(
-                        "ProcessExternalRequestTrait: Error in trying to receive command from signal handler: {e:?}"
+                        "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
                     );
                 }
             }
@@ -377,7 +377,7 @@ impl ProcessExternalRequestTrait for Feed {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             println!(
-                        "Heating: Error in trying to receive command from signal handler: {e:?}"
+                        "Heating: Error in trying to receive command from messaging: {e:?}"
                     );
                         }
                     }

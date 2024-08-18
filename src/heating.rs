@@ -927,13 +927,194 @@ pub mod tests {
     // Check if the heater remains switched off during two cycles of the saw tooth profile.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
-    pub fn test_heating_with_measured_temperature_high() {}
+    pub fn test_heating_with_measured_temperature_high() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600);
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    30.0, // hot temperature to force switching off heater
+                    24.0,
+                    1.0,
+                    0.0,
+                );
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino
+            scope.spawn(move || {
+                let command_received = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_gpio,
+                    rx_heating_from_gpio,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+            println!("* [Heating] checking reaction to high temperature.");
+        });        
+    }
 
     // Check if the heater is switched on and is not switched off during two cycles of the saw tooth profile.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Check if the heater is switched off after sending Quit command and before sending Terminate command.
     #[test]
-    pub fn test_heating_with_measured_temperature_low() {}
+    pub fn test_heating_with_measured_temperature_low() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600);
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_heating,
+                    &tx_gpio_to_heating,
+                    20.0, // cold temperature to force switching on heater
+                    24.0,
+                    1.0,
+                    0.0,
+                );
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);                
+                rx_signal_handler_from_heating.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino
+            scope.spawn(move || {
+                let command_received = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Heater)));
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                // check if heater is switched off when exiting application
+                let command_received = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_gpio,
+                    rx_heating_from_gpio,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_datalogger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+            println!("* [Heating] checking reaction to low temperature.");
+        });                      
+    }
 
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
     // Duration of heater switched on shall equal duration of heater switched off (1% tolerance).
