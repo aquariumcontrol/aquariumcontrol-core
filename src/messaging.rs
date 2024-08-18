@@ -164,7 +164,7 @@ pub struct MessagingConfig {
     timeout_millis: u64,
 }
 
-[cfg_attr(doc, aquamarine::aquamarine)]
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
 /// Thread communication is as follows:
 /// ```mermaid
