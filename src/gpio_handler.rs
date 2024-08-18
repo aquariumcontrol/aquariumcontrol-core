@@ -127,10 +127,11 @@ impl GpioHandler {
     /// * `config` - configuration data for GPIO handler
     /// * `i2c_config` - configuration data for I2C handler
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
+        let use_simulator = config.use_simulator;	// create copy because struct is moved
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
-            i2c_interface: match config.use_simulator {
+            i2c_interface: match use_simulator {
                 true => None,
                 false => Some(I2cInterface::new(i2c_config)),
             }
@@ -182,12 +183,11 @@ impl GpioHandler {
     /// Requests a response from the real hardware
     #[cfg(target_os = "linux")]
     fn get_response_from_hardware(&mut self, internal_command: InternalCommand) -> f32 {
+        let i2c: &mut I2cInterface = self.i2c_interface.as_mut().unwrap();
         match internal_command {
             InternalCommand::RequestSignal(signal) => match signal {
                 AquariumSignal::WaterTemperature => {
-                    match self
-                        .i2c_interface
-                        .unwrap()
+                    match i2c
                         .get_response_from_i2c(AquariumSignal::WaterTemperature)
                     {
                         Ok(c) => c,
@@ -195,18 +195,14 @@ impl GpioHandler {
                     }
                 }
                 AquariumSignal::pH => {
-                    match self
-                        .i2c_interface
-                        .unwrap()
+                    match i2c
                         .get_response_from_i2c(AquariumSignal::pH) {
                         Ok(c) => c,
                         Err(_) => self.config.replacement_value_ph,
                     }
                 }
                 AquariumSignal::Conductivity => {
-                    match self
-                        .i2c_interface
-                        .unwrap()
+                    match i2c
                         .get_response_from_i2c(AquariumSignal::Conductivity)
                     {
                         Ok(c) => c,
