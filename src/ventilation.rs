@@ -461,11 +461,17 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::ventilation::Ventilation;
+    use crate::channel_content::AquariumDevice;
 
-    fn prepare_ventilation_tests() -> Ventilation {
+    fn prepare_ventilation_tests(short_ramp: bool) -> Ventilation {
         // prepare struct Ventilation for subsequent tests
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+        let config: ConfigData;
+        if short_ramp {
+            config = read_config_file("/config/aquarium_control_test_ventilation_secondary.toml".to_string());
+        }
+        else {
+            config = read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());            
+        }           
         Ventilation::new(config.ventilation)
     }
 
@@ -560,26 +566,289 @@ pub mod tests {
         command_received
     }
 
-    // Check if the ventilation remains switched off during two cycles of the saw tooth profile.
+    // Check if the ventilation is switched on when temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
-    pub fn test_ventilation_with_measured_temperature_high() {}
+    pub fn test_ventilation_with_measured_temperature_high() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
 
-    // Check if the ventilation is switched on and is not switched off during two cycles of the saw tooth profile.
+        let mut ventilation = prepare_ventilation_tests(false);
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    30.0, // hot temperature to force switching off heater
+                );
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino and mock data logger
+            scope.spawn(move || {
+                let command_received = test_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_gpio,
+                    rx_ventilation_from_gpio,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+            println!("* [Ventilation] checking reaction to high temperature.");
+        });                
+    }
+
+    // Check if the ventilation is switched off with low temperature and switched back on when exiting the application.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Check if the ventilation is switched off after sending Quit command and before sending Terminate command.
     #[test]
-    pub fn test_ventilation_with_measured_temperature_low() {}
+    pub fn test_ventilation_with_measured_temperature_low() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let mut ventilation = prepare_ventilation_tests(false);
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    10,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    20.0, // hot temperature to force switching off heater
+                );
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino and mock data logger
+            scope.spawn(move || {
+                let command_received = test_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation)));
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                
+                // check if ventilation is switched back on when exiting the application
+                let command_received = test_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_gpio,
+                    rx_ventilation_from_gpio,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+            println!("* [Ventilation] checking reaction to low temperature.");
+        });                        
+    }
 
     // Check if the ventilation is switched on and off during two cycles of the saw tooth profile.
     // Duration of ventilation switched on shall equal duration of ventilation switched off (1% tolerance).
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
-    pub fn test_ventilation_with_measured_temperature_50_percent() {}
+    pub fn test_ventilation_with_measured_temperature_50_percent() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
 
-    // Check if ventilation control is not acting when disabled (active=false in configuration file)
-    #[test]
-    pub fn test_ventilation_not_active() {}
+        let mut ventilation = prepare_ventilation_tests(true);
+
+        // channels for the test object. test environment only uses one of the channels
+        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+            // thread for mock GPIO and mock signal handler
+            scope.spawn(move || {
+                run_main_cycle_with_stimuli(
+                    20,
+                    &rx_gpio_from_ventilation,
+                    &tx_gpio_to_ventilation,
+                    26.5, // hot temperature to force switching off heater
+                );
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            });
+
+            // thread for mock Controllino and mock Datalogger
+            scope.spawn(move || {
+               for _ in 0..2 {
+                    let command_received = test_receive_actuation_command_send_confirmation(
+                            &rx_controllino_from_ventilation,
+                            &tx_controllino_to_ventilation,
+                        );
+                    assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                    let command_received = test_receive_actuation_command_send_confirmation(
+                            &rx_controllino_from_ventilation,
+                            &tx_controllino_to_ventilation,
+                        );
+                    assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation)));
+                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                }
+
+                // check if ventilation is switched back on when exiting the application
+                let command_received = test_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_ventilation,
+                    &tx_controllino_to_ventilation,
+                );
+                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+            });
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_gpio,
+                    rx_ventilation_from_gpio,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
+                );
+                println!("execution of test object finished.");
+                let _ =
+                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+            println!("* [Ventilation] checking reaction to low temperature.");
+        });                                
+    }
 
     // Check if ventilation control is only actuating when quitting while schedule check provides negative result
     #[test]
@@ -587,7 +856,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let mut ventilation = prepare_ventilation_tests(false);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();

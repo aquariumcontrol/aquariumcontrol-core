@@ -924,7 +924,7 @@ pub mod tests {
         false
     }
 
-    // Check if the heater remains switched off during two cycles of the saw tooth profile.
+    // Check if the heater remains switched off with high temperature.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_heating_with_measured_temperature_high() {
@@ -976,7 +976,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino
+            // thread for mock Controllino and mock data logger
             scope.spawn(move || {
                 let command_received = test_heating_receive_actuation_command_send_confirmation(
                         &rx_controllino_from_heating,
@@ -1016,7 +1016,7 @@ pub mod tests {
         });        
     }
 
-    // Check if the heater is switched on and is not switched off during two cycles of the saw tooth profile.
+    // Check if the heater is switched on and is not switched off with low temperature.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Check if the heater is switched off after sending Quit command and before sending Terminate command.
     #[test]
@@ -1069,7 +1069,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino
+            // thread for mock Controllino and mock data logger
             scope.spawn(move || {
                 let command_received = test_heating_receive_actuation_command_send_confirmation(
                         &rx_controllino_from_heating,
@@ -1169,7 +1169,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino
+            // thread for mock Controllino and mock data logger
             scope.spawn(move || {
                 for _ in 0..2 {
                     let command_received = test_heating_receive_actuation_command_send_confirmation(
@@ -1223,10 +1223,6 @@ pub mod tests {
             println!("* [Heating] checking reaction to low temperature.");
         });                               
     }
-
-    // Check if heating control is not acting when disabled (active=false in configuration file)
-    #[test]
-    pub fn test_heating_not_active() {}
 
     // checks if the Quit command is correctly processed
     // - application shall switch off heater before exiting
