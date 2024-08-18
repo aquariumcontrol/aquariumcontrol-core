@@ -35,8 +35,17 @@ pub trait MineralInjectionTrait {
     ) -> (bool, u32);
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct implements the MineralInjectionTrait for executing the Balling mineral dosing.
 /// It also contains state attributes for the actuators.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     mineral_injection[Mineral injection] --> controllino[Controllino]
+///     controllino --> mineral_injection
+///     signal_handler[Signal handler] --> mineral_injection
+/// ```
+
 pub struct MineralInjection;
 
 impl MineralInjection {

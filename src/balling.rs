@@ -52,12 +52,14 @@ pub struct BallingConfig {
 /// Contains the configuration and the implementation for the Balling dosing control.
 /// Thread communication is as follows:
 /// ```mermaid
+
 /// graph LR
 ///     balling[Balling dosing control] --> signal_handler[Signal handler]
 ///     signal_handler --> balling
-///     balling --> controllino[Controllino]
-///     controllino --> balling
-///     balling --> datalogger[Data logger]
+///     signal_handler --> mineral_injection[Mineral injection]
+///     balling --> mineral_injection
+///     mineral_injection --> controllino[Controllino]
+///     controllino --> mineral_injection
 ///     balling --> schedule_check[Schedule check]
 ///     schedule_check --> balling
 ///	    messaging[Messaging] --> balling
