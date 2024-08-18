@@ -34,7 +34,18 @@ pub struct FeedConfig {
     pub device_switch_delay_millis: u32,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the feed control.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     feed[Feed control] --> controllino[Controllino]
+///     controllino --> feed
+///     feed --> signal_handler[Signal handler]
+///     signal_handler --> feed
+///     messaging[Messaging] --> feed
+/// ```
+
 pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
@@ -62,7 +73,7 @@ impl Feed {
             profile_id_requested: -1,
         }
     }
-
+        
     /// Loads and executes a given feed profile.
     /// # Arguments
     /// * `profile_id` - ID of feed profile to be executed
