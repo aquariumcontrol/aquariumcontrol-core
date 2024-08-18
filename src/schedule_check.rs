@@ -30,7 +30,23 @@ pub struct ScheduleCheckConfig {
     strategy_if_schedule_not_found: bool,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the schedule checker.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     schedule_check[Schedule check] --> ventilation[Ventilation control]
+///     ventilation --> schedule_check
+///     schedule_check --> heating[Heating control]
+///     heating --> schedule_check
+///     schedule_check --> refill[Refill control]
+///     refill --> schedule_check
+///     schedule_check --> balling[Balling dosing control]
+///     balling --> schedule_check
+///     schedule_check --> signal_handler[Signal handler]
+///     signal_handler --> schedule_check
+/// ```
+
 pub struct ScheduleCheck {
     /// configuration data for schedule checker
     config: ScheduleCheckConfig,
