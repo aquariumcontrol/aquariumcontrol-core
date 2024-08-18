@@ -391,6 +391,10 @@ pub mod tests {
     use crate::ventilation::tests::test_receive_actuation_command_send_confirmation;
     use crate::ventilation::tests::test_receive_information_for_datalogger;
     use crate::ventilation::Ventilation;
+    use crate::water_injection::WaterInjectionTrait;
+    use crate::refill::TankLevelSwitchSignals;
+    use crate::refill::RefillErrors;
+    use crate::refill::RefillConfig;
 
     #[cfg(target_os = "linux")]
     // Test case runs ventilation control and triggers inhibition by sending stop message.
@@ -1224,11 +1228,6 @@ pub mod tests {
         msg_stop.domain = messaging_domains::REFILL;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut msg_execute = Message::new();
-        msg_execute.domain = messaging_domains::REFILL;
-        msg_execute.command = messaging_commands::RESET;
-        msg_execute.command_param1 = 1;
-
         // create test objects
         let mut refill = Refill::new(config.refill, sql_interface_refill);
         let mut messaging = Messaging::new(config.messaging);
@@ -1433,8 +1432,228 @@ pub mod tests {
         });
     }
 
+    pub struct MockWaterInjectionAlwaysErr;
+
+    impl WaterInjectionTrait for MockWaterInjectionAlwaysErr {
+        fn inject_water(
+            &mut self,
+            _tx_to_controllino: &Sender<InternalCommand>,
+            _rx_from_controllino: &Receiver<bool>,
+            _tx_to_gpio: &Sender<InternalCommand>,
+            _rx_from_gpio: &Receiver<f32>,
+            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            _tx_to_datalogger: &Sender<bool>,
+            _tank_level_switch_signals: &mut TankLevelSwitchSignals,
+            refill_errors: &mut RefillErrors,
+            _config: &RefillConfig,
+            _sql_interface_refill: &mut SqlInterfaceRefill,
+        ) -> bool {
+            // do nothing
+            println!("Refill: execute_refill *MockWaterInjectionAlwaysErr* has been called.");
+            // trigger error condition for allowing test case to reset it
+            refill_errors.error_switch_stuck_low = true;
+            false // simulate that no Quit command has been received
+        }
+    }
+
     #[cfg(target_os = "linux")]
     // Test case runs refill control and triggers reset of error by sending "ResetAllErrors" message.
     #[test]
-    pub fn test_messaging_resets_refill_errors() {}
+    pub fn test_messaging_resets_refill_errors() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill_quaternary.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                println!("Messaging: Could open message queue.");
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "Messaging: failure to open message queue for test using {}, error={e:?}",
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+
+        let mut msg_reset = Message::new();
+        msg_reset.domain = messaging_domains::REFILL;
+        msg_reset.command = messaging_commands::RESET;
+
+        // create test objects
+        let mut refill = Refill::new(config.refill, sql_interface_refill);
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+        let (tx_refill_to_datalogger, _rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_refill_to_schedule_check_for_test_case_finish = tx_refill_to_schedule_check.clone();
+
+        let mut mock_water_injection = MockWaterInjectionAlwaysErr {};
+
+        scope(|scope| {
+            let mutex_device_scheduler_refill_test_object = Arc::new(Mutex::new(0));
+            let mutex_device_scheduler_refill_test_environment =
+                mutex_device_scheduler_refill_test_object.clone();
+
+            // thread for mock schedule check: runs until it receives Quit command
+            scope.spawn(move || loop {
+                if mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    true,
+                ) {
+                    break;
+                }
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+            });
+
+            // thread for IPC messaging - this scope controls execution of the test case
+            scope.spawn(move || {
+                // Phase 1: Normal refill cycle, sending stop command afterwards
+                // stimulate tank level switch high and valid
+                run_main_cycle_with_stimuli_refill(
+                    4,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    1.0,
+                    0.0,
+                );
+                // stimulate tank level switch low and valid
+                run_main_cycle_with_stimuli_refill(
+                    6,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    0.0,
+                    0.0,
+                );
+                run_main_cycle_with_stimuli_refill(
+                    1,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    1.0,
+                    0.0,
+                );
+                let actuation_count_1 = *mutex_device_scheduler_refill_test_environment
+                    .lock()
+                    .unwrap();
+                println!(
+                    "test_messaging_stops_starts_refill: actuation_count_1 = {}",
+                    actuation_count_1
+                );
+                // amount of actuations (before stop request): one refill operation executed
+                assert_eq!(actuation_count_1, 1);
+
+                // sending IPC message requesting error reset of refill control
+                let _ = mq_stimuli.send(0, &msg_reset.create_message_buf());
+                // stimulate tank level switch high and valid
+                run_main_cycle_with_stimuli_refill(
+                    4,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    1.0,
+                    0.0,
+                );
+
+                // Phase 2: Stimulating low level and checking if inhibition works
+                // stimulate tank level switch low and valid
+                run_main_cycle_with_stimuli_refill(
+                    6,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    0.0,
+                    0.0,
+                );
+                run_main_cycle_with_stimuli_refill(
+                    1,
+                    &rx_gpio_from_refill,
+                    &tx_gpio_to_refill,
+                    1.0,
+                    0.0,
+                );
+                
+                let actuation_count_2 = *mutex_device_scheduler_refill_test_environment
+                    .lock()
+                    .unwrap();
+                // amount of actuations (after stop request): no further refill operation executed
+                println!(
+                    "test_messaging_stops_starts_refill: actuation_count_2 = {}",
+                    actuation_count_2
+                );
+                assert_eq!(actuation_count_2, 2);
+                
+                // requesting refill control to quit
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object #1 - messaging
+            scope.spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            });
+
+            // thread for test object #2
+            scope.spawn(move || {
+                refill.execute(
+                    mutex_device_scheduler_refill_test_object.clone(),
+                    tx_refill_to_gpio,
+                    rx_refill_from_gpio,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_datalogger,
+                    rx_refill_from_messaging,
+                    &mut mock_water_injection,
+                );
+                
+                let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+
+
+            println!(
+                "* [Messaging] checking if messaging can reset refill control error succeeded."
+            );
+        });    
+    }
 }
