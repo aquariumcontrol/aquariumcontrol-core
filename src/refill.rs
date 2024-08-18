@@ -180,6 +180,30 @@ impl RefillErrors {
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+/// refill[Refill control] --> gpio_handler[GPIO handler]
+/// refill --> water_injection[Water injection]
+/// water_injection --> gpio_handler
+/// gpio_handler --> refill
+/// gpio_handler --> water_injection
+/// water_injection --> controllino[Controllino]
+/// controllino --> water_injection
+/// refill --> signal_handler[Signal handler]
+/// signal_handler --> refill
+/// signal_handler --> water_injection
+/// refill --> schedule_check[Schedule check]
+/// schedule_check --> refill
+/// water_injection --> data_logger[Data logger]
+/// messaging[Messaging] --> refill
+/// ```
+/// Communication channel to and from Controllino is forwarded to implementation of WaterInjectionTrait.
+/// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
+/// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
+/// GPIO handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
+
+                
 /// Architecture of the component is as follows:
 /// ```mermaid
 /// graph LR

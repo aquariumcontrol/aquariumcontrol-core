@@ -49,8 +49,18 @@ pub trait WaterInjectionTrait {
     ) -> bool;
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Implementation of the WaterInjectionTrait which contains the code for executing the refill once
 /// the main control has detected that the water level is low.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     water_injection[Mineral injection] --> controllino[Controllino]
+///     controllino --> water_injection
+///     water_injection --> gpio_handler[GPIO handler]
+///     gpio_handler --> water_injection
+///     signal_handler[Signal handler] --> water_injection
+/// ```
 pub struct WaterInjection;
 
 impl WaterInjectionTrait for WaterInjection {

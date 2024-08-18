@@ -64,6 +64,8 @@ pub struct BallingConfig {
 ///     schedule_check --> balling
 ///	    messaging[Messaging] --> balling
 /// ```
+/// Communication channel to and from Controllino is forwarded to implementation of MineralInjectionTrait.
+/// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
 
 pub struct Balling {
     /// configuration data for Balling dosing control
