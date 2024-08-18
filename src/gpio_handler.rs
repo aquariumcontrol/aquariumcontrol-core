@@ -116,7 +116,7 @@ pub struct GpioHandler {
 
     /// I2C interface for communication with Atlas Scientific sensor units
     #[cfg(target_os = "linux")]
-    i2c_interface: I2cInterface,
+    i2c_interface: Option<I2cInterface>,
 }
 
 impl GpioHandler {
@@ -130,7 +130,10 @@ impl GpioHandler {
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
-            i2c_interface: I2cInterface::new(i2c_config),
+            i2c_interface: match config.use_simulator {
+                true => None,
+                false => Some(I2cInterface::new(i2c_config)),
+            }
         }
     }
 
@@ -184,6 +187,7 @@ impl GpioHandler {
                 AquariumSignal::WaterTemperature => {
                     match self
                         .i2c_interface
+                        .unwrap()
                         .get_response_from_i2c(AquariumSignal::WaterTemperature)
                     {
                         Ok(c) => c,
@@ -191,7 +195,10 @@ impl GpioHandler {
                     }
                 }
                 AquariumSignal::pH => {
-                    match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH) {
+                    match self
+                        .i2c_interface
+                        .unwrap()
+                        .get_response_from_i2c(AquariumSignal::pH) {
                         Ok(c) => c,
                         Err(_) => self.config.replacement_value_ph,
                     }
@@ -199,6 +206,7 @@ impl GpioHandler {
                 AquariumSignal::Conductivity => {
                     match self
                         .i2c_interface
+                        .unwrap()
                         .get_response_from_i2c(AquariumSignal::Conductivity)
                     {
                         Ok(c) => c,
