@@ -89,7 +89,27 @@ pub struct I2cInterfaceConfig {
     pub min_val_atlas_scientific_conductivity: f32,
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     gpio_handler[GPIO handler] --> tcp_communication[TCP communication]
+///     tcp_communication --> gpio_handler
+///     gpio_handler --> data_logger[Data logger]
+///     data_logger --> gpio_handler
+///     gpio_handler --> refill[Refill control]
+///     refill --> gpio_handler
+///     gpio_handler --> heating[Heating control]
+///     heating --> gpio_handler
+///     gpio_handler --> ventilation[Ventilation control]
+///     ventilation --> gpio_handler
+///     gpio_handler --> monitors[Monitors]
+///     monitors --> gpio_handler
+///     gpio_handler --> signal_handler[Signal handler]
+///     signal_handler --> gpio_handler
+/// ```
+
 pub struct GpioHandler {
     /// configuration data for GPIO handler
     config: GpioHandlerConfig,

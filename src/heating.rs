@@ -189,7 +189,22 @@ fn switch_off_heater(
     }
 }
 
-/// Contains the configuration and the implementation for the refill control.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Contains the configuration and the implementation for the heating control.
+/// Thread communication is as follows:
+/// ```mermaid
+/// graph LR
+///     heating[Heating control] --> gpio_handler[GPIO handler]
+///     gpio_handler --> heating
+///     heating --> controllino[Controllino]
+///     controllino --> heating
+///     heating --> signal_handler[Signal handler]
+///     signal_handler --> heating
+///     heating --> schedule_check[Schedule check]
+///     schedule_check --> heating
+///     messaging[Messaging] --> heating
+/// ```
+
 pub struct Heating {
     /// configuration data for heating control
     config: HeatingConfig,
