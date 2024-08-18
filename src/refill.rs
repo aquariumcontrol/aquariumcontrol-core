@@ -376,18 +376,24 @@ impl Refill {
 
     /// Calculates the inhibition flag depending on the commands received.
     /// # Arguments
+    /// * `current_state` - current value of inhibition flag
     /// * `start_command_received` - flag indicating that start command has been received
     /// * `stop_command_received` - flag indicating that stop command has been received
-    fn calc_inhibition_flag(start_command_received: bool, stop_command_received: bool) -> bool {
+    fn calc_inhibition_flag(
+        current_state: bool,
+        start_command_received: bool,
+        stop_command_received: bool,
+    ) -> bool {
         if stop_command_received {
             println!("Refill: received Stop command. Inhibiting refill control.");
             return true;
         }
         if start_command_received {
+            // start command has higher priority than stop command
             println!("Refill: received Start command. Restarting refill control.");
             return false;
         }
-        false
+        current_state
     }
 
     // Checks if historic refill data does not exceed limitations in terms of count and volume.
@@ -499,8 +505,11 @@ impl Refill {
                     start_command_received,
                     stop_command_received,
                 ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
-                refill_inhibited =
-                    Self::calc_inhibition_flag(start_command_received, stop_command_received);
+                refill_inhibited = Self::calc_inhibition_flag(
+                    refill_inhibited,
+                    start_command_received,
+                    stop_command_received,
+                );
                 if quit_command_received {
                     break;
                 }
@@ -519,7 +528,7 @@ impl Refill {
                 break; // exit outer loop
             }
 
-            if self.config.active && !refill_inhibited {
+            if self.config.active {
                 // check for external requests while waiting for the check interval to pass
                 println!("Refill: executing main loop.");
 
@@ -551,6 +560,7 @@ impl Refill {
                 if !quit_command_received
                     && !self.tank_level_switch_position_stabilized
                     && !tank_level_switch_signals.tank_level_switch_invalid
+                    && !refill_inhibited
                 {
                     println!(
                         "Refill: Stabilized tank level switch position indicates low water level."
@@ -622,8 +632,11 @@ impl Refill {
                     start_command_received,
                     stop_command_received,
                 ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
-                refill_inhibited =
-                    Self::calc_inhibition_flag(start_command_received, stop_command_received);
+                refill_inhibited = Self::calc_inhibition_flag(
+                    refill_inhibited,
+                    start_command_received,
+                    stop_command_received,
+                );
                 if quit_command_received {
                     break;
                 }
@@ -806,7 +819,7 @@ pub mod tests {
         )
     }
 
-    struct RefillTestExecutionVoid;
+    pub struct RefillTestExecutionVoid;
 
     impl WaterInjectionTrait for RefillTestExecutionVoid {
         fn inject_water(
