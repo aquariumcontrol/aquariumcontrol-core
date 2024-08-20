@@ -95,7 +95,7 @@ impl MineralInjectionTrait for MineralInjection {
         loop {
             // check if there is a quit request
             (quit_command_received, _, _) =
-                self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+                self.process_external_request(rx_from_signal_handler, None);
             if quit_command_received {
                 break; // stop dosing
             }

@@ -153,7 +153,7 @@ impl ScheduleCheck {
             }
 
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }

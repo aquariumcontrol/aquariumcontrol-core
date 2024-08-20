@@ -53,7 +53,7 @@ pub struct DataLoggerConfig {
 ///     data_logger --> signal_handler[Signal handler]
 ///     signal_handler[Signal handler] --> data_logger
 /// ```
-       
+
 pub struct DataLogger {
     /// configuration data for the data logger
     config: DataLoggerConfig,
@@ -139,7 +139,7 @@ impl DataLogger {
                 i = i + 1;
                 spin_sleeper.sleep(sleep_duration_one_millisec);
                 (quit_command_received, _, _) =
-                    self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                    self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
                     break;
                 }

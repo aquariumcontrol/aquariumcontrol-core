@@ -438,7 +438,7 @@ impl Balling {
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
-            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
                 println!("Balling: main loop: received Quit command. Exiting...");
                 break;

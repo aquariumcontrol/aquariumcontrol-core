@@ -177,7 +177,7 @@ pub struct MessagingConfig {
 ///     messaging --> balling[Balling dosing control]
 ///     messaging --> monitors[Monitors]
 /// ```
-       
+
 pub struct Messaging {
     config: MessagingConfig,
 
@@ -361,7 +361,7 @@ impl Messaging {
                 }
             }
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
@@ -396,6 +396,9 @@ pub mod tests {
     use crate::messaging::Messaging;
     use crate::refill::tests::RefillTestExecutionVoid;
     use crate::refill::Refill;
+    use crate::refill::RefillConfig;
+    use crate::refill::RefillErrors;
+    use crate::refill::TankLevelSwitchSignals;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::SqlInterfaceBalling;
     use crate::sql_interface_feed::SqlInterfaceFeed;
@@ -406,9 +409,6 @@ pub mod tests {
     use crate::ventilation::tests::test_receive_information_for_datalogger;
     use crate::ventilation::Ventilation;
     use crate::water_injection::WaterInjectionTrait;
-    use crate::refill::TankLevelSwitchSignals;
-    use crate::refill::RefillErrors;
-    use crate::refill::RefillConfig;
 
     #[cfg(target_os = "linux")]
     // Test case runs ventilation control and triggers inhibition by sending stop message.
@@ -1349,7 +1349,7 @@ pub mod tests {
                     actuation_count_2
                 );
                 assert_eq!(actuation_count_2, 1);
-                
+
                 // stimulate tank level switch high and valid
                 run_main_cycle_with_stimuli_refill(
                     1,
@@ -1435,10 +1435,10 @@ pub mod tests {
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
-                
-                let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
 
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
 
             println!(
                 "* [Messaging] checking if messaging can stop and start refill control succeeded."
@@ -1609,7 +1609,7 @@ pub mod tests {
                     1.0,
                     0.0,
                 );
-                
+
                 let actuation_count_2 = *mutex_device_scheduler_refill_test_environment
                     .lock()
                     .unwrap();
@@ -1619,7 +1619,7 @@ pub mod tests {
                     actuation_count_2
                 );
                 assert_eq!(actuation_count_2, 2);
-                
+
                 // requesting refill control to quit
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
@@ -1660,14 +1660,14 @@ pub mod tests {
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
-                
-                let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
 
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
 
             println!(
                 "* [Messaging] checking if messaging can reset refill control error succeeded."
             );
-        });    
+        });
     }
 }

@@ -266,7 +266,7 @@ impl FoodInjectionTrait for FoodInjection {
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
             (quit_command_received, _, _) =
-                self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+                self.process_external_request(rx_from_signal_handler, None);
             if quit_command_received {
                 break; // exit outer loop
             }
@@ -309,7 +309,7 @@ impl FoodInjectionTrait for FoodInjection {
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.pause_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+                    self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
                     break; // exit inner loop
                 }
@@ -358,7 +358,7 @@ impl FoodInjectionTrait for FoodInjection {
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.feed_duration {
                 (quit_command_received, _, _) =
-                    self.process_external_request(rx_from_signal_handler, rx_from_signal_handler);
+                    self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
                     break; // exit inner loop
                 }

@@ -311,7 +311,7 @@ impl TcpCommunication {
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }

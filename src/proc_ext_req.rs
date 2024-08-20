@@ -34,11 +34,11 @@ pub trait ProcessExternalRequestTrait {
     /// Checks if there are new messages in the channels.
     /// # Arguments
     /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging
+    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging: &Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
@@ -61,26 +61,31 @@ pub trait ProcessExternalRequestTrait {
             }
         };
 
-        let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Start => (true, false),
-                InternalCommand::Stop => (false, true),
-                _ => {
-                    println!("ProcessExternalRequestTrait: ignoring inapplicable command from messaging.");
-                    (false, false)
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                        "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
-                    );
+        let (start_command_received, stop_command_received) = match rx_from_messaging_opt {
+            Some(rx_from_messaging) => {
+                match rx_from_messaging.try_recv() {
+                    Ok(c) => match c {
+                        InternalCommand::Start => (true, false),
+                        InternalCommand::Stop => (false, true),
+                        _ => {
+                            println!("ProcessExternalRequestTrait: ignoring inapplicable command from messaging.");
+                            (false, false)
+                        }
+                    },
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                println!(
+                                "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
+                                );
+                            }
+                        }
+                        (false, false)
                     }
                 }
-                (false, false)
             }
+            None => (false, false),
         };
 
         //println!("ProcessExternalRequestTrait: quit_command_received={}, start_command_received={}, stop_command_received={}",
@@ -100,11 +105,11 @@ impl ProcessExternalRequestTrait for Refill {
     /// If the message contains the command to reset all errors, the function will reset all error bits.
     /// # Arguments
     /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging
+    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging: &Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
@@ -127,30 +132,35 @@ impl ProcessExternalRequestTrait for Refill {
             }
         };
 
-        let (start_command_received, stop_command_received) = match rx_from_messaging.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Start => (true, false),
-                InternalCommand::Stop => (false, true),
-                InternalCommand::ResetAllErrors => {
-                    self.refill_errors.reset_all_errors();
-                    (false, false)
-                }
-                _ => {
-                    println!("Refill: ignoring inapplicable command from messaging.");
-                    (false, false)
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
+        let (start_command_received, stop_command_received) = match rx_from_messaging_opt {
+            Some(rx_from_messaging) => {
+                match rx_from_messaging.try_recv() {
+                    Ok(c) => match c {
+                        InternalCommand::Start => (true, false),
+                        InternalCommand::Stop => (false, true),
+                        InternalCommand::ResetAllErrors => {
+                            self.refill_errors.reset_all_errors();
+                            (false, false)
+                        }
+                        _ => {
+                            println!("Refill: ignoring inapplicable command from messaging.");
+                            (false, false)
+                        }
+                    },
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                println!(
                             "Refill: Error in trying to receive command from messaging: {e:?}"
                         );
+                            }
+                        }
+                        (false, false)
                     }
                 }
-                (false, false)
             }
+            None => (false, false),
         };
 
         (
@@ -200,7 +210,7 @@ impl ProcessExternalRequestTrait for DataLogger {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -215,7 +225,7 @@ impl ProcessExternalRequestTrait for FoodInjection {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -230,7 +240,7 @@ impl ProcessExternalRequestTrait for MineralInjection {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -245,7 +255,7 @@ impl ProcessExternalRequestTrait for WaterInjection {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -260,7 +270,7 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -275,7 +285,7 @@ impl ProcessExternalRequestTrait for Controllino {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -290,7 +300,7 @@ impl ProcessExternalRequestTrait for GpioHandler {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -306,7 +316,7 @@ impl ProcessExternalRequestTrait for Messaging {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -321,7 +331,7 @@ impl ProcessExternalRequestTrait for TcpCommunication {
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         process_external_request_without_messaging(rx_from_signal_handler)
     }
@@ -331,12 +341,12 @@ impl ProcessExternalRequestTrait for Feed {
     /// Checks if there are new messages in the channels.
     /// Implementation for Feed
     /// # Arguments
-    /// * `rx_from_signal_handler` - receiver part of channel    
-    /// * `rx_from_messaging` - receiver part of channel    
+    /// * `rx_from_signal_handler` - reference to receiver part of channel    
+    /// * `rx_from_messaging_opt` - reference to receiver part of channel wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        rx_from_messaging: &Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
         let quit_command_received = match rx_from_signal_handler.try_recv() {
             Ok(c) => match c {
@@ -362,27 +372,32 @@ impl ProcessExternalRequestTrait for Feed {
         self.execute_command_received = false;
         self.profile_id_requested = -1;
         let (start_command_received, stop_command_received, execute_command_received, profile_id) =
-            match rx_from_messaging.try_recv() {
-                Ok(c) => match c {
-                    InternalCommand::Start => (true, false, false, 0),
-                    InternalCommand::Stop => (false, true, false, 0),
-                    InternalCommand::Execute(c) => (false, false, true, c),
-                    _ => {
-                        println!("Feed: ignoring inapplicable command from messaging.");
-                        (false, false, false, 0)
-                    }
-                },
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            println!(
-                        "Heating: Error in trying to receive command from messaging: {e:?}"
-                    );
+            match rx_from_messaging_opt {
+                Some(rx_from_messaging) => {
+                    match rx_from_messaging.try_recv() {
+                        Ok(c) => match c {
+                            InternalCommand::Start => (true, false, false, 0),
+                            InternalCommand::Stop => (false, true, false, 0),
+                            InternalCommand::Execute(c) => (false, false, true, c),
+                            _ => {
+                                println!("Feed: ignoring inapplicable command from messaging.");
+                                (false, false, false, 0)
+                            }
+                        },
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    println!(
+                                "Heating: Error in trying to receive command from messaging: {e:?}"
+                            );
+                                }
+                            }
+                            (false, false, false, 0)
                         }
                     }
-                    (false, false, false, 0)
                 }
+                None => (false, false, false, 0),
             };
 
         self.execute_command_received = execute_command_received;

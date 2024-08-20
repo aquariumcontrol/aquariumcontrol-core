@@ -393,7 +393,7 @@ impl Ventilation {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             let (quit_command_received, start_command_received, stop_command_received) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+                self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
                 break;
             }
@@ -473,21 +473,22 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::ventilation::Ventilation;
-    use crate::channel_content::AquariumDevice;
 
     fn prepare_ventilation_tests(short_ramp: bool) -> Ventilation {
         // prepare struct Ventilation for subsequent tests
         let config: ConfigData;
         if short_ramp {
-            config = read_config_file("/config/aquarium_control_test_ventilation_secondary.toml".to_string());
+            config = read_config_file(
+                "/config/aquarium_control_test_ventilation_secondary.toml".to_string(),
+            );
+        } else {
+            config = read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
         }
-        else {
-            config = read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());            
-        }           
         Ventilation::new(config.ventilation)
     }
 
@@ -597,10 +598,14 @@ pub mod tests {
         let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
 
         scope(|scope| {
@@ -637,7 +642,10 @@ pub mod tests {
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                );
                 _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -661,11 +669,11 @@ pub mod tests {
                     rx_ventilation_from_messaging,
                 );
                 println!("execution of test object finished.");
-                let _ =
-                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
             });
             println!("* [Ventilation] checking reaction to high temperature.");
-        });                
+        });
     }
 
     // Check if the ventilation is switched off with low temperature and switched back on when exiting the application.
@@ -684,10 +692,14 @@ pub mod tests {
         let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
 
         scope(|scope| {
@@ -724,15 +736,21 @@ pub mod tests {
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation)));
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
+                );
                 _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
-                
+
                 // check if ventilation is switched back on when exiting the application
                 let command_received = test_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                );
                 _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -756,11 +774,11 @@ pub mod tests {
                     rx_ventilation_from_messaging,
                 );
                 println!("execution of test object finished.");
-                let _ =
-                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
             });
             println!("* [Ventilation] checking reaction to low temperature.");
-        });                        
+        });
     }
 
     // Check if the ventilation is switched on and off during two cycles of the saw tooth profile.
@@ -779,10 +797,14 @@ pub mod tests {
         let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) = mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) = mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) = mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
 
         scope(|scope| {
@@ -815,18 +837,24 @@ pub mod tests {
 
             // thread for mock Controllino and mock Datalogger
             scope.spawn(move || {
-               for _ in 0..2 {
+                for _ in 0..2 {
                     let command_received = test_receive_actuation_command_send_confirmation(
-                            &rx_controllino_from_ventilation,
-                            &tx_controllino_to_ventilation,
-                        );
-                    assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                        &rx_controllino_from_ventilation,
+                        &tx_controllino_to_ventilation,
+                    );
+                    assert_eq!(
+                        command_received,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                    );
                     test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
                     let command_received = test_receive_actuation_command_send_confirmation(
-                            &rx_controllino_from_ventilation,
-                            &tx_controllino_to_ventilation,
-                        );
-                    assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation)));
+                        &rx_controllino_from_ventilation,
+                        &tx_controllino_to_ventilation,
+                    );
+                    assert_eq!(
+                        command_received,
+                        Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
+                    );
                     test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
                 }
 
@@ -835,7 +863,10 @@ pub mod tests {
                     &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
                 );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation)));
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                );
                 _ = test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -859,11 +890,11 @@ pub mod tests {
                     rx_ventilation_from_messaging,
                 );
                 println!("execution of test object finished.");
-                let _ =
-                    tx_ventilation_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
             });
             println!("* [Ventilation] checking reaction to low temperature.");
-        });                                
+        });
     }
 
     // Check if ventilation control is only actuating when quitting while schedule check provides negative result

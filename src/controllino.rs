@@ -185,7 +185,7 @@ pub struct ControllinoConfig {
 ///     controllino --> signal_handler[Signal handler]
 ///     signal_handler --> controllino
 /// ```
-        
+
 pub struct Controllino {
     /// configuration data for Controllino
     pub config: ControllinoConfig,
@@ -323,7 +323,7 @@ impl Controllino {
     ) {
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }

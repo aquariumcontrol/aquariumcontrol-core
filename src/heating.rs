@@ -329,7 +329,7 @@ impl Heating {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start heating has been received
                 stop_command_received,  // request to (temporarily) stop heating has been received
-            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
                 break;
             }
@@ -947,7 +947,8 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating, mut sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -995,10 +996,13 @@ pub mod tests {
             // thread for mock Controllino and mock data logger
             scope.spawn(move || {
                 let command_received = test_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                );
                 test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -1029,7 +1033,7 @@ pub mod tests {
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
             });
             println!("* [Heating] checking reaction to high temperature.");
-        });        
+        });
     }
 
     // Check if the heater is switched on and is not switched off with low temperature.
@@ -1040,7 +1044,8 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating, mut sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -1080,7 +1085,7 @@ pub mod tests {
                     1.0,
                     0.0,
                 );
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);                
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
@@ -1088,17 +1093,23 @@ pub mod tests {
             // thread for mock Controllino and mock data logger
             scope.spawn(move || {
                 let command_received = test_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Heater)));
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
+                );
                 test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
                 // check if heater is switched off when exiting application
                 let command_received = test_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                );
                 test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -1129,7 +1140,7 @@ pub mod tests {
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
             });
             println!("* [Heating] checking reaction to low temperature.");
-        });                      
+        });
     }
 
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
@@ -1140,7 +1151,8 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating, mut sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
@@ -1180,7 +1192,7 @@ pub mod tests {
                     1.0,
                     0.0,
                 );
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);                
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
@@ -1189,25 +1201,34 @@ pub mod tests {
             scope.spawn(move || {
                 for _ in 0..2 {
                     let command_received = test_heating_receive_actuation_command_send_confirmation(
-                            &rx_controllino_from_heating,
-                            &tx_controllino_to_heating,
-                        );
-                    assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
-                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                    let command_received = test_heating_receive_actuation_command_send_confirmation(
-                            &rx_controllino_from_heating,
-                            &tx_controllino_to_heating,
-                        );
-                    assert_eq!(command_received, Some(InternalCommand::SwitchOn(AquariumDevice::Heater)));
-                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                }    
-                // check if heater is switched off when exiting application
-                let command_received = test_heating_receive_actuation_command_send_confirmation(
                         &rx_controllino_from_heating,
                         &tx_controllino_to_heating,
                     );
-                assert_eq!(command_received, Some(InternalCommand::SwitchOff(AquariumDevice::Heater)));
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);               
+                    assert_eq!(
+                        command_received,
+                        Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                    );
+                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                    let command_received = test_heating_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    assert_eq!(
+                        command_received,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
+                    );
+                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                }
+                // check if heater is switched off when exiting application
+                let command_received = test_heating_receive_actuation_command_send_confirmation(
+                    &rx_controllino_from_heating,
+                    &tx_controllino_to_heating,
+                );
+                assert_eq!(
+                    command_received,
+                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                );
+                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
@@ -1237,7 +1258,7 @@ pub mod tests {
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
             });
             println!("* [Heating] checking reaction to low temperature.");
-        });                               
+        });
     }
 
     // checks if the Quit command is correctly processed

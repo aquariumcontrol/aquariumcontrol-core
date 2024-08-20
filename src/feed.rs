@@ -76,7 +76,7 @@ impl Feed {
             profile_id_requested: -1,
         }
     }
-        
+
     /// Loads and executes a given feed profile.
     /// # Arguments
     /// * `profile_id` - ID of feed profile to be executed
@@ -222,7 +222,7 @@ impl Feed {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
-            ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
                 break;
             }

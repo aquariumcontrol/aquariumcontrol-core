@@ -203,7 +203,6 @@ impl RefillErrors {
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 /// GPIO handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 
-                
 /// Architecture of the component is as follows:
 /// ```mermaid
 /// graph LR
@@ -528,7 +527,8 @@ impl Refill {
                     quit_command_received,
                     start_command_received,
                     stop_command_received,
-                ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+                ) = self
+                    .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
                 refill_inhibited = Self::calc_inhibition_flag(
                     refill_inhibited,
                     start_command_received,
@@ -655,7 +655,8 @@ impl Refill {
                     quit_command_received,
                     start_command_received,
                     stop_command_received,
-                ) = self.process_external_request(&rx_from_signal_handler, &rx_from_messaging);
+                ) = self
+                    .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
                 refill_inhibited = Self::calc_inhibition_flag(
                     refill_inhibited,
                     start_command_received,
@@ -990,7 +991,10 @@ pub mod tests {
             mpsc::channel();
 
         let (quit_command_received, start_command_received, stop_command_received) = refill
-            .process_external_request(&rx_refill_from_signal_handler, &rx_refill_from_messaging);
+            .process_external_request(
+                &rx_refill_from_signal_handler,
+                Some(&rx_refill_from_messaging),
+            );
         assert_eq!(quit_command_received, false);
         assert_eq!(start_command_received, false);
         assert_eq!(stop_command_received, false);
@@ -1570,7 +1574,7 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, start_command_received, stop_command_received) = refill.process_external_request(
                         &rx_refill_from_signal_handler,
-                        &rx_refill_from_messaging);
+                       Some(&rx_refill_from_messaging));
 
                 assert_eq!(quit_command_received, false);
                 assert_eq!(start_command_received, false);
@@ -1612,7 +1616,7 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, start_command_received, stop_command_received) = refill.process_external_request(
                         &rx_refill_from_signal_handler,
-                        &rx_refill_from_messaging,
+                        Some(&rx_refill_from_messaging),
                     );
                 assert_eq!(quit_command_received, true);
                 assert_eq!(start_command_received, false);

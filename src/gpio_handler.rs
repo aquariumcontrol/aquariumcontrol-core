@@ -127,14 +127,14 @@ impl GpioHandler {
     /// * `config` - configuration data for GPIO handler
     /// * `i2c_config` - configuration data for I2C handler
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
-        let use_simulator = config.use_simulator;	// create copy because struct is moved
+        let use_simulator = config.use_simulator; // create copy because struct is moved
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
             i2c_interface: match use_simulator {
                 true => None,
                 false => Some(I2cInterface::new(i2c_config)),
-            }
+            },
         }
     }
 
@@ -187,24 +187,17 @@ impl GpioHandler {
         match internal_command {
             InternalCommand::RequestSignal(signal) => match signal {
                 AquariumSignal::WaterTemperature => {
-                    match i2c
-                        .get_response_from_i2c(AquariumSignal::WaterTemperature)
-                    {
+                    match i2c.get_response_from_i2c(AquariumSignal::WaterTemperature) {
                         Ok(c) => c,
                         Err(_) => self.config.replacement_value_water_temperature,
                     }
                 }
-                AquariumSignal::pH => {
-                    match i2c
-                        .get_response_from_i2c(AquariumSignal::pH) {
-                        Ok(c) => c,
-                        Err(_) => self.config.replacement_value_ph,
-                    }
-                }
+                AquariumSignal::pH => match i2c.get_response_from_i2c(AquariumSignal::pH) {
+                    Ok(c) => c,
+                    Err(_) => self.config.replacement_value_ph,
+                },
                 AquariumSignal::Conductivity => {
-                    match i2c
-                        .get_response_from_i2c(AquariumSignal::Conductivity)
-                    {
+                    match i2c.get_response_from_i2c(AquariumSignal::Conductivity) {
                         Ok(c) => c,
                         Err(_) => self.config.replacement_value_conductivity,
                     }
@@ -269,7 +262,7 @@ impl GpioHandler {
 
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, &rx_from_signal_handler);
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
