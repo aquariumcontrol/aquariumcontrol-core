@@ -9,27 +9,30 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #![allow(non_snake_case)]
 use chrono::Local;
+use chrono::NaiveDateTime;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+use std::fs;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
-use std::fs;
-use chrono::NaiveDateTime;
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::iir_filter::IIRFilter;
 use crate::iir_filter::IIRFilterConfig;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
+use crate::sql_interface::SqlInterface;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
-use crate::sql_interface::SqlInterface;
 
 /// Holds the configuration data for the regular data logging to SQL database.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
+    /// switch indicating if self-generated timestamp or data-base timestamp shall be used
+    use_sql_timestamp: bool,
+
     /// interval of the data logger in seconds
     logging_interval: u64,
 
@@ -140,12 +143,16 @@ impl DataLogger {
         if config.output_to_disk {
             if config.output_file_name_timestamp.is_empty()
                 || config.output_file_name_water_temperature.is_empty()
-                || config.output_file_name_water_temperature_filtered.is_empty()
+                || config
+                    .output_file_name_water_temperature_filtered
+                    .is_empty()
                 || config.output_file_name_pH.is_empty()
                 || config.output_file_name_pH_filtered.is_empty()
                 || config.output_file_name_conductivity.is_empty()
                 || config.output_file_name_conductivity_filtered.is_empty()
-                || config.output_file_name_tank_level_switch_position.is_empty()
+                || config
+                    .output_file_name_tank_level_switch_position
+                    .is_empty()
                 || config.output_file_name_tank_level_switch_invalid.is_empty()
                 || config.output_file_name_ventilation_is_on.is_empty()
                 || config.output_file_name_heating_is_on.is_empty()
@@ -266,13 +273,8 @@ impl DataLogger {
     /// # Arguments
     /// * `data` - string data to be written to file
     /// * `output_file_name` - name of file where the value shall be written to    
-    fn output_timestamp(
-        &self,
-        timestamp: NaiveDateTime,
-        output_file_name: &String,
-    ) {
+    fn output_timestamp(&self, timestamp: NaiveDateTime, output_file_name: &String) {
         if self.config.output_to_disk {
-
             match fs::write(output_file_name, timestamp.to_string()) {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
@@ -337,20 +339,16 @@ impl DataLogger {
                 break;
             }
 
-            match SqlInterface::get_current_timestamp(&mut sql_interface_data.conn) {
-                Ok(c) => {
-                    self.output_timestamp(c, &self.config.output_file_name_timestamp);
-                },
-                Err(e) => {
-                    println!("DataLogger: Could not retrieve timestamp from database: {e:?}");
-                }
-            }
-            
             // get information if refill is in progress from refill thread
             match rx_from_refill.try_recv() {
                 Ok(c) => {
                     refill_in_progress = c;
-                    self.output_state(c, "ON", "OFF", &self.config.output_file_name_refill_in_progress);
+                    self.output_state(
+                        c,
+                        "ON",
+                        "OFF",
+                        &self.config.output_file_name_refill_in_progress,
+                    );
                 }
                 Err(e) => {
                     match e {
@@ -382,7 +380,12 @@ impl DataLogger {
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
                     ventilation_is_on = c;
-                    self.output_state(c, "ON", "OFF", &self.config.output_file_name_ventilation_is_on);
+                    self.output_state(
+                        c,
+                        "ON",
+                        "OFF",
+                        &self.config.output_file_name_ventilation_is_on,
+                    );
                 }
                 Err(e) => {
                     match e {
@@ -423,7 +426,11 @@ impl DataLogger {
                     // now listen for response
                     ph = match rx_from_gpio.recv() {
                         Ok(c) => {
-                            self.output_signal(c, AquariumSignal::pH, &self.config.output_file_name_pH);
+                            self.output_signal(
+                                c,
+                                AquariumSignal::pH,
+                                &self.config.output_file_name_pH,
+                            );
                             Some(c)
                         }
                         Err(_) => None,
@@ -588,8 +595,22 @@ impl DataLogger {
                 None => None,
             };
 
+            // get timestampe either from SQL server or application-generated
+            let current_timestamp = match self.config.use_sql_timestamp {
+                true => match SqlInterface::get_current_timestamp(&mut sql_interface_data.conn) {
+                    Ok(c) => {
+                        self.output_timestamp(c, &self.config.output_file_name_timestamp);
+                        c
+                    }
+                    Err(e) => {
+                        println!("DataLogger: Could not retrieve timestamp from database: {e:?} - using application-generated timestamp.");
+                        Local::now().naive_local()
+                    }
+                },
+                false => Local::now().naive_local(),
+            };
+
             // all data received, let's construct a data frame
-            let current_timestamp = Local::now().naive_local();
             let data_frame = DataFrame {
                 timestamp: current_timestamp,
                 water_temperature: water_temperature,
