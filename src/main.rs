@@ -23,6 +23,7 @@ mod config;
 mod controllino;
 mod controllino_actuate_hardware;
 mod controllino_actuate_simulator;
+mod data_injection;
 mod data_logger;
 mod device_relay_logic;
 mod feed;
@@ -68,6 +69,7 @@ use crate::config::read_config_file;
 use crate::controllino::Controllino;
 use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::controllino_actuate_simulator::ControllinoActuateSimulator;
+use crate::data_injection::DataInjection;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::food_injection::FoodInjection;
@@ -673,7 +675,10 @@ fn main() {
 
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
+
+    let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
+
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
     let mut feed = Feed::new(config.feed, sql_interface_feed);
@@ -806,6 +811,7 @@ fn main() {
 
         scope.spawn(move || {
             data_logger.execute(
+                &mut data_injection,
                 sql_interface_data,
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
