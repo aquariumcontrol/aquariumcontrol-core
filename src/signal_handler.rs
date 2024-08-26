@@ -396,7 +396,7 @@ pub fn handle_signals(
     println!("signal_handler: finished.");
 
     // Messaging is checking for termination signal periodically.
-    match tx_to_messaging.send(InternalCommand::Terminate) {
+    match tx_to_messaging.send(InternalCommand::Quit) {
         Ok(_) => {
             println!("signal_handler: Sent termination signal to Messaging thread.");
         }
