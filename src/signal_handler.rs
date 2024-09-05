@@ -449,8 +449,8 @@ pub fn handle_signals(
         }
     }
 
-    // Messaging is checking for termination signal periodically.
-    match tx_to_messaging.send(InternalCommand::Terminate) {
+    // Messaging is checking for Quit signal periodically.
+    match tx_to_messaging.send(InternalCommand::Quit) {
         Ok(_) => {}
         Err(e) => {
             error!(

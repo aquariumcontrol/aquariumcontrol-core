@@ -199,7 +199,7 @@ fn process_external_request_without_messaging(
             _ => {
                 warn!(
                     target: LOG_TARGET_PROC_EXT_REQ,
-                    "ProcessExternalRequestTrait: ignoring not applicable command from signal handler."
+                    "ignoring not applicable command from signal handler."
                 );
                 false
             }
