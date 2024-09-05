@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
+use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -18,6 +19,8 @@ use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
 use crate::refill::TankLevelSwitchSignals;
 use crate::sql_interface_refill::SqlInterfaceRefill;
+
+const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
 /// Trait for the execution of the refill once control has detected that water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -64,6 +67,7 @@ pub trait WaterInjectionTrait {
 pub struct WaterInjection;
 
 impl WaterInjectionTrait for WaterInjection {
+    
     /// this function executes the refill operation
     fn inject_water(
         &mut self,
@@ -79,17 +83,17 @@ impl WaterInjectionTrait for WaterInjection {
         sql_interface_refill: &mut SqlInterfaceRefill,
     ) -> bool {
         // inform data logger that refill is in progress
-        println!("Refill: communicating to data logger thread...");
         match tx_to_datalogger.send(true) {
             Ok(_) => { /* no listening to response */ }
             Err(e) => {
-                println!(
-                "Refill: Error in channel communication to DataLogger when starting refill: {e:?}"
-            );
+                error!(
+                    target: LOG_TARGET_WATER_INJECTION,
+                    "channel communication to data logger when starting refill failed ({e:?})"
+                );
             }
         }
-        println!("Refill: executing refill...");
         let mut quit_command_received = false;
+
         // command start of refill pump
         match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
             Ok(_) => {
@@ -97,15 +101,20 @@ impl WaterInjectionTrait for WaterInjection {
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Refill: Error when trying to receive answer from Controllino when switching on refill pump: {e:?}")
+                        error!(
+                            target: LOG_TARGET_WATER_INJECTION,
+                            "receiving answer from Controllino when switching on refill pump failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Refill: Error in channel communication to Controllino when switching on refill pump: {e:?}");
+                error!(
+                    target: LOG_TARGET_WATER_INJECTION,
+                    "channel communication to Controllino when switching on refill pump failed ({e:?})"
+                );
             }
         }
-        println!("Refill: Sent request to switch on refill pump to Controllino thread.");
 
         //*** wait for condition to stop refilling ***
         let spin_sleeper = SpinSleeper::default();
@@ -121,7 +130,6 @@ impl WaterInjectionTrait for WaterInjection {
         loop {
             spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
             refill_time_seconds += sleep_interval_seconds;
-            println!("Water injection: updating tank level switch signals");
             tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
             if tank_level_switch_signals.tank_level_switch_position
                 && additional_refill_volume_executed > config.additional_refill_volume
@@ -139,21 +147,12 @@ impl WaterInjectionTrait for WaterInjection {
             refill_volume += refill_increment;
             if tank_level_switch_signals.tank_level_switch_position {
                 additional_refill_volume_executed += refill_increment;
-                println!(
-                    "Executing additional refill at {}L, limit at {}L",
-                    additional_refill_volume_executed, config.additional_refill_volume
-                );
             }
             (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
-                println!("Water injection: received Quit command");
                 break;
             }
-            println!(
-                "Water injection: current refill volume at {}L, limit={}L",
-                refill_volume, config.max_refill_volume
-            );
             if refill_volume > config.max_refill_volume {
                 refill_errors.error_switch_stuck_low = true;
                 refill_error_code = 2;
@@ -162,35 +161,37 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        println!(
-            "Water injection: Sending request to switch off refill pump to Controllino thread"
-        );
         match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
             Ok(_) => {
                 // now listen for response
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Refill: Error when trying to receive answer from Controllino when switching off refill pump: {e:?}")
+                        error!(
+                            target: LOG_TARGET_WATER_INJECTION,
+                            "receiving answer from Controllino when switching off refill pump failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Refill: Error in channel communication to Controllino when switching off refill pump: {e:?}");
+                error!(
+                    target: LOG_TARGET_WATER_INJECTION,
+                    "channel communication to Controllino when switching off refill pump failed ({e:?})"
+                );
             }
         }
-        println!("Water injection: Sent request to switch off refill pump to Controllino thread.");
 
         // inform data logger that refill is finished
         match tx_to_datalogger.send(false) {
             Ok(_) => { /* no listening to response */ }
             Err(e) => {
-                println!(
-                "Refill: Error in channel communication to DataLogger when finishing refill: {e:?}"
-            );
+                error!(
+                    target: LOG_TARGET_WATER_INJECTION,
+                    "channel communication to data logger when finishing refill failed ({e:?})"
+                );
             }
         }
-        println!("Water injection: Sent information to data logger.");
 
         // write result to data base
         match sql_interface_refill.insert_refill_event(
@@ -201,9 +202,10 @@ impl WaterInjectionTrait for WaterInjection {
         ) {
             Ok(_) => {}
             Err(e) => {
-                println!(
-                "Refill: error occurred when writing refill operation data to SQL database: {e:?}"
-            );
+                error!(
+                    target: LOG_TARGET_WATER_INJECTION,
+                    "writing refill operation data to SQL database failed ({e:?})"
+                );
                 refill_errors.error_sql_update_failed = true;
             }
         }

@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
@@ -148,6 +149,8 @@ pub struct SqlInterfaceSchedule {
 }
 
 impl SqlInterfaceSchedule {
+    const LOG_TARGET_SQL_INTERFACE_SCHEDULE: &'static str = "sql_interface_schedule";
+
     /// Provides a struct of type SqlInterfaceSchedule.
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
@@ -189,7 +192,10 @@ impl SqlInterfaceSchedule {
                     self.schedules.push(schedule_entry);
                 }
                 Err(e) => {
-                    println!("SqlInterfaceSchedule: Error reading schedule: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE,
+                        "reading schedule faild ({e:?})"
+                    );
                     return Err(e);
                 }
             }

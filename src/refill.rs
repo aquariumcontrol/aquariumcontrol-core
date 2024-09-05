@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fmt;
@@ -81,6 +82,8 @@ pub struct TankLevelSwitchSignals {
     pub error_receive_tank_level_switch_invalid: bool,
 }
 
+const LOG_TARGET_REFILL: &str = "refill";
+
 impl TankLevelSwitchSignals {
     /// Executes the channel communication to update the tank level switch position signal
     /// as well as the tank level switch invalid signal.
@@ -97,7 +100,7 @@ impl TankLevelSwitchSignals {
             AquariumSignal::TankLevelSwitchPosition,
         )) {
             Ok(_) => {
-                //println!("Refill: Sent request for tank level switch position.");
+                // Sent request for tank level switch position.
                 // now listen for response
                 self.tank_level_switch_position = match rx_from_gpio.recv() {
                     Ok(c) => {
@@ -105,9 +108,9 @@ impl TankLevelSwitchSignals {
                         c > 0.0
                     }
                     Err(e) => {
-                        println!(
-                            "Refill: Error in update_tank_level_switch_signals \
-                            when reading channel content for tank_level_switch_position: {e:?}"
+                        error!(
+                            target: LOG_TARGET_REFILL,
+                            "receiving tank level switch position from GPIO handler failed ({e:?})"
                         );
                         self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
                         false
@@ -115,7 +118,10 @@ impl TankLevelSwitchSignals {
                 };
             }
             Err(e) => {
-                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch position: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "channel communication for GPIO handler for tank level switch position failed ({e:?})"
+                );
             }
         }
 
@@ -131,9 +137,9 @@ impl TankLevelSwitchSignals {
                         c > 0.0
                     }
                     Err(e) => {
-                        println!(
-                            "Refill: Error in update_tank_level_switch_signals \
-                            when reading channel content for tank_level_switch_invalid: {e:?}"
+                        error!(
+                            target: LOG_TARGET_REFILL,
+                            "receiving tank level switch invalid from GPIO handler failed ({e:?})"
                         );
                         self.error_receive_tank_level_switch_invalid = true;
                         true
@@ -141,22 +147,25 @@ impl TankLevelSwitchSignals {
                 };
             }
             Err(e) => {
-                println!("Refill: Error in channel communication to GPIO handler when requesting tank level switch invalid: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "channel communication for GPIO handler for tank level switch invalid failed ({e:?})"
+                );
             }
         }
 
-        println!(
-            "Refill: update_tank_level_switch_signals set struct variables \
-                        tank_level_switch_position={} and tank_level_switch_invalid={}",
-            match self.tank_level_switch_position {
-                true => "high",
-                false => "low",
-            },
-            match self.tank_level_switch_invalid {
-                true => "invalid",
-                false => "valid",
-            }
-        );
+        //println!(
+        //    "Refill: update_tank_level_switch_signals set struct variables \
+        //                tank_level_switch_position={} and tank_level_switch_invalid={}",
+        //    match self.tank_level_switch_position {
+        //        true => "high",
+        //        false => "low",
+        //    },
+        //    match self.tank_level_switch_invalid {
+        //        true => "invalid",
+        //        false => "valid",
+        //    }
+        //);
     }
 }
 
@@ -241,9 +250,10 @@ impl fmt::Display for RefillSqlData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            " Refill: Duration since last refill is {} seconds.\n \
+            " {}: Duration since last refill is {} seconds.\n \
             Refill: volume of last 24h is {} L.\n Refill: Count of last 24h is {}.\n \
             Refill: volume of last hour is {} L.\n Refill: Count of last hour is {}.",
+            LOG_TARGET_REFILL,
             self.duration_since_last_refill,
             self.refill_volume_last_24h,
             self.refill_count_last_24h,
@@ -341,11 +351,19 @@ impl Refill {
             Ok(_) => match self.sql_interface_refill.get_duration_since_last_refill() {
                 Ok(c) => c,
                 Err(e) => {
-                    panic!("Could not get duration since last refill event: {e:?}");
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "could not get duration since last refill event ({e:?})"
+                    );
+                    99 // @todo: replace with default value
                 }
             },
             Err(e) => {
-                panic!("Could not check if refill table is empty or not: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "could not check if refill table is empty or not ({e:?})"
+                );
+                99 // @todo: replace with default value
             }
         };
 
@@ -353,14 +371,21 @@ impl Refill {
         {
             Ok(c) => c,
             Err(e) => {
-                panic!("Could not get refill volume of last 24 hours: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "could not get refill volume of last 24 hours ({e:?})");
+                99.0 // @todo: replace with default value
             }
         };
 
         let refill_count_last_24h = match self.sql_interface_refill.get_refill_count_of_last_24h() {
             Ok(c) => c,
             Err(e) => {
-                panic!("Could not get refill count of last 24 hours: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "could not get refill count of last 24 hours: {e:?}"
+                );
+                99 // @todo: replace with default value
             }
         };
 
@@ -368,7 +393,11 @@ impl Refill {
             match self.sql_interface_refill.get_refill_volume_of_last_hour() {
                 Ok(c) => c,
                 Err(e) => {
-                    panic!("Could not get refill volume of last hour: {e:?}");
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "Could not get refill volume of last hour: {e:?}"
+                    );
+                    99.0 // @todo: replace with default value
                 }
             };
 
@@ -376,7 +405,11 @@ impl Refill {
         {
             Ok(c) => c,
             Err(e) => {
-                panic!("Could not get refill count of last hour: {e:?}");
+                error!(
+                    target: LOG_TARGET_REFILL,
+                    "Could not get refill count of last hour: {e:?}"
+                );
+                99 // @todo: replace with default value
             }
         };
         RefillSqlData {
@@ -408,12 +441,18 @@ impl Refill {
         stop_command_received: bool,
     ) -> bool {
         if stop_command_received {
-            println!("Refill: received Stop command. Inhibiting refill control.");
+            info!(
+                target: LOG_TARGET_REFILL,
+                "received Stop command. Inhibiting refill control."
+            );
             return true;
         }
         if start_command_received {
             // start command has higher priority than stop command
-            println!("Refill: received Start command. Restarting refill control.");
+            info!(
+                target: LOG_TARGET_REFILL,
+                "received Start command. Restarting refill control."
+            );
             return false;
         }
         current_state
@@ -427,40 +466,45 @@ impl Refill {
         let refill_check_volume_last_24h =
             sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
         if refill_check_volume_last_24h {
-            println!(
-                "Refill volume of last 24h exceeds permissible refill volume per 24h of {}",
+            info!(
+                target: LOG_TARGET_REFILL,
+                "refill volume of last 24h exceeds permissible refill volume per 24h of {}",
                 self.config.max_refill_volume_24h
             )
         }
         let refill_check_count_last_24h =
             sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
         if refill_check_count_last_24h {
-            println!(
-                "Refill count of last 24h exceeds permissible refill count per 24h of {}",
+            info!(
+                target: LOG_TARGET_REFILL,
+                "refill count of last 24h exceeds permissible refill count per 24h of {}",
                 self.config.max_refill_count_24h
             )
         }
         let refill_check_volume_last_hour =
             sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
         if refill_check_volume_last_hour {
-            println!(
-                "Refill volume of last hour exceeds permissible refill volume per hour of {}",
+            info!(
+                target: LOG_TARGET_REFILL,
+                "refill volume of last hour exceeds permissible refill volume per hour of {}",
                 self.config.max_refill_volume_hour
             )
         }
         let refill_check_count_last_hour =
             sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
         if refill_check_count_last_hour {
-            println!(
-                "Refill count of last 24h exceeds permissible refill count per hour of {}",
+            info!(
+                target: LOG_TARGET_REFILL,
+                "refill count of last 24h exceeds permissible refill count per hour of {}",
                 self.config.max_refill_count_hour
             )
         }
         let refill_check_intervall_last_refill =
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_intervall_last_refill {
-            println!(
-                "Time interval since last refill {} is too small (limit={}).",
+            info!(
+                target: LOG_TARGET_REFILL,
+                "time interval since last refill {} is too small (limit={}).",
                 sql_refill_data.duration_since_last_refill, self.config.min_interval_last_refill
             );
         }
@@ -512,7 +556,6 @@ impl Refill {
 
         // retrieving data from SQL data base
         let mut sql_refill_data = self.get_sql_refill_data();
-        println!("{}", sql_refill_data);
 
         let mut refill_inhibited = false;
         let mut quit_command_received = false; // request to end the application has been received
@@ -553,9 +596,6 @@ impl Refill {
             }
 
             if self.config.active {
-                // check for external requests while waiting for the check interval to pass
-                println!("Refill: executing main loop.");
-
                 // frequent update required for calculation of error condition switch stuck high
                 sql_refill_data.duration_since_last_refill =
                     sql_refill_data.duration_since_last_refill + self.config.check_interval;
@@ -573,22 +613,11 @@ impl Refill {
 
                 self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
 
-                println!(
-                    "self.tank_level_switch_position_stabilized={}",
-                    self.tank_level_switch_position_stabilized
-                );
-                println!(
-                    "tank_level_switch_signals.tank_level_switch_invalid={}",
-                    tank_level_switch_signals.tank_level_switch_invalid
-                );
                 if !quit_command_received
                     && !self.tank_level_switch_position_stabilized
                     && !tank_level_switch_signals.tank_level_switch_invalid
                     && !refill_inhibited
                 {
-                    println!(
-                        "Refill: Stabilized tank level switch position indicates low water level."
-                    );
                     sql_refill_data = self.get_sql_refill_data();
 
                     // execute checks before initiating refill
@@ -597,31 +626,30 @@ impl Refill {
                             && !self.refill_errors.error_sql_update_failed
                         {
                             // schedule check to see if actuation is allowed
-                            println!("Refill: initiating communication to schedule checker.");
                             match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                                 Ok(_) => {
                                     // now listen for response
                                     schedule_check_result = match rx_from_schedule_check.recv() {
                                         Ok(c) => c,
                                         Err(e) => {
-                                            println!(
-                                                "Refill: Error when reading channel content for schedule check: {e:?}"
+                                            error!(
+                                                target: LOG_TARGET_REFILL,
+                                                "reading channel content for schedule check failed ({e:?})"
                                             );
-                                            false // assume we are not allowed to actuate when communication is not successful
+                                            true // assume we are allowed to actuate when communication is not successful
                                         }
                                     };
                                 }
                                 Err(e) => {
-                                    println!(
-                                        "Refill: Error in channel communication to schedule check: {e:?}"
+                                    error!(
+                                        target: LOG_TARGET_REFILL,
+                                        "channel communication to schedule check failed ({e:?})"
                                     );
                                 }
                             }
-                            println!("Refill: finished communication to schedule checker.");
 
                             if schedule_check_result {
                                 // conditions for allowing refill operation are given
-                                println!("Refill: Executing refill.");
                                 // inner scope to limit lifetime of unlocked mutex
                                 {
                                     let mut mutex_data =
@@ -648,6 +676,7 @@ impl Refill {
             }
 
             // wait for configured time period before rechecking the sensor signal
+            // check for external requests while waiting
             i = 0;
             while i < self.config.check_interval * 10 {
                 i = i + 1;
@@ -671,13 +700,14 @@ impl Refill {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Refill: Sending Quit confirmation to signal handler.");
+        info!(
+            target: LOG_TARGET_REFILL,
+            "sending Quit confirmation to signal handler."
+        );
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "Refill: Error in trying to send quit confirmation back to signal handler: {e:?}"
-                );
+                error!("sending quit confirmation back to signal handler failed ({e:?})");
             }
         };
 
@@ -690,12 +720,19 @@ impl Refill {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Refill: ignoring inapplicable command from signal handler.");
+                        warn!(
+                            target: LOG_TARGET_REFILL,
+                            "ignoring not applicable command {} from signal handler",
+                            c
+                        );
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Refill: error when trying to receive termination signal: {e:?}");
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "receiving termination signal from signal handler failed ({e:?})"
+                    );
                     false
                 }
             };

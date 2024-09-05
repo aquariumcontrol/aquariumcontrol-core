@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -58,6 +59,8 @@ pub struct FoodInjection {
 }
 
 impl FoodInjection {
+    const LOG_TARGET_FOOD_INJECTION: &'static str = "food_injection";
+
     /// Provide a struct of type FoodInjection
     pub fn new(config: &FeedConfig) -> FoodInjection {
         FoodInjection {
@@ -91,7 +94,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Skimmer),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Skimmer),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for skimmer.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for skimmer."
+                    );
                     return;
                 }
             };
@@ -102,12 +108,18 @@ impl FoodInjection {
                             self.skimmer_state = target_skimmer_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on skimmer: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on skimmer failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on skimmer: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on skimmer failed ({e:?})"
+                    );
                 }
             }
         }
@@ -117,7 +129,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump1),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for main pump 1.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for main pump 1."
+                    );
                     return;
                 }
             };
@@ -128,12 +143,18 @@ impl FoodInjection {
                             self.main_pump1_state = target_main_pump1_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on main pump 1: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on main pump 1 failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on main pump 1: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on main pump 1 failed ({e:?})"
+                    );
                 }
             }
         }
@@ -143,7 +164,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump2),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for main pump 2.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for main pump 2."
+                    );
                     return;
                 }
             };
@@ -154,12 +178,18 @@ impl FoodInjection {
                             self.main_pump2_state = target_main_pump2_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on main pump 2: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on main pump 2 failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on main pump 2: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on main pump 2 failed ({e:?})"
+                    );
                 }
             }
         }
@@ -169,7 +199,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump1),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for aux pump 1.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for aux pump 1."
+                    );
                     return;
                 }
             };
@@ -180,12 +213,18 @@ impl FoodInjection {
                             self.aux_pump1_state = target_aux_pump1_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on aux pump 1: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on aux pump 1 failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux pump 1: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on aux pump 1 failed ({e:?})"
+                    );
                 }
             }
         }
@@ -195,7 +234,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump2),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for aux pump 2.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for aux pump 2."
+                    );
                     return;
                 }
             };
@@ -206,12 +248,18 @@ impl FoodInjection {
                             self.aux_pump2_state = target_aux_pump2_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on aux pump 2: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on aux pump 2 failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux pump 2: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on aux pump 2 failed ({e:?})"
+                    );
                 }
             }
         }
@@ -221,7 +269,10 @@ impl FoodInjection {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Feeder),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Feeder),
                 _ => {
-                    println!("food_injection: Error - received undefined state as target state for feeder.");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "received undefined state as target state for feeder."
+                    );
                     return;
                 }
             };
@@ -232,12 +283,18 @@ impl FoodInjection {
                             self.feeder_state = target_feeder_state;
                         }
                         Err(e) => {
-                            println!("FoodInjection: Error when trying to receive answer from Controllino when switching on feeder: {e:?}")
+                            error!(
+                                target: Self::LOG_TARGET_FOOD_INJECTION,
+                                "receiving answer from Controllino when switching on feeder failed ({e:?})"
+                            );
                         }
                     };
                 }
                 Err(e) => {
-                    println!("FoodInjection: Error in channel communication to Controllino when switching on aux feeder: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FOOD_INJECTION,
+                        "channel communication to Controllino when switching on aux feeder failed ({e:?})"
+                    );
                 }
             }
         }

@@ -7,7 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info};
 use serde_derive::Deserialize;
+use std::env;
 use std::fs;
 
 use crate::balling::BallingConfig;
@@ -85,18 +87,20 @@ pub struct ConfigData {
 /// # Arguments:
 /// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 pub fn read_config_file(relative_path: String) -> ConfigData {
-    use std::env;
+    const LOG_TARGET_CONFIG: &str = "config";
+
     let out_dir = match env::var("CARGO_MANIFEST_DIR") {
         Ok(c) => c,
         Err(_) => {
-            println!("config: Could not read environment variable CARGO_MANIFEST_DIR. Using fallback path.");
+            error!(target: LOG_TARGET_CONFIG,
+                "could not read environment variable CARGO_MANIFEST_DIR. Using fallback path.");
             "/usr/local/src/aquarium_control".to_string()
         }
     };
 
     let filename = out_dir + &relative_path;
 
-    println!("Reading config in {}", filename);
+    info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block
     // to return the `data: Ok(c)` as a `String`
@@ -122,7 +126,10 @@ pub fn read_config_file(relative_path: String) -> ConfigData {
         // Handle the `error` case.
         Err(e) => {
             // Write `msg` to `stderr`.
-            panic!("Unable to load data from `{filename}`:{e}");
+            panic!(
+                "{}: unable to load data from `{filename}` ({e})",
+                LOG_TARGET_CONFIG
+            );
         }
     }
 }

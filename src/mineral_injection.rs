@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
@@ -71,6 +72,7 @@ impl MineralInjectionTrait for MineralInjection {
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
     ) -> (bool, u32) {
+        const LOG_TARGET_MINERAL_INJECTION: &str = "mineral_injection";
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
@@ -83,12 +85,18 @@ impl MineralInjectionTrait for MineralInjection {
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Balling mineral dosing: Error when trying to receive answer from Controllino when switching on dosing pump: {e:?}")
+                        error!(
+                            target: LOG_TARGET_MINERAL_INJECTION,
+                            "receiving answer from Controllino when switching on dosing pump failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Balling mineral dosing: Error in channel communication to Controllino when switching on dosing pump: {e:?}");
+                error!(
+                    target: LOG_TARGET_MINERAL_INJECTION,
+                    "channel communication to Controllino when switching on dosing pump failed ({e:?})"
+                );
             }
         }
 
@@ -115,12 +123,18 @@ impl MineralInjectionTrait for MineralInjection {
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Balling mineral dosing: Error when trying to receive answer from Controllino when switching off dosing pump: {e:?}")
+                        error!(
+                            target: LOG_TARGET_MINERAL_INJECTION,
+                            "receiving answer from Controllino when switching off dosing pump failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Balling mineral dosing: Error in channel communication to Controllino when switching off dosing pump: {e:?}");
+                error!(
+                    target: LOG_TARGET_MINERAL_INJECTION,
+                    "channel communication to Controllino when switching off dosing pump failed ({e:?})"
+                );
             }
         }
 

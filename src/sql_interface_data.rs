@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
@@ -181,6 +182,8 @@ pub struct SqlInterfaceData {
 }
 
 impl SqlInterfaceData {
+    const LOG_TARGET_SQL_INTERFACE_DATA: &'static str = "sql_interface_data";
+
     /// Provides a struct of type SqlInterfaceData
     /// # Arguments
     /// * `conn` - connection to SQL database
@@ -420,7 +423,10 @@ impl SqlInterfaceData {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_DATA,
+                    "could not insert data frame into database ({e:?})"
+                );
                 return Err(SqlInterfaceError::InsertDataFrameFailure(
                     "Error when inserting data frame into database using query: ".to_string()
                         + sql_query_string.as_str(),

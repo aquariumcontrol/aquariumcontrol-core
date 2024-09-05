@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -20,6 +21,8 @@ use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
+
+const LOG_TARGET_VENTILATION: &str = "ventilation";
 
 /// Holds the configuration data for the ventilation control.
 /// The configuration is loaded from the .toml configuration file.
@@ -72,21 +75,29 @@ fn switch_on_ventilation(
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Ventilation: Error when trying to receive answer from Controllino when switching on ventilation: {e:?}");
+                        error!(
+                            target: LOG_TARGET_VENTILATION,
+                            "receiving answer from Controllino when switching on ventilation failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Ventilation: Error in channel communication to Controllino when switching on ventilation: {e:?}");
+                error!(
+                    target: LOG_TARGET_VENTILATION,
+                    "channel communication to Controllino when switching on ventilation ({e:?})"
+                );
             }
         }
         match tx_to_datalogger.send(true) {
             Ok(_) => {}
             Err(e) => {
-                println!("Ventilation: Error in channel communication to data logger when switching on ventilation: {e:?}");
+                error!(
+                    target: LOG_TARGET_VENTILATION,
+                    "channel communication to data logger failed when switching on ventilation ({e:?})"
+                );
             }
         }
-        println!("Ventilation: Switched on ventilation.");
 
         *mutex_data += 1;
     }
@@ -113,21 +124,29 @@ fn switch_off_ventilation(
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Ventilation: Error when trying to receive answer from Controllino when switching off ventilation: {e:?}");
+                        error!(
+                            target: LOG_TARGET_VENTILATION,
+                            "receiving answer from Controllino when switching off ventilation failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Ventilation: Error in channel communication to Controllino when switching off ventilation: {e:?}");
+                error!(
+                    target: LOG_TARGET_VENTILATION,
+                    "channel communication to Controllino when switching off ventilation failed ({e:?})"
+                );
             }
         }
         match tx_to_datalogger.send(false) {
             Ok(_) => {}
             Err(e) => {
-                println!("Ventilation: Error in channel communication to data logger when switching off ventilation: {e:?}");
+                error!(
+                    target: LOG_TARGET_VENTILATION,
+                    "channel communication to data logger when switching off ventilation failed ({e:?})"
+                );
             }
         }
-        println!("Ventilation: Switched off ventilation.");
         *mutex_data += 1;
     }
 }
@@ -226,8 +245,9 @@ impl Ventilation {
                         measured_temperature = match rx_from_gpio.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!(
-                                    "Ventilation: Error when reading channel content for water temperature: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_VENTILATION,
+                                    "reading channel content for water temperature failed ({e:?})"
                                 );
                                 measurement_error = true;
                                 measured_temperature // keep the old value
@@ -236,9 +256,9 @@ impl Ventilation {
                     }
                     Err(e) => {
                         measurement_error = true;
-                        println!(
-                            "Ventilation: Error in channel communication to GPIO handler \
-                            when requesting water temperature: {e:?}"
+                        error!(
+                            target: LOG_TARGET_VENTILATION,
+                            "channel communication to GPIO handler when requesting water temperature failed ({e:?})"
                         );
                     }
                 }
@@ -250,23 +270,24 @@ impl Ventilation {
                         schedule_check_result = match rx_from_schedule_check.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!(
-                                    "Ventilation: Error when reading channel content for schedule check: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_VENTILATION,
+                                    "reading channel content for schedule check failed ({e:?})"
                                 );
-                                false // assume we are not allowed to actuate when communication is not successful
+                                true // assume we are allowed to actuate when communication is not successful
                             }
                         };
                     }
                     Err(e) => {
-                        println!(
-                            "Ventilation: Error in channel communication to schedule check: {e:?}"
+                        error!(
+                            target: LOG_TARGET_VENTILATION,
+                            "channel communication to schedule check failed ({e:?})"
                         );
                     }
                 }
 
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
-                    println!("Ventilation: control is active");
                     if (measured_temperature >= self.config.switch_off_temperature)
                         && (measured_temperature <= self.config.switch_on_temperature)
                     {
@@ -298,7 +319,6 @@ impl Ventilation {
                         }
                     } else {
                         if measured_temperature > self.config.switch_on_temperature {
-                            println!("Ventilation: Measured temperature is high (greater than upper bound of control window).");
                             // switch on ventilation if not already on
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
@@ -311,7 +331,6 @@ impl Ventilation {
                             }
                         }
                         if measured_temperature < self.config.switch_off_temperature {
-                            println!("Ventilation: Measured temperature is low (smaller than lower bound of control window).");
                             // switch off ventilation if not already off
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
@@ -326,7 +345,6 @@ impl Ventilation {
                     }
                 } else {
                     if ventilation_inhibited {
-                        println!("Ventilation: Control is inhibited by external request.");
                         // external request for stopping ventilation control has been received
                         match self.config.switch_on_when_external_stop {
                             true => {
@@ -355,7 +373,6 @@ impl Ventilation {
                             }
                         }
                     } else {
-                        println!("Ventilation: Control is inhibited by schedule check.");
                         // schedule check requires stop of ventilation control
                         match self.config.switch_on_when_out_of_schedule {
                             true => {
@@ -398,11 +415,17 @@ impl Ventilation {
                 break;
             }
             if stop_command_received {
-                println!("Ventilation: main loop: received Stop command. Inhibiting ventilation.");
+                info!(
+                    target: LOG_TARGET_VENTILATION,
+                    "received Stop command. Inhibiting ventilation."
+                );
                 ventilation_inhibited = true;
             }
             if start_command_received {
-                println!("Ventilation: main loop: received Start command. Restarting ventilation.");
+                info!(
+                    target: LOG_TARGET_VENTILATION,
+                    "received Start command. Restarting ventilation."
+                );
                 ventilation_inhibited = false;
             }
         }
@@ -431,12 +454,12 @@ impl Ventilation {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Ventilation: Sending Quit confirmation to signal handler.");
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "Ventilation: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: LOG_TARGET_VENTILATION,
+                    "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
         };
@@ -450,12 +473,19 @@ impl Ventilation {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Ventilation: ignoring inapplicable command from signal handler.");
+                        warn!(
+                            target: LOG_TARGET_VENTILATION,
+                            "ignoring inapplicable command ({}) from signal handler.",
+                            c
+                        );
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Ventilation: error when trying to receive termination signal: {e:?}");
+                    error!(
+                        target: LOG_TARGET_VENTILATION,
+                        "receiving termination signal failed ({e:?})"
+                    );
                     false
                 }
             };

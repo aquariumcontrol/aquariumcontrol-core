@@ -6,6 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+#[cfg(target_os = "linux")]
+use log::{error, info, warn};
 #[cfg(target_os = "linux")]
 use posixmq::PosixMq;
 use serde_derive::Deserialize;
@@ -184,23 +187,35 @@ pub struct Messaging {
     // Message queue
     #[cfg(target_os = "linux")]
     mq: PosixMq,
+    mq_max_msg_len: usize,
 }
 
 impl Messaging {
+    const LOG_TARGET_MESSAGING: &'static str = "messaging";
+
     /// Opens the message queue
     /// # Arguments
     /// * `config` - configuration data for Messaging
     pub fn new(config: MessagingConfig) -> Messaging {
         #[cfg(target_os = "linux")]
         let mq = match PosixMq::open(&config.mq_filename) {
-            Ok(c) => {
-                println!("Messaging: Could open message queue.");
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "Messaging: failure to open message queue using {}, error={e:?}",
+                    "{}: failure to open message queue using {} ({e:?})",
+                    Self::LOG_TARGET_MESSAGING,
                     &config.mq_filename
+                );
+            }
+        };
+
+        // identify maximum length of message queue
+        let mq_max_msg_len = match self.mq.attributes() {
+            Ok(c) => c.max_msg_len,
+            Err(e) => {
+                panic!(
+                    "{}: Failed to open attributes ({e:?})",
+                    Self::LOG_TARGET_MESSAGING,
                 );
             }
         };
@@ -210,6 +225,7 @@ impl Messaging {
 
             #[cfg(target_os = "linux")]
             mq: mq,
+            mq_max_msg_len: mq_max_msg_len,
         }
     }
 
@@ -226,31 +242,23 @@ impl Messaging {
     ) {
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
-        // identify maximum length of message queue
-        let mq_max_msg_len = match self.mq.attributes() {
-            Ok(c) => c.max_msg_len,
-            Err(e) => {
-                panic!("Messaging: Failed to open attributes ({e:?}");
-            }
-        };
-
-        let mut msgbuf = vec![0; mq_max_msg_len];
+        let mut msgbuf = vec![0; self.mq_max_msg_len];
         let mut msg = Message::new();
 
         loop {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
                 Ok((r1, r2)) => {
-                    println!(
-                        "Messaging: POSIX message received with r1={}, r2={}.",
-                        r1, r2
-                    );
-                    println!("Messaging: Received message has size {}.", msgbuf.len());
-                    let zero_char: u8 = 0;
-                    for (position, non_zero_char) in msgbuf.iter().enumerate() {
-                        if *non_zero_char != zero_char {
-                            println!("[{}] {}", position, non_zero_char);
-                        }
-                    }
+                    //println!(
+                    //    "{}: POSIX message received with r1={}, r2={}, length={}.",
+                    //    Self::LOG_TARGET_MESSAGING,
+                    //    r1, r2, msgbuf.len()
+                    //);
+                    //let zero_char: u8 = 0;
+                    //for (position, non_zero_char) in msgbuf.iter().enumerate() {
+                    //    if *non_zero_char != zero_char {
+                    //        println!("[{}] {}", position, non_zero_char);
+                    //    }
+                    //}
                     if msgbuf.len() > 0 {
                         let mut domain_buf: [u8; 4] = [0; 4];
                         domain_buf[0] = msgbuf[4];
@@ -280,9 +288,13 @@ impl Messaging {
                         command_param2_buf[3] = msgbuf[19];
                         msg.command_param2 = i32::from_le_bytes(command_param2_buf);
 
-                        println!(
-                            "Messaging: domain={}, cmd={}, param1={}, param2={}",
-                            msg.domain, msg.command, msg.command_param1, msg.command_param2
+                        info!(
+                            target: Self::LOG_TARGET_MESSAGING,
+                            "received message: domain={}, cmd={}, param1={}, param2={}",
+                            msg.domain,
+                            msg.command,
+                            msg.command_param1,
+                            msg.command_param2
                         );
 
                         // interpret domain in message
@@ -294,8 +306,9 @@ impl Messaging {
                             messaging_domains::BALLING => MessagingDomain::Balling,
                             messaging_domains::MONITORS => MessagingDomain::Monitors,
                             _ => {
-                                println!(
-                                    "Messaging: ignoring message for unknown domain {}",
+                                warn!(
+                                    target: Self::LOG_TARGET_MESSAGING,
+                                    "ignoring message for unknown domain {}",
                                     msg.domain
                                 );
                                 MessagingDomain::Unknown
@@ -311,7 +324,8 @@ impl Messaging {
                                 InternalCommand::Execute(msg.command_param1)
                             }
                             _ => {
-                                println!(
+                                warn!(
+                                    target: Self::LOG_TARGET_MESSAGING,
                                     "Messaging: ignoring message with unknown command {}",
                                     msg.command
                                 );
@@ -333,20 +347,27 @@ impl Messaging {
                                 MessagingDomain::Unknown => unreachable!(),
                             };
 
-                            println!("Messaging: Sending message to domain {}", domain);
+                            info!(
+                                target: Self::LOG_TARGET_MESSAGING,
+                                "forwarding message to domain {}",
+                                domain
+                            );
 
                             match tx_to_domain.send(command) {
                                 Ok(_) => { /* do nothing */ }
                                 Err(e) => {
-                                    println!(
-                                        "messaging: Error in channel communication to domain: {e:?}"
+                                    error!(
+                                        target: Self::LOG_TARGET_MESSAGING,
+                                        "channel communication to domain {} failed ({e:?})",
+                                        domain
                                     );
                                 }
                             }
                         }
                     } else {
-                        println!(
-                            "Messaging: Message has incorrect length ({}). Ignoring it.",
+                        error!(
+                            target: Self::LOG_TARGET_MESSAGING,
+                            "message has incorrect length ({}). ignoring it.",
                             msgbuf.len()
                         );
                     }
@@ -355,7 +376,10 @@ impl Messaging {
                     match e.kind() {
                         ErrorKind::TimedOut => { /* do nothing */ }
                         _ => {
-                            println!("Messaging: Error occurred when reading POSIX message: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_MESSAGING,
+                                "timeout occurred when reading POSIX message ({e:?})"
+                            );
                         }
                     }
                 }

@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, warn};
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::fmt;
@@ -19,6 +20,8 @@ use crate::controllino::ControllinoConfig;
 use crate::controllino::ControllinoError;
 use crate::controllino::RelayActuationTrait;
 use crate::device_relay_logic::get_relay_command;
+
+const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
 
 /// Container for message content sent to Controllino
 pub struct ControllinoMessageContent {
@@ -114,17 +117,16 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
     let second_checksum = data[4] ^ data[5] ^ data[6];
     let ok_result = (data[3] == first_checksum) && (data[7] == second_checksum);
     if !ok_result {
-        println!("check_controllino_checksums:");
-        println!(
-            "data[0]={} data[1]={} data[2]={} data[3]={}",
-            data[0], data[1], data[2], data[3]
+        warn!(target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+            "data used for checksum calculation: \n\
+            [0]={} [1]={} [2]={} [3]={} [4]={} [5]={} [6]={} [7]={}\n\
+            first checksum ([3]) should have been {}\n\
+            second checksum ([7]) should have been {}",
+            data[0], data[1], data[2], data[3],
+            data[4], data[5], data[6], data[7],
+            first_checksum,
+            second_checksum,
         );
-        println!(
-            "data[4]={} data[5]={} data[6]={} data[7]={}",
-            data[4], data[5], data[6], data[7]
-        );
-        println!("first checksum should have been {}", first_checksum);
-        println!("second checksum should have been {}", second_checksum);
     }
     ok_result
 }
@@ -214,14 +216,13 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 let message = match create_command_message(internal_command.clone(), config) {
                     Ok(c) => c,
                     Err(e) => {
-                        println!(
-                            "Controllino: encountered error in preparation of communication: {e:?}"
+                        error!(
+                            target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                            "preparation of communication failed ({e:?})"
                         );
                         return Err(ControllinoError::FailureCommandMessageCreation);
                     }
                 };
-
-                println!("{}", message);
 
                 if config.active {
                     // write message to Controllino
@@ -229,7 +230,10 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                     match serial_port.write(&message.data) {
                         Ok(_) => { /* do nothing */ }
                         Err(e) => {
-                            println!("Controllino: Error occurred when sending command to Controllino: {e:?}");
+                            error!(
+                                target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                "sending command to Controllino failed ({e:?})"
+                            );
                             return Err(ControllinoError::WriteError);
                         }
                     }
@@ -257,17 +261,20 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                     let serial_port = serial_port_opt.as_mut().unwrap();
                     match serial_port.read_exact(serial_buf.as_mut_slice()) {
                         Ok(()) => {
-                            //println!("message_length={}", message_length);
                             if !check_controllino_checksums(serial_buf.as_slice()) {
-                                println!("Controllino: Received response from device with incorrect checksums");
+                                warn!(
+                                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                    "Received response from device with incorrect checksums"
+                                );
                                 return Err(ControllinoError::IncorrectChecksum);
                             } else {
                                 Ok(())
                             }
                         }
                         Err(_) => {
-                            println!(
-                                "Controllino: Error when trying to receive response from device."
+                            error!(
+                                target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                "receiving response from device failed."
                             );
                             return Err(ControllinoError::ReadError);
                         }
@@ -277,8 +284,9 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 }
             }
             _ => {
-                println!(
-                    "Controllino: ignoring irrelevant internal command {}.",
+                warn!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "ignoring irrelevant internal command {}.",
                     internal_command.to_string()
                 );
                 return Err(ControllinoError::IrrelevantCommand(internal_command));

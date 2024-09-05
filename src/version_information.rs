@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::info;
 use std::env;
 
 /// Major version number
@@ -34,15 +35,25 @@ pub struct VersionInformation {
 }
 
 impl VersionInformation {
+    const LOG_TARGET_VERSION_INFORMATION: &'static str = "version_information";
+
     /// Provides a struct of type VersionInformation.
     pub fn new() -> VersionInformation {
         // get fully qualified path and file name
         let pathfilename = match env::current_exe() {
             Ok(exe_path) => {
-                println!("Path of this executable is: {}", exe_path.display());
+                info!(
+                    target: Self::LOG_TARGET_VERSION_INFORMATION,
+                    "path of this executable is: {}", exe_path.display()
+                );
                 exe_path
             }
-            Err(e) => panic!("failed to get current exe path: {e:?}"),
+            Err(e) => {
+                panic!(
+                    "{}: failed to get current exe path: {e:?}",
+                    Self::LOG_TARGET_VERSION_INFORMATION,
+                );
+            }
         };
         // calculate hash from executable
         let bytes = std::fs::read(pathfilename).unwrap(); // Vec<u8>

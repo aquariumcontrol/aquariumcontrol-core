@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::{Duration, NaiveDateTime};
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -87,6 +88,8 @@ pub struct SqlInterfaceFeed {
 }
 
 impl SqlInterfaceFeed {
+    const LOG_TARGET_SQL_INTERFACE_FEED: &'static str = "sql_interface_feed";
+
     /// Provides a struct of type SqlInterfaceFeed.
     /// # Arguments
     /// * `conn` - connection to SQL database
@@ -236,7 +239,10 @@ impl SqlInterfaceFeed {
         let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
             Ok(c) => c,
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not retrieve feed pattern from database ({e:?})"
+                );
                 return Err(e);
             }
         };
@@ -297,7 +303,10 @@ impl SqlInterfaceFeed {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not insert feed event into database ({e:?})"
+                );
                 Err(SqlInterfaceError::InsertFeedEventFailure(
                     "Error when inserting refill event into database.".to_string(),
                 ))
@@ -343,7 +352,10 @@ impl SqlInterfaceFeed {
         ) {
             Ok(c) => c,
             Err(e) => {
-                println!("{}", e);
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not get feed schedule entry from database ({e:?})"
+                );
                 return Err(
                     SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
                         "Could not convert timestamp string read from SQL database".to_string(),
@@ -375,7 +387,6 @@ impl SqlInterfaceFeed {
             let sql_query_string =
                 sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
             let timestamp_tomorrow = feedschedule_entry.timestamp + Duration::days(1);
-            println!("Timestamp for tomorrow: {}", timestamp_tomorrow.to_string());
             match self.conn.exec_drop::<_, _>(
                 sql_query_string,
                 params! {
@@ -385,7 +396,10 @@ impl SqlInterfaceFeed {
             ) {
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    println!("{e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                        "could not update feed schedule entry ({e:?})"
+                    );
                     Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
                         "Error when updating feed schedule of entry which shall be repeated.".to_string(),
                     ))
@@ -403,7 +417,10 @@ impl SqlInterfaceFeed {
             ) {
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    println!("{e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                        "could not delete feed schedule entry ({e:?})"
+                    );
                     Err(
                         SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
                             "Error when deleting refill entry which shall be not repeated."
@@ -444,9 +461,12 @@ impl SqlInterfaceFeed {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not insert feed schedule entry ({e:?})"
+                );
                 Err(SqlInterfaceError::InsertFeedEventFailure(
-                    "Error when inserting refill event into database.".to_string(),
+                    "Error when inserting feed event into database.".to_string(),
                 ))
             }
         }

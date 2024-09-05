@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{debug, error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -47,6 +48,8 @@ pub struct Monitors {
 impl ProcessExternalRequestTrait for Monitors {}
 
 impl Monitors {
+    const LOG_TARGET_MONITORS: &'static str = "monitors";
+
     /// Provides a struct of type Monitors.
     /// # Arguments
     /// * `config` - configuration data for monitors
@@ -84,8 +87,17 @@ impl Monitors {
 
         loop {
             if self.config.active && (loop_counter % 100 == 0) {
-                // run monitors every 10 seconds
-                println!("Monitors: Executing main control");
+                if monitors_inhibited {
+                    info!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "monitors are inhibited after receiving stop command via message.");
+                } else {
+                    // run monitors every 10 seconds
+                    debug!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "executing monitors"
+                    );
+                }
             }
             (
                 quit_command_received,
@@ -96,30 +108,38 @@ impl Monitors {
                 break;
             }
             if stop_command_received {
-                println!("Monitors: main loop: received Stop command. Inhibiting monitoring.");
+                info!(
+                    target: Self::LOG_TARGET_MONITORS,
+                    "received Stop command. Inhibiting monitoring."
+                );
                 monitors_inhibited = true;
             }
             if start_command_received {
-                println!("Monitors: main loop: received Start command. Restarting monitoring.");
+                info!(
+                    target: Self::LOG_TARGET_MONITORS,
+                    "received Start command. Restarting monitoring."
+                );
                 monitors_inhibited = false;
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
-            if monitors_inhibited {
-                println!("Monitors are inhibited after receiving stop command via message.");
-            }
             loop_counter += 1;
         }
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Monitors: Sending Quit confirmation to signal handler.");
+        info!(
+            target: Self::LOG_TARGET_MONITORS,
+            "sending Quit confirmation to signal handler."
+        );
+
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "Monitors: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: Self::LOG_TARGET_MONITORS,
+                    "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
         };
@@ -133,12 +153,19 @@ impl Monitors {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Monitors: ignoring inapplicable command from signal handler.");
+                        warn!(
+                            target: Self::LOG_TARGET_MONITORS,
+                            "ignoring not applicable command {} from signal handler.",
+                            c
+                        );
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Monitors: error when trying to receive termination signal: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "receiving termination signal failed ({e:?})"
+                    );
                     false
                 }
             };

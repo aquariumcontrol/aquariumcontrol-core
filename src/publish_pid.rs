@@ -26,6 +26,8 @@ pub struct PublishPid {
 }
 
 impl PublishPid {
+    const LOG_TARGET_PUBLISH_PID: &'static str = "publish_pid";
+
     /// Checks if PID file already contains published PID.
     /// If yes, then application will panic.
     /// If no, then function publishes PID provides a struct of type PublishPid
@@ -42,14 +44,16 @@ impl PublishPid {
                 Ok(c) => c,
                 Err(e) => {
                     panic!(
-                        "PublishPid: PID file ({}) contains invalid content: {e:?}",
+                        "{}: PID file ({}) contains invalid content: {e:?}",
+                        Self::LOG_TARGET_PUBLISH_PID,
                         config.pid_filename
                     );
                 }
             };
             if process_id_read > 0 {
                 panic!(
-                    "PublishPid: PID file ({}) already contains published PID.",
+                    "{}: PID file ({}) already contains published PID.",
+                    Self::LOG_TARGET_PUBLISH_PID,
                     config.pid_filename
                 );
             }

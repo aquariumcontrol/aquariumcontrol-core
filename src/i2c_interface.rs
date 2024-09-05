@@ -53,6 +53,9 @@ pub enum I2cError {
 
     /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
     SetAddressError(u16),
+
+    /// Signal requested cannot be provided by this crate
+    InvalidSignalRequest(AquariumSignal),
 }
 
 /// numeric values used in communication with Atlas Scientific sensor units
@@ -117,6 +120,8 @@ pub struct I2cInterface {
 }
 
 impl I2cInterface {
+    const LOG_TARGET_I2C_INTERFACE: &'static str = "i2c_interface";
+
     /// Provides a struct of type I2cInterface
     /// # Arguments    
     /// * `config` - configuration for I2C interface
@@ -127,13 +132,19 @@ impl I2cInterface {
                 let i2c = match I2c::new() {
                     Ok(c) => c,
                     Err(e) => {
-                        panic!("i2c_interface: Initialization of I2C interface failed: {e:?}");
+                        panic!(
+                            "{}: initialization of I2C interface failed ({e:?})",
+                            Self::LOG_TARGET_I2C_INTERFACE
+                        );
                     }
                 };
                 match i2c.set_timeout(config.timeout_transaction) {
                     Ok(_) => i2c,
                     Err(_) => {
-                        panic!("i2c_interface: Could not set timeout for transactions.");
+                        panic!(
+                            "{}: could not set timeout for transactions.",
+                            Self::LOG_TARGET_I2C_INTERFACE
+                        );
                     }
                 }
             },
@@ -230,14 +241,23 @@ impl I2cInterface {
             AquariumSignal::Conductivity => self.config.address_atlas_scientific_conductivity,
             AquariumSignal::WaterTemperature => self.config.address_atlas_scientific_temperature,
             _ => {
-                panic!("i2c_interface: invalid signal request");
+                warn!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "ignoring invalid signal request ({})",
+                    signal
+                );
+                return Err(I2cError::InvalidSignal(signal));
             }
         };
 
         match self.i2c.set_slave_address(i2c_address) {
             Ok(_) => { /* do nothing */ }
-            Err(_) => {
-                println!("i2c_interface: could not set address of device");
+            Err(e) => {
+                error!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "could not set {} as address of device ({e:?})",
+                    i2c_address
+                );
                 return Err(I2cError::SetAddressError(i2c_address));
             }
         }
@@ -247,15 +267,20 @@ impl I2cInterface {
         match self.i2c.write(&send_buf) {
             Ok(c) => {
                 if c != 1 {
-                    println!(
-                        "i2c_interface: could not write command to sensor unit for {}",
+                    error!(
+                        target: Self::LOG_TARGET_I2C_INTERFACE,
+                        "could not write command to sensor unit for {}",
                         signal
                     );
                     return Err(I2cError::InsufficientWrite);
                 }
             }
             Err(e) => {
-                println!("i2c_interface: error in writing to device {} {e:?}", signal);
+                error!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "writing to device {} failed {e:?}",
+                    signal
+                );
                 return Err(I2cError::WriteFailure);
             }
         }
@@ -265,7 +290,11 @@ impl I2cInterface {
             AquariumSignal::Conductivity => self.sleep_duration_conductivity,
             AquariumSignal::WaterTemperature => self.sleep_duration_temperature,
             _ => {
-                println!("i2c_interface: invalid signal request - using arbitrary duration.");
+                warn!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "sleep duration for signal {} not defined - using arbitrary sleep duration of {}",
+                    signal,
+                    sleep_duration);
                 self.sleep_duration_temperature
             }
         };
@@ -278,8 +307,9 @@ impl I2cInterface {
         match self.i2c.read(&mut read_buffer) {
             Ok(_) => { /* do nothing */ }
             Err(_) => {
-                println!(
-                    "i2c_interface: did not receive full response from sensor unit for {}",
+                error!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "did not receive full response from sensor unit for {}",
                     signal
                 );
                 return Err(I2cError::InsufficientRead);
@@ -294,7 +324,11 @@ impl I2cInterface {
         match Self::check_response(read_buffer, is_ph) {
             Ok(c) => Ok(c),
             Err(e) => {
-                println!("i2c_interface: error in sensor unit response");
+                error!(
+                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    "error in sensor unit response for {}",
+                    signal
+                );
                 Err(I2cError::ResponseEvaluationFailure(e))
             }
         }

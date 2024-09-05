@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 use chrono::LocalResult::{Ambiguous, None, Single};
 use chrono::*;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
@@ -280,6 +281,8 @@ pub struct SqlInterface {
 }
 
 impl SqlInterface {
+    const LOG_TARGET_SQL_INTERFACE: &'static str = "sql_interface";
+
     /// Provides a struct of type SqlInterface.
     /// # Arguments
     /// * `config` - configuration data for SqlInterface
@@ -461,8 +464,9 @@ impl SqlInterface {
 
         // check error case if there is more than one response
         if single_string_array.len() > 1 {
-            println!(
-                "SQL database responded with multiple responses to request to query: {}",
+            error!(
+                target: Self::LOG_TARGET_SQL_INTERFACE,
+                "SQL database responded with multiple responses to request to query ({})",
                 sql_query_string
             );
             Err(SqlInterfaceError::SingleVersionRequestMultipleResults)
@@ -606,7 +610,10 @@ impl SqlInterface {
         ) {
             Ok(c) => Ok(c),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE,
+                    "Could not retrieve database name ({e:?})"
+                );
                 Err(e)
             }
         }
@@ -630,7 +637,10 @@ impl SqlInterface {
             Ok(c) => c,
             Err(e) => {
                 if !cfg!(test) {
-                    println!("{e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE,
+                        "could not retrieve timestamp from database ({e:?})"
+                    );
                 }
                 return Err(e);
             }
@@ -666,7 +676,10 @@ impl SqlInterface {
                 Ok(c) => c,
                 Err(e) => {
                     if !cfg!(test) {
-                        println!("{e:?}");
+                        error!(
+                            target: Self::LOG_TARGET_SQL_INTERFACE,
+                            "could not retrieve optional timestamp from database ({e:?})"
+                        );
                     }
                     return Err(e);
                 }
@@ -738,7 +751,10 @@ impl SqlInterface {
             match Self::get_single_string_from_database(&mut self.conn, sql_query_string) {
                 Ok(c) => c,
                 Err(e) => {
-                    println!("Error when retrieving single string from database: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE,
+                        "could not retrieve date from database ({e:?})"
+                    );
                     return Err(e);
                 }
             };
@@ -746,8 +762,9 @@ impl SqlInterface {
         match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
             Err(e) => {
-                println!(
-                    "Error converting timestamp_string={} {e:?}",
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE,
+                    "Error converting timestamp_string={} to date ({e:?})",
                     timestamp_string
                 );
                 Err(SqlInterfaceError::TimestampConversionFailure(
@@ -810,11 +827,11 @@ impl SqlInterface {
         ) {
             let required_tables_string = &self.config.db_tables.join(",");
             let existing_tables_string = &existing_tables.join(",");
-            println!(
+            error!(
+                target: Self::LOG_TARGET_SQL_INTERFACE,
                 "Required tables ({}) are not existing in database ({}).",
                 required_tables_string, existing_tables_string
             );
-
             Err(SqlInterfaceError::RequiredTablesNotExisting)
         } else {
             Ok(())

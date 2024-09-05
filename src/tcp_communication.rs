@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{debug, error};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::io;
@@ -133,6 +134,8 @@ pub struct TcpCommunication {
 }
 
 impl TcpCommunication {
+    const LOG_TARGET_TCP_COMMUNICATION: &'static str = "tcp_communication";
+
     /// Provides wrapped into Result type either
     /// - a struct of type TcpCommunication after a successful attempt to open the TCP channel
     /// - or an error value from enum TcpCommunicationError
@@ -146,8 +149,9 @@ impl TcpCommunication {
         ) {
             Ok(c) => c,
             Err(e) => {
-                println!(
-                    "Error when trying to connect to {} via port {}: {e:?}",
+                error!(
+                    target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                    "connection to {} via port {} failed ({e:?})",
                     tcp_connection.ip_address, tcp_connection.port
                 );
                 return Err(TcpCommunicationError::ConnectionFailed(e));
@@ -188,7 +192,11 @@ impl TcpCommunication {
         let request: String;
         let relay_id_string = relay_id.to_string();
         if state {
-            println!("tcp_communication: switching on relay #{}", relay_id);
+            debug!(
+                target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                "switching on relay #{}",
+                relay_id
+            );
             request = category::CONTROLLINO.to_string()
                 + " "
                 + command::SETSINGLE
@@ -196,7 +204,11 @@ impl TcpCommunication {
                 + &relay_id_string
                 + "\n";
         } else {
-            println!("tcp_communication: switching off relay #{}", relay_id);
+            debug!(
+                target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                "switching off relay #{}",
+                relay_id
+            );
             request = category::CONTROLLINO.to_string()
                 + " "
                 + command::UNSETSINGLE
@@ -204,22 +216,26 @@ impl TcpCommunication {
                 + &relay_id_string
                 + "\n";
         }
-        //println!("Writing...(request={})", request);
         match self.write_stream.write(request.as_bytes()) {
             Ok(_) => {}
             Err(e) => {
-                panic!("{e:?}");
+                panic!(
+                    "{}: Writing to TCP stream failed ({e:?})",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                );
             }
         };
         let _ = self.write_stream.flush();
 
-        //println!("Reading...");
         let mut response = String::new();
         response.clear();
         match self.buf_reader.read_line(&mut response) {
             Ok(_) => {}
             Err(e) => {
-                panic!("{e:?}");
+                panic!(
+                    "{}: Reading from TCP stream failed ({e:?})",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                );
             }
         };
     }
@@ -250,43 +266,54 @@ impl TcpCommunication {
         let request =
             category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";
 
-        //println!("Writing...(request={})", request);
         match self.write_stream.write(request.as_bytes()) {
             Ok(_) => {}
             Err(e) => {
-                panic!("{e:?}");
+                panic!(
+                    "{}: Writing to TCP stream failed ({e:?})",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                );
             }
         };
         let _ = self.write_stream.flush();
 
-        //println!("Reading...");
         let mut response = String::new();
         response.clear();
         match self.buf_reader.read_line(&mut response) {
             Ok(_) => {}
             Err(e) => {
-                panic!("{e:?}");
+                panic!(
+                    "{}: Reading from TCP stream failed ({e:?})",
+                    Self::LOG_TARGET_TCP_COMMUNICATION
+                );
             }
         };
-        //println!("Read from TCP: {}", response);
         match Self::get_last_word(&response) {
             Some(last_word) => {
                 if !last_word.is_empty() {
                     let mut last_word_string = last_word.to_string();
-                    //println!("Last word of response is {}", last_word_string);
                     Self::trim_newline(&mut last_word_string);
                     match last_word_string.parse::<f32>() {
                         Ok(c) => c,
                         Err(e) => {
-                            panic!("TcpCommunication: Failed to convert response ({last_word}) to f32: {e:?}");
+                            panic!(
+                                "{}: Failed to convert response ({last_word}) to f32: ({e:?})",
+                                Self::LOG_TARGET_TCP_COMMUNICATION
+                            );
                         }
                     }
                 } else {
-                    panic!("TcpCommunication: Last word of response is empty.");
+                    panic!(
+                        "{}: Last word of response is empty.",
+                        Self::LOG_TARGET_TCP_COMMUNICATION
+                    );
                 }
             }
             None => {
-                panic!("TcpCommunication: Response does not contain any words.");
+                panic!(
+                    "{}: Response does not contain any words.",
+                    Self::LOG_TARGET_TCP_COMMUNICATION
+                );
             }
         }
     }
@@ -329,14 +356,18 @@ impl TcpCommunication {
                                             match tx_to_gpio.send(response_value) {
                                                 Ok(()) => {}
                                                 Err(e) => {
-                                                    println!(
-                                                            "Error in trying to send response value back to data logger: {e:?}"
-                                                        );
+                                                    error!(
+                                                        target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                                                        "sending esponse value back to data logger failed ({e:?})"
+                                                    );
                                                 }
                                             }
                                         }
                                         None => {
-                                            panic!("TCP communication: Missing channel to return value to GpioHandler.");
+                                            panic!(
+                                                "{}: Missing channel to return value to GpioHandler.",
+                                                Self::LOG_TARGET_TCP_COMMUNICATION
+                                            );
                                         }
                                     }
                                 }
@@ -347,7 +378,9 @@ impl TcpCommunication {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
-                                    panic!("TcpCommunication: Error in trying to receive command from data logger: {e:?}");
+                                    panic!(
+                                        "TcpCommunication: Error in trying to receive command from data logger: {e:?}"
+                                    );
                                 }
                             }
                         }
@@ -372,7 +405,9 @@ impl TcpCommunication {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
-                                    panic!("TcpCommunication: Error in trying to receive command from data logger: {e:?}");
+                                    panic!(
+                                        "TcpCommunication: Error in trying to receive command from data logger: {e:?}"
+                                    );
                                 }
                             }
                         }
@@ -383,7 +418,6 @@ impl TcpCommunication {
                 }
             }
             // **********************************
-
             spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
 
@@ -392,7 +426,10 @@ impl TcpCommunication {
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!("TcpCommunication: Error in trying to send confirmation back to signal handler: {e:?}");
+                error!(
+                    target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                    "sending confirmation back to signal handler faild ({e:?})"
+                );
             }
         };
     }

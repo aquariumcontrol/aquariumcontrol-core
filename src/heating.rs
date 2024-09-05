@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -22,6 +23,8 @@ use crate::sawtooth_profile::SawToothProfile;
 use crate::sawtooth_profile::SawToothProfileConfig;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+
+const LOG_TARGET_HEATING: &str = "heating";
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -43,13 +46,14 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
         sql_interface_heating: &mut SqlInterfaceHeating,
         sql_interface: &mut SqlInterface,
     ) {
-        println!("Heating: Transferring statistical data to SQL database.");
         // two subsequent sections.
         let today = match sql_interface.get_current_date() {
             Ok(c) => c,
             Err(e) => {
-                println!("Heating: Could not get current date from SQL database: {e:?}");
-                println!("Heating: Warning - not inserting heating stats into database.");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "could not get current date from SQL database ({e:?}) - not inserting heating stats into database"
+                );
                 return;
             }
         };
@@ -58,7 +62,12 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
 
         match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
             Ok(_) => {}
-            Err(e) => println!("Heating: Could not insert heating statistics into database: {e:?}"),
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "could not insert heating statistics into database: {e:?}"
+                );
+            }
         };
     }
 }
@@ -129,21 +138,29 @@ fn switch_on_heater(
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Heating: Error when trying to receive answer from Controllino when switching on heater: {e:?}");
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "receiving answer from Controllino when switching on heater failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Heating: Error in channel communication to Controllino when switching on heater: {e:?}");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "channel communication to Controllino when switching on heater failed ({e:?})"
+                );
             }
         }
         match tx_to_datalogger.send(true) {
             Ok(_) => {}
             Err(e) => {
-                println!("Heating: Error in channel communication to data logger when switching on heater: {e:?}");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "channel communication to data logger when switching on heater failed ({e:?})"
+                );
             }
         }
-        println!("Heating: Switched on heater.");
 
         *mutex_data += 1;
     }
@@ -170,21 +187,29 @@ fn switch_off_heater(
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Heating: Error when trying to receive answer from Controllino when switching off heater: {e:?}");
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "receiving answer from Controllino when switching off heater failed ({e:?})"
+                        );
                     }
                 };
             }
             Err(e) => {
-                println!("Heating: Error in channel communication to Controllino when switching off heater: {e:?}");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "channel communication to Controllino when switching off heater failed ({e:?})"
+                );
             }
         }
         match tx_to_datalogger.send(false) {
             Ok(_) => {}
             Err(e) => {
-                println!("Heating: Error in channel communication to data logger when switching off heater: {e:?}");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "channel communication to data logger when switching off heater failed ({e:?})"
+                );
             }
         }
-        println!("Heating: Switched off heater.");
         *mutex_data += 1;
     }
 }
@@ -247,7 +272,10 @@ impl Heating {
         match self.sql_interface_heating.get_duration_until_midnight() {
             Ok(c) => c,
             Err(e) => {
-                println!("Heating: Could not get duration until midnight: {e:?}");
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "could not get duration until midnight ({e:?})"
+                );
                 24 * 3600 // default value for time in seconds until midnight
             }
         }
@@ -301,8 +329,9 @@ impl Heating {
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
 
-        println!(
-            "Heating: Duration until midnight is {} seconds.",
+        info!(
+            target: LOG_TARGET_HEATING,
+            "duration until midnight is {} seconds.",
             duration_until_midnight
         );
         let mut heating_stats_opt = match self
@@ -311,18 +340,13 @@ impl Heating {
         {
             Ok(c) => Some(c),
             Err(e) => {
-                println!("Heating: Could not get heating stats from database:{e:?} - creating new one for today");
+                info!(
+                    target: LOG_TARGET_HEATING,
+                    "could not get existing heating stats entry for today from database ({e:?}) - creating new one for today"
+                );
                 Some(HeatingStatsEntry::new())
             }
         };
-        match heating_stats_opt {
-            Some(ref heating_stats) => {
-                println!("{}", heating_stats);
-            }
-            None => {
-                // do nothing
-            }
-        }
 
         loop {
             let (
@@ -334,11 +358,14 @@ impl Heating {
                 break;
             }
             if stop_command_received {
-                println!("Heating: main loop: received Stop command. Inhibiting heating.");
+                info!(
+                    target: LOG_TARGET_HEATING,
+                    "received Stop command. inhibiting heating."
+                );
                 heating_inhibited = true;
             }
             if start_command_received {
-                println!("Heating: main loop: received Start command. Restarting heating.");
+                info!("received Start command. restarting heating.");
                 heating_inhibited = false;
             }
 
@@ -354,8 +381,9 @@ impl Heating {
                         measured_water_temperature = match rx_from_gpio.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!(
-                                    "Heating: Error when reading channel content for water temperature: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_HEATING,
+                                    "receiving water temperature from GPIO handler failed ({e:?})"
                                 );
                                 measurement_error_water_temperature = true;
                                 measured_water_temperature // keep the old value
@@ -364,9 +392,9 @@ impl Heating {
                     }
                     Err(e) => {
                         measurement_error_water_temperature = true;
-                        println!(
-                            "Heating: Error in channel communication to GPIO handler \
-                            when requesting water temperature: {e:?}"
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "channel communication to GPIO handler for requesting water temperature failed ({e:?})"
                         );
                     }
                 }
@@ -381,8 +409,9 @@ impl Heating {
                         measured_ambient_temperature = match rx_from_gpio.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!(
-                                    "Heating: Error when reading channel content for ambient temperature: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_HEATING,
+                                    "reading ambient temperature from GPIO handler failed ({e:?})"
                                 );
                                 measurement_error_ambient_temperature = true;
                                 measured_ambient_temperature // keep the old value
@@ -391,9 +420,9 @@ impl Heating {
                     }
                     Err(e) => {
                         measurement_error_ambient_temperature = true;
-                        println!(
-                            "Heating: Error in channel communication to GPIO handler \
-                            when requesting ambient temperature: {e:?}"
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "channel communication to GPIO handler for reading ambient temperature failed ({e:?})"
                         );
                     }
                 }
@@ -407,16 +436,17 @@ impl Heating {
                         match rx_from_gpio.recv() {
                             Ok(c) => measured_tank_level_switch_position = c,
                             Err(e) => {
-                                println!(
-                                    "Heating: Error when reading channel content for tank level switch position: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_HEATING,
+                                    "reading tank level switch position from GPIO handler failed ({e:?})"
                                 );
                             }
                         };
                     }
                     Err(e) => {
-                        println!(
-                            "Heating: Error in channel communication to GPIO handler \
-                            when requesting tank level switch position: {e:?}"
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "channel communication to GPIO handler for reading tank level switch position failed ({e:?})"
                         );
                     }
                 }
@@ -430,16 +460,17 @@ impl Heating {
                         match rx_from_gpio.recv() {
                             Ok(c) => measured_tank_level_switch_invalid = c,
                             Err(e) => {
-                                println!(
-                                    "Heating: Error when reading channel content for tank level switch invalid: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_HEATING,
+                                    "reading tank level switch invalid from GPIO handler failed ({e:?})"
                                 );
                             }
                         };
                     }
                     Err(e) => {
-                        println!(
-                            "Heating: Error in channel communication to GPIO handler \
-                            when requesting tank level switch invalid: {e:?}"
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "channel communication to GPIO handler for reading tank level switch invalid failed ({e:?})"
                         );
                     }
                 }
@@ -449,10 +480,6 @@ impl Heating {
                     || (measured_tank_level_switch_position < 0.5)
                 {
                     tank_level_low_counter += 1;
-                    println!(
-                        "Incremented tank_level_low_counter to {}",
-                        tank_level_low_counter
-                    );
                 } else {
                     tank_level_low_counter = 0;
                 }
@@ -464,16 +491,18 @@ impl Heating {
                         schedule_check_result = match rx_from_schedule_check.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!(
-                                    "Heating: Error when reading channel content for schedule check: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_HEATING,
+                                    "receiving from schedule check failed ({e:?})"
                                 );
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
                     }
                     Err(e) => {
-                        println!(
-                            "Heating: Error in channel communication to schedule check: {e:?}"
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "channel communication to schedule check failed ({e:?})"
                         );
                     }
                 }
@@ -684,12 +713,16 @@ impl Heating {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Heating: Sending Quit confirmation to signal handler.");
         _ = match tx_to_signal_handler.send(true) {
-            Ok(()) => {}
+            Ok(()) => {
+                info!(
+                    target: LOG_TARGET_HEATING,
+                    "sent quit confirmation to signal handler.");
+            }
             Err(e) => {
-                println!(
-                    "Heating: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: LOG_TARGET_HEATING,
+                    "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
         };
@@ -703,12 +736,17 @@ impl Heating {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Heating: ignoring inapplicable command from signal handler.");
+                        warn!(
+                            target: LOG_TARGET_HEATING,
+                            "ignoring not applicable command from signal handler (c)"
+                        );
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Heating: error when trying to receive termination signal: {e:?}");
+                    error!(
+                        target: LOG_TARGET_HEATING,
+                        "receiving termination signal from signal handler failed ({e:?})");
                     false
                 }
             };

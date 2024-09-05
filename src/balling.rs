@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
+use log::{error, info};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -90,13 +91,18 @@ pub struct Balling {
 impl ProcessExternalRequestTrait for Balling {}
 
 impl Balling {
+    const LOG_TARGET_BALLING: &'static str = "balling";
+
     /// Provides a struct of type Balling.
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
     /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
     pub fn new(config: BallingConfig, mut sql_interface_balling: SqlInterfaceBalling) -> Balling {
         if config.schedule_check_interval == 0 {
-            panic!("Balling: schedule check interval is zero - please assign a value > 0");
+            panic!(
+                "{}: schedule check interval is zero - please assign a value > 0",
+                Self::LOG_TARGET_BALLING
+            );
         }
 
         let countdown_dosing_pump1 =
@@ -137,14 +143,16 @@ impl Balling {
             _ => {
                 // Panic is happening at startup of system.
                 panic!(
-                    "Balling countdown calculation encountered invalid pump id = {}",
+                    "{}: countdown calculation encountered invalid pump id = {}",
+                    Self::LOG_TARGET_BALLING,
                     pump_id
                 );
             }
         };
         if target_dosing_interval == 0 {
             panic!(
-                "Invalid dosing interval for pump #{} in configuration.",
+                "{}: Invalid dosing interval for pump #{} in configuration.",
+                Self::LOG_TARGET_BALLING,
                 pump_id
             );
         }
@@ -156,20 +164,27 @@ impl Balling {
                 Some(duration) => match duration.try_into() {
                     Ok(c) => c,
                     Err(e) => {
-                        println!("Error {e:?} occurred when reading last Balling dosing event duration for pump {} from database.", pump_id);
+                        error!("{}: Reading last dosing event duration for pump {} from database ({e:?})",
+                            Self::LOG_TARGET_BALLING,
+                            pump_id);
                         0
                     }
                 },
                 None => target_dosing_interval.into(),
             },
             Err(e) => {
-                panic!("Could not get duration since last Balling dosing event: {e:?}");
+                panic!(
+                    "{}: Could not get duration since last Balling dosing event: {e:?}",
+                    Self::LOG_TARGET_BALLING
+                );
             }
         };
 
-        println!(
-            "Balling: Duration since last Balling dosing for pump {} is {} seconds.",
-            pump_id, duration_since_balling_dosing
+        info!(
+            target: Self::LOG_TARGET_BALLING,
+            "Duration since last dosing for pump {} is {} seconds.",
+            pump_id,
+            duration_since_balling_dosing
         );
 
         // limit subtraction to 0
@@ -178,9 +193,11 @@ impl Balling {
             Some(diff) => diff,
         };
 
-        println!(
-            "Balling: Countdown for next Balling dosing of pump {} is {} seconds.",
-            pump_id, countdown
+        info!(
+            target: Self::LOG_TARGET_BALLING,
+            "Countdown for next dosing of pump {} is {} seconds.",
+            pump_id,
+            countdown
         );
 
         countdown
@@ -240,8 +257,8 @@ impl Balling {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
-                println!(
-                    "Balling: Calculated target dosing duration of {} ms for pump #{}",
+                info!(target: Self::LOG_TARGET_BALLING,
+                    "Calculated target dosing duration of {} ms for pump #{}",
                     dosing_duration_millis, pump_id
                 );
                 if dosing_duration_millis > 0 {
@@ -265,8 +282,9 @@ impl Balling {
                 }
             }
             Err(e) => {
-                println!(
-                    "Balling: Encountered error when reading set values of pump #{}: {e:?}",
+                error!(
+                    target: Self::LOG_TARGET_BALLING,
+                    "encountered error when reading set values of pump #{}: {e:?}",
                     pump_id
                 );
             }
@@ -312,26 +330,22 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60secs)
 
                 // schedule check to see if actuation is allowed
-                // println!("Balling: initiating communication to schedule checker.");
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         // now listen for response
                         schedule_check_result = match rx_from_schedule_check.recv() {
                             Ok(c) => c,
                             Err(e) => {
-                                println!("Balling: Error when reading channel content for schedule check: {e:?}");
+                                error!(target: Self::LOG_TARGET_BALLING,
+                                    "Error when reading channel content for schedule check ({e:?})",
+                                );
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
-                        if schedule_check_result {
-                            println!("Balling has permission from schedule checker.");
-                        } else {
-                            println!("Balling has no permission from schedule checker.");
-                        }
                     }
                     Err(e) => {
-                        println!(
-                            "Balling: Error in channel communication to schedule check: {e:?}"
+                        error!(target: Self::LOG_TARGET_BALLING,
+                            "Error in channel communication to schedule check: {e:?}"
                         );
                     }
                 }
@@ -440,15 +454,15 @@ impl Balling {
                 stop_command_received,
             ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
-                println!("Balling: main loop: received Quit command. Exiting...");
+                info!(target: Self::LOG_TARGET_BALLING, "received Quit command. Exiting...");
                 break;
             }
             if stop_command_received {
-                println!("Balling: main loop: received Stop command. Inhibiting dosing.");
+                info!(target: Self::LOG_TARGET_BALLING, "received Stop command. Inhibiting dosing.");
                 dosing_inhibited = true;
             }
             if start_command_received {
-                println!("Balling: main loop: received Start command. Restarting dosing.");
+                info!(target: Self::LOG_TARGET_BALLING, "received Start command. (Re-)starting dosing.");
                 dosing_inhibited = false;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -457,12 +471,12 @@ impl Balling {
         }
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Balling: Sending Quit confirmation to signal handler.");
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "Balling: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: Self::LOG_TARGET_BALLING,
+                    "Error in trying to send quit confirmation back to signal handler: {e:?}"
                 );
             }
         };
@@ -476,12 +490,15 @@ impl Balling {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Balling: ignoring inapplicable command from signal handler.");
+                        info!(
+                            target: Self::LOG_TARGET_BALLING,
+                            "ignoring inapplicable command {} from signal handler.", c);
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Balling: error when trying to receive termination signal: {e:?}");
+                    error!(target: Self::LOG_TARGET_BALLING,
+                        "error when trying to receive termination signal. ({e:?})");
                     false
                 }
             };

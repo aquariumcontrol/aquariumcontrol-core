@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
@@ -120,6 +121,8 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
+    const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
+
     #[cfg(target_os = "linux")]
     /// This function returns a struct of type GpioHandler.
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
@@ -144,7 +147,10 @@ impl GpioHandler {
     /// * `config` - configuration data for GPIO handler
     pub fn new(config: GpioHandlerConfig) -> GpioHandler {
         if !config.use_simulator {
-            panic!("Usage of hardware not supported on this platform.");
+            panic!(
+                "{}: Usage of hardware not supported on this platform.",
+                Self::LOG_TARGET_GPIO_HANDLER
+            );
         }
 
         GpioHandler { config: config }
@@ -159,22 +165,28 @@ impl GpioHandler {
         internal_command: InternalCommand,
     ) -> f32 {
         match internal_command {
-            InternalCommand::RequestSignal(_) => {
-                //println!("GpioHandler::get_response_from_simulator: requesting {}", c);
-                match tx_to_tcp.send(internal_command) {
-                    Ok(()) => match rx_from_tcp.recv() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            panic!("GpioHandler: Error occurred when trying to receive response from TCP thread: {e:?}");
-                        }
-                    },
+            InternalCommand::RequestSignal(_) => match tx_to_tcp.send(internal_command) {
+                Ok(()) => match rx_from_tcp.recv() {
+                    Ok(c) => c,
                     Err(e) => {
-                        panic!("GpioHandler: Error in trying to send request to TCP thread: {e:?}");
+                        panic!(
+                                "{}: Error occurred when trying to receive response from TCP thread ({e:?})",
+                                Self::LOG_TARGET_GPIO_HANDLER);
                     }
+                },
+                Err(e) => {
+                    panic!(
+                        "{}: Error occurred when trying to send request to TCP thread ({e:?})",
+                        Self::LOG_TARGET_GPIO_HANDLER
+                    );
                 }
-            }
+            },
             _ => {
-                println!("GpioHandler: ignoring irrelevant internal commands.");
+                warn!(
+                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    "ignoring not applicable internal command ({})",
+                    internal_command
+                );
                 0.0
             }
         }
@@ -208,7 +220,11 @@ impl GpioHandler {
                 AquariumSignal::TankLevelSwitchInvalid => 0.0,
             },
             _ => {
-                println!("GpioHandler: ignoring irrelevant internal commands.");
+                warn!(
+                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    "ignoring not applicable internal command ({})",
+                    internal_command
+                );
                 0.0
             }
         }
@@ -216,7 +232,10 @@ impl GpioHandler {
 
     #[cfg(not(target_os = "linux"))]
     fn get_response_from_hardware(&self, _internal_command: InternalCommand) -> f32 {
-        panic!("Usage of hardware not supported on this platform.");
+        panic!(
+            "{}: Usage of hardware not supported on this platform.",
+            Self::LOG_TARGET_GPIO_HANDLER
+        );
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
@@ -255,9 +274,17 @@ impl GpioHandler {
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let mut response_value: f32 = 0.0;
+        let mut data_logger_channel_disconnected = false;
+        let mut refill_channel_disconnected = false;
+        let mut heating_channel_disconnected = false;
+        let mut ventilation_channel_disconnected = false;
+        let mut monitors_channel_disconnected = false;
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
-            panic!("Gpiohandler configured to run with simulator, but no channel to TCP thread provided.");
+            panic!(
+                "{}: configured to run with simulator, but no channel to TCP thread provided.",
+                Self::LOG_TARGET_GPIO_HANDLER
+            );
         }
 
         loop {
@@ -268,35 +295,43 @@ impl GpioHandler {
             }
 
             // *** communication with data logger ***
-            match rx_from_data_logger.try_recv() {
-                Ok(c) => {
-                    if self.config.active {
-                        if self.config.use_simulator {
-                            response_value = Self::get_response_from_simulator(
-                                tx_to_tcp_opt.as_ref().unwrap(),
-                                rx_from_tcp_opt.as_ref().unwrap(),
-                                c,
-                            );
+            if !data_logger_channel_disconnected {
+                match rx_from_data_logger.try_recv() {
+                    Ok(c) => {
+                        if self.config.active {
+                            if self.config.use_simulator {
+                                response_value = Self::get_response_from_simulator(
+                                    tx_to_tcp_opt.as_ref().unwrap(),
+                                    rx_from_tcp_opt.as_ref().unwrap(),
+                                    c,
+                                );
+                            } else {
+                                response_value = self.get_response_from_hardware(c);
+                            }
                         } else {
-                            response_value = self.get_response_from_hardware(c);
+                            response_value = 0.0;
                         }
-                    } else {
-                        response_value = 0.0;
-                    }
-                    match tx_to_data_logger.send(response_value) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            println!(
-                                "Error in trying to send response value back to data logger: {e:?}"
-                            );
+                        match tx_to_data_logger.send(response_value) {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "sending response value back to data logger failed ({e:?})"
+                                );
+                                data_logger_channel_disconnected = true;
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "receiving command from data logger failed ({e:?})",
+                                );
+                                data_logger_channel_disconnected = true;
+                            }
                         }
                     }
                 }
@@ -304,33 +339,40 @@ impl GpioHandler {
             // **********************************
 
             // *** communication with refill control ***
-            match rx_from_refill.try_recv() {
-                Ok(c) => {
-                    if self.config.active {
-                        if self.config.use_simulator {
-                            response_value = Self::get_response_from_simulator(
-                                tx_to_tcp_opt.as_ref().unwrap(),
-                                rx_from_tcp_opt.as_ref().unwrap(),
-                                c,
-                            );
+            if !refill_channel_disconnected {
+                match rx_from_refill.try_recv() {
+                    Ok(c) => {
+                        if self.config.active {
+                            if self.config.use_simulator {
+                                response_value = Self::get_response_from_simulator(
+                                    tx_to_tcp_opt.as_ref().unwrap(),
+                                    rx_from_tcp_opt.as_ref().unwrap(),
+                                    c,
+                                );
+                            }
+                            // @todo: implement communication with real HW
                         }
-                        // @todo: implement communication with real HW
-                    }
-                    println!("GpioHandler: Sending back to refill.");
-                    match tx_to_refill.send(response_value) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            println!(
-                                "Error in trying to send response value back to data logger: {e:?}"
-                            );
+                        match tx_to_refill.send(response_value) {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "sending response value back to refill control failed ({e:?})"
+                                );
+                                refill_channel_disconnected = true;
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from data refill: {e:?}");
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "receiving command from refill control failed ({e:?})"
+                                );
+                                refill_channel_disconnected = true;
+                            }
                         }
                     }
                 }
@@ -338,33 +380,40 @@ impl GpioHandler {
             // **********************************
 
             // *** communication with heating control ***
-            match rx_from_heating.try_recv() {
-                Ok(c) => {
-                    if self.config.active {
-                        if self.config.use_simulator {
-                            response_value = Self::get_response_from_simulator(
-                                tx_to_tcp_opt.as_ref().unwrap(),
-                                rx_from_tcp_opt.as_ref().unwrap(),
-                                c,
-                            );
+            if !heating_channel_disconnected {
+                match rx_from_heating.try_recv() {
+                    Ok(c) => {
+                        if self.config.active {
+                            if self.config.use_simulator {
+                                response_value = Self::get_response_from_simulator(
+                                    tx_to_tcp_opt.as_ref().unwrap(),
+                                    rx_from_tcp_opt.as_ref().unwrap(),
+                                    c,
+                                );
+                            }
+                            // @todo: implement communication with real HW
                         }
-                        // @todo: implement communication with real HW
-                    }
-                    println!("GpioHandler: Sending back to Heating");
-                    match tx_to_heating.send(response_value) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            println!(
-                                "Error in trying to send response value back to data logger: {e:?}"
-                            );
+                        match tx_to_heating.send(response_value) {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "sending response value back to heating failed ({e:?})"
+                                );
+                                heating_channel_disconnected = true;
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from heating: {e:?}");
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "receiveing command from heating failed ({e:?})"
+                                );
+                                heating_channel_disconnected = true;
+                            }
                         }
                     }
                 }
@@ -372,33 +421,40 @@ impl GpioHandler {
             // **********************************
 
             // *** communication with ventilation control ***
-            match rx_from_ventilation.try_recv() {
-                Ok(c) => {
-                    if self.config.active {
-                        if self.config.use_simulator {
-                            response_value = Self::get_response_from_simulator(
-                                tx_to_tcp_opt.as_ref().unwrap(),
-                                rx_from_tcp_opt.as_ref().unwrap(),
-                                c,
-                            );
+            if !ventilation_channel_disconnected {
+                match rx_from_ventilation.try_recv() {
+                    Ok(c) => {
+                        if self.config.active {
+                            if self.config.use_simulator {
+                                response_value = Self::get_response_from_simulator(
+                                    tx_to_tcp_opt.as_ref().unwrap(),
+                                    rx_from_tcp_opt.as_ref().unwrap(),
+                                    c,
+                                );
+                            }
+                            // @todo: implement communication with real HW
                         }
-                        // @todo: implement communication with real HW
-                    }
-                    println!("GpioHandler: Sending back to Ventilation");
-                    match tx_to_ventilation.send(response_value) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            println!(
-                                "Error in trying to send response value back to data logger: {e:?}"
-                            );
+                        match tx_to_ventilation.send(response_value) {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "sending response value back to ventilation failed ({e:?})"
+                                );
+                                ventilation_channel_disconnected = true;
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from ventilation: {e:?}");
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "receiving command from ventilation failed ({e:?})"
+                                );
+                                ventilation_channel_disconnected = true;
+                            }
                         }
                     }
                 }
@@ -406,33 +462,40 @@ impl GpioHandler {
             // **********************************
 
             // *** communication with monitors ***
-            match rx_from_monitors.try_recv() {
-                Ok(c) => {
-                    if self.config.active {
-                        if self.config.use_simulator {
-                            response_value = Self::get_response_from_simulator(
-                                tx_to_tcp_opt.as_ref().unwrap(),
-                                rx_from_tcp_opt.as_ref().unwrap(),
-                                c,
-                            );
+            if !monitors_channel_disconnected {
+                match rx_from_monitors.try_recv() {
+                    Ok(c) => {
+                        if self.config.active {
+                            if self.config.use_simulator {
+                                response_value = Self::get_response_from_simulator(
+                                    tx_to_tcp_opt.as_ref().unwrap(),
+                                    rx_from_tcp_opt.as_ref().unwrap(),
+                                    c,
+                                );
+                            }
+                            // @todo: implement communication with real HW
                         }
-                        // @todo: implement communication with real HW
-                    }
-                    println!("GpioHandler: Sending back to Monitors");
-                    match tx_to_monitors.send(response_value) {
-                        Ok(()) => {}
-                        Err(e) => {
-                            println!(
-                                "Error in trying to send response value back to data logger: {e:?}"
-                            );
+                        match tx_to_monitors.send(response_value) {
+                            Ok(()) => {}
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "sending response value back to monitors failed ({e:?})"
+                                );
+                                monitors_channel_disconnected = true;
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!("GpioHandler: Error in trying to receive command from monitors: {e:?}");
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                error!(
+                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    "receiving command from monitors failed ({e:?})"
+                                );
+                                monitors_channel_disconnected = true;
+                            }
                         }
                     }
                 }
@@ -440,17 +503,16 @@ impl GpioHandler {
             // **********************************
         }
 
-        println!("GpioHandler: Exited loop - sending back to signal handler");
-
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!("GpioHandler: Error in trying to send confirmation back to signal handler: {e:?}");
+                error!(
+                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    "sending confirmation back to signal handler failed ({e:?})"
+                );
             }
         };
-
-        println!("GpioHandler finished.");
     }
 }

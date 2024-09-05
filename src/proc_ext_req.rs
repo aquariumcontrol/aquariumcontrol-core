@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, warn};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use crate::channel_content::InternalCommand;
@@ -24,6 +25,8 @@ use crate::refill::Refill;
 use crate::schedule_check::ScheduleCheck;
 use crate::tcp_communication::TcpCommunication;
 use crate::water_injection::WaterInjection;
+
+const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
 
 /// The trait implements processing of repeated patterns of channel communication from signal handler and from messaging.
 /// Default implementation is used by Balling dosing control, heating control, ventilation control and monitors.
@@ -44,7 +47,10 @@ pub trait ProcessExternalRequestTrait {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
-                    println!("ProcessExternalRequestTrait: ignoring inapplicable command from signal handler.");
+                    warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ProcessExternalRequestTrait: ignoring not applicable command from signal handler."
+                    );
                     false
                 }
             },
@@ -52,9 +58,10 @@ pub trait ProcessExternalRequestTrait {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
-                        println!(
-                        "ProcessExternalRequestTrait: Error in trying to receive command from signal handler: {e:?}"
-                    );
+                        error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
+                        );
                     }
                 }
                 false
@@ -68,7 +75,10 @@ pub trait ProcessExternalRequestTrait {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         _ => {
-                            println!("ProcessExternalRequestTrait: ignoring inapplicable command from messaging.");
+                            warn!(
+                                target: LOG_TARGET_PROC_EXT_REQ,
+                                "ProcessExternalRequestTrait: ignoring not applicable command from messaging."
+                            );
                             (false, false)
                         }
                     },
@@ -76,8 +86,9 @@ pub trait ProcessExternalRequestTrait {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
-                                println!(
-                                "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
+                                error!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "receiving command from messaging failed ({e:?})"
                                 );
                             }
                         }
@@ -87,9 +98,6 @@ pub trait ProcessExternalRequestTrait {
             }
             None => (false, false),
         };
-
-        //println!("ProcessExternalRequestTrait: quit_command_received={}, start_command_received={}, stop_command_received={}",
-        //    quit_command_received, start_command_received, stop_command_received);
 
         (
             quit_command_received,
@@ -115,7 +123,10 @@ impl ProcessExternalRequestTrait for Refill {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
-                    println!("Refill: ignoring inapplicable command from signal handler.");
+                    warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ignoring not applicable command from signal handler."
+                    );
                     false
                 }
             },
@@ -123,8 +134,9 @@ impl ProcessExternalRequestTrait for Refill {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
-                        println!(
-                            "Refill: Error in trying to receive command from signal handler: {e:?}"
+                        error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
                         );
                     }
                 }
@@ -143,7 +155,10 @@ impl ProcessExternalRequestTrait for Refill {
                             (false, false)
                         }
                         _ => {
-                            println!("Refill: ignoring inapplicable command from messaging.");
+                            warn!(
+                                target: LOG_TARGET_PROC_EXT_REQ,
+                                "ignoring not applicable command from messaging."
+                            );
                             (false, false)
                         }
                     },
@@ -151,9 +166,10 @@ impl ProcessExternalRequestTrait for Refill {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
-                                println!(
-                            "Refill: Error in trying to receive command from messaging: {e:?}"
-                        );
+                                error!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "receiving command from messaging failed ({e:?})"
+                                );
                             }
                         }
                         (false, false)
@@ -181,7 +197,10 @@ fn process_external_request_without_messaging(
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
-                println!("ProcessExternalRequestTrait: ignoring inapplicable command from signal handler.");
+                warn!(
+                    target: LOG_TARGET_PROC_EXT_REQ,
+                    "ProcessExternalRequestTrait: ignoring not applicable command from signal handler."
+                );
                 false
             }
         },
@@ -189,8 +208,9 @@ fn process_external_request_without_messaging(
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
-                    println!(
-                        "ProcessExternalRequestTrait: Error in trying to receive command from messaging: {e:?}"
+                    error!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "receiving command from messaging failed ({e:?})"
                     );
                 }
             }
@@ -352,7 +372,11 @@ impl ProcessExternalRequestTrait for Feed {
             Ok(c) => match c {
                 InternalCommand::Quit => true,
                 _ => {
-                    println!("Feed: ignoring inapplicable command from signal handler.");
+                    warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ignoring not applicable command {} from signal handler.",
+                        c
+                    );
                     false
                 }
             },
@@ -360,8 +384,9 @@ impl ProcessExternalRequestTrait for Feed {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
-                        println!(
-                            "Feed: Error in trying to receive command from signal handler: {e:?}"
+                        error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
                         );
                     }
                 }
@@ -380,7 +405,11 @@ impl ProcessExternalRequestTrait for Feed {
                             InternalCommand::Stop => (false, true, false, 0),
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
-                                println!("Feed: ignoring inapplicable command from messaging.");
+                                warn!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "ignoring not applicable command {} from messaging.",
+                                    c
+                                );
                                 (false, false, false, 0)
                             }
                         },
@@ -388,9 +417,10 @@ impl ProcessExternalRequestTrait for Feed {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
-                                    println!(
-                                "Heating: Error in trying to receive command from messaging: {e:?}"
-                            );
+                                    error!(
+                                        target: LOG_TARGET_PROC_EXT_REQ,
+                                        "receiving command from messaging failed ({e:?})"
+                                    );
                                 }
                             }
                             (false, false, false, 0)

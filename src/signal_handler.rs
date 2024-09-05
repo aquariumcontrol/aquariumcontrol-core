@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use crate::channel_content::InternalCommand;
+use log::{error, info};
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
@@ -68,6 +69,8 @@ use std::time::Duration;
 ///     tcp_communication --> signal_handler
 /// ```
 
+const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
+
 pub fn handle_signals(
     tx_to_messaging: Sender<InternalCommand>,
     tx_to_refill: Sender<InternalCommand>,
@@ -94,7 +97,10 @@ pub fn handle_signals(
     rx_from_tcp_opt: Option<Receiver<bool>>,
 ) {
     if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
-        panic!("handle_signals: inconsistent channel parameters for TcpCommunication provided to handle_signals.");
+        panic!(
+            "{}: inconsistent channel parameters for TcpCommunication provided",
+            LOG_TARGET_SIGNAL_HANDLER
+        );
     }
 
     let spin_sleeper = SpinSleeper::default();
@@ -104,10 +110,16 @@ pub fn handle_signals(
     for signal in signal_hook::consts::TERM_SIGNALS {
         match signal_hook::flag::register(*signal, Arc::clone(&term)) {
             Ok(c) => {
-                println!("handle_signals: Registered hook for signal {c:?}");
+                info!(
+                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    "registered hook for signal {c:?}"
+                );
             }
             Err(e) => {
-                panic!("handle_signals: Could not hook SIGTERM routine: {e:?}");
+                panic!(
+                    "{}: Could not hook SIGTERM routine: {e:?}",
+                    LOG_TARGET_SIGNAL_HANDLER
+                );
             }
         }
     }
@@ -115,189 +127,221 @@ pub fn handle_signals(
     while !term.load(Ordering::Relaxed) {
         spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
     }
-    println!("handle_signals: received termination signal.");
+    info!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "received termination signal from operating system",
+    );
 
     // first, let's shut down the refill control
     match tx_to_refill.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Refill thread to shut down.");
             // now listen for response
             match rx_from_refill.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from refill thread {e:?}")
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from refill thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Refill when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "hannel communication to refill control failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // second, let's shut down the heating control
     match tx_to_heating.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Heating thread to shut down.");
             // now listen for response
             match rx_from_heating.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from heating thread {e:?}")
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from heating thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Heating when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to heating control failed when sending Quit command ({e:?})"
+            );
         }
     }
 
-    // next, let's shut down the heating control
+    // next, let's shut down the ventilation control
     match tx_to_ventilation.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Ventilation thread to shut down.");
             // now listen for response
             match rx_from_ventilation.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!(
-                        "handle_signals: could not receive answer from ventilation thread {e:?}"
-                    )
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from ventilation control ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Ventilation when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to ventilation control failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // next, let's shut down the monitors
     match tx_to_monitors.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Monitors thread to shut down.");
-            // now listen for response
             match rx_from_monitors.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from Monitors thread {e:?}")
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from monitors thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Monitors when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to monitors thread failed when sending Quit command ({e:?})"
+            );
         }
     }
 
-    // next, let's shut down the monitors
+    // next, let's shut down the feed control
     match tx_to_feed.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Feed thread to shut down.");
-            // now listen for response
             match rx_from_feed.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from Feed thread {e:?}")
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from feed control ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Feed when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to feed control failed when sending Quit command ({e:?})"
+            );
         }
     }
 
-    // next, let's shut down the monitors
+    // next, let's shut down Balling dosing control
     match tx_to_balling.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Balling thread to shut down.");
-            // now listen for response
             match rx_from_balling.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("handle_signals: could not receive answer from Balling thread {e:?}")
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from Balling dosing control ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Balling when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Balling dosing congtrol failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // next, let's shut down the schedule checker
     match tx_to_schedule_check.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for ScheduleCheck thread to shut down.");
-            // now listen for response
             match rx_from_schedule_check.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!(
-                        "handle_signals: could not receive answer from ScheduleCheck thread {e:?}"
-                    )
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from ScheduleCheck thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to ScheduleCheck when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to ScheduleCheck failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // next, let's shut down the data logging
     match tx_to_datalogger.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for DataLogger thread to terminate.");
-            // now listen for response
             match rx_from_datalogger.recv() {
-                Ok(_) => {
-                    println!("handle_signals: received Quit confirmation from data logger.");
-                }
+                Ok(_) => {}
                 Err(e) => {
-                    println!(
-                        "handle_signals: could not receive answer from datalogger thread {e:?}"
-                    )
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from data logger thread {e:?}"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to DataLogger when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "hannel communication to data logger thread failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // next, let's shut down Controllino
     match tx_to_controllino.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Controllino thread to terminate.");
-            // now listen for response
             match rx_from_controllino.recv() {
-                Ok(_) => {
-                    println!("handle_signals: received Quit confirmation from Controllino.");
-                }
+                Ok(_) => {}
                 Err(e) => {
-                    println!(
-                        "handle_signals: could not receive answer from Controllino thread {e:?}"
-                    )
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from Controllino thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Controllino when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Controllino failed when sending Quit command ({e:?})"
+            );
         }
     }
 
     // next, let's shut down GpioHandler
     match tx_to_gpio.send(InternalCommand::Quit) {
         Ok(_) => {
-            println!("signal_handler: Waiting for Gpio thread to terminate.");
-            // now listen for response
             match rx_from_gpio.recv() {
                 Ok(_) => {}
                 Err(e) => {
-                    println!(
-                        "handle_signals: could not receive answer from GpioHandler thread {e:?}"
-                    )
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from GpioHandler thread ({e:?})"
+                    );
                 }
             };
         }
         Err(e) => {
-            println!("handle_signals: Error in channel communication to GpioHandler when sending Quit command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to GpioHandler failed when sending Quit command ({e:?})"
+            );
         }
     }
 
@@ -305,103 +349,114 @@ pub fn handle_signals(
     match tx_to_tcp_opt {
         Some(tx_to_tcp) => match tx_to_tcp.send(InternalCommand::Quit) {
             Ok(_) => {
-                println!("signal_handler: Waiting for TcpCommunication thread to terminate.");
-                // now listen for response
                 match rx_from_tcp_opt {
                     Some(rx_from_tcp) => match rx_from_tcp.recv() {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("handle_signals: could not receive answer from TcpCommunication thread {e:?}")
+                            error!(
+                                target: LOG_TARGET_SIGNAL_HANDLER,
+                                "could not receive answer from TcpCommunication thread ({e:?})"
+                            );
                         }
                     },
                     None => { /* do nothing */ }
                 }
             }
             Err(e) => {
-                println!("handle_signals: Error in channel communication to TcpCommunication when sending Quit command: {e:?}");
+                error!(
+                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    "channel communication to TcpCommunication when sending Quit command ({e:?})"
+                );
             }
         },
         None => { /* do nothing */ }
     }
 
-    // DataLogger thread has already ceased operation. It is now awaiting termination command.
+    // data logger thread has already ceased operation. It is now awaiting termination command.
     match tx_to_datalogger.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to DataLogger thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to DataLogger when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to data logger failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
-    // Heating thread has already ceased operation. It is now awaiting termination command.
+    // heating thread has already ceased operation. It is now awaiting termination command.
     match tx_to_heating.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Heating thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Heating when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to heating control failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
-    // Ventilation thread has already ceased operation. It is now awaiting termination command.
+    // ventilation thread has already ceased operation. It is now awaiting termination command.
     match tx_to_ventilation.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Ventilation thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Ventilation when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to ventilation control failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
-    // Feed thread has already ceased operation. It is now awaiting termination command.
+    // Feed control has already ceased operation. It is now awaiting termination command.
     match tx_to_feed.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Feed thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Feed when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to feed control failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
-    // Balling thread has already ceased operation. It is now awaiting termination command.
+    // Balling control has already ceased operation. It is now awaiting termination command.
     match tx_to_balling.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Balling thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Balling when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Balling dosing control failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
     // Monitors thread has already ceased operation. It is now awaiting termination command.
     match tx_to_monitors.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Monitors thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Monitors when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Monitors failed when sending Terminate command ({e:?})"
+            );
         }
     }
 
     // Refill thread has already ceased operation. It is now awaiting termination command.
     match tx_to_refill.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Refill thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Refill when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to refill control failed when sending Terminate command ({e:?})"
+            );
         }
     }
-    println!("signal_handler: finished.");
 
     // Messaging is checking for termination signal periodically.
     match tx_to_messaging.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            println!("signal_handler: Sent termination signal to Messaging thread.");
-        }
+        Ok(_) => {}
         Err(e) => {
-            println!("handle_signals: Error in channel communication to Messaging when sending Terminate command: {e:?}");
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Messaging failed when sending Terminate command ({e:?})"
+            );
         }
     }
 }

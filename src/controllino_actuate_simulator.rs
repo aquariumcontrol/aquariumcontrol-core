@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use log::warn;
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Sender;
@@ -16,6 +18,8 @@ use crate::controllino::ControllinoConfig;
 use crate::controllino::ControllinoError;
 use crate::controllino::RelayActuationTrait;
 use crate::device_relay_logic::get_relay_command;
+
+const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";
 
 /// Contains trait implementation for system testing purposes.
 pub struct ControllinoActuateSimulator;
@@ -57,8 +61,9 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
                 }
             }
             _ => {
-                println!(
-                    "Controllino: ignoring irrelevant internal command {}.",
+                warn!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR,
+                    "ignoring irrelevant internal command {}.",
                     internal_command.to_string()
                 );
                 Err(ControllinoError::IrrelevantCommand(internal_command))

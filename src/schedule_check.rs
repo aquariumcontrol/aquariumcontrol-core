@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -56,6 +57,8 @@ pub struct ScheduleCheck {
 }
 
 impl ScheduleCheck {
+    const LOG_TARGET_SCHEDULE_CHECK: &'static str = "schedule_check";
+
     /// Provides a struct of type ScheduleCheck.
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
@@ -83,17 +86,17 @@ impl ScheduleCheck {
         rx: &Receiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
     ) {
-        match tx.send (
-            match rx.try_recv() {
+        match tx.send(match rx.try_recv() {
             Ok(c) => match c {
-                InternalCommand::ScheduleCheck => {
-                    match schedule_entry {
-                        Some(c) => c.check_if_allowed(),
-                        None => self.config.strategy_if_schedule_not_found,
-                    }
+                InternalCommand::ScheduleCheck => match schedule_entry {
+                    Some(c) => c.check_if_allowed(),
+                    None => self.config.strategy_if_schedule_not_found,
                 },
                 _ => {
-                    println!("ScheduleCheck: ignoring inapplicable command from signal handler.");
+                    warn!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "ignoring not applicable command ({c:?}) from signal handler"
+                    );
                     return;
                 }
             },
@@ -101,18 +104,21 @@ impl ScheduleCheck {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
-                        println!(
-                            "ScheduleCheck: Error in trying to receive command from signal handler: {e:?}"
+                        error!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "receiving command from signal handler failed ({e:?})"
                         );
                     }
                 }
                 return;
             }
-        }
-        ) {
-            Ok(_) => { /* nothing to be done */ },
+        }) {
+            Ok(_) => { /* nothing to be done */ }
             Err(e) => {
-                println!("ScheduleCheck: Error in sending back message: {e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    "sending back message failed ({e:?})"
+                );
             }
         };
     }
@@ -148,7 +154,6 @@ impl ScheduleCheck {
 
         loop {
             if loop_counter % self.config.schedule_check_interval * 10 == 0 {
-                println!("ScheduleCheck: polling SQL database.");
                 _ = self.sql_interface_schedule.read_schedule();
             }
 
@@ -164,7 +169,10 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Ventilation: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "could not find schedule for ventilation ({e:?})"
+                    );
                     None
                 }
             };
@@ -180,7 +188,10 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Heating: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "could not find schedule for heating ({e:?})"
+                    );
                     None
                 }
             };
@@ -196,7 +207,10 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Refill: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "could not find schedule for refill ({e:?})"
+                    );
                     None
                 }
             };
@@ -212,7 +226,10 @@ impl ScheduleCheck {
             {
                 Ok(c) => Some(c),
                 Err(e) => {
-                    println!("ScheduleCheck: could not find schedule for Balling: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "could not find schedule for balling ({e:?})"
+                    );
                     None
                 }
             };
@@ -228,12 +245,16 @@ impl ScheduleCheck {
         }
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("ScheduleCheck: Sending Quit confirmation to signal handler.");
+        info!(
+            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+            "sending Quit confirmation to signal handler."
+        );
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "ScheduleCheck: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
         };

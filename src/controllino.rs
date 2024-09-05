@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::error;
 use serde_derive::Deserialize;
 use serialport::ClearBuffer;
 use serialport::SerialPort;
@@ -201,6 +202,8 @@ pub struct Controllino {
 }
 
 impl Controllino {
+    const LOG_TARGET_CONTROLLINO: &'static str = "controllino";
+
     /// Provides a struct of type Controllino
     /// # Arguments
     /// * `config` - configuration data for Controllino
@@ -222,7 +225,10 @@ impl Controllino {
                     match serialport::new(config.port_name.clone(), config.baud_rate).open() {
                         Ok(c) => c,
                         Err(e) => {
-                            panic!("controllino: failed to open serial port: {e:?}");
+                            panic!(
+                                "{}: failed to open serial port ({e:?})",
+                                Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     };
 
@@ -231,7 +237,8 @@ impl Controllino {
                     Ok(()) => { /* do nothing */ }
                     Err(_) => {
                         panic!(
-                            "controllino: could not set timeout of {} milliseconds.",
+                            "{}: could not set timeout of {} milliseconds.",
+                            Self::LOG_TARGET_CONTROLLINO,
                             config.timeout_millis
                         );
                     }
@@ -239,11 +246,12 @@ impl Controllino {
 
                 // write to Data Terminal Ready pin: clear the signal
                 match serial_port.write_data_terminal_ready(false) {
-                    Ok(_) => {
-                        println!("Controllino: could reset DTR");
-                    }
+                    Ok(_) => { /* could reset DTR - do nothing */ }
                     Err(e) => {
-                        panic!("Controllino: error when clearing DTR: {e:?}");
+                        panic!(
+                            "{}: error when clearing DTR ({e:?})",
+                            Self::LOG_TARGET_CONTROLLINO
+                        );
                     }
                 }
 
@@ -254,11 +262,12 @@ impl Controllino {
 
                 // flush the buffer
                 match serial_port.clear(ClearBuffer::All) {
-                    Ok(_) => {
-                        println!("Controllino: could clear buffer.");
-                    }
+                    Ok(_) => { /* could clear buffer - do nothing */ }
                     Err(e) => {
-                        panic!("Controllino: error when clearing buffer: {e:?}");
+                        panic!(
+                            "{}: error when clearing buffer ({e:?})",
+                            Self::LOG_TARGET_CONTROLLINO
+                        );
                     }
                 }
 
@@ -331,7 +340,6 @@ impl Controllino {
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
-                    println!("Controllino: received request from Refill thread.");
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -342,14 +350,18 @@ impl Controllino {
                     ) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("Controllino: Error in actuation of refill pump: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "actuation of refill pump. ({e:?})"
+                            );
                         }
                     }
                     match tx_to_refill.send(true) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!(
-                                "Controllino: Error in trying to send response value back to refill control: {e:?}"
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "responding to refill control ({e:?})"
                             );
                         }
                     }
@@ -358,7 +370,10 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from refill control {e:?}");
+                            panic!(
+                                "{}: error when trying to receive command from refill control ({e:?})",
+                                 Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     }
                 }
@@ -368,7 +383,6 @@ impl Controllino {
             // *** communication with heating control ***
             match rx_from_heating.try_recv() {
                 Ok(c) => {
-                    println!("Controllino: received request from Heating thread.");
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -379,14 +393,18 @@ impl Controllino {
                     ) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("Controllino: Error in actuation of heater: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "actuation of heater ({e:?})"
+                            );
                         }
                     }
                     match tx_to_heating.send(true) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!(
-                                "Controllino: Error in trying to send response value back to heating control: {e:?}"
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "responding to heating control: {e:?}"
                             );
                         }
                     }
@@ -395,7 +413,10 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from heating control {e:?}");
+                            panic!(
+                                "{}: Error in trying to receive command from heating control {e:?}",
+                                Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     }
                 }
@@ -405,7 +426,6 @@ impl Controllino {
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
-                    println!("Controllino: received request from Ventilation thread.");
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -416,14 +436,18 @@ impl Controllino {
                     ) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("Controllino: Error in actuation of ventilation: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "actuation of ventilation ({e:?})"
+                            );
                         }
                     }
                     match tx_to_ventilation.send(true) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!(
-                                "Controllino: Error in trying to send response value back to ventilation control: {e:?}"
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "responding to ventilation control ({e:?})"
                             );
                         }
                     }
@@ -432,7 +456,10 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from ventilation control {e:?}");
+                            panic!(
+                                "{}: Error in trying to receive command from ventilation control {e:?}",
+                                Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     }
                 }
@@ -442,7 +469,6 @@ impl Controllino {
             // *** communication with Balling dosing control ***
             match rx_from_balling.try_recv() {
                 Ok(c) => {
-                    println!("Controllino: received request from Balling thread.");
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -453,14 +479,18 @@ impl Controllino {
                     ) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("Controllino: Error in actuation of Balling dosing: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "actuation of Balling dosing ({e:?})"
+                            );
                         }
                     }
                     match tx_to_balling.send(true) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!(
-                                "Controllino: Error in trying to send response value back to Balling dosing control: {e:?}"
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "responding to Balling dosing control ({e:?})"
                             );
                         }
                     }
@@ -469,7 +499,10 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from Balling dosing control {e:?}");
+                            panic!(
+                                "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
+                                Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     }
                 }
@@ -479,7 +512,6 @@ impl Controllino {
             // *** communication with feed control ***
             match rx_from_feed.try_recv() {
                 Ok(c) => {
-                    println!("Controllino: received request from Feed thread.");
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -490,14 +522,18 @@ impl Controllino {
                     ) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("Controllino: Error in actuation of feeder: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "actuation of feeder ({e:?})"
+                            );
                         }
                     }
                     match tx_to_feed.send(true) {
                         Ok(()) => {}
                         Err(e) => {
-                            println!(
-                                "Controllino: Error in trying to send response value back to feed control: {e:?}"
+                            error!(
+                                target: Self::LOG_TARGET_CONTROLLINO,
+                                "responding to feed control ({e:?})"
                             );
                         }
                     }
@@ -506,7 +542,10 @@ impl Controllino {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("Controllino: Error in trying to receive command from feed control {e:?}");
+                            panic!(
+                                "{}: Error in trying to receive command from feed control ({e:?})",
+                                Self::LOG_TARGET_CONTROLLINO
+                            );
                         }
                     }
                 }
@@ -519,7 +558,9 @@ impl Controllino {
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!("Controllino: Error in trying to send confirmation back to signal handler: {e:?}");
+                error!(target: Self::LOG_TARGET_CONTROLLINO,
+                    "sending confirmation to signal handler ({e:?})"
+                );
             }
         };
     }

@@ -9,6 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 
+const LOG_TARGET_IIR_FILTER: &str = "iir_filter";
+
 trait FilterDefault {
     fn filter_default() -> Self;
 }
@@ -19,7 +21,10 @@ impl FilterDefault for () {
 
 impl FilterDefault for f32 {
     fn filter_default() -> Self {
-        panic!("initial value was required for filter")
+        panic!(
+            "{}: initial value was required for filter",
+            LOG_TARGET_IIR_FILTER
+        )
     }
 }
 
@@ -57,8 +62,8 @@ impl IIRFilter {
     ) -> Self {
         if time_step == 0.0 {
             panic!(
-                "IIRFilter initialized with invalid time step value ({}).",
-                time_step
+                "{}: filter initialized with invalid time step value ({}).",
+                LOG_TARGET_IIR_FILTER, time_step
             );
         }
         Self {

@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -22,6 +23,8 @@ pub struct SqlInterfaceRefill {
 }
 
 impl SqlInterfaceRefill {
+    const LOG_TARGET_SQL_INTERFACE_REFILL: &'static str = "sql_interface_refill";
+
     /// Provides a struct of type SqlInterfaceRefill.
     /// # Arguments
     /// * `conn` - connection to SQL database
@@ -118,7 +121,10 @@ impl SqlInterfaceRefill {
         ) {
             Ok(c) => Ok(c),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_REFILL,
+                    "could not retrieve refill volume of last 24h from database ({e:?})"
+                );
                 Err(e)
             }
         }
@@ -135,7 +141,10 @@ impl SqlInterfaceRefill {
         ) {
             Ok(c) => Ok(c),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_REFILL,
+                    "could not retrieve refill volume of last hour from database ({e:?})"
+                );
                 Err(e)
             }
         }
@@ -169,7 +178,10 @@ impl SqlInterfaceRefill {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_REFILL,
+                    "could not insert refill event into database ({e:?})"
+                );
                 Err(SqlInterfaceError::InsertRefillEventFailure(
                     "Error when inserting refill event into database.".to_string(),
                 ))

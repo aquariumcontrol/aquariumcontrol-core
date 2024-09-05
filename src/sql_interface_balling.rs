@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::*;
+use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
@@ -37,6 +38,8 @@ pub struct BallingSetVal {
 }
 
 impl SqlInterfaceBalling {
+    const LOG_TARGET_SQL_INTERFACE_BALLING: &'static str = "sql_interface_balling";
+
     /// Provides a struct of type SqlInterfaceBalling
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
@@ -113,7 +116,10 @@ impl SqlInterfaceBalling {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
+                    "could not insert Balling dosing event into database ({e:?})"
+                );
                 Err(SqlInterfaceError::InsertBallingEventFailure(
                     "Error when inserting Balling dosing event into database.".to_string(),
                 ))

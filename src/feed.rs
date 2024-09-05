@@ -7,6 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use log::{error, info, trace, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -64,6 +65,8 @@ pub struct Feed {
 }
 
 impl Feed {
+    const LOG_TARGET_FEED: &'static str = "feed";
+
     /// Provides a struct of type Feed
     /// # Arguments
     /// * `config` - configuration data for feed control
@@ -91,7 +94,7 @@ impl Feed {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) {
+    ) -> Result<(), ()> {
         // load feed pattern from database
         match self
             .sql_interface_feed
@@ -110,7 +113,11 @@ impl Feed {
                     match SqlInterface::get_current_timestamp(&mut self.sql_interface_feed.conn) {
                         Ok(c) => c,
                         Err(e) => {
-                            panic!("Feed: could not get current timestamp from database: {e:?}");
+                            error!(
+                                target: Self::LOG_TARGET_FEED,
+                                "could not get current timestamp from database ({e:?})"
+                            );
+                            return Err(());
                         }
                     };
 
@@ -121,14 +128,22 @@ impl Feed {
                     feed_pattern.profile_name,
                     profile_id,
                 ) {
-                    Ok(_) => {}
+                    Ok(_) => Ok(()),
                     Err(e) => {
-                        panic!("Could not insert feed event into database: {e:?}")
+                        error!(
+                            target: Self::LOG_TARGET_FEED,
+                            "could not insert feed event into database ({e:?})"
+                        );
+                        Err(())
                     }
                 }
             }
             Err(e) => {
-                println!("Error when reading feed pattern from database: {e:?}");
+                error!(
+                    target: Self::LOG_TARGET_FEED,
+                    "Error when reading feed pattern from database: {e:?}"
+                );
+                Err(())
             }
         }
     }
@@ -156,62 +171,79 @@ impl Feed {
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
+        let mut execution_blocked: bool = false;
 
         loop {
             if self.config.active
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                println!("Feed: checking schedule...");
                 match self
                     .sql_interface_feed
                     .get_feedschedule_entry_from_database()
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entry) => {
-                            println!(
-                                "Feed schedule entry before update: \
-                                timestamp={}, profile_name={}, repeat_daily={}",
-                                feed_schedule_entry.timestamp,
-                                feed_schedule_entry.profile_name,
-                                feed_schedule_entry.repeat_daily
-                            );
+                            //println!(
+                            //    "Feed schedule entry before update: \
+                            //    timestamp={}, profile_name={}, repeat_daily={}",
+                            //    feed_schedule_entry.timestamp,
+                            //    feed_schedule_entry.profile_name,
+                            //    feed_schedule_entry.repeat_daily
+                            //);
 
-                            {
-                                // scope to limit lifetime of unlocked mutex
-                                let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
-
-                                self.execute_feed(
-                                    feed_schedule_entry.profile_id,
-                                    food_injection,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &rx_from_signal_handler,
-                                );
-
-                                *mutex_data += 1;
-
-                                //*** update schedule ***
-                                match self
-                                    .sql_interface_feed
-                                    .update_feedschedule_entry_in_database(&mut feed_schedule_entry)
+                            if !execution_blocked {
                                 {
-                                    Ok(()) => {
-                                        println!("Update feed schedule entry");
+                                    // scope to limit lifetime of unlocked mutex
+                                    let mut mutex_data =
+                                        mutex_device_scheduler_feed.lock().unwrap();
+
+                                    match self.execute_feed(
+                                        feed_schedule_entry.profile_id,
+                                        food_injection,
+                                        &tx_to_controllino,
+                                        &rx_from_controllino,
+                                        &rx_from_signal_handler,
+                                    ) {
+                                        Ok(_) => { /* do nothing */ }
+                                        Err(_) => {
+                                            // error occurred. Block subsequent executions
+                                            execution_blocked = true;
+                                        }
                                     }
-                                    Err(e) => {
-                                        println!("Error when updating feed schedule entry: {e:?}");
+
+                                    *mutex_data += 1;
+
+                                    //*** update schedule ***
+                                    match self
+                                        .sql_interface_feed
+                                        .update_feedschedule_entry_in_database(
+                                            &mut feed_schedule_entry,
+                                        ) {
+                                        Ok(()) => {
+                                            // do nothing
+                                            //println!("Updated feed schedule entry");
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                target: Self::LOG_TARGET_FEED,
+                                                "updating feed schedule entry failed ({e:?})"
+                                            );
+                                            execution_blocked = true;
+                                        }
                                     }
                                 }
                             }
                         }
                         None => {
-                            println!("Database has no feed schedule entry which lies in the past.");
+                            // do nothing
+                            //println!("Database has no feed schedule entry which lies in the past.");
                         }
                     },
                     Err(e) => {
-                        println!(
-                            "Could not retrieve feed schedule information from database: {e:?}"
+                        error!(
+                            target: Self::LOG_TARGET_FEED,
+                            "could not retrieve feed schedule information from database ({e:?})"
                         );
                     }
                 };
@@ -227,26 +259,38 @@ impl Feed {
                 break;
             }
             if stop_command_received {
-                println!("Feed: main loop: received Stop command. Inhibiting feed.");
+                info!(
+                    target: Self::LOG_TARGET_FEED,
+                    "received Stop command. Inhibiting feed."
+                );
                 feed_inhibited = true;
             }
             if start_command_received {
-                println!("Feed: main loop: received Start command. Restarting feed.");
+                info!(
+                    target: Self::LOG_TARGET_FEED,
+                    "received Start command. Restarting feed."
+                );
                 feed_inhibited = false;
             }
-            if self.execute_command_received && self.profile_id_requested >= 0 {
+            if self.execute_command_received && self.profile_id_requested >= 0 && !execution_blocked
+            {
                 {
                     // scope to limit lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
-                    self.execute_feed(
+                    match self.execute_feed(
                         self.profile_id_requested,
                         food_injection,
                         &tx_to_controllino,
                         &rx_from_controllino,
                         &rx_from_signal_handler,
-                    );
-
+                    ) {
+                        Ok(_) => { /* do nothing */ }
+                        Err(_) => {
+                            // error occurred. Block subsequent executions
+                            execution_blocked = true;
+                        }
+                    }
                     *mutex_data += 1;
                 }
             }
@@ -258,12 +302,16 @@ impl Feed {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        println!("Feed: Sending Quit confirmation to signal handler.");
+        trace!(
+            target: Self::LOG_TARGET_FEED,
+            "Sending Quit confirmation to signal handler."
+        );
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                println!(
-                    "Feed: Error in trying to send quit confirmation back to signal handler: {e:?}"
+                error!(
+                    target: Self::LOG_TARGET_FEED,
+                    "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
         };
@@ -277,12 +325,17 @@ impl Feed {
                 Ok(c) => match c {
                     InternalCommand::Terminate => true,
                     _ => {
-                        println!("Feed: ignoring inapplicable command from signal handler.");
+                        warn!(
+                            target: Self::LOG_TARGET_FEED,
+                            "ignoring not applicable command from signal handler ({})",
+                            c);
                         false
                     }
                 },
                 Err(e) => {
-                    println!("Feed: error when trying to receive termination signal: {e:?}");
+                    error!(
+                        target: Self::LOG_TARGET_FEED,
+                        "receiving termination signal failed ({e:?})");
                     false
                 }
             };

@@ -58,6 +58,7 @@ mod water_injection;
 #[cfg(target_os = "linux")]
 mod i2c_interface;
 
+use log::{info, trace, warn};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -164,16 +165,52 @@ use crate::water_injection::WaterInjection;
 /// ```
 
 fn main() {
+    const LOG_TARGET_MAIN: &str = "main";
+
+    // open file for logging
+    let log_file = match fern::log_file("aquarium.log") {
+        Ok(c) => c,
+        Err(e) => {
+            panic!(
+                "{}: Could not open output file for logging: {e:?}",
+                LOG_TARGET_MAIN
+            );
+        }
+    };
+
+    // configure logger
+    let _ = fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339(std::time::SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .level_for("hyper", log::LevelFilter::Info)
+        .chain(std::io::stdout()) // output to stdout
+        .chain(log_file) // output to file
+        .apply();
+
     //env::set_var("RUST_BACKTRACE", "1");
     let config = read_config_file("/config/aquarium_control.toml".to_string());
 
     let version_information = VersionInformation::new();
-    println!("Hash of this executable is: {}", version_information.hash);
+    info!(target: LOG_TARGET_MAIN,
+        "hash of this executable is: {}",
+        version_information.hash
+    );
 
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
-            panic!("Could not connect to SQL database: {e:?}");
+            panic!(
+                "{}: could not connect to SQL database: {e:?}",
+                LOG_TARGET_MAIN
+            );
         }
     };
 
@@ -198,46 +235,67 @@ fn main() {
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
         Err(e) => {
-            panic!("Could not read list of tables from SQL database: {e:?}");
+            panic!(
+                "{} Could not read list of tables from SQL database: {e:?}",
+                LOG_TARGET_MAIN
+            );
         }
     };
 
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
-            println!(
-                "Version information including hash of executable found in database: {}",
+            info!(
+                target: LOG_TARGET_MAIN,
+                "version information including hash of executable found in database: {}",
                 c
             );
             if c != version_information.hash {
-                println!("*** WARNING *** hash value for version in database does not match hash version of executable. Proceed with caution.");
+                warn!(
+                    target: LOG_TARGET_MAIN,                
+                    "hash value for version in database does not match hash version of executable. Proceed with caution.");
             }
         }
         Err(e) => {
             if e == SqlInterfaceError::SingleVersionRequestMultipleResults {
-                println!("*** WARNING *** found multiple hash values for version in database. Proceed with caution.");
+                warn!(
+                    target: LOG_TARGET_MAIN,                    
+                    "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
-                panic!("Could not find version information in database: {e:?}");
+                panic!(
+                    "{}: Could not find version information in database: {e:?}",
+                    LOG_TARGET_MAIN
+                );
             }
         }
     }
 
     let database = match sql_interface.get_database() {
         Ok(c) => c,
-        Err(e) => panic!("Could not get database name: {e:?}"),
+        Err(e) => {
+            panic!("{}: Could not get database name ({e:?})", LOG_TARGET_MAIN);
+        }
     };
-    println!("Current database name is {}", database);
+    info!(
+        target: LOG_TARGET_MAIN,
+        "current database name is {}", database);
 
     match sql_interface.check_required_tables_existing() {
         Ok(_) => {
-            println!("Required tables are existing in database.")
+            info!(
+                target: LOG_TARGET_MAIN,
+                "required tables are existing in database.")
         }
         Err(e) => panic!("{e:?}"),
     }
 
-    println!("Read the following tables from database:");
+    let mut tables_string: String = "read the following tables from database:".to_string();
     for table in tables {
-        println!("* {}", table);
+        tables_string += " ";
+        tables_string += &table;
     }
+    info!(
+        target: LOG_TARGET_MAIN,
+        "{}", tables_string);
 
     let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
 
@@ -741,7 +799,7 @@ fn main() {
                     &mut ControllinoActuateHardware,
                 );
             });
-            println!("main(01): Controllino terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Controllino terminated.");
         }
 
         scope.spawn(move || {
@@ -770,7 +828,7 @@ fn main() {
                 tx_signal_handler_to_tcp_opt,
                 rx_signal_handler_from_tcp_opt,
             );
-            println!("main(02): Signal handler terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
         });
 
         scope.spawn(move || {
@@ -786,7 +844,7 @@ fn main() {
                 tx_schedule_check_to_signal_handler,
                 rx_schedule_check_from_signal_handler,
             );
-            println!("main(03): Schedule checker terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
         });
 
         scope.spawn(move || {
@@ -806,7 +864,7 @@ fn main() {
                 tx_gpio_to_signal_handler,
                 rx_gpio_from_signal_handler,
             );
-            println!("main(04): GPIO handler terminated.");
+            trace!(target: LOG_TARGET_MAIN, "GPIO handler terminated.");
         });
 
         scope.spawn(move || {
@@ -821,7 +879,7 @@ fn main() {
                 tx_datalogger_to_signal_handler,
                 rx_datalogger_from_signal_handler,
             );
-            println!("main(05): Data logger terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Data logger terminated.");
         });
 
         // Refill needs actuation of relay
@@ -844,7 +902,7 @@ fn main() {
                 rx_refill_from_messaging,
                 &mut water_injection,
             );
-            println!("main(06): Refill terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Refill terminated.");
         });
 
         // Heating needs actuation of relay
@@ -868,7 +926,7 @@ fn main() {
                 &mut sql_interface,
                 &mut heating_stats_transfer,
             );
-            println!("main(07): Heating terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Heating terminated.");
         });
 
         // Ventilation needs actuation of relay
@@ -888,7 +946,7 @@ fn main() {
                 rx_ventilation_from_schedule_check,
                 rx_ventilation_from_messaging,
             );
-            println!("main(08): Ventilation terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
         });
 
         // Monitors needs communication with Controllino device
@@ -905,7 +963,7 @@ fn main() {
                 rx_monitors_from_signal_handler,
                 rx_monitors_from_messaging,
             );
-            println!("main(09): Monitors terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Monitors terminated.");
         });
 
         // Feed needs actuation of relay
@@ -921,7 +979,7 @@ fn main() {
                 rx_feed_from_messaging,
                 &mut food_injection,
             );
-            println!("main(10): Feed terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Feed terminated.");
         });
 
         // Balling dosing needs actuation of relays
@@ -939,7 +997,7 @@ fn main() {
                 rx_balling_from_messaging,
                 &mut mineral_injection,
             );
-            println!("main(11): Balling terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Balling terminated.");
         });
 
         // IPC via messages
@@ -959,7 +1017,7 @@ fn main() {
             // remove PID from file
             publish_pid.erase_pid();
 
-            println!("main(12): Messaging terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Messaging terminated.");
         });
     });
 }
