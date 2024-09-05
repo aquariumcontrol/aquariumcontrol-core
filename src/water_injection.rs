@@ -67,7 +67,6 @@ pub trait WaterInjectionTrait {
 pub struct WaterInjection;
 
 impl WaterInjectionTrait for WaterInjection {
-    
     /// this function executes the refill operation
     fn inject_water(
         &mut self,

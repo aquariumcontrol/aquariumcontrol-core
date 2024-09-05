@@ -20,6 +20,9 @@ use crate::channel_content::AquariumSignal;
 #[cfg(target_os = "linux")]
 use crate::i2c_interface::I2cInterface;
 
+#[cfg(target_os = "linux")]
+use rppal::gpio::{Gpio, InputPin, Level, Pin};
+
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -39,6 +42,9 @@ pub struct GpioHandlerConfig {
 
     /// replacement value for conductivity in case reading from I2C fails
     pub replacement_value_conductivity: f32,
+
+    /// GPIO pin number for tank level sensor
+    pub gpio_pin_number_tank_level: u8,
 }
 
 /// Holds the configuration data for the I2C interface.
@@ -118,6 +124,14 @@ pub struct GpioHandler {
     /// I2C interface for communication with Atlas Scientific sensor units
     #[cfg(target_os = "linux")]
     i2c_interface: Option<I2cInterface>,
+
+    /// GPIO interface for communication with tank level switch and ambient sensor
+    #[cfg(target_os = "linux")]
+    gpio: Gpio,
+
+    /// input pin for communication with tank level switch
+    #[cfg(target_os = "linux")]
+    input_pin_tank_level_switch: InputPin,
 }
 
 impl GpioHandler {
@@ -131,6 +145,29 @@ impl GpioHandler {
     /// * `i2c_config` - configuration data for I2C handler
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
         let use_simulator = config.use_simulator; // create copy because struct is moved
+
+        #[cfg(target_os = "linux")]
+        let gpio = match Gpio::new() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "{}: could not open interface to GPIO ({e:?})"
+                    Self::LOG_TARGET_GPIO_HANDLER,
+                );
+            }
+        };
+
+        #[cfg(target_os = "linux")]
+        let pin = match gpio.get(config.gpio_pin_number_tank_level) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "could not get pin from GPIO interface ({e:?})"
+                    Self::LOG_TARGET_GPIO_HANDLER,
+                );
+            }
+        };
+
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
@@ -138,6 +175,10 @@ impl GpioHandler {
                 true => None,
                 false => Some(I2cInterface::new(i2c_config)),
             },
+            #[cfg(target_os = "linux")]
+            gpio: gpio,
+            #[cfg(target_os = "linux")]
+            input_pin_tank_level_switch: pin.into_input_pullup(),
         }
     }
 
@@ -216,8 +257,13 @@ impl GpioHandler {
                 }
                 AquariumSignal::AmbientTemperature => 0.0,
                 AquariumSignal::AmbientHumidity => 0.0,
-                AquariumSignal::TankLevelSwitchPosition => 0.0,
-                AquariumSignal::TankLevelSwitchInvalid => 0.0,
+                AquariumSignal::TankLevelSwitchPosition => {
+                    match self.input_pin_tank_level_switch.read() {
+                        Low => 0.0,
+                        High => 1.0,
+                    }
+                }
+                AquariumSignal::TankLevelSwitchInvalid => 0.0, // not supported by library
             },
             _ => {
                 warn!(
@@ -349,8 +395,9 @@ impl GpioHandler {
                                     rx_from_tcp_opt.as_ref().unwrap(),
                                     c,
                                 );
+                            } else {
+                                response_value = self.get_response_from_hardware(c);
                             }
-                            // @todo: implement communication with real HW
                         }
                         match tx_to_refill.send(response_value) {
                             Ok(()) => {}
@@ -391,7 +438,9 @@ impl GpioHandler {
                                     c,
                                 );
                             }
-                            // @todo: implement communication with real HW
+                            else {
+                                response_value = self.get_response_from_hardware(c);
+                            }
                         }
                         match tx_to_heating.send(response_value) {
                             Ok(()) => {}
@@ -432,7 +481,9 @@ impl GpioHandler {
                                     c,
                                 );
                             }
-                            // @todo: implement communication with real HW
+                            else {
+                                response_value = self.get_response_from_hardware(c);
+                            }
                         }
                         match tx_to_ventilation.send(response_value) {
                             Ok(()) => {}
@@ -473,7 +524,9 @@ impl GpioHandler {
                                     c,
                                 );
                             }
-                            // @todo: implement communication with real HW
+                            else {
+                                response_value = self.get_response_from_hardware(c);
+                            }
                         }
                         match tx_to_monitors.send(response_value) {
                             Ok(()) => {}
