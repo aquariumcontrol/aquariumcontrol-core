@@ -95,6 +95,10 @@ switch_on_when_external_stop = false                    # strategy when external
 
 [balling]
 active = true
+pump1_active = true                                     # determines if pump 1 shall be used or not
+pump2_active = true                                     # determines if pump 2 shall be used or not
+pump3_active = true                                     # determines if pump 3 shall be used or not
+pump4_active = true                                     # determines if pump 4 shall be used or not
 schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
 dosing_interval_pump1 = 3600                            # inject Balling minerals with pump 1 after each period
 dosing_interval_pump2 = 3200                            # inject Balling minerals with pump 2 after each period

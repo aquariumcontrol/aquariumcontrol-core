@@ -21,7 +21,7 @@ use crate::channel_content::AquariumSignal;
 use crate::i2c_interface::I2cInterface;
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, InputPin, Level, Pin};
+use rppal::gpio::{Gpio, InputPin};
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -125,10 +125,6 @@ pub struct GpioHandler {
     #[cfg(target_os = "linux")]
     i2c_interface: Option<I2cInterface>,
 
-    /// GPIO interface for communication with tank level switch and ambient sensor
-    #[cfg(target_os = "linux")]
-    gpio: Gpio,
-
     /// input pin for communication with tank level switch
     #[cfg(target_os = "linux")]
     input_pin_tank_level_switch: InputPin,
@@ -136,6 +132,14 @@ pub struct GpioHandler {
 
 impl GpioHandler {
     const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
+
+    pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
+        if config.gpio_pin_number_tank_level > 3 && config.gpio_pin_number_tank_level < 28 {
+            true // valid GPIO pin number
+        } else {
+            false // invalid GPIO pin number
+        }
+    }
 
     #[cfg(target_os = "linux")]
     /// This function returns a struct of type GpioHandler.
@@ -146,12 +150,19 @@ impl GpioHandler {
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
         let use_simulator = config.use_simulator; // create copy because struct is moved
 
+        if !Self::check_valid_gpio_pin_config(&config) {
+            panic!(
+                "{}: GPIO pin configuration is invalid",
+                Self::LOG_TARGET_GPIO_HANDLER,
+            );
+        }
+
         #[cfg(target_os = "linux")]
         let gpio = match Gpio::new() {
             Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "{}: could not open interface to GPIO ({e:?})"
+                    "{}: could not open interface to GPIO ({e:?})",
                     Self::LOG_TARGET_GPIO_HANDLER,
                 );
             }
@@ -162,7 +173,7 @@ impl GpioHandler {
             Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "could not get pin from GPIO interface ({e:?})"
+                    "{}: could not get pin from GPIO interface ({e:?})",
                     Self::LOG_TARGET_GPIO_HANDLER,
                 );
             }
@@ -175,8 +186,6 @@ impl GpioHandler {
                 true => None,
                 false => Some(I2cInterface::new(i2c_config)),
             },
-            #[cfg(target_os = "linux")]
-            gpio: gpio,
             #[cfg(target_os = "linux")]
             input_pin_tank_level_switch: pin.into_input_pullup(),
         }
@@ -191,6 +200,13 @@ impl GpioHandler {
             panic!(
                 "{}: Usage of hardware not supported on this platform.",
                 Self::LOG_TARGET_GPIO_HANDLER
+            );
+        }
+
+        if !Self::check_valid_gpio_pin_config(&config) {
+            panic!(
+                "{}: GPIO pin configuration is invalid",
+                Self::LOG_TARGET_GPIO_HANDLER,
             );
         }
 
@@ -258,9 +274,9 @@ impl GpioHandler {
                 AquariumSignal::AmbientTemperature => 0.0,
                 AquariumSignal::AmbientHumidity => 0.0,
                 AquariumSignal::TankLevelSwitchPosition => {
-                    match self.input_pin_tank_level_switch.read() {
-                        Low => 0.0,
-                        High => 1.0,
+                    match self.input_pin_tank_level_switch.is_high() {
+                        true => 1.0,
+                        false => 0.0,
                     }
                 }
                 AquariumSignal::TankLevelSwitchInvalid => 0.0, // not supported by library
@@ -437,8 +453,7 @@ impl GpioHandler {
                                     rx_from_tcp_opt.as_ref().unwrap(),
                                     c,
                                 );
-                            }
-                            else {
+                            } else {
                                 response_value = self.get_response_from_hardware(c);
                             }
                         }
@@ -480,8 +495,7 @@ impl GpioHandler {
                                     rx_from_tcp_opt.as_ref().unwrap(),
                                     c,
                                 );
-                            }
-                            else {
+                            } else {
                                 response_value = self.get_response_from_hardware(c);
                             }
                         }
@@ -523,8 +537,7 @@ impl GpioHandler {
                                     rx_from_tcp_opt.as_ref().unwrap(),
                                     c,
                                 );
-                            }
-                            else {
+                            } else {
                                 response_value = self.get_response_from_hardware(c);
                             }
                         }
@@ -567,5 +580,40 @@ impl GpioHandler {
                 );
             }
         };
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::config::read_config_file;
+    use crate::gpio_handler::GpioHandler;
+    use crate::config::ConfigData;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    pub fn test_valid_gpio_config() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    #[should_panic]
+    pub fn test_invalid_gpio_config_low() {
+        let config: ConfigData = read_config_file(
+            "/config/aquarium_control_test_gpio_handler_invalid_low.toml".to_string(),
+        );
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    #[should_panic]
+    pub fn test_invalid_gpio_config_high() {
+        let config: ConfigData = read_config_file(
+            "/config/aquarium_control_test_gpio_handler_invalid_high.toml".to_string(),
+        );
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
     }
 }

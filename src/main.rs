@@ -32,6 +32,7 @@ mod food_injection;
 mod gpio_handler;
 mod heating;
 mod iir_filter;
+mod logger;
 
 #[cfg(target_os = "linux")]
 mod messaging;
@@ -64,6 +65,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 
+use crate::logger::setup_logger;
 use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
@@ -97,6 +99,8 @@ use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
 use crate::water_injection::WaterInjection;
+
+const LOG_TARGET_MAIN: &str = "main";
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
@@ -165,35 +169,7 @@ use crate::water_injection::WaterInjection;
 /// ```
 
 fn main() {
-    const LOG_TARGET_MAIN: &str = "main";
-
-    // open file for logging
-    let log_file = match fern::log_file("aquarium.log") {
-        Ok(c) => c,
-        Err(e) => {
-            panic!(
-                "{}: Could not open output file for logging: {e:?}",
-                LOG_TARGET_MAIN
-            );
-        }
-    };
-
-    // configure logger
-    let _ = fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "[{} {} {}] {}",
-                humantime::format_rfc3339(std::time::SystemTime::now()),
-                record.level(),
-                record.target(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Debug)
-        .level_for("hyper", log::LevelFilter::Info)
-        .chain(std::io::stdout()) // output to stdout
-        .chain(log_file) // output to file
-        .apply();
+    setup_logger();
 
     //env::set_var("RUST_BACKTRACE", "1");
     let config = read_config_file("/config/aquarium_control.toml".to_string());

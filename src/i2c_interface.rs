@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+use log::{error, warn};
 use spin_sleep::SpinSleeper;
 use std::str;
 use std::time::Duration;
@@ -246,7 +248,7 @@ impl I2cInterface {
                     "ignoring invalid signal request ({})",
                     signal
                 );
-                return Err(I2cError::InvalidSignal(signal));
+                return Err(I2cError::InvalidSignalRequest(signal));
             }
         };
 
@@ -294,7 +296,7 @@ impl I2cInterface {
                     target: Self::LOG_TARGET_I2C_INTERFACE,
                     "sleep duration for signal {} not defined - using arbitrary sleep duration of {}",
                     signal,
-                    sleep_duration);
+                    self.sleep_duration_temperature.as_millis());
                 self.sleep_duration_temperature
             }
         };

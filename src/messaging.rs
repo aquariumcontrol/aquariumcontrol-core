@@ -210,7 +210,7 @@ impl Messaging {
         };
 
         // identify maximum length of message queue
-        let mq_max_msg_len = match self.mq.attributes() {
+        let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
                 panic!(
@@ -247,7 +247,7 @@ impl Messaging {
 
         loop {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
-                Ok((r1, r2)) => {
+                Ok((_r1, _r2)) => {
                     //println!(
                     //    "{}: POSIX message received with r1={}, r2={}, length={}.",
                     //    Self::LOG_TARGET_MESSAGING,
@@ -641,7 +641,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_balling_multiple_dosings.toml".to_string(),
+            "/config/aquarium_control_test_messaging.toml".to_string(),
         );
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => {
@@ -741,7 +741,7 @@ pub mod tests {
                     .unwrap();
 
                 // check amount of actuations (after stop request)
-                assert_eq!(actuation_count_1, 4);
+                assert_eq!(actuation_count_1, 1);
 
                 // sending IPC message requesting restart of Balling dosing control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
@@ -757,7 +757,7 @@ pub mod tests {
                     .unwrap();
 
                 // check amount of actuations (after start request)
-                assert_eq!(actuation_count_2, 9);
+                assert_eq!(actuation_count_2, 3);
 
                 // requesting Balling dosing control to quit
                 let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);

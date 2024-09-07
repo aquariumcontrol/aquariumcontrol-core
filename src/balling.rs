@@ -30,6 +30,18 @@ pub struct BallingConfig {
     /// control will only be active when the flag is set to true
     active: bool,
 
+    /// pump #1 will only be used when the flag is set to true
+    pump1_active: bool,
+
+    /// pump #2 will only be used when the flag is set to true
+    pump2_active: bool,
+    
+    /// pump #3 will only be used when the flag is set to true
+    pump3_active: bool,
+
+    /// pump #4 will only be used when the flag is set to true
+    pump4_active: bool,
+
     /// interval for the main control in seconds
     schedule_check_interval: u32,
 
@@ -252,7 +264,7 @@ impl Balling {
 
         match self
             .sql_interface_balling
-            .get_single_balling_setval_from_database(1)
+            .get_single_balling_setval_from_database(pump_id.into())
         {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
@@ -351,7 +363,7 @@ impl Balling {
                 }
 
                 //*** Peristaltic pump 1 ***
-                if self.countdown_dosing_pump1 <= 0 {
+                if self.countdown_dosing_pump1 <= 0 && self.config.pump1_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -372,10 +384,12 @@ impl Balling {
                     }
                     self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
                 } else {
-                    self.countdown_dosing_pump1 -= 1;
+                    if self.countdown_dosing_pump1 > 0 {
+                        self.countdown_dosing_pump1 -= 1;
+                    }
                 }
                 //*** Peristaltic pump 2 ***
-                if self.countdown_dosing_pump2 <= 0 {
+                if self.countdown_dosing_pump2 <= 0 && self.config.pump2_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -396,10 +410,12 @@ impl Balling {
                     }
                     self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                 } else {
-                    self.countdown_dosing_pump2 -= 1;
+                    if self.countdown_dosing_pump2 > 0 {
+                        self.countdown_dosing_pump2 -= 1;
+                    }
                 }
                 //*** Peristaltic pump 3 ***
-                if self.countdown_dosing_pump3 <= 0 {
+                if self.countdown_dosing_pump3 <= 0 && self.config.pump3_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -420,10 +436,12 @@ impl Balling {
                     }
                     self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
                 } else {
-                    self.countdown_dosing_pump3 -= 1;
+                    if self.countdown_dosing_pump3 > 0 {
+                        self.countdown_dosing_pump3 -= 1;
+                    }
                 }
                 //*** Peristaltic pump 4 ***
-                if self.countdown_dosing_pump4 <= 0 {
+                if self.countdown_dosing_pump4 <= 0 && self.config.pump4_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -444,7 +462,9 @@ impl Balling {
                     }
                     self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
                 } else {
-                    self.countdown_dosing_pump4 -= 1;
+                    if self.countdown_dosing_pump4 > 0 {
+                        self.countdown_dosing_pump4 -= 1;
+                    }
                 }
             }
 
@@ -770,7 +790,7 @@ pub mod tests {
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-        let (_, rx_balling_from_messaging) = mpsc::channel();
+        let (_tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -861,13 +881,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_2.toml",
-            true,
-            3,
-            10000,
-            0,
-            1,
-            1,
-            1,
+            true,	// schedule allows
+            1,		// execution count
+            10000,	// maximum time in milliseconds for test execution
+            1,		// number of dosings for pump #1
+            0,		// number of dosings for pump #2
+            0,		// number of dosings for pump #3
+            0,		// number of dosings for pump #4
         );
     }
 
@@ -875,13 +895,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_3.toml",
-            false,
-            0,
-            10000,
-            0,
-            0,
-            0,
-            0,
+            false,	// schedule does not allow
+            0,		// execution count
+            10000,	// maximum time in milliseconds for test execution
+            0,		// number of dosings for pump #1
+            0,		// number of dosings for pump #2
+            0,		// number of dosings for pump #3
+            0,		// number of dosings for pump #4
         );
     }
 
@@ -889,13 +909,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
-            true,
-            14,
-            20000,
-            5,
-            4,
-            3,
-            2,
+            true,	// schedule allows
+            14,		// execution count
+            20000,	// maximum time in milliseoncds for test execution
+            5,		// number of dosings for pump #1
+            4,		// number of dosings for pump #2
+            3,		// number of dosings for pump #3
+            2,		// number of dosings for pump #4
         );
     }
 
