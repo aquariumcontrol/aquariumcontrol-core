@@ -7,12 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::channel_content::InternalCommand;
+use crate::proc_ext_req::ProcessExternalRequestTrait;
 use log::{error, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-
-use crate::channel_content::InternalCommand;
-use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 #[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
@@ -21,7 +20,142 @@ use crate::channel_content::AquariumSignal;
 use crate::i2c_interface::I2cInterface;
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, InputPin};
+use rppal::gpio::{Gpio, InputPin, Mode, PullUpDown};
+
+#[cfg(target_os = "linux")]
+use hal_sensor_dht::{DhtSensor, SensorType};
+
+#[cfg(target_os = "linux")]
+use std::ptr::read_volatile;
+
+#[cfg(target_os = "linux")]
+use std::ptr::write_volatile;
+
+#[cfg(target_os = "linux")]
+use std::thread;
+
+#[cfg(target_os = "linux")]
+use std::time::Duration;
+
+#[cfg(target_os = "linux")]
+use libc::sched_param;
+
+#[cfg(target_os = "linux")]
+use libc::sched_setscheduler;
+
+#[cfg(target_os = "linux")]
+use libc::SCHED_FIFO;
+
+#[cfg(target_os = "linux")]
+use libc::SCHED_OTHER;
+
+const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
+
+/// enabling and disabling of interrupts for operation of DHT driver hal_sensor_dht
+#[cfg(target_os = "linux")]
+struct DhtInterruptCtrl {}
+
+#[cfg(target_os = "linux")]
+/// implementation for controlling interrupts - requires special privileges on the executable:
+/// setcap cap_sys_nice+ep ./your_program
+impl hal_sensor_dht::InterruptCtrl for DhtInterruptCtrl {
+    /// enable interrupts again after having communicated with DHT sensor
+    fn enable(&mut self) {
+        unsafe {
+            let param = sched_param { sched_priority: 32 };
+            let result = sched_setscheduler(0, SCHED_FIFO, &param);
+
+            if result != 0 {
+                error!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "Error setting priority, you may not have cap_sys_nice capability"
+                );
+            }
+        }
+    }
+
+    /// disable interrupts before communicating with DHT sensor    
+    fn disable(&mut self) {
+        unsafe {
+            let param = sched_param { sched_priority: 0 };
+            let result = sched_setscheduler(0, SCHED_OTHER, &param);
+
+            if result != 0 {
+                panic!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "Error setting priority, you may not have cap_sys_nice capability"
+                );
+            }
+        }
+    }
+}
+
+/// custom delay function for DHT driver hal_sensor_dht
+#[cfg(target_os = "linux")]
+struct DhtTimer {}
+
+#[cfg(target_os = "linux")]
+impl DelayUs<u16> for DhtTimer {
+    fn delay_us(&mut self, t: u16) {
+        let mut i = 0;
+        unsafe {
+            while read_volatile(&mut i) < t {
+                write_volatile(&mut i, read_volatile(&mut i) + 1);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl DelayMs<u16> for DhtTimer {
+    fn delay_ms(&mut self, ms: u16) {
+        thread::sleep(Duration::from_millis(ms.into()));
+    }
+}
+
+/// interface implementation for DHT driver hal_sensor_dht
+#[cfg(target_os = "linux")]
+struct DhtPin(rppal::gpio::IoPin);
+
+#[cfg(target_os = "linux")]
+impl DhtPin {
+    pub fn new(pin: rppal::gpio::Pin) -> DhtPin {
+        DhtPin(pin.into_io(Mode::Input))
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl InputPin for DhtPin {
+    type Error = <rppal::gpio::IoPin as InputPin>::Error;
+    fn is_high(&self) -> Result<bool, <rppal::gpio::IoPin as InputPin>::Error> {
+        Ok(self.0.is_high())
+    }
+    fn is_low(&self) -> Result<bool, <rppal::gpio::IoPin as InputPin>::Error> {
+        Ok(self.0.is_low())
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl OutputPin for DhtPin {
+    type Error = <rppal::gpio::IoPin as OutputPin>::Error;
+    fn set_high(&mut self) -> Result<(), <rppal::gpio::IoPin as OutputPin>::Error> {
+        Ok(self.0.set_high())
+    }
+    fn set_low(&mut self) -> Result<(), <rppal::gpio::IoPin as OutputPin>::Error> {
+        Ok(self.0.set_low())
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl hal_sensor_dht::IoPin for DhtPin {
+    fn set_input_pullup_mode(&mut self) {
+        self.0.set_mode(Mode::Input);
+        self.0.set_pullupdown(PullUpDown::PullUp);
+    }
+    fn set_output_mode(&mut self) {
+        self.0.set_mode(Mode::Output);
+    }
+}
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -45,6 +179,12 @@ pub struct GpioHandlerConfig {
 
     /// GPIO pin number for tank level sensor
     pub gpio_pin_number_tank_level: u8,
+
+    /// GPIO pin number for communication with DHT22 sensor
+    pub gpio_pin_number_dht22_io: u8,
+
+    /// GPIO pin number for providing power to DHT22 sensor
+    pub gpio_pin_number_dht22_vcc: u8,
 }
 
 /// Holds the configuration data for the I2C interface.
@@ -131,13 +271,34 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
-    const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
-
     pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
-        if config.gpio_pin_number_tank_level > 3 && config.gpio_pin_number_tank_level < 28 {
-            true // valid GPIO pin number
+        // check if pin ids are in valid range
+        if config.gpio_pin_number_tank_level > 3
+            && config.gpio_pin_number_tank_level < 28
+            && config.gpio_pin_number_dht22_vcc > 3
+            && config.gpio_pin_number_dht22_vcc < 28
+            && config.gpio_pin_number_dht22_io > 3
+            && config.gpio_pin_number_dht22_io < 28
+        {
+            // check if pin ids are distinct
+            if config.gpio_pin_number_tank_level != config.gpio_pin_number_dht22_vcc
+                && config.gpio_pin_number_dht22_vcc != config.gpio_pin_number_dht22_io
+                && config.gpio_pin_number_dht22_io != config.gpio_pin_number_tank_level
+            {
+                true // valid GPIO pin number
+            } else {
+                error!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "GPIO pins are not distinct."
+                );
+                false // invalid GPIO pin numbers because not distinct
+            }
         } else {
-            false // invalid GPIO pin number
+            error!(
+                target: LOG_TARGET_GPIO_HANDLER,
+                "GPIO pins are not inside permissible range."
+            );
+            false // invalid GPIO pin number because out of range
         }
     }
 
@@ -153,7 +314,7 @@ impl GpioHandler {
         if !Self::check_valid_gpio_pin_config(&config) {
             panic!(
                 "{}: GPIO pin configuration is invalid",
-                Self::LOG_TARGET_GPIO_HANDLER,
+                LOG_TARGET_GPIO_HANDLER,
             );
         }
 
@@ -163,21 +324,65 @@ impl GpioHandler {
             Err(e) => {
                 panic!(
                     "{}: could not open interface to GPIO ({e:?})",
-                    Self::LOG_TARGET_GPIO_HANDLER,
+                    LOG_TARGET_GPIO_HANDLER,
                 );
             }
         };
 
         #[cfg(target_os = "linux")]
-        let pin = match gpio.get(config.gpio_pin_number_tank_level) {
+        let tank_level_pin = match gpio.get(config.gpio_pin_number_tank_level) {
             Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "{}: could not get pin from GPIO interface ({e:?})",
-                    Self::LOG_TARGET_GPIO_HANDLER,
+                    "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER,
+                    config.gpio_pin_number_tank_level
                 );
             }
         };
+
+        #[cfg(target_os = "linux")]
+        let mut dht_vcc_pin = match gpio.get(config.gpio_pin_number_dht22_vcc) {
+            Ok(c) => c.into_output(),
+            Err(e) => {
+                panic!(
+                    "{}: could not get pin {} from GPIO interface for DHT power supply ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER, config.gpio_pin_number_dht22_vcc
+                );
+            }
+        };
+
+        #[cfg(target_os = "linux")]
+        dht_vcc_pin.set_high();
+        // give sensor some time to wake up
+        thread::sleep(Duration::from_secs(1));
+
+        // read one sample from DHT sensor to verify SW and HW are working ok
+        #[cfg(target_os = "linux")]
+        if let Ok(dht_io_pin) = gpio.get(config.gpio_pin_number_dht22_io) {
+            let my_pin = MyPin::new(dht_io_pin);
+            let my_timer = MyTimer {};
+            let my_interrupt = MyInterruptCtrl {};
+            let mut sensor = DHTSensor::new(SensorType::DHT22, my_pin, my_timer, my_interrupt);
+
+            if let Ok(r) = sensor.read() {
+                info!(
+                    "first reading from DHT sensor: Temperature = {} deg C / and humidity = {}%",
+                    r.temperature_celsius(),
+                    r.humidity_percent()
+                );
+            } else {
+                panic!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "failed to read from DHT sensor"
+                );
+            }
+        } else {
+            panic!(
+                target: LOG_TARGET_GPIO_HANDLER,
+                "failed to aquire pin for communication with DHT sensor"
+            );
+        }
 
         GpioHandler {
             config: config,
@@ -187,7 +392,7 @@ impl GpioHandler {
                 false => Some(I2cInterface::new(i2c_config)),
             },
             #[cfg(target_os = "linux")]
-            input_pin_tank_level_switch: pin.into_input_pullup(),
+            input_pin_tank_level_switch: tank_level_pin.into_input_pullup(),
         }
     }
 
@@ -199,14 +404,14 @@ impl GpioHandler {
         if !config.use_simulator {
             panic!(
                 "{}: Usage of hardware not supported on this platform.",
-                Self::LOG_TARGET_GPIO_HANDLER
+                LOG_TARGET_GPIO_HANDLER
             );
         }
 
         if !Self::check_valid_gpio_pin_config(&config) {
             panic!(
                 "{}: GPIO pin configuration is invalid",
-                Self::LOG_TARGET_GPIO_HANDLER,
+                LOG_TARGET_GPIO_HANDLER,
             );
         }
 
@@ -228,19 +433,19 @@ impl GpioHandler {
                     Err(e) => {
                         panic!(
                                 "{}: Error occurred when trying to receive response from TCP thread ({e:?})",
-                                Self::LOG_TARGET_GPIO_HANDLER);
+                                LOG_TARGET_GPIO_HANDLER);
                     }
                 },
                 Err(e) => {
                     panic!(
                         "{}: Error occurred when trying to send request to TCP thread ({e:?})",
-                        Self::LOG_TARGET_GPIO_HANDLER
+                        LOG_TARGET_GPIO_HANDLER
                     );
                 }
             },
             _ => {
                 warn!(
-                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    target: LOG_TARGET_GPIO_HANDLER,
                     "ignoring not applicable internal command ({})",
                     internal_command
                 );
@@ -283,7 +488,7 @@ impl GpioHandler {
             },
             _ => {
                 warn!(
-                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    target: LOG_TARGET_GPIO_HANDLER,
                     "ignoring not applicable internal command ({})",
                     internal_command
                 );
@@ -296,7 +501,7 @@ impl GpioHandler {
     fn get_response_from_hardware(&self, _internal_command: InternalCommand) -> f32 {
         panic!(
             "{}: Usage of hardware not supported on this platform.",
-            Self::LOG_TARGET_GPIO_HANDLER
+            LOG_TARGET_GPIO_HANDLER
         );
     }
 
@@ -345,7 +550,7 @@ impl GpioHandler {
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
-                Self::LOG_TARGET_GPIO_HANDLER
+                LOG_TARGET_GPIO_HANDLER
             );
         }
 
@@ -377,7 +582,7 @@ impl GpioHandler {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "sending response value back to data logger failed ({e:?})"
                                 );
                                 data_logger_channel_disconnected = true;
@@ -389,7 +594,7 @@ impl GpioHandler {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "receiving command from data logger failed ({e:?})",
                                 );
                                 data_logger_channel_disconnected = true;
@@ -419,7 +624,7 @@ impl GpioHandler {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "sending response value back to refill control failed ({e:?})"
                                 );
                                 refill_channel_disconnected = true;
@@ -431,7 +636,7 @@ impl GpioHandler {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "receiving command from refill control failed ({e:?})"
                                 );
                                 refill_channel_disconnected = true;
@@ -461,7 +666,7 @@ impl GpioHandler {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "sending response value back to heating failed ({e:?})"
                                 );
                                 heating_channel_disconnected = true;
@@ -473,7 +678,7 @@ impl GpioHandler {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "receiveing command from heating failed ({e:?})"
                                 );
                                 heating_channel_disconnected = true;
@@ -503,7 +708,7 @@ impl GpioHandler {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "sending response value back to ventilation failed ({e:?})"
                                 );
                                 ventilation_channel_disconnected = true;
@@ -515,7 +720,7 @@ impl GpioHandler {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "receiving command from ventilation failed ({e:?})"
                                 );
                                 ventilation_channel_disconnected = true;
@@ -545,7 +750,7 @@ impl GpioHandler {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "sending response value back to monitors failed ({e:?})"
                                 );
                                 monitors_channel_disconnected = true;
@@ -557,7 +762,7 @@ impl GpioHandler {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 error!(
-                                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                                    target: LOG_TARGET_GPIO_HANDLER,
                                     "receiving command from monitors failed ({e:?})"
                                 );
                                 monitors_channel_disconnected = true;
@@ -575,7 +780,7 @@ impl GpioHandler {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_GPIO_HANDLER,
+                    target: LOG_TARGET_GPIO_HANDLER,
                     "sending confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -587,10 +792,10 @@ impl GpioHandler {
 pub mod tests {
     #[cfg(target_os = "linux")]
     use crate::config::read_config_file;
-    
+
     #[cfg(target_os = "linux")]
     use crate::config::ConfigData;
-    
+
     #[cfg(target_os = "linux")]
     use crate::gpio_handler::GpioHandler;
 
