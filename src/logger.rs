@@ -34,7 +34,7 @@ pub fn setup_logger() {
             ))
         })
         .level(log::LevelFilter::Debug)
-//        .level_for("hyper", log::LevelFilter::Info)
+        //        .level_for("hyper", log::LevelFilter::Info)
         .chain(std::io::stdout()) // output to stdout
         .chain(log_file) // output to file
         .apply();

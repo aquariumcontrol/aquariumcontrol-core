@@ -35,7 +35,7 @@ pub struct BallingConfig {
 
     /// pump #2 will only be used when the flag is set to true
     pump2_active: bool,
-    
+
     /// pump #3 will only be used when the flag is set to true
     pump3_active: bool,
 
@@ -881,13 +881,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_2.toml",
-            true,	// schedule allows
-            1,		// execution count
-            10000,	// maximum time in milliseconds for test execution
-            1,		// number of dosings for pump #1
-            0,		// number of dosings for pump #2
-            0,		// number of dosings for pump #3
-            0,		// number of dosings for pump #4
+            true,  // schedule allows
+            1,     // execution count
+            10000, // maximum time in milliseconds for test execution
+            1,     // number of dosings for pump #1
+            0,     // number of dosings for pump #2
+            0,     // number of dosings for pump #3
+            0,     // number of dosings for pump #4
         );
     }
 
@@ -895,13 +895,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_3.toml",
-            false,	// schedule does not allow
-            0,		// execution count
-            10000,	// maximum time in milliseconds for test execution
-            0,		// number of dosings for pump #1
-            0,		// number of dosings for pump #2
-            0,		// number of dosings for pump #3
-            0,		// number of dosings for pump #4
+            false, // schedule does not allow
+            0,     // execution count
+            10000, // maximum time in milliseconds for test execution
+            0,     // number of dosings for pump #1
+            0,     // number of dosings for pump #2
+            0,     // number of dosings for pump #3
+            0,     // number of dosings for pump #4
         );
     }
 
@@ -909,13 +909,13 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
-            true,	// schedule allows
-            14,		// execution count
-            20000,	// maximum time in milliseoncds for test execution
-            5,		// number of dosings for pump #1
-            4,		// number of dosings for pump #2
-            3,		// number of dosings for pump #3
-            2,		// number of dosings for pump #4
+            true,  // schedule allows
+            14,    // execution count
+            20000, // maximum time in milliseoncds for test execution
+            5,     // number of dosings for pump #1
+            4,     // number of dosings for pump #2
+            3,     // number of dosings for pump #3
+            2,     // number of dosings for pump #4
         );
     }
 

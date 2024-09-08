@@ -585,9 +585,14 @@ impl GpioHandler {
 
 #[cfg(test)]
 pub mod tests {
+    #[cfg(target_os = "linux")]
     use crate::config::read_config_file;
-    use crate::gpio_handler::GpioHandler;
+    
+    #[cfg(target_os = "linux")]
     use crate::config::ConfigData;
+    
+    #[cfg(target_os = "linux")]
+    use crate::gpio_handler::GpioHandler;
 
     #[test]
     #[cfg(target_os = "linux")]

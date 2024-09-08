@@ -640,9 +640,8 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_messaging.toml".to_string(),
-        );
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_messaging.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => {
                 println!("Messaging: Could open message queue.");

@@ -65,7 +65,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 
-use crate::logger::setup_logger;
 use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
@@ -79,6 +78,7 @@ use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
+use crate::logger::setup_logger;
 #[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
 use crate::mineral_injection::MineralInjection;
