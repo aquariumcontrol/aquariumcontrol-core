@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use log::{error, warn};
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
@@ -20,142 +20,18 @@ use crate::channel_content::AquariumSignal;
 use crate::i2c_interface::I2cInterface;
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, InputPin, Mode, PullUpDown};
-
-#[cfg(target_os = "linux")]
-use hal_sensor_dht::{DhtSensor, SensorType};
-
-#[cfg(target_os = "linux")]
-use std::ptr::read_volatile;
-
-#[cfg(target_os = "linux")]
-use std::ptr::write_volatile;
-
-#[cfg(target_os = "linux")]
-use std::thread;
+use rppal::gpio::{Bias, Gpio, InputPin, IoPin, Level, Mode};
 
 #[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
-use libc::sched_param;
+use std::thread;
 
 #[cfg(target_os = "linux")]
-use libc::sched_setscheduler;
-
-#[cfg(target_os = "linux")]
-use libc::SCHED_FIFO;
-
-#[cfg(target_os = "linux")]
-use libc::SCHED_OTHER;
+use std::thread::sleep;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
-
-/// enabling and disabling of interrupts for operation of DHT driver hal_sensor_dht
-#[cfg(target_os = "linux")]
-struct DhtInterruptCtrl {}
-
-#[cfg(target_os = "linux")]
-/// implementation for controlling interrupts - requires special privileges on the executable:
-/// setcap cap_sys_nice+ep ./your_program
-impl hal_sensor_dht::InterruptCtrl for DhtInterruptCtrl {
-    /// enable interrupts again after having communicated with DHT sensor
-    fn enable(&mut self) {
-        unsafe {
-            let param = sched_param { sched_priority: 32 };
-            let result = sched_setscheduler(0, SCHED_FIFO, &param);
-
-            if result != 0 {
-                error!(
-                    target: LOG_TARGET_GPIO_HANDLER,
-                    "Error setting priority, you may not have cap_sys_nice capability"
-                );
-            }
-        }
-    }
-
-    /// disable interrupts before communicating with DHT sensor    
-    fn disable(&mut self) {
-        unsafe {
-            let param = sched_param { sched_priority: 0 };
-            let result = sched_setscheduler(0, SCHED_OTHER, &param);
-
-            if result != 0 {
-                panic!(
-                    target: LOG_TARGET_GPIO_HANDLER,
-                    "Error setting priority, you may not have cap_sys_nice capability"
-                );
-            }
-        }
-    }
-}
-
-/// custom delay function for DHT driver hal_sensor_dht
-#[cfg(target_os = "linux")]
-struct DhtTimer {}
-
-#[cfg(target_os = "linux")]
-impl DelayUs<u16> for DhtTimer {
-    fn delay_us(&mut self, t: u16) {
-        let mut i = 0;
-        unsafe {
-            while read_volatile(&mut i) < t {
-                write_volatile(&mut i, read_volatile(&mut i) + 1);
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl DelayMs<u16> for DhtTimer {
-    fn delay_ms(&mut self, ms: u16) {
-        thread::sleep(Duration::from_millis(ms.into()));
-    }
-}
-
-/// interface implementation for DHT driver hal_sensor_dht
-#[cfg(target_os = "linux")]
-struct DhtPin(rppal::gpio::IoPin);
-
-#[cfg(target_os = "linux")]
-impl DhtPin {
-    pub fn new(pin: rppal::gpio::Pin) -> DhtPin {
-        DhtPin(pin.into_io(Mode::Input))
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl InputPin for DhtPin {
-    type Error = <rppal::gpio::IoPin as InputPin>::Error;
-    fn is_high(&self) -> Result<bool, <rppal::gpio::IoPin as InputPin>::Error> {
-        Ok(self.0.is_high())
-    }
-    fn is_low(&self) -> Result<bool, <rppal::gpio::IoPin as InputPin>::Error> {
-        Ok(self.0.is_low())
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl OutputPin for DhtPin {
-    type Error = <rppal::gpio::IoPin as OutputPin>::Error;
-    fn set_high(&mut self) -> Result<(), <rppal::gpio::IoPin as OutputPin>::Error> {
-        Ok(self.0.set_high())
-    }
-    fn set_low(&mut self) -> Result<(), <rppal::gpio::IoPin as OutputPin>::Error> {
-        Ok(self.0.set_low())
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl hal_sensor_dht::IoPin for DhtPin {
-    fn set_input_pullup_mode(&mut self) {
-        self.0.set_mode(Mode::Input);
-        self.0.set_pullupdown(PullUpDown::PullUp);
-    }
-    fn set_output_mode(&mut self) {
-        self.0.set_mode(Mode::Output);
-    }
-}
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -271,6 +147,67 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
+    /// read temperature and humity from DHT sensor
+    /// # Arguments
+    /// * `pin` - struct of type InputPin
+    fn read_dht_data(pin: &mut IoPin) -> Result<(f32, f32), &'static str> {
+        let mut data = [0u8; 5];
+        let mut last_state = true;
+        let mut counter: u32;
+        let mut j = 0;
+
+        // send start signal
+        pin.set_mode(Mode::Output);
+        pin.write(Level::Low);
+        sleep(Duration::from_millis(18));
+        pin.write(Level::High);
+        sleep(Duration::from_micros(40));
+        
+        // configure pin for subsequent reading
+        pin.set_bias(Bias::PullUp);
+        pin.set_mode(Mode::Input);
+
+        // read data
+        for _ in 0..85 {
+            counter = 0;
+            while pin.is_high() == last_state {
+                counter += 1;
+                sleep(Duration::from_micros(1));
+                if counter == 255 {
+                    break;
+                }
+            }
+            last_state = pin.is_high();
+            if counter == 255 {
+                break;
+            }
+            if (j >= 4) && (j % 2 == 0) {
+                data[j / 8] <<= 1;
+                if counter > 16 {
+                    data[j / 8] = 1;
+                }
+            }
+            j += 1;
+        }
+
+        // checksum validation
+        if (j >= 40) && (data[4] == (data[0] + data[1] + data[2] + data[3]) & 0xFF) {
+            let humidity = ((data[0] as u16) << 8 | data[1] as u16) as f32 / 10.0;
+            let mut temperature = (((data[2] & 0x7F) as u16) << 8 | data[3] as u16) as f32 / 10.0;
+            if data[2] & 0x80 != 0 {
+                temperature = -temperature;
+            }
+            Ok((temperature, humidity))
+        } else {
+            Err("Failed to read data from DHT sensor")
+        }
+    }
+
+    /// checks if the GPIO pin configuration valid:
+    /// - pin numbers shall be within permissible range
+    /// - pin numbers shall be distinct
+    /// # Arguments
+    /// * `config` - configuration of GPIO handler
     pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
         // check if pin ids are in valid range
         if config.gpio_pin_number_tank_level > 3
@@ -311,6 +248,7 @@ impl GpioHandler {
     pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
         let use_simulator = config.use_simulator; // create copy because struct is moved
 
+        // check if GPIO pin configuration is valid
         if !Self::check_valid_gpio_pin_config(&config) {
             panic!(
                 "{}: GPIO pin configuration is invalid",
@@ -318,6 +256,7 @@ impl GpioHandler {
             );
         }
 
+        // open interface to GPIO library
         #[cfg(target_os = "linux")]
         let gpio = match Gpio::new() {
             Ok(c) => c,
@@ -329,6 +268,7 @@ impl GpioHandler {
             }
         };
 
+        // get pin for tank level monitoring
         #[cfg(target_os = "linux")]
         let tank_level_pin = match gpio.get(config.gpio_pin_number_tank_level) {
             Ok(c) => c,
@@ -341,6 +281,7 @@ impl GpioHandler {
             }
         };
 
+        // get pin for providing supply voltag to DHT sensor
         #[cfg(target_os = "linux")]
         let mut dht_vcc_pin = match gpio.get(config.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
@@ -352,36 +293,41 @@ impl GpioHandler {
             }
         };
 
+        // switch on power supply of DHT sensor
         #[cfg(target_os = "linux")]
         dht_vcc_pin.set_high();
         // give sensor some time to wake up
         thread::sleep(Duration::from_secs(1));
 
-        // read one sample from DHT sensor to verify SW and HW are working ok
+        // get pin for communication with DHT sensor
         #[cfg(target_os = "linux")]
-        if let Ok(dht_io_pin) = gpio.get(config.gpio_pin_number_dht22_io) {
-            let my_pin = MyPin::new(dht_io_pin);
-            let my_timer = MyTimer {};
-            let my_interrupt = MyInterruptCtrl {};
-            let mut sensor = DHTSensor::new(SensorType::DHT22, my_pin, my_timer, my_interrupt);
-
-            if let Ok(r) = sensor.read() {
-                info!(
-                    "first reading from DHT sensor: Temperature = {} deg C / and humidity = {}%",
-                    r.temperature_celsius(),
-                    r.humidity_percent()
-                );
-            } else {
+        let mut dht_io_pin = match gpio.get(config.gpio_pin_number_dht22_io) {
+            Ok(c) => c.into_io(Mode::Output),
+            Err(e) => {
                 panic!(
-                    target: LOG_TARGET_GPIO_HANDLER,
-                    "failed to read from DHT sensor"
+                    "{}: failed to aquire pin for communication with DHT sensor ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER
                 );
             }
-        } else {
-            panic!(
-                target: LOG_TARGET_GPIO_HANDLER,
-                "failed to aquire pin for communication with DHT sensor"
-            );
+        };
+
+        // read one sample from DHT sensor to verify SW and HW are working ok
+        #[cfg(target_os = "linux")]
+        match Self::read_dht_data(&mut dht_io_pin) {
+            Ok((temperature, humidity)) => {
+                info!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "Initial read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
+                    temperature,
+                    humidity,
+                );
+            }
+            Err(e) => {
+                panic!(
+                    "{}: failed to read from DHT sensor ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER
+                );
+            }
         }
 
         GpioHandler {
