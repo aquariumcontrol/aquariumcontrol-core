@@ -7,11 +7,32 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
-use rppal::gpio::{Bias, Gpio, InputPin, IoPin, Level, Mode};
+use log::error;
+use rppal::gpio::{Bias, IoPin, Level, Mode, OutputPin};
+use serde_derive::Deserialize;
+use std::thread;
 use std::thread::sleep;
+use std::time::Duration;
 
 const LOG_TARGET_DHT: &str = "dht";
+
+/// Holds the configuration data for the GPIO handler.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
+#[derive(Deserialize, Debug)]
+pub struct DhtConfig {
+    /// duration to keep pin down during start signal in microseconds
+    pub sensor_init_pin_down_duration_micros: u64,
+
+    /// duration to keep pin up during start signal in microseconds
+    pub sensor_init_pin_up_duration_micros: u64,
+
+    /// duration for sensor to respond after sending start signal in microseconds
+    pub sensor_init_input_duration_micros: u64,
+
+    /// maximum permissible duration for sensor to respond in microseconds
+    pub timeout_duration_micros: u32,
+}
 
 // Excerpt from AM2302 Product Manual, AOSONG
 // www.aosong.com
@@ -20,51 +41,50 @@ const LOG_TARGET_DHT: &str = "dht";
 // Symbol       Parameter                               min     typ     max     Unit
 //-----------------------------------------------------------------------------------
 // Tbe          Host the start signal down time         0.8     1       20      mS
-const DHT22_T_BE_IDX: u8 = 1;
+const DHT22_T_BE_IDX: usize = 1;
 const DHT22_T_BE_MIN: u32 = 800;
 const DHT22_T_BE_MAX: u32 = 20000;
 const DHT22_T_BE_LVL: bool = true;
 
 // Tgo          Bus master has released time            20      30      200     micS
-const DHT22_T_GO_IDX: u8 = 2;
-const DHT22_T_GO_MIN: u8 = 20;
-const DHT22_T_GO_MAX: u8 = 200;
+const DHT22_T_GO_IDX: usize = 2;
+const DHT22_T_GO_MIN: u32 = 20;
+const DHT22_T_GO_MAX: u32 = 200;
 const DHT22_T_GO_LVL: bool = false;
 
 // Trel         Response to low time                    75      80      85      micS
-const DHT22_T_REL_IDX: u8 = 3;
-const DHT22_T_REL_MIN: u8 = 75;
-const DHT22_T_REL_MAX: u8 = 85;
+const DHT22_T_REL_IDX: usize = 3;
+const DHT22_T_REL_MIN: u32 = 75;
+const DHT22_T_REL_MAX: u32 = 85;
 const DHT22_T_REL_LVL: bool = true;
 
 // Treh         In response to high time                75      80      85      micS
-const DHT22_T_REH_IDX: u8 = 4;
-const DHT22_T_REH_MIN: u8 = 75;
-const DHT22_T_REH_MAX: u8 = 85;
+const DHT22_T_REH_IDX: usize = 4;
+const DHT22_T_REH_MIN: u32 = 75;
+const DHT22_T_REH_MAX: u32 = 85;
 const DHT22_T_REH_LVL: bool = false;
 
 // TLOW         Signal "0", "1" low time                48      50      55      micS
-const DHT22_T_LOW_MIN: u8 = 48;
-const DHT22_T_LOW_MAX: u8 = 55;
+const DHT22_T_LOW_MIN: u32 = 48;
+const DHT22_T_LOW_MAX: u32 = 55;
 const DHT22_T_LOW_LVL: bool = true;
 
 // TH0          Signal "0" high time                    22      26      30      micS
-const DHT22_T_H0_MIN: u8 = 22;
-const DHT22_T_H0_MAX: u8 = 30;
+const DHT22_T_H0_MIN: u32 = 22;
+const DHT22_T_H0_MAX: u32 = 30;
 const DHT22_T_H0_LVL: bool = false;
 
 // TH1          Signal "1" high time                    68      70      75      micS
-const DHT22_T_H1_MIN: u8 = 68;
-const DHT22_T_H1_MAX: u8 = 70;
-const DHT22_T_H1_LVL: bool = false;
+const DHT22_T_H1_MIN: u32 = 68;
+const DHT22_T_H1_MAX: u32 = 70;
 
 // Ten          Sensor to release the bus time          45      50      55      micS
-const DHT22_T_EN_IDX: u8 = 85;
-const DHT22_T_EN_MIN: u8 = 45;
-const DHT22_T_EN_MAX: u8 = 55;
+const DHT22_T_EN_IDX: usize = 85;
+const DHT22_T_EN_MIN: u32 = 45;
+const DHT22_T_EN_MAX: u32 = 55;
 const DHT22_T_EN_LVL: bool = true;
 
-const DHT22_T_LATENCY: u8 = 5;
+const DHT22_T_LATENCY: u32 = 5;
 
 // minimum and maximum value for temperature10 signal range check
 const DHT22_MINVAL_TEMP10: i32 = -500;
@@ -74,7 +94,8 @@ const DHT22_MAXVAL_TEMP10: i32 = 500;
 const DHT22_MINVAL_HUM10: i32 = -10;
 const DHT22_MAXVAL_HUM10: i32 = 1000;
 
-enum DhtError {
+#[derive(Debug)]
+pub enum DhtError {
     /// timeout happened during data transmission
     Timeout,
 
@@ -118,19 +139,16 @@ enum DhtError {
 /// read temperature and humity from DHT sensor
 /// # Arguments
 /// * `pin` - struct of type InputPin
-fn read_dht_data(
+pub fn read_dht_data(
     config: &DhtConfig,
     vcc_pin: &mut OutputPin,
     data_pin: &mut IoPin,
 ) -> Result<(f32, f32), DhtError> {
     let mut ticks = [0u32; 86];
     let mut byte_vals = [0u8; 5];
-    let mut lvls = [false, 86];
+    let mut lvls = [false; 86];
     let mut tick_counter: u32 = 0;
-    let mut data = [0u8; 5];
-    let mut last_state = true;
-    let mut counter: u32;
-    let mut j = 0;
+    let mut last_state: bool;
 
     // switch on power supply of DHT sensor
     #[cfg(target_os = "linux")]
@@ -173,28 +191,28 @@ fn read_dht_data(
                     "timeout during data transmission (limit={})",
                     config.timeout_duration_micros
                 );
-                return Err("timeout during data transmission");
+                return Err(DhtError::Timeout);
             }
         }
-        lvls[i] = data_pin.is_high;
+        lvls[i] = data_pin.is_high();
         last_state = lvls[i];
         ticks[i] = tick_counter;
         tick_counter = 0;
     }
 
     // transmission has to start with level false
-    if (lvls[0]) {
+    if lvls[0] {
         error!(
             target: LOG_TARGET_DHT,
             "data transmission is not starting with low level"
         );
-        return DhtError::DataNotStartingWithFalse;
+        return Err(DhtError::DataNotStartingWithFalse);
     }
 
     // host the start signal down time
-    if ((lvls[DHT22_T_BE_IDX] != DHT22_T_BE_LVL)
+    if (lvls[DHT22_T_BE_IDX] != DHT22_T_BE_LVL)
         || (ticks[DHT22_T_BE_IDX] < DHT22_T_BE_MIN - DHT22_T_LATENCY)
-        || (ticks[DHT22_T_BE_IDX] > DHT22_T_BE_MAX + DHT22_T_LATENCY))
+        || (ticks[DHT22_T_BE_IDX] > DHT22_T_BE_MAX + DHT22_T_LATENCY)
     {
         error!(
             target: LOG_TARGET_DHT,
@@ -203,13 +221,13 @@ fn read_dht_data(
             DHT22_T_BE_MIN - DHT22_T_LATENCY,
             DHT22_T_BE_MAX + DHT22_T_LATENCY
         );
-        return DhtError::StartSignalDownTimeOutOfRange;
+        return Err(DhtError::StartSignalDownTimeOutOfRange);
     }
 
     // bus master release time
-    if ((lvls[DHT22_T_GO_IDX] != DHT22_T_GO_LVL)
+    if (lvls[DHT22_T_GO_IDX] != DHT22_T_GO_LVL)
         || (ticks[DHT22_T_GO_IDX] < DHT22_T_GO_MIN - DHT22_T_LATENCY)
-        || (ticks[DHT22_T_GO_IDX] > DHT22_T_GO_MAX + DHT22_T_LATENCY))
+        || (ticks[DHT22_T_GO_IDX] > DHT22_T_GO_MAX + DHT22_T_LATENCY)
     {
         error!(
             target: LOG_TARGET_DHT,
@@ -218,13 +236,13 @@ fn read_dht_data(
             DHT22_T_GO_MIN - DHT22_T_LATENCY,
             DHT22_T_GO_MAX + DHT22_T_LATENCY
         );
-        return DhtError::BusMasterReleaseTimeOutOfRange;
+        return Err(DhtError::BusMasterReleaseTimeOutOfRange);
     }
 
     // response to low time
-    if ((lvls[DHT22_T_REL_IDX] != DHT22_T_REL_LVL)
+    if (lvls[DHT22_T_REL_IDX] != DHT22_T_REL_LVL)
         || (ticks[DHT22_T_REL_IDX] < DHT22_T_REL_MIN - DHT22_T_LATENCY)
-        || (ticks[DHT22_T_REL_IDX] > DHT22_T_REL_MAX + DHT22_T_LATENCY))
+        || (ticks[DHT22_T_REL_IDX] > DHT22_T_REL_MAX + DHT22_T_LATENCY)
     {
         error!(
             target: LOG_TARGET_DHT,
@@ -233,13 +251,13 @@ fn read_dht_data(
             DHT22_T_REL_MIN - DHT22_T_LATENCY,
             DHT22_T_REL_MAX + DHT22_T_LATENCY
         );
-        return DhtError::ResponseToLowTimeOutOfRange;
+        return Err(DhtError::ResponseToLowTimeOutOfRange);
     }
 
     // response to high time
-    if ((lvls[DHT22_T_REH_IDX] != DHT22_T_REH_LVL)
+    if (lvls[DHT22_T_REH_IDX] != DHT22_T_REH_LVL)
         || (ticks[DHT22_T_REH_IDX] < DHT22_T_REH_MIN - DHT22_T_LATENCY)
-        || (ticks[DHT22_T_REH_IDX] > DHT22_T_REH_MAX + DHT22_T_LATENCY))
+        || (ticks[DHT22_T_REH_IDX] > DHT22_T_REH_MAX + DHT22_T_LATENCY)
     {
         error!(
             target: LOG_TARGET_DHT,
@@ -248,13 +266,13 @@ fn read_dht_data(
             DHT22_T_REH_MIN - DHT22_T_LATENCY,
             DHT22_T_REH_MAX + DHT22_T_LATENCY
         );
-        return DhtError::ResponseToLowTimeOutOfRange;
+        return Err(DhtError::ResponseToHighTimeOutOfRange);
     }
 
     // sensor bus release time
-    if ((lvls[DHT22_T_EN_IDX] != DHT22_T_EN_LVL)
+    if (lvls[DHT22_T_EN_IDX] != DHT22_T_EN_LVL)
         || (ticks[DHT22_T_EN_IDX] < DHT22_T_EN_MIN - DHT22_T_LATENCY)
-        || (ticks[DHT22_T_EN_IDX] > DHT22_T_EN_MAX + DHT22_T_LATENCY))
+        || (ticks[DHT22_T_EN_IDX] > DHT22_T_EN_MAX + DHT22_T_LATENCY)
     {
         error!(
             target: LOG_TARGET_DHT,
@@ -263,14 +281,14 @@ fn read_dht_data(
             DHT22_T_EN_MIN - DHT22_T_LATENCY,
             DHT22_T_EN_MAX + DHT22_T_LATENCY
         );
-        return DhtError::SensorBusReleaseTimeOutOfRange;
+        return Err(DhtError::SensorBusReleaseTimeOutOfRange);
     }
 
     // signal "0" -> "1" low time
     for i in (DHT22_T_REH_IDX + 1..DHT22_T_EN_IDX + 1).step_by(2) {
-        if ((lvls[i] != DHT22_T_LOW_LVL)
+        if (lvls[i] != DHT22_T_LOW_LVL)
             || (ticks[i] < DHT22_T_LOW_MIN - 4 * DHT22_T_LATENCY)
-            || (ticks[i] > DHT22_T_LOW_MAX + 4 * DHT22_T_LATENCY))
+            || (ticks[i] > DHT22_T_LOW_MAX + 4 * DHT22_T_LATENCY)
         {
             error!(
                 target: LOG_TARGET_DHT,
@@ -279,7 +297,7 @@ fn read_dht_data(
                 DHT22_T_LOW_MIN - 4 * DHT22_T_LATENCY,
                 DHT22_T_LOW_MAX + 4 * DHT22_T_LATENCY
             );
-            return DhtError::Signal0To1TimeOutOfRange;
+            return Err(DhtError::Signal0To1TimeOutOfRange);
         }
     }
 
@@ -287,7 +305,7 @@ fn read_dht_data(
     let mut idx_bit = 0;
     let mut idx_byte = 0;
 
-    let mut i = DHT22_T_REH_IDX + 2;
+    let mut i: usize = DHT22_T_REH_IDX + 2;
     while i < DHT22_T_EN_IDX {
         // part 1: check level and if bit timing is within global interval
         if (lvls[i] != DHT22_T_H0_LVL)
@@ -295,11 +313,11 @@ fn read_dht_data(
             || (ticks[i] > DHT22_T_H1_MAX + 4 * DHT22_T_LATENCY)
         {
             error!(
-                target: LOG_TARGET_DHT
+                target: LOG_TARGET_DHT,
                 "bit timing is not within global interval (measured {}, limits are {}, {})",
                 ticks[i], DHT22_T_H0_MIN - 4 * DHT22_T_LATENCY, DHT22_T_H1_MAX + 4 * DHT22_T_LATENCY
             );
-            return DhtError::BitTimingNotWithinGlobalInterval;
+            return Err(DhtError::BitTimingNotWithinGlobalInterval);
         }
 
         // part 2: check separate intervals for low and high bit
@@ -319,7 +337,7 @@ fn read_dht_data(
                     "timing not within specific interval for high value (measured {}, limits are {}, {})",
                     ticks[i], DHT22_T_H1_MIN - 2 * DHT22_T_LATENCY, DHT22_T_H1_MAX + 2 * DHT22_T_LATENCY
                 );
-                return DhtError::BitTimingNotWithinSpecificInterval;
+                return Err(DhtError::BitTimingNotWithinSpecificInterval);
             }
         }
 
@@ -334,24 +352,25 @@ fn read_dht_data(
     }
 
     // transfer data into signal variables
-    let mut hum10: i32 = byte_vals[0];
+    let mut hum10: i32 = byte_vals[0].into();
     hum10 = hum10 << 8;
-    hum10 = hum10 + byte_vals[1];
+    hum10 += byte_vals[1] as i32;
 
-    let mut temp10: i32 = byte_vals[2];
+    let mut temp10: i32 = byte_vals[2].into();
     temp10 = temp10 << 8;
-    temp10 = temp10 + byte_vals[3];
+    temp10 += byte_vals[3] as i32;
 
     // calculate and compare checksum
-    let checksum: i32 = (byteVals[0] + byteVals[1] + byteVals[2] + byteVals[3]) & 0xFF;
-
-    if checksum != byteVals[4] {
+    let checksum_calculated: i32 =
+        ((byte_vals[0] + byte_vals[1] + byte_vals[2] + byte_vals[3]) & 0xFF).into();
+    let checksum_received: i32 = byte_vals[4].into();
+    if checksum_calculated != checksum_received {
         error!(
             target: LOG_TARGET_DHT,
             "checksum error (calculated {}, received {})",
-            checksum, byteVals[4]
+            checksum_calculated, checksum_received
         );
-        return DhtError::ChecksumError;
+        return Err(DhtError::ChecksumError);
     }
 
     // range check for temperature
@@ -362,7 +381,7 @@ fn read_dht_data(
             DHT22_MINVAL_TEMP10 / 10,
             DHT22_MAXVAL_TEMP10 / 10
         );
-        return DhtError::TemperatureOutOfRange;
+        return Err(DhtError::TemperatureOutOfRange);
     }
 
     // range check for humidity
@@ -373,12 +392,12 @@ fn read_dht_data(
             DHT22_MINVAL_HUM10 / 10,
             DHT22_MAXVAL_HUM10 / 10
         );
-        return DhtError::HumidityOutOfRange;
+        return Err(DhtError::HumidityOutOfRange);
     }
 
     // calculate final values
-    let temperature: f32 = temp10 / 10;
-    let humidity: f32 = hum10 / 10;
+    let temperature: f32 = (temp10 / 10) as f32;
+    let humidity: f32 = (hum10 / 10) as f32;
 
-    (temperature, humidity)
+    Ok((temperature, humidity))
 }

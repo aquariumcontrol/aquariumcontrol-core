@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use log::{error, warn};
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
@@ -20,16 +20,12 @@ use crate::channel_content::AquariumSignal;
 use crate::i2c_interface::I2cInterface;
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::{Bias, Gpio, InputPin, IoPin, Level, Mode};
+use rppal::gpio::{Gpio, InputPin, Mode};
 
 #[cfg(target_os = "linux")]
 use crate::dht::read_dht_data;
 
-#[cfg(target_os = "linux")]
-use std::time::Duration;
-
-#[cfg(target_os = "linux")]
-use std::thread;
+use crate::dht::DhtConfig;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 
@@ -188,8 +184,13 @@ impl GpioHandler {
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
+    /// * `dht_config` - configuration data for GPIO handler
     /// * `i2c_config` - configuration data for I2C handler
-    pub fn new(config: GpioHandlerConfig, i2c_config: I2cInterfaceConfig) -> GpioHandler {
+    pub fn new(
+        config: GpioHandlerConfig,
+        dht_config: DhtConfig,
+        i2c_config: I2cInterfaceConfig,
+    ) -> GpioHandler {
         let use_simulator = config.use_simulator; // create copy because struct is moved
 
         // check if GPIO pin configuration is valid
@@ -251,7 +252,7 @@ impl GpioHandler {
 
         // read one sample from DHT sensor to verify SW and HW are working ok
         #[cfg(target_os = "linux")]
-        match Self::read_dht_data(&mut dht_io_pin) {
+        match read_dht_data(&dht_config, &mut dht_vcc_pin, &mut dht_io_pin) {
             Ok((temperature, humidity)) => {
                 info!(
                     target: LOG_TARGET_GPIO_HANDLER,

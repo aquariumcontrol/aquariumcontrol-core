@@ -706,7 +706,7 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
 
     #[cfg(target_os = "linux")]
-    let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+    let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
     #[cfg(not(target_os = "linux"))]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler);
 

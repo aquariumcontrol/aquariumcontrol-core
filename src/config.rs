@@ -15,6 +15,7 @@ use std::fs;
 use crate::balling::BallingConfig;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
+use crate::dht::DhtConfig;
 use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::gpio_handler::I2cInterfaceConfig;
@@ -45,6 +46,9 @@ pub struct ConfigData {
 
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,
+
+    /// configuration of DHT driver
+    pub dht: DhtConfig,
 
     /// configuration of the fresh water refill control
     pub refill: RefillConfig,
