@@ -26,6 +26,9 @@ mod controllino_actuate_simulator;
 mod data_injection;
 mod data_logger;
 mod device_relay_logic;
+#[cfg(target_os = "linux")]
+mod dht;
+
 mod feed;
 mod feedpattern;
 mod food_injection;

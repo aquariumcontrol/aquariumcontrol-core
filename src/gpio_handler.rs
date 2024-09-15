@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use log::{error, info, warn};
+use log::{error, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
@@ -23,13 +23,13 @@ use crate::i2c_interface::I2cInterface;
 use rppal::gpio::{Bias, Gpio, InputPin, IoPin, Level, Mode};
 
 #[cfg(target_os = "linux")]
+use crate::dht::read_dht_data;
+
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 use std::thread;
-
-#[cfg(target_os = "linux")]
-use std::thread::sleep;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 
@@ -147,62 +147,6 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
-    /// read temperature and humity from DHT sensor
-    /// # Arguments
-    /// * `pin` - struct of type InputPin
-    fn read_dht_data(pin: &mut IoPin) -> Result<(f32, f32), &'static str> {
-        let mut data = [0u8; 5];
-        let mut last_state = true;
-        let mut counter: u32;
-        let mut j = 0;
-
-        // send start signal
-        pin.set_mode(Mode::Output);
-        pin.write(Level::Low);
-        sleep(Duration::from_millis(18));
-        pin.write(Level::High);
-        sleep(Duration::from_micros(40));
-        
-        // configure pin for subsequent reading
-        pin.set_bias(Bias::PullUp);
-        pin.set_mode(Mode::Input);
-
-        // read data
-        for _ in 0..85 {
-            counter = 0;
-            while pin.is_high() == last_state {
-                counter += 1;
-                sleep(Duration::from_micros(1));
-                if counter == 255 {
-                    break;
-                }
-            }
-            last_state = pin.is_high();
-            if counter == 255 {
-                break;
-            }
-            if (j >= 4) && (j % 2 == 0) {
-                data[j / 8] <<= 1;
-                if counter > 16 {
-                    data[j / 8] = 1;
-                }
-            }
-            j += 1;
-        }
-
-        // checksum validation
-        if (j >= 40) && (data[4] == (data[0] + data[1] + data[2] + data[3]) & 0xFF) {
-            let humidity = ((data[0] as u16) << 8 | data[1] as u16) as f32 / 10.0;
-            let mut temperature = (((data[2] & 0x7F) as u16) << 8 | data[3] as u16) as f32 / 10.0;
-            if data[2] & 0x80 != 0 {
-                temperature = -temperature;
-            }
-            Ok((temperature, humidity))
-        } else {
-            Err("Failed to read data from DHT sensor")
-        }
-    }
-
     /// checks if the GPIO pin configuration valid:
     /// - pin numbers shall be within permissible range
     /// - pin numbers shall be distinct
@@ -281,7 +225,7 @@ impl GpioHandler {
             }
         };
 
-        // get pin for providing supply voltag to DHT sensor
+        // get pin for providing supply voltage to DHT sensor
         #[cfg(target_os = "linux")]
         let mut dht_vcc_pin = match gpio.get(config.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
@@ -292,12 +236,6 @@ impl GpioHandler {
                 );
             }
         };
-
-        // switch on power supply of DHT sensor
-        #[cfg(target_os = "linux")]
-        dht_vcc_pin.set_high();
-        // give sensor some time to wake up
-        thread::sleep(Duration::from_secs(1));
 
         // get pin for communication with DHT sensor
         #[cfg(target_os = "linux")]
