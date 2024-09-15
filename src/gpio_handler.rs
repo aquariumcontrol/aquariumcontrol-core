@@ -689,7 +689,7 @@ pub mod tests {
     pub fn test_valid_gpio_config() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
     }
 
     #[test]
@@ -699,7 +699,7 @@ pub mod tests {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_gpio_handler_invalid_low.toml".to_string(),
         );
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
     }
 
     #[test]
@@ -709,6 +709,6 @@ pub mod tests {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_gpio_handler_invalid_high.toml".to_string(),
         );
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
     }
 }
