@@ -676,6 +676,9 @@ impl GpioHandler {
 #[cfg(test)]
 pub mod tests {
     #[cfg(target_os = "linux")]
+    use crate::logger::setup_logger;
+
+    #[cfg(target_os = "linux")]
     use crate::config::read_config_file;
 
     #[cfg(target_os = "linux")]
@@ -687,6 +690,8 @@ pub mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     pub fn test_valid_gpio_config() {
+        setup_logger();
+
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);

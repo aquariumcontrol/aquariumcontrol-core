@@ -138,6 +138,7 @@ pub enum DhtError {
 
 /// read temperature and humity from DHT sensor
 /// # Arguments
+/// * `config` - configuration for DHT communicationn
 /// * `pin` - struct of type InputPin
 pub fn read_dht_data(
     config: &DhtConfig,
@@ -149,15 +150,19 @@ pub fn read_dht_data(
     let mut lvls = [false; 86];
     let mut tick_counter: u32 = 0;
     let mut last_state: bool;
+    let sleep_time = Duration::from_micros(1);	// sleep time between monitoring pin state
 
+    data_pin.set_mode(Mode::Output);
+    data_pin.write(Level::High);
     // switch on power supply of DHT sensor
     #[cfg(target_os = "linux")]
+    vcc_pin.set_low();
+    thread::sleep(Duration::from_secs(1));
     vcc_pin.set_high();
     // give sensor some time to wake up
     thread::sleep(Duration::from_secs(1));
 
     // send start signal
-    data_pin.set_mode(Mode::Output);
     data_pin.write(Level::Low);
     sleep(Duration::from_micros(
         config.sensor_init_pin_down_duration_micros,
@@ -178,17 +183,27 @@ pub fn read_dht_data(
 
     last_state = data_pin.is_high();
 
-    let sleep_time = Duration::from_micros(1);
-
     // observe level changes and record the timing
     for i in 0..85 {
         while data_pin.is_high() == last_state {
             tick_counter += 1;
             sleep(sleep_time);
             if tick_counter > config.timeout_duration_micros {
+                for k in 0..i {
+                    println!("lvs[{}]={} ticks[{}]={}",
+                        k,
+                        match lvls[k] {
+                            false => "LOW",
+                            true => "HIGH",
+                        },
+                        k,
+                        ticks[k]
+                    );
+                }
                 error!(
                     target: LOG_TARGET_DHT,
-                    "timeout during data transmission (limit={})",
+                    "timeout during data transmission of bit {} (limit={})",
+                    i,
                     config.timeout_duration_micros
                 );
                 return Err(DhtError::Timeout);
