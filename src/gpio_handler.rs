@@ -20,7 +20,7 @@ use crate::channel_content::AquariumSignal;
 use crate::i2c_interface::I2cInterface;
 
 #[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, InputPin, Mode};
+use rppal::gpio::{Gpio, InputPin};
 
 #[cfg(target_os = "linux")]
 use crate::dht::read_dht_data;
@@ -226,33 +226,14 @@ impl GpioHandler {
             }
         };
 
-        // get pin for providing supply voltage to DHT sensor
-        #[cfg(target_os = "linux")]
-        let mut dht_vcc_pin = match gpio.get(config.gpio_pin_number_dht22_vcc) {
-            Ok(c) => c.into_output(),
-            Err(e) => {
-                panic!(
-                    "{}: could not get pin {} from GPIO interface for DHT power supply ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER, config.gpio_pin_number_dht22_vcc
-                );
-            }
-        };
-
-        // get pin for communication with DHT sensor
-        #[cfg(target_os = "linux")]
-        let mut dht_io_pin = match gpio.get(config.gpio_pin_number_dht22_io) {
-            Ok(c) => c.into_io(Mode::Output),
-            Err(e) => {
-                panic!(
-                    "{}: failed to aquire pin for communication with DHT sensor ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER
-                );
-            }
-        };
-
         // read one sample from DHT sensor to verify SW and HW are working ok
         #[cfg(target_os = "linux")]
-        match read_dht_data(&dht_config, &mut dht_vcc_pin, &mut dht_io_pin) {
+        match read_dht_data(
+            &dht_config,
+            &gpio,
+            config.gpio_pin_number_dht22_vcc,
+            config.gpio_pin_number_dht22_io,
+        ) {
             Ok((temperature, humidity)) => {
                 info!(
                     target: LOG_TARGET_GPIO_HANDLER,

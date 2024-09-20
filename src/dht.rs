@@ -8,7 +8,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::error;
-use rppal::gpio::{Bias, IoPin, Level, Mode, OutputPin};
+use rppal::gpio::{Level, Gpio, Trigger};
+use std::time::SystemTime;
 use serde_derive::Deserialize;
 use std::thread;
 use std::thread::sleep;
@@ -31,7 +32,7 @@ pub struct DhtConfig {
     pub sensor_init_input_duration_micros: u64,
 
     /// maximum permissible duration for sensor to respond in microseconds
-    pub timeout_duration_micros: u32,
+    pub timeout_duration_micros: u64,
 }
 
 // Excerpt from AM2302 Product Manual, AOSONG
@@ -96,8 +97,26 @@ const DHT22_MAXVAL_HUM10: i32 = 1000;
 
 #[derive(Debug)]
 pub enum DhtError {
-    /// timeout happened during data transmission
-    Timeout,
+    /// Vcc pin acquisition failed
+    VccPinAcquisitionFailed,
+    
+    /// Data pin acquisition for output failed
+    DataPinOutputAcquisitionFailed,
+    
+    /// Data pin acquisition for input failed
+    DataPinInputAcquisitionFailed,
+
+    /// Could not set interrupt
+    CouldNotSetInterrupt,
+    
+    /// Could not clear interrupt
+    CouldNotClearInterrupt,
+    
+    // Could not measure interrupt duration
+    CouldNotMeasureInterruptDuration,
+
+    // execution of interrupt failed
+    InterruptFailed,
 
     /// data transmission is not starting with low level
     DataNotStartingWithFalse,
@@ -142,79 +161,113 @@ pub enum DhtError {
 /// * `pin` - struct of type InputPin
 pub fn read_dht_data(
     config: &DhtConfig,
-    vcc_pin: &mut OutputPin,
-    data_pin: &mut IoPin,
+    gpio: &Gpio,
+    gpio_pin_number_dht22_vcc: u8,
+    gpio_pin_number_dht22_io: u8,
 ) -> Result<(f32, f32), DhtError> {
     let mut ticks = [0u32; 86];
     let mut byte_vals = [0u8; 5];
     let mut lvls = [false; 86];
-    let mut tick_counter: u32 = 0;
-    let mut last_state: bool;
-    let sleep_time = Duration::from_micros(1);	// sleep time between monitoring pin state
 
-    data_pin.set_mode(Mode::Output);
-    data_pin.write(Level::High);
-    // switch on power supply of DHT sensor
+    // get pin for providing supply voltage to DHT sensor
     #[cfg(target_os = "linux")]
-    vcc_pin.set_low();
-    thread::sleep(Duration::from_secs(1));
-    vcc_pin.set_high();
-    // give sensor some time to wake up
-    thread::sleep(Duration::from_secs(1));
+    let mut dht_vcc_pin = match gpio.get(gpio_pin_number_dht22_vcc) {
+        Ok(c) => c.into_output(),
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_DHT,
+                "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
+                gpio_pin_number_dht22_vcc
+            );
+            return Err(DhtError::VccPinAcquisitionFailed);
+        }
+    };
 
-    // send start signal
-    data_pin.write(Level::Low);
-    sleep(Duration::from_micros(
-        config.sensor_init_pin_down_duration_micros,
-    ));
-    data_pin.write(Level::High);
-    sleep(Duration::from_micros(
-        config.sensor_init_pin_up_duration_micros,
-    ));
+    // scope to force drop of output pin
+    {
+        // get pin for triggering DHT sensor
+        #[cfg(target_os = "linux")]
+        let mut data_pin = match gpio.get(gpio_pin_number_dht22_io) {
+            Ok(c) => c.into_output(),
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_DHT,
+                    "failed to aquire pin {} for triggering DHT sensor ({e:?})",
+                    gpio_pin_number_dht22_io,
+                );
+                return Err(DhtError::DataPinOutputAcquisitionFailed);
+            }
+        };
 
-    // configure pin for subsequent reading
-    data_pin.set_bias(Bias::PullUp);
-    data_pin.set_mode(Mode::Input);
+        data_pin.write(Level::High);
+        // switch on power supply of DHT sensor
+        #[cfg(target_os = "linux")]
+        dht_vcc_pin.set_low();
+        thread::sleep(Duration::from_secs(1));
+        dht_vcc_pin.set_high();
+        // give sensor some time to wake up
+        thread::sleep(Duration::from_secs(1));
 
-    // give pin some time to initialize
-    sleep(Duration::from_micros(
-        config.sensor_init_input_duration_micros,
-    ));
+        // send start signal
+        data_pin.write(Level::Low);
+        sleep(Duration::from_micros(
+            config.sensor_init_pin_down_duration_micros,
+        ));
+        data_pin.write(Level::High);
+        sleep(Duration::from_micros(
+            config.sensor_init_pin_up_duration_micros,
+        ));
+    }
+    // get pin for reading from DHT sensor
+    #[cfg(target_os = "linux")]
+    let mut data_pin = match gpio.get(gpio_pin_number_dht22_io) {
+        Ok(c) => c.into_input(),
+        Err(e) => {
+            error!(
+                "failed to aquire pin {} for reading from DHT sensor ({e:?})",
+                gpio_pin_number_dht22_io,
+            );
+            return Err(DhtError::DataPinInputAcquisitionFailed);
+        }
+    };
 
-    last_state = data_pin.is_high();
+    match data_pin.set_interrupt(Trigger::Both) {
+        Ok(()) => {},
+        Err(_) => {
+            return Err(DhtError::CouldNotSetInterrupt);
+        }
+    }
+
+    let timeout_duration = Duration::from_micros(
+        config.timeout_duration_micros
+    );
 
     // observe level changes and record the timing
     for i in 0..85 {
-        while data_pin.is_high() == last_state {
-            tick_counter += 1;
-            sleep(sleep_time);
-            if tick_counter > config.timeout_duration_micros {
-                for k in 0..i {
-                    println!("lvs[{}]={} ticks[{}]={}",
-                        k,
-                        match lvls[k] {
-                            false => "LOW",
-                            true => "HIGH",
-                        },
-                        k,
-                        ticks[k]
-                    );
-                }
-                error!(
-                    target: LOG_TARGET_DHT,
-                    "timeout during data transmission of bit {} (limit={})",
-                    i,
-                    config.timeout_duration_micros
-                );
-                return Err(DhtError::Timeout);
+        let time_before = SystemTime::now();
+        match data_pin.poll_interrupt(true, Some(timeout_duration)) {
+            Ok(_) => {},
+            Err(_) => {
+                return Err(DhtError::InterruptFailed);
             }
         }
+        let irq_duration = match time_before.elapsed() {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(DhtError::CouldNotMeasureInterruptDuration);
+            }
+        };        
         lvls[i] = data_pin.is_high();
-        last_state = lvls[i];
-        ticks[i] = tick_counter;
-        tick_counter = 0;
+        ticks[i] = irq_duration.as_micros() as u32;
     }
 
+    match data_pin.clear_interrupt() {
+        Ok(()) => {},
+        Err(_) => {
+            return Err(DhtError::CouldNotClearInterrupt);
+        }
+    }
+    
     // transmission has to start with level false
     if lvls[0] {
         error!(
