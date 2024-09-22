@@ -63,6 +63,10 @@ const DHT22_MAXVAL_TEMP10: i32 = 500;
 const DHT22_MINVAL_HUM10: i32 = -10;
 const DHT22_MAXVAL_HUM10: i32 = 1000;
 
+// timing of (neutral) low phase between data bit
+const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
+const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
+
 #[derive(Debug, PartialEq)]
 pub enum DhtError {
     /// Vcc pin acquisition failed
@@ -123,6 +127,7 @@ pub fn read_dht_data(
     reset_sensor: bool,
 ) -> Result<(f32, f32), DhtError> {
     let mut ticks = [0u64; DHT22_TRANSMISSION_END_IDX];
+    let mut lvls = [false; DHT22_TRANSMISSION_END_IDX];
     let mut byte_vals = [0u8; DHT22_DATA_LEN];
 
     // get pin for providing supply voltage to DHT sensor
@@ -158,9 +163,9 @@ pub fn read_dht_data(
         // reset of DHT sensor
         if reset_sensor {
             dht_vcc_pin.set_low();
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(Duration::from_millis(200));
             dht_vcc_pin.set_high();
-            thread::sleep(Duration::from_millis(1000)); // give sensor some time to wake up
+            thread::sleep(Duration::from_millis(500)); // give sensor some time to wake up
         } else {
             thread::sleep(Duration::from_millis(500)); // pause between transmissions
         }
@@ -171,11 +176,11 @@ pub fn read_dht_data(
             config.sensor_init_pin_down_duration_micros,
         ));
         data_pin.write(Level::High);
-        //        sleep(Duration::from_micros(
-        //            config.sensor_init_pin_up_duration_micros,
-        //        ));
+        sleep(Duration::from_micros(
+            config.sensor_init_pin_up_duration_micros,
+        ));
     }
-    
+
     // get pin for reading from DHT sensor
     #[cfg(target_os = "linux")]
     let mut data_pin = match gpio.get(gpio_pin_number_dht22_io) {
@@ -190,7 +195,7 @@ pub fn read_dht_data(
     };
 
     // duration for debouncing of interrupts
-//    let debounce_duration_opt = Some(Duration::from_micros(1));
+    //    let debounce_duration_opt = Some(Duration::from_micros(1));
 
     match data_pin.set_interrupt(Trigger::Both, None) {
         Ok(()) => {}
@@ -211,7 +216,7 @@ pub fn read_dht_data(
     for i in 0..DHT22_TRANSMISSION_END_IDX {
         // poll the interrupt
         let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
-            Ok(c) => {c}
+            Ok(c) => c,
             Err(_) => {
                 return Err(DhtError::InterruptFailed);
             }
@@ -221,6 +226,11 @@ pub fn read_dht_data(
         match event_opt {
             Some(event) => {
                 duration_after = event.timestamp;
+                lvls[i] = match event.trigger {
+                    Trigger::RisingEdge => false,
+                    Trigger::FallingEdge => true,
+                    _ => false,
+                };
             }
             None => {
                 duration_after = duration_before;
@@ -246,7 +256,7 @@ pub fn read_dht_data(
 
     // output of tick timing to terminal for development purposes
     for k in 0..(valid_ticks_received + 1) {
-        println!("ticks[{}]={}", k, ticks[k]);
+        println!("lvls[{}]={}, ticks[{}]={}", k, lvls[k], k, ticks[k]);
     }
     println!("**************************");
 
@@ -259,6 +269,16 @@ pub fn read_dht_data(
 
     if timeout_occurred {
         return Err(DhtError::Timeout);
+    }
+
+    //let mut data_bit_len[0u64; DHT22_TRANSMISSION_END_IDX];
+    let mut count_data_bits = 0;
+    for i in 0..(valid_ticks_received + 1) {
+        if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
+            continue;
+        }
+        println!("data_bit_len[{}] = {}", count_data_bits, ticks[i]);
+        count_data_bits += 1;
     }
 
     // evaluate bit lengths and compute transmission values
