@@ -23,7 +23,7 @@ use crate::i2c_interface::I2cInterface;
 use rppal::gpio::{Gpio, InputPin};
 
 #[cfg(target_os = "linux")]
-use crate::dht::read_dht_data;
+use crate::dht::{read_dht_data, DhtError};
 
 use crate::dht::DhtConfig;
 
@@ -227,26 +227,43 @@ impl GpioHandler {
         };
 
         // read one sample from DHT sensor to verify SW and HW are working ok
+        let mut measurement_successful = false;
+        let mut retry_counter = 0;
+
         #[cfg(target_os = "linux")]
-        match read_dht_data(
-            &dht_config,
-            &gpio,
-            config.gpio_pin_number_dht22_vcc,
-            config.gpio_pin_number_dht22_io,
-        ) {
-            Ok((temperature, humidity)) => {
-                info!(
-                    target: LOG_TARGET_GPIO_HANDLER,
-                    "Initial read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
-                    temperature,
-                    humidity,
-                );
-            }
-            Err(e) => {
-                panic!(
-                    "{}: failed to read from DHT sensor ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER
-                );
+        while !measurement_successful {
+            match read_dht_data(
+                &dht_config,
+                &gpio,
+                config.gpio_pin_number_dht22_vcc,
+                config.gpio_pin_number_dht22_io,
+                retry_counter == 0,
+            ) {
+                Ok((temperature, humidity)) => {
+                    info!(
+                        target: LOG_TARGET_GPIO_HANDLER,
+                        "Initial read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
+                        temperature,
+                        humidity,
+                    );
+                    measurement_successful = true;
+                }
+                Err(e) => {
+                    if e == DhtError::Timeout {
+                        retry_counter += 1;
+                        if retry_counter > 3 {
+                            panic!(
+                                "{}: failed to read from DHT sensor (after {} retries, {e:?}",
+                                LOG_TARGET_GPIO_HANDLER, retry_counter,
+                            );
+                        }
+                    } else {
+                        panic!(
+                            "{}: failed to read from DHT sensor ({e:?})",
+                            LOG_TARGET_GPIO_HANDLER
+                        );
+                    }
+                }
             }
         }
 
