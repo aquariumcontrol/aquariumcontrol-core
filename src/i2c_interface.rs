@@ -7,19 +7,73 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::str;
 use std::time::Duration;
+
+#[cfg(target_os = "linux")]
+use log::{error, warn};
+
 #[cfg(target_os = "linux")]
 use {
     rppal::i2c::I2c, // required for communication with AtlasScientific sensors
 };
 
+#[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
-use crate::gpio_handler::I2cInterfaceConfig;
+
+/// Holds the configuration data for the I2C interface.
+/// The configuration is loaded from the .toml configuration file.
+/// This struct does not contain any implementation.
+/// Struct is intentionally placed here instead of create i2c_interface.
+#[derive(Deserialize, Debug)]
+pub struct I2cInterfaceConfig {
+    /// I2C address of Atlas Scientific pH sensor unit
+    pub address_atlas_scientific_ph: u16,
+
+    /// I2C address of Atlas Scientific conductivity sensor unit
+    pub address_atlas_scientific_conductivity: u16,
+
+    /// I2C address of Atlas Scientific temperature sensor unit    
+    pub address_atlas_scientific_temperature: u16,
+
+    /// maximum number of read attempts
+    pub max_read_attempts: u16,
+
+    /// timeout for transactions in milliseconds
+    pub timeout_transaction: u32,
+
+    /// sleep time in milliseconds before after writing before reading from pH sensor unit
+    pub sleep_time_atlas_scientific_ph: u64,
+
+    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
+    pub sleep_time_atlas_scientific_conductivity: u64,
+
+    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
+    pub sleep_time_atlas_scientific_temperature: u64,
+
+    /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
+    pub max_val_atlas_scientific_ph: f32,
+
+    /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
+    pub min_val_atlas_scientific_ph: f32,
+
+    /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+    pub max_val_atlas_scientific_temperature: f32,
+
+    /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
+    pub min_val_atlas_scientific_temperature: f32,
+
+    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    pub max_val_atlas_scientific_conductivity: f32,
+
+    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    pub min_val_atlas_scientific_conductivity: f32,
+}
 
 /// error codes for evaluation of sensor unit response
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum AtlasScientificError {
     /// first character in message sent from sensor unit does not match required magic number
@@ -38,6 +92,7 @@ pub enum AtlasScientificError {
     ConversionFailure,
 }
 
+#[cfg(target_os = "linux")]
 /// communication error codes
 #[derive(Debug, PartialEq)]
 pub enum I2cError {
@@ -60,6 +115,7 @@ pub enum I2cError {
     InvalidSignalRequest(AquariumSignal),
 }
 
+#[allow(dead_code)]
 /// numeric values used in communication with Atlas Scientific sensor units
 mod atlas_scientific_constants {
     /// command sent to sensor unit for initiating response
@@ -99,6 +155,7 @@ mod atlas_scientific_constants {
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
+#[allow(dead_code)]
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct I2cInterface {
     /// I2C interface of rppal library
@@ -122,11 +179,13 @@ pub struct I2cInterface {
 }
 
 impl I2cInterface {
+    #[cfg(target_os = "linux")]
     const LOG_TARGET_I2C_INTERFACE: &'static str = "i2c_interface";
 
     /// Provides a struct of type I2cInterface
     /// # Arguments    
     /// * `config` - configuration for I2C interface
+    #[cfg(target_os = "linux")]
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
             #[cfg(target_os = "linux")]
@@ -173,6 +232,7 @@ impl I2cInterface {
     /// # Arguments    
     /// * `character` - character to be checked
     /// * `negative_allowed` - flag indicating if a negative sign is allowed    
+    #[allow(dead_code)]
     fn is_numeric(character: u8, negative_allowed: bool) -> bool {
         match character {
             atlas_scientific_constants::ASCII_VAL_ZERO
@@ -189,6 +249,7 @@ impl I2cInterface {
     /// # Arguments
     /// * `buf` - array of u8
     /// * `is_ph` - flag indicating if sensor unit is pH unit
+    #[allow(dead_code)]
     fn check_response(
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
@@ -341,12 +402,18 @@ impl I2cInterface {
 pub mod tests {
     use assert_float_eq::*;
 
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
     use crate::i2c_interface::atlas_scientific_constants;
-    use crate::i2c_interface::AquariumSignal;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
+
+    #[cfg(target_os = "linux")]
+    use crate::config::read_config_file;
+
+    #[cfg(target_os = "linux")]
+    use crate::config::ConfigData;
+
+    #[cfg(target_os = "linux")]
+    use crate::channel_content::AquariumSignal;
 
     // happy case for evaluating response from pH sensor unit
     #[test]
@@ -375,6 +442,7 @@ pub mod tests {
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
     #[test]
+    #[cfg(target_os = "linux")]
     pub fn test_i2c_interface_check_response_invalid_ph_negative() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,

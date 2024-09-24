@@ -9,9 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use log::{error, info, warn};
+use log::{error, warn};
 use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+
+#[cfg(target_os = "linux")]
+use log::info;
 
 #[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
@@ -25,7 +28,11 @@ use rppal::gpio::{Gpio, InputPin};
 #[cfg(target_os = "linux")]
 use crate::dht::{read_dht_data, DhtError};
 
+#[cfg(target_os = "linux")]
 use crate::dht::DhtConfig;
+
+#[cfg(target_os = "linux")]
+use crate::i2c_interface::I2cInterfaceConfig;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 
@@ -57,55 +64,6 @@ pub struct GpioHandlerConfig {
 
     /// GPIO pin number for providing power to DHT22 sensor
     pub gpio_pin_number_dht22_vcc: u8,
-}
-
-/// Holds the configuration data for the I2C interface.
-/// The configuration is loaded from the .toml configuration file.
-/// This struct does not contain any implementation.
-/// Struct is intentionally placed here instead of create i2c_interface.
-#[derive(Deserialize, Debug)]
-pub struct I2cInterfaceConfig {
-    /// I2C address of Atlas Scientific pH sensor unit
-    pub address_atlas_scientific_ph: u16,
-
-    /// I2C address of Atlas Scientific conductivity sensor unit
-    pub address_atlas_scientific_conductivity: u16,
-
-    /// I2C address of Atlas Scientific temperature sensor unit    
-    pub address_atlas_scientific_temperature: u16,
-
-    /// maximum number of read attempts
-    pub max_read_attempts: u16,
-
-    /// timeout for transactions in milliseconds
-    pub timeout_transaction: u32,
-
-    /// sleep time in milliseconds before after writing before reading from pH sensor unit
-    pub sleep_time_atlas_scientific_ph: u64,
-
-    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
-    pub sleep_time_atlas_scientific_conductivity: u64,
-
-    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
-    pub sleep_time_atlas_scientific_temperature: u64,
-
-    /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_ph: f32,
-
-    /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_ph: f32,
-
-    /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_temperature: f32,
-
-    /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_temperature: f32,
-
-    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub max_val_atlas_scientific_conductivity: f32,
-
-    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub min_val_atlas_scientific_conductivity: f32,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

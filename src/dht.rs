@@ -7,13 +7,19 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use log::error;
+
+#[cfg(target_os = "linux")]
+use log::warn;
+#[cfg(target_os = "linux")]
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
+#[cfg(target_os = "linux")]
 use std::thread;
+#[cfg(target_os = "linux")]
 use std::thread::sleep;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
-use std::time::SystemTime;
 
 const LOG_TARGET_DHT: &str = "dht";
 
@@ -33,68 +39,100 @@ pub struct DhtConfig {
 
     /// maximum permissible duration for sensor to respond in microseconds
     pub timeout_duration_micros: u64,
+
+    // duration in milliseconds the sensor is switched off before requesting transmission
+    pub sensor_reset_duration_millis: u64,
+
+    // duration in milliseconds the sensor is given to initialize
+    pub sensor_startup_duration_millis: u64,
+
+    // duration in milliseconds the sensor is given to pause between transmissions
+    pub sensor_pause_duration_millis: u64,
 }
 
-// Excerpt from AM2302 Product Manual, AOSONG
-// www.aosong.com
-// Response time from sensor from Table 6: Single bus signal characteristics
-
-// Symbol       Parameter                               min     typ     max     Unit
-//-----------------------------------------------------------------------------------
-
-// TH0          Signal "0" high time	                22      26      30      micS
-const DHT22_T_H0_MIN: u64 = 22;
-const DHT22_T_H0_MAX: u64 = 30;
-
-// TH1          Signal "1" high time                    68      70      75      micS
-const DHT22_T_H1_MIN: u64 = 42;
-const DHT22_T_H1_MAX: u64 = 179;
-
-const DHT22_T_LATENCY: u64 = 5;
-
-const DHT22_TRANSMISSION_END_IDX: usize = 86;
+#[allow(unused)]
 const DHT22_DATA_LEN: usize = 5;
+#[allow(unused)]
+const DHT22_BYTE0_START_IDX: usize = 1;
+#[allow(unused)]
+const DHT22_BYTE0_STOP_IDX: usize = 8;
+#[allow(unused)]
+const DHT22_BYTE1_START_IDX: usize = 9;
+#[allow(unused)]
+const DHT22_BYTE1_STOP_IDX: usize = 16;
+#[allow(unused)]
+const DHT22_BYTE2_START_IDX: usize = 17;
+#[allow(unused)]
+const DHT22_BYTE2_STOP_IDX: usize = 23;
+#[allow(unused)]
+const DHT22_BYTE3_START_IDX: usize = 24;
+#[allow(unused)]
+const DHT22_BYTE3_STOP_IDX: usize = 31;
+#[allow(unused)]
+const DHT22_BYTE4_START_IDX: usize = 32;
+#[allow(unused)]
+const DHT22_BYTE4_STOP_IDX: usize = 39;
+
+#[allow(unused)]
+const DHT22_TRANSMISSION_END_IDX: usize = 86;
+
+#[allow(unused)]
+const DHT22_HUMIDITY_START_IDX: usize = 1;
+#[allow(unused)]
+const DHT22_HUMIDITY_STOP_IDX: usize = 16;
+
+#[allow(unused)]
+const DHT22_TEMPERATURE_START_IDX: usize = 1;
+#[allow(unused)]
+const DHT22_TEMPERATURE_STOP_IDX: usize = 16;
 
 // minimum and maximum value for temperature10 signal range check
+#[allow(unused)]
 const DHT22_MINVAL_TEMP10: i32 = -500;
+#[allow(unused)]
 const DHT22_MAXVAL_TEMP10: i32 = 500;
 
 // minimum and maximum value for temperature10 signal range check
+#[cfg(target_os = "linux")]
 const DHT22_MINVAL_HUM10: i32 = -10;
+#[cfg(target_os = "linux")]
 const DHT22_MAXVAL_HUM10: i32 = 1000;
 
 // timing of (neutral) low phase between data bit
+#[allow(unused)]
 const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
+#[allow(unused)]
 const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
 
 // distinguish between true and false
+#[allow(unused)]
 const DHT22_BIT_TIMING_LIMIT: u64 = 50;
 
 #[derive(Debug, PartialEq)]
 pub enum DhtError {
     /// Vcc pin acquisition failed
+    #[cfg(target_os = "linux")]
     VccPinAcquisitionFailed,
 
     /// Data pin acquisition for output failed
+    #[cfg(target_os = "linux")]
     DataPinOutputAcquisitionFailed,
 
     /// Data pin acquisition for input failed
+    #[cfg(target_os = "linux")]
     DataPinInputAcquisitionFailed,
 
     /// Could not set interrupt
+    #[cfg(target_os = "linux")]
     CouldNotSetInterrupt,
 
     /// Could not clear interrupt
+    #[cfg(target_os = "linux")]
     CouldNotClearInterrupt,
 
     // execution of interrupt failed
+    #[cfg(target_os = "linux")]
     InterruptFailed,
-
-    // bit timing is not within global interval
-    BitTimingNotWithinGlobalInterval,
-
-    // timing not within specific interval for high value
-    BitTimingNotWithinSpecificInterval,
 
     // error occurred during calculation of checksum
     ChecksumCalculationError,
@@ -112,6 +150,100 @@ pub enum DhtError {
     HumidityOutOfRange,
 }
 
+#[allow(unused)]
+pub fn calc_data_bits(
+    ticks: [u64; DHT22_TRANSMISSION_END_IDX],
+    valid_ticks_received: usize,
+) -> [bool; DHT22_TRANSMISSION_END_IDX] {
+    let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
+    let mut count_data_bits = 0;
+    for i in 0..(valid_ticks_received + 1) {
+        if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
+            continue;
+        }
+        if ticks[i] > DHT22_BIT_TIMING_LIMIT {
+            data_bits[i] = true;
+        }
+        println!(
+            "data_bit_len[{}] = {} => {}",
+            count_data_bits,
+            ticks[i],
+            match data_bits[i] {
+                true => "TRUE",
+                false => "FALSE",
+            }
+        );
+        count_data_bits += 1;
+    }
+    data_bits
+}
+
+#[allow(unused)]
+pub fn calc_byte_array(data_bits: [bool; DHT22_BYTE4_STOP_IDX]) -> [u8; DHT22_DATA_LEN] {
+    let mut byte_vals = [0u8; DHT22_DATA_LEN];
+    // calculate byte values as preparation for checksum calculation
+    for idx_bit in DHT22_BYTE0_START_IDX..DHT22_BYTE0_STOP_IDX + 1 {
+        byte_vals[0] |= match data_bits[idx_bit] {
+            true => 1,
+            false => 0,
+        };
+        byte_vals[0] = byte_vals[0] << 1;
+    }
+    for idx_bit in DHT22_BYTE1_START_IDX..DHT22_BYTE1_STOP_IDX + 1 {
+        byte_vals[1] |= match data_bits[idx_bit] {
+            true => 1,
+            false => 0,
+        };
+        byte_vals[1] = byte_vals[1] << 1;
+    }
+    for idx_bit in DHT22_BYTE2_START_IDX..DHT22_BYTE2_STOP_IDX + 1 {
+        byte_vals[2] |= match data_bits[idx_bit] {
+            true => 1,
+            false => 0,
+        };
+        byte_vals[2] = byte_vals[2] << 1;
+    }
+    for idx_bit in DHT22_BYTE3_START_IDX..DHT22_BYTE3_STOP_IDX + 1 {
+        byte_vals[3] |= match data_bits[idx_bit] {
+            true => 1,
+            false => 0,
+        };
+        byte_vals[3] = byte_vals[3] << 1;
+    }
+    for idx_bit in DHT22_BYTE4_START_IDX..DHT22_BYTE4_STOP_IDX + 1 {
+        byte_vals[4] |= match data_bits[idx_bit] {
+            true => 1,
+            false => 0,
+        };
+        byte_vals[4] = byte_vals[4] << 1;
+    }
+    byte_vals
+}
+
+#[allow(unused)]
+pub fn calc_checksum(byte_vals: [u8; DHT22_DATA_LEN]) -> Result<u8, DhtError> {
+    // calculate and compare checksum
+    let mut checksum_intermediate: u16 =
+        byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
+    checksum_intermediate = checksum_intermediate & 0xFF;
+    let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
+        Ok(c) => c,
+        Err(_) => return Err(DhtError::ChecksumCalculationError),
+    };
+
+    let checksum_received: u8 = byte_vals[4].into();
+    if checksum_calculated != checksum_received {
+        error!(
+            target: LOG_TARGET_DHT,
+            "checksum error (calculated {}, received {})",
+            checksum_calculated, checksum_received
+        );
+        return Err(DhtError::ChecksumError);
+    }
+    Ok(checksum_calculated)
+}
+
+#[cfg(target_os = "linux")]
 /// read temperature and humity from DHT sensor
 /// # Arguments
 /// * `config` - configuration for DHT communicationn
@@ -124,8 +256,6 @@ pub fn read_dht_data(
     reset_sensor: bool,
 ) -> Result<(f32, f32), DhtError> {
     let mut ticks = [0u64; DHT22_TRANSMISSION_END_IDX];
-    let mut lvls = [false; DHT22_TRANSMISSION_END_IDX];
-    let mut byte_vals = [0u8; DHT22_DATA_LEN];
 
     // get pin for providing supply voltage to DHT sensor
     #[cfg(target_os = "linux")]
@@ -160,11 +290,12 @@ pub fn read_dht_data(
         // reset of DHT sensor
         if reset_sensor {
             dht_vcc_pin.set_low();
-            thread::sleep(Duration::from_millis(200));
+            thread::sleep(Duration::from_millis(config.sensor_reset_duration_millis));
             dht_vcc_pin.set_high();
-            thread::sleep(Duration::from_millis(500)); // give sensor some time to wake up
+            thread::sleep(Duration::from_millis(config.sensor_startup_duration_millis));
+        // give sensor some time to wake up
         } else {
-            thread::sleep(Duration::from_millis(500)); // pause between transmissions
+            thread::sleep(Duration::from_millis(sensor_pause_duration_millis)); // pause between transmissions
         }
 
         // send start signal
@@ -218,30 +349,24 @@ pub fn read_dht_data(
             }
         };
 
-        // evaluate the recorded timestamp
-        match event_opt {
-            Some(event) => {
-                duration_after = event.timestamp;
-                lvls[i] = match event.trigger {
-                    Trigger::RisingEdge => false,
-                    Trigger::FallingEdge => true,
-                    _ => false,
-                };
-            }
-            None => {
-                warn!(
-                    target: LOG_TARGET_DHT,
-                    "empty interrupt event for bit #{}",
-                    i
-                );
-                duration_after = duration_before;
-            }
-        }
-
         if i == 0 {
             // for the first bit timing, no start data is available
             ticks[0] = 0;
         } else {
+            // evaluate the recorded timestamp
+            match event_opt {
+                Some(event) => {
+                    duration_after = event.timestamp;
+                }
+                None => {
+                    warn!(
+                        target: LOG_TARGET_DHT,
+                        "empty interrupt event for bit #{}",
+                        i
+                    );
+                    duration_after = duration_before;
+                }
+            }
             let bit_duration = duration_after - duration_before;
             ticks[i] = bit_duration.as_micros() as u64;
         }
@@ -255,12 +380,6 @@ pub fn read_dht_data(
         valid_ticks_received = i;
     }
 
-    // output of tick timing to terminal for development purposes
-    // for k in 0..(valid_ticks_received + 1) {
-    //    println!("lvls[{}]={}, ticks[{}]={}", k, lvls[k], k, ticks[k]);
-    // }
-    // println!("**************************");
-
     match data_pin.clear_interrupt() {
         Ok(()) => {}
         Err(_) => {
@@ -272,108 +391,32 @@ pub fn read_dht_data(
         return Err(DhtError::Timeout);
     }
 
-    let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
-    let mut count_data_bits = 0;
-    for i in 0..(valid_ticks_received + 1) {
-        if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
-            continue;
-        }
-        if ticks[i] > DHT22_BIT_TIMING_LIMIT {
-            data_bits[i] = true; 
-        }
-        println!("data_bit_len[{}] = {} => {}",
-            count_data_bits, 
-            ticks[i], 
-            match data_bits[i] {
-                true => "TRUE",
-                false => "FALSE",
-            });
-        count_data_bits += 1;
-    }
+    // identify the data bits and store values in data_bits
+    let data_bits = calc_data_bits(ticks, valid_ticks_received);
 
-    // evaluate bit lengths and compute transmission values
-    let mut idx_bit = 0;
-    let mut idx_byte = 0;
-    let mut i: usize = 0;
-
-    while i < DHT22_TRANSMISSION_END_IDX {
-        // part 1: check level and if bit timing is within global interval
-        if (ticks[i] < DHT22_T_H0_MIN - 4 * DHT22_T_LATENCY)
-            || (ticks[i] > DHT22_T_H1_MAX + 4 * DHT22_T_LATENCY)
-        {
-            error!(
-                target: LOG_TARGET_DHT,
-                "bit timing is not within global interval (measured {}, limits are {}, {})",
-                ticks[i], DHT22_T_H0_MIN - 4 * DHT22_T_LATENCY, DHT22_T_H1_MAX + 4 * DHT22_T_LATENCY
-            );
-            return Err(DhtError::BitTimingNotWithinGlobalInterval);
-        }
-
-        // part 2: check separate intervals for low and high bit
-        if (ticks[i] >= DHT22_T_H0_MIN - 2 * DHT22_T_LATENCY)
-            && (ticks[i] <= DHT22_T_H0_MAX + 2 * DHT22_T_LATENCY)
-        {
-            byte_vals[idx_byte % DHT22_DATA_LEN] = byte_vals[idx_byte % DHT22_DATA_LEN] << 1;
-        } else {
-            if (ticks[i] >= DHT22_T_H1_MIN - 2 * DHT22_T_LATENCY)
-                && (ticks[i] <= DHT22_T_H1_MAX + 2 * DHT22_T_LATENCY)
-            {
-                byte_vals[idx_byte % DHT22_DATA_LEN] = byte_vals[idx_byte % DHT22_DATA_LEN] << 1;
-                byte_vals[idx_byte % DHT22_DATA_LEN] |= 1;
-            } else {
-                error!(
-                    target: LOG_TARGET_DHT,
-                    "timing not within specific interval for high value (measured {}, limits are {}, {})",
-                    ticks[i], DHT22_T_H1_MIN - 2 * DHT22_T_LATENCY, DHT22_T_H1_MAX + 2 * DHT22_T_LATENCY
-                );
-                return Err(DhtError::BitTimingNotWithinSpecificInterval);
-            }
-        }
-
-        if idx_bit >= 7 {
-            idx_bit = 0;
-            idx_byte += 1;
-        } else {
-            idx_bit += 1;
-        }
-
-        i += 1;
-    }
+    let byte_vals = calc_byte_array(data_bits);
 
     for i in 0..DHT22_DATA_LEN {
         println!("byte_vals[{}] = {}", i, byte_vals[i]);
     }
 
-    // transfer data into signal variables
-    let mut hum10: i32 = byte_vals[0].into();
-    hum10 = hum10 << 8;
-    hum10 += byte_vals[1] as i32;
-
-    let mut temp10: i32 = byte_vals[2].into();
-    temp10 = temp10 << 8;
-    temp10 += byte_vals[3] as i32;
-
-    println!("hum10={}, temp10={}", hum10, temp10);
-
-    // calculate and compare checksum
-    let mut checksum_intermediate: u16 =
-        byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
-    checksum_intermediate = checksum_intermediate & 0xFF;
-    let checksum_calculated: u8 = match ((checksum_intermediate << (16 - 8)) >> (16 - 8)).try_into()
-    {
+    // checksum calculation
+    let checksum = match calc_checksum(byte_vals) {
         Ok(c) => c,
-        Err(_) => return Err(DhtError::ChecksumCalculationError),
+        Err(e) => return e,
     };
 
-    let checksum_received: u8 = byte_vals[4].into();
-    if checksum_calculated != checksum_received {
-        error!(
-            target: LOG_TARGET_DHT,
-            "checksum error (calculated {}, received {})",
-            checksum_calculated, checksum_received
-        );
-        return Err(DhtError::ChecksumError);
-    }
+    // calculate humidity
+    let mut hum10: u32 = byte_vals[0].into();
+    hum10 = hum10 << 8;
+    hum10 += byte_vals[1] as u32;
+
+    // calculate temperature
+    let mut temp10: u32 = byte_vals[2].into();
+    temp10 = temp10 << 8;
+    temp10 += byte_vals[3] as u32;
+
+    println!("hum10={}, temp10={}", hum10, temp10);
 
     // range check for temperature
     if (temp10 < DHT22_MINVAL_TEMP10) || (temp10 > DHT22_MAXVAL_TEMP10) {

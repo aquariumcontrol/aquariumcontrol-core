@@ -26,7 +26,6 @@ mod controllino_actuate_simulator;
 mod data_injection;
 mod data_logger;
 mod device_relay_logic;
-#[cfg(target_os = "linux")]
 mod dht;
 
 mod feed;
@@ -37,6 +36,7 @@ mod heating;
 mod iir_filter;
 mod logger;
 
+mod i2c_interface;
 #[cfg(target_os = "linux")]
 mod messaging;
 mod mineral_injection;
@@ -58,9 +58,6 @@ mod tcp_communication;
 mod ventilation;
 mod version_information;
 mod water_injection;
-
-#[cfg(target_os = "linux")]
-mod i2c_interface;
 
 use log::{info, trace, warn};
 use std::sync::mpsc;

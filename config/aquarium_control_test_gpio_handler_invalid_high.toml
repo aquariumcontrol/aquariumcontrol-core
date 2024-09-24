@@ -125,6 +125,9 @@ sensor_init_pin_down_duration_micros = 800              # duration to keep pin d
 sensor_init_pin_up_duration_micros = 0                  # duration to keep pin up during start signal in microseconds 
 sensor_init_input_duration_micros = 0                   # duration for sensor to respond after sending start signal in microseconds
 timeout_duration_micros = 1000                          # maximum permissible duration for sensor to respond in microseconds
+sensor_reset_duration_millis = 500                      # duration in milliseconds the sensor is switched off before requesting transmission
+sensor_startup_duration_millis = 1000                   # duration in milliseconds the sensor is given to initialize
+sensor_pause_duration_millis = 500                      # duration in milliseconds the sensor is given to pause between transmissions
 
 [i2c_interface]
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph

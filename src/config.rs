@@ -18,8 +18,8 @@ use crate::data_logger::DataLoggerConfig;
 use crate::dht::DhtConfig;
 use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
-use crate::gpio_handler::I2cInterfaceConfig;
 use crate::heating::HeatingConfig;
+use crate::i2c_interface::I2cInterfaceConfig;
 
 #[cfg(target_os = "linux")]
 use crate::messaging::MessagingConfig;
