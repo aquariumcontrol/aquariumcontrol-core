@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::error;
+use log::{error, warn};
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
 use std::thread;
@@ -67,6 +67,9 @@ const DHT22_MAXVAL_HUM10: i32 = 1000;
 const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
 const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
 
+// distinguish between true and false
+const DHT22_BIT_TIMING_LIMIT: u64 = 50;
+
 #[derive(Debug, PartialEq)]
 pub enum DhtError {
     /// Vcc pin acquisition failed
@@ -83,9 +86,6 @@ pub enum DhtError {
 
     /// Could not clear interrupt
     CouldNotClearInterrupt,
-
-    // Could not measure interrupt duration
-    CouldNotMeasureInterruptDuration,
 
     // execution of interrupt failed
     InterruptFailed,
@@ -104,9 +104,6 @@ pub enum DhtError {
 
     // timeout during transmission of data
     Timeout,
-
-    // interrupt handling returned empty event
-    EmptyEvent,
 
     // temperature value is out of range
     TemperatureOutOfRange,
@@ -194,9 +191,8 @@ pub fn read_dht_data(
         }
     };
 
-    // duration for debouncing of interrupts
-    //    let debounce_duration_opt = Some(Duration::from_micros(1));
-
+    // interrupts shall be triggered for both falling and rising edge
+    // debouncing does not work, hence no (None) debouncing time provided
     match data_pin.set_interrupt(Trigger::Both, None) {
         Ok(()) => {}
         Err(_) => {
@@ -233,6 +229,11 @@ pub fn read_dht_data(
                 };
             }
             None => {
+                warn!(
+                    target: LOG_TARGET_DHT,
+                    "empty interrupt event for bit #{}",
+                    i
+                );
                 duration_after = duration_before;
             }
         }
@@ -255,10 +256,10 @@ pub fn read_dht_data(
     }
 
     // output of tick timing to terminal for development purposes
-    for k in 0..(valid_ticks_received + 1) {
-        println!("lvls[{}]={}, ticks[{}]={}", k, lvls[k], k, ticks[k]);
-    }
-    println!("**************************");
+    // for k in 0..(valid_ticks_received + 1) {
+    //    println!("lvls[{}]={}, ticks[{}]={}", k, lvls[k], k, ticks[k]);
+    // }
+    // println!("**************************");
 
     match data_pin.clear_interrupt() {
         Ok(()) => {}
@@ -271,13 +272,22 @@ pub fn read_dht_data(
         return Err(DhtError::Timeout);
     }
 
-    //let mut data_bit_len[0u64; DHT22_TRANSMISSION_END_IDX];
+    let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
     let mut count_data_bits = 0;
     for i in 0..(valid_ticks_received + 1) {
         if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
             continue;
         }
-        println!("data_bit_len[{}] = {}", count_data_bits, ticks[i]);
+        if ticks[i] > DHT22_BIT_TIMING_LIMIT {
+            data_bits[i] = true; 
+        }
+        println!("data_bit_len[{}] = {} => {}",
+            count_data_bits, 
+            ticks[i], 
+            match data_bits[i] {
+                true => "TRUE",
+                false => "FALSE",
+            });
         count_data_bits += 1;
     }
 
