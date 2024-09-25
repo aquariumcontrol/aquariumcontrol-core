@@ -150,299 +150,367 @@ pub enum DhtError {
     HumidityOutOfRange,
 }
 
-#[allow(unused)]
-pub fn calc_data_bits(
-    ticks: [u64; DHT22_TRANSMISSION_END_IDX],
-    valid_ticks_received: usize,
-) -> [bool; DHT22_TRANSMISSION_END_IDX] {
-    let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
-    let mut count_data_bits = 0;
-    for i in 0..(valid_ticks_received + 1) {
-        if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
-            continue;
-        }
-        if ticks[i] > DHT22_BIT_TIMING_LIMIT {
-            data_bits[i] = true;
-        }
-        println!(
-            "data_bit_len[{}] = {} => {}",
-            count_data_bits,
-            ticks[i],
-            match data_bits[i] {
-                true => "TRUE",
-                false => "FALSE",
-            }
-        );
-        count_data_bits += 1;
-    }
-    data_bits
-}
+pub struct Dht {
+    // configuration for communication with DHT sensor
+    config: DhtConfig,
 
-#[allow(unused)]
-pub fn calc_byte_array(data_bits: [bool; DHT22_BYTE4_STOP_IDX]) -> [u8; DHT22_DATA_LEN] {
-    let mut byte_vals = [0u8; DHT22_DATA_LEN];
-    // calculate byte values as preparation for checksum calculation
-    for idx_bit in DHT22_BYTE0_START_IDX..DHT22_BYTE0_STOP_IDX + 1 {
-        byte_vals[0] |= match data_bits[idx_bit] {
-            true => 1,
-            false => 0,
-        };
-        byte_vals[0] = byte_vals[0] << 1;
-    }
-    for idx_bit in DHT22_BYTE1_START_IDX..DHT22_BYTE1_STOP_IDX + 1 {
-        byte_vals[1] |= match data_bits[idx_bit] {
-            true => 1,
-            false => 0,
-        };
-        byte_vals[1] = byte_vals[1] << 1;
-    }
-    for idx_bit in DHT22_BYTE2_START_IDX..DHT22_BYTE2_STOP_IDX + 1 {
-        byte_vals[2] |= match data_bits[idx_bit] {
-            true => 1,
-            false => 0,
-        };
-        byte_vals[2] = byte_vals[2] << 1;
-    }
-    for idx_bit in DHT22_BYTE3_START_IDX..DHT22_BYTE3_STOP_IDX + 1 {
-        byte_vals[3] |= match data_bits[idx_bit] {
-            true => 1,
-            false => 0,
-        };
-        byte_vals[3] = byte_vals[3] << 1;
-    }
-    for idx_bit in DHT22_BYTE4_START_IDX..DHT22_BYTE4_STOP_IDX + 1 {
-        byte_vals[4] |= match data_bits[idx_bit] {
-            true => 1,
-            false => 0,
-        };
-        byte_vals[4] = byte_vals[4] << 1;
-    }
-    byte_vals
-}
-
-#[allow(unused)]
-pub fn calc_checksum(byte_vals: [u8; DHT22_DATA_LEN]) -> Result<u8, DhtError> {
-    // calculate and compare checksum
-    let mut checksum_intermediate: u16 =
-        byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
-    checksum_intermediate = checksum_intermediate & 0xFF;
-    let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
-        Ok(c) => c,
-        Err(_) => return Err(DhtError::ChecksumCalculationError),
-    };
-
-    let checksum_received: u8 = byte_vals[4].into();
-    if checksum_calculated != checksum_received {
-        error!(
-            target: LOG_TARGET_DHT,
-            "checksum error (calculated {}, received {})",
-            checksum_calculated, checksum_received
-        );
-        return Err(DhtError::ChecksumError);
-    }
-    Ok(checksum_calculated)
-}
-
-#[cfg(target_os = "linux")]
-/// read temperature and humity from DHT sensor
-/// # Arguments
-/// * `config` - configuration for DHT communicationn
-/// * `pin` - struct of type InputPin
-pub fn read_dht_data(
-    config: &DhtConfig,
-    gpio: &Gpio,
-    gpio_pin_number_dht22_vcc: u8,
-    gpio_pin_number_dht22_io: u8,
-    reset_sensor: bool,
-) -> Result<(f32, f32), DhtError> {
-    let mut ticks = [0u64; DHT22_TRANSMISSION_END_IDX];
-
-    // get pin for providing supply voltage to DHT sensor
+    // reference to GPIO interface
     #[cfg(target_os = "linux")]
-    let mut dht_vcc_pin = match gpio.get(gpio_pin_number_dht22_vcc) {
-        Ok(c) => c.into_output(),
-        Err(e) => {
+    gpio: &Gpio,
+}
+
+impl Dht {
+    /// Provides a struct of type Dht - Linux platform specific version
+    /// # Arguments    
+    /// * `config` - configuration for communication with DHT sensor
+    /// * `gpio` - reference to GPIO interface
+    #[cfg(target_os = "linux")]
+    pub fn new(config: DhtConfig, gpio: &Gpio) -> Dht {
+        Dht {
+            config: config,
+            gpio: gpio,
+        }
+    }
+    
+    /// Provides a struct of type Dht - non-Linux platform specific version (for testing)
+    /// # Arguments    
+    /// * `config` - configuration for communication with DHT sensor
+    #[cfg(target_os = "linux")]
+    pub fn new(config: DhtConfig) -> Dht {
+        Dht {
+            config: config,
+        }
+    }
+
+    #[allow(unused)]
+    pub fn calc_data_bits(
+        ticks: [u64; DHT22_TRANSMISSION_END_IDX],
+        valid_ticks_received: usize,
+    ) -> [bool; DHT22_TRANSMISSION_END_IDX] {
+        let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
+        let mut count_data_bits = 0;
+        for i in 0..(valid_ticks_received + 1) {
+            if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
+                continue;
+            }
+            if ticks[i] > DHT22_BIT_TIMING_LIMIT {
+                data_bits[i] = true;
+            }
+            println!(
+                "data_bit_len[{}] = {} => {}",
+                count_data_bits,
+                ticks[i],
+                match data_bits[i] {
+                    true => "TRUE",
+                    false => "FALSE",
+                }
+            );
+            count_data_bits += 1;
+        }
+        data_bits
+    }
+
+    #[allow(unused)]
+    pub fn calc_byte_array(data_bits: [bool; DHT22_BYTE4_STOP_IDX]) -> [u8; DHT22_DATA_LEN] {
+        let mut byte_vals = [0u8; DHT22_DATA_LEN];
+        // calculate byte values as preparation for checksum calculation
+        for idx_bit in DHT22_BYTE0_START_IDX..DHT22_BYTE0_STOP_IDX + 1 {
+            byte_vals[0] |= match data_bits[idx_bit] {
+                true => 1,
+                false => 0,
+            };
+            byte_vals[0] = byte_vals[0] << 1;
+        }
+        for idx_bit in DHT22_BYTE1_START_IDX..DHT22_BYTE1_STOP_IDX + 1 {
+            byte_vals[1] |= match data_bits[idx_bit] {
+                true => 1,
+                false => 0,
+            };
+            byte_vals[1] = byte_vals[1] << 1;
+        }
+        for idx_bit in DHT22_BYTE2_START_IDX..DHT22_BYTE2_STOP_IDX + 1 {
+            byte_vals[2] |= match data_bits[idx_bit] {
+                true => 1,
+                false => 0,
+            };
+            byte_vals[2] = byte_vals[2] << 1;
+        }
+        for idx_bit in DHT22_BYTE3_START_IDX..DHT22_BYTE3_STOP_IDX + 1 {
+            byte_vals[3] |= match data_bits[idx_bit] {
+                true => 1,
+                false => 0,
+            };
+            byte_vals[3] = byte_vals[3] << 1;
+        }
+        for idx_bit in DHT22_BYTE4_START_IDX..DHT22_BYTE4_STOP_IDX + 1 {
+            byte_vals[4] |= match data_bits[idx_bit] {
+                true => 1,
+                false => 0,
+            };
+            byte_vals[4] = byte_vals[4] << 1;
+        }
+        byte_vals
+    }
+
+    #[allow(unused)]
+    pub fn calc_checksum(byte_vals: [u8; DHT22_DATA_LEN]) -> Result<u8, DhtError> {
+        // calculate and compare checksum
+        let mut checksum_intermediate: u16 =
+            byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
+        checksum_intermediate = checksum_intermediate & 0xFF;
+        let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
+            Ok(c) => c,
+            Err(_) => return Err(DhtError::ChecksumCalculationError),
+        };
+
+        let checksum_received: u8 = byte_vals[4].into();
+        if checksum_calculated != checksum_received {
             error!(
                 target: LOG_TARGET_DHT,
-                "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
-                gpio_pin_number_dht22_vcc
+                "checksum error (calculated {}, received {})",
+                checksum_calculated, checksum_received
             );
-            return Err(DhtError::VccPinAcquisitionFailed);
+            return Err(DhtError::ChecksumError);
         }
-    };
+        Ok(checksum_calculated)
+    }
 
-    // scope to force drop of output pin
-    {
-        // get pin for triggering DHT sensor
-        #[cfg(target_os = "linux")]
-        let mut data_pin = match gpio.get(gpio_pin_number_dht22_io) {
+    #[cfg(target_os = "linux")]
+    /// read temperature and humity from DHT sensor
+    /// # Arguments
+    /// * `config` - configuration for DHT communicationn
+    /// * `pin` - struct of type InputPin
+    pub fn read(
+        &self,
+        reset_sensor: bool,
+    ) -> Result<(f32, f32), DhtError> {
+        let mut ticks = [0u64; DHT22_TRANSMISSION_END_IDX];
+
+        // get pin for providing supply voltage to DHT sensor
+        let mut dht_vcc_pin = match self.gpio.get(self.config.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
             Err(e) => {
                 error!(
                     target: LOG_TARGET_DHT,
-                    "failed to aquire pin {} for triggering DHT sensor ({e:?})",
-                    gpio_pin_number_dht22_io,
+                    "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
+                    self.config.gpio_pin_number_dht22_vcc
                 );
-                return Err(DhtError::DataPinOutputAcquisitionFailed);
+                return Err(DhtError::VccPinAcquisitionFailed);
             }
         };
 
-        // reset of DHT sensor
-        if reset_sensor {
-            dht_vcc_pin.set_low();
-            thread::sleep(Duration::from_millis(config.sensor_reset_duration_millis));
-            dht_vcc_pin.set_high();
-            thread::sleep(Duration::from_millis(config.sensor_startup_duration_millis));
-        // give sensor some time to wake up
-        } else {
-            thread::sleep(Duration::from_millis(sensor_pause_duration_millis)); // pause between transmissions
-        }
-
-        // send start signal
-        data_pin.write(Level::Low);
-        sleep(Duration::from_micros(
-            config.sensor_init_pin_down_duration_micros,
-        ));
-        data_pin.write(Level::High);
-        sleep(Duration::from_micros(
-            config.sensor_init_pin_up_duration_micros,
-        ));
-    }
-
-    // get pin for reading from DHT sensor
-    #[cfg(target_os = "linux")]
-    let mut data_pin = match gpio.get(gpio_pin_number_dht22_io) {
-        Ok(c) => c.into_input_pullup(),
-        Err(e) => {
-            error!(
-                "failed to aquire pin {} for reading from DHT sensor ({e:?})",
-                gpio_pin_number_dht22_io,
-            );
-            return Err(DhtError::DataPinInputAcquisitionFailed);
-        }
-    };
-
-    // interrupts shall be triggered for both falling and rising edge
-    // debouncing does not work, hence no (None) debouncing time provided
-    match data_pin.set_interrupt(Trigger::Both, None) {
-        Ok(()) => {}
-        Err(_) => {
-            return Err(DhtError::CouldNotSetInterrupt);
-        }
-    }
-
-    let timeout_duration = Duration::from_micros(config.timeout_duration_micros);
-
-    let mut timeout_occurred = false;
-    let mut valid_ticks_received: usize = 0;
-
-    let mut duration_before: Duration = Duration::from_micros(0); // initialization to avoid compiler error
-    let mut duration_after: Duration;
-
-    // observe level changes and record the timing
-    for i in 0..DHT22_TRANSMISSION_END_IDX {
-        // poll the interrupt
-        let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(DhtError::InterruptFailed);
-            }
-        };
-
-        if i == 0 {
-            // for the first bit timing, no start data is available
-            ticks[0] = 0;
-        } else {
-            // evaluate the recorded timestamp
-            match event_opt {
-                Some(event) => {
-                    duration_after = event.timestamp;
-                }
-                None => {
-                    warn!(
+        // scope to force drop of output pin
+        {
+            // get pin for triggering DHT sensor
+            let mut data_pin = match gpio.get(self.config.gpio_pin_number_dht22_io) {
+                Ok(c) => c.into_output(),
+                Err(e) => {
+                    error!(
                         target: LOG_TARGET_DHT,
-                        "empty interrupt event for bit #{}",
-                        i
+                        "failed to aquire pin {} for triggering DHT sensor ({e:?})",
+                        gpio_pin_number_dht22_io,
                     );
-                    duration_after = duration_before;
+                    return Err(DhtError::DataPinOutputAcquisitionFailed);
+                }
+            };
+
+            // reset of DHT sensor
+            if reset_sensor {
+                dht_vcc_pin.set_low();
+                thread::sleep(Duration::from_millis(self.config.sensor_reset_duration_millis));
+                dht_vcc_pin.set_high();
+                thread::sleep(Duration::from_millis(self.config.sensor_startup_duration_millis));
+            // give sensor some time to wake up
+            } else {
+                thread::sleep(Duration::from_millis(self.config.sensor_pause_duration_millis));
+                // pause between transmissions
+            }
+
+            // send start signal
+            data_pin.write(Level::Low);
+            sleep(Duration::from_micros(
+                self.config.sensor_init_pin_down_duration_micros,
+            ));
+            data_pin.write(Level::High);
+            sleep(Duration::from_micros(
+                self.config.sensor_init_pin_up_duration_micros,
+            ));
+        }
+
+        // get pin for reading from DHT sensor
+        let mut data_pin = match gpio.get(self.config.gpio_pin_number_dht22_io) {
+            Ok(c) => c.into_input_pullup(),
+            Err(e) => {
+                error!(
+                    "failed to aquire pin {} for reading from DHT sensor ({e:?})",
+                    self.config.gpio_pin_number_dht22_io,
+                );
+                return Err(DhtError::DataPinInputAcquisitionFailed);
+            }
+        };
+
+        // interrupts shall be triggered for both falling and rising edge
+        // debouncing does not work, hence no (None) debouncing time provided
+        match data_pin.set_interrupt(Trigger::Both, None) {
+            Ok(()) => {}
+            Err(_) => {
+                return Err(DhtError::CouldNotSetInterrupt);
+            }
+        }
+
+        let timeout_duration = Duration::from_micros(self.config.timeout_duration_micros);
+
+        let mut timeout_occurred = false;
+        let mut valid_ticks_received: usize = 0;
+
+        let mut duration_before: Duration = Duration::from_micros(0); // initialization to avoid compiler error
+        let mut duration_after: Duration;
+
+        // observe level changes and record the timing
+        for i in 0..DHT22_TRANSMISSION_END_IDX {
+            // poll the interrupt
+            let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
+                Ok(c) => c,
+                Err(_) => {
+                    return Err(DhtError::InterruptFailed);
+                }
+            };
+
+            if i == 0 {
+                // for the first bit timing, no start data is available
+                ticks[0] = 0;
+            } else {
+                // evaluate the recorded timestamp
+                match event_opt {
+                    Some(event) => {
+                        duration_after = event.timestamp;
+                    }
+                    None => {
+                        warn!(
+                            target: LOG_TARGET_DHT,
+                            "empty interrupt event for bit #{}",
+                            i
+                        );
+                        duration_after = duration_before;
+                    }
+                }
+                let bit_duration = duration_after - duration_before;
+                ticks[i] = bit_duration.as_micros() as u64;
+            }
+            duration_before = duration_after;
+
+            // abort measuring, if timeout occurred
+            if ticks[i] > config.timeout_duration_micros {
+                timeout_occurred = true;
+                break;
+            }
+            valid_ticks_received = i;
+        }
+
+        match data_pin.clear_interrupt() {
+            Ok(()) => {}
+            Err(_) => {
+                return Err(DhtError::CouldNotClearInterrupt);
+            }
+        }
+
+        if timeout_occurred {
+            return Err(DhtError::Timeout);
+        }
+
+        // identify the data bits and store values in data_bits
+        let data_bits = Self::calc_data_bits(ticks, valid_ticks_received);
+
+        let byte_vals = Self::calc_byte_array(data_bits);
+
+        for i in 0..DHT22_DATA_LEN {
+            println!("byte_vals[{}] = {}", i, byte_vals[i]);
+        }
+
+        // checksum calculation
+        let checksum = match Self::calc_checksum(byte_vals) {
+            Ok(c) => c,
+            Err(e) => return e,
+        };
+
+        // calculate humidity
+        let mut hum10: u32 = byte_vals[0].into();
+        hum10 = hum10 << 8;
+        hum10 += byte_vals[1] as u32;
+
+        // calculate temperature
+        let mut temp10: u32 = byte_vals[2].into();
+        temp10 = temp10 << 8;
+        temp10 += byte_vals[3] as u32;
+
+        println!("hum10={}, temp10={}", hum10, temp10);
+
+        // range check for temperature
+        if (temp10 < DHT22_MINVAL_TEMP10) || (temp10 > DHT22_MAXVAL_TEMP10) {
+            error!(
+                "temperature is out of range (measured {}, limits are {}, {})",
+                (temp10 / 10),
+                DHT22_MINVAL_TEMP10 / 10,
+                DHT22_MAXVAL_TEMP10 / 10
+            );
+            return Err(DhtError::TemperatureOutOfRange);
+        }
+
+        // range check for humidity
+        if (hum10 < DHT22_MINVAL_HUM10) || (hum10 > DHT22_MAXVAL_HUM10) {
+            error!(
+                "humidity is out of range (measured {}, limits are {}, {})",
+                (hum10 / 10),
+                DHT22_MINVAL_HUM10 / 10,
+                DHT22_MAXVAL_HUM10 / 10
+            );
+            return Err(DhtError::HumidityOutOfRange);
+        }
+
+        // calculate final values
+        let temperature: f32 = (temp10 / 10) as f32;
+        let humidity: f32 = (hum10 / 10) as f32;
+
+        Ok((temperature, humidity))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
+        // read one sample from DHT sensor to verify SW and HW are working ok
+        let mut measurement_successful = false;
+        let mut retry_counter = 0;
+
+        while !measurement_successful {
+            match self.read(retry_counter == 0) {
+                Ok((temperature, humidity)) => {
+                    info!(
+                        target: LOG_TARGET_GPIO_HANDLER,
+                        "read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
+                        temperature,
+                        humidity,
+                    );
+                    measurement_successful = true;
+                    return (temperature, humidity);
+                }
+                Err(e) => {
+                    if e == DhtError::Timeout {
+                        retry_counter += 1;
+                        if retry_counter > 3 {
+                            error!(
+                                target: LOG_TARGET_DHT,
+                                "failed to read from DHT sensor (after {} retries, {e:?}",
+                                retry_counter,
+                            );
+                        }
+                    } else {
+                        error!(
+                            LOG_TARGET_GPIO_HANDLER,
+                            "failed to read from DHT sensor ({e:?})",
+                        );
+                    }
+                    return Err(e);
                 }
             }
-            let bit_duration = duration_after - duration_before;
-            ticks[i] = bit_duration.as_micros() as u64;
-        }
-        duration_before = duration_after;
-
-        // abort measuring, if timeout occurred
-        if ticks[i] > config.timeout_duration_micros {
-            timeout_occurred = true;
-            break;
-        }
-        valid_ticks_received = i;
-    }
-
-    match data_pin.clear_interrupt() {
-        Ok(()) => {}
-        Err(_) => {
-            return Err(DhtError::CouldNotClearInterrupt);
         }
     }
-
-    if timeout_occurred {
-        return Err(DhtError::Timeout);
-    }
-
-    // identify the data bits and store values in data_bits
-    let data_bits = calc_data_bits(ticks, valid_ticks_received);
-
-    let byte_vals = calc_byte_array(data_bits);
-
-    for i in 0..DHT22_DATA_LEN {
-        println!("byte_vals[{}] = {}", i, byte_vals[i]);
-    }
-
-    // checksum calculation
-    let checksum = match calc_checksum(byte_vals) {
-        Ok(c) => c,
-        Err(e) => return e,
-    };
-
-    // calculate humidity
-    let mut hum10: u32 = byte_vals[0].into();
-    hum10 = hum10 << 8;
-    hum10 += byte_vals[1] as u32;
-
-    // calculate temperature
-    let mut temp10: u32 = byte_vals[2].into();
-    temp10 = temp10 << 8;
-    temp10 += byte_vals[3] as u32;
-
-    println!("hum10={}, temp10={}", hum10, temp10);
-
-    // range check for temperature
-    if (temp10 < DHT22_MINVAL_TEMP10) || (temp10 > DHT22_MAXVAL_TEMP10) {
-        error!(
-            "temperature is out of range (measured {}, limits are {}, {})",
-            (temp10 / 10),
-            DHT22_MINVAL_TEMP10 / 10,
-            DHT22_MAXVAL_TEMP10 / 10
-        );
-        return Err(DhtError::TemperatureOutOfRange);
-    }
-
-    // range check for humidity
-    if (hum10 < DHT22_MINVAL_HUM10) || (hum10 > DHT22_MAXVAL_HUM10) {
-        error!(
-            "humidity is out of range (measured {}, limits are {}, {})",
-            (hum10 / 10),
-            DHT22_MINVAL_HUM10 / 10,
-            DHT22_MAXVAL_HUM10 / 10
-        );
-        return Err(DhtError::HumidityOutOfRange);
-    }
-
-    // calculate final values
-    let temperature: f32 = (temp10 / 10) as f32;
-    let humidity: f32 = (hum10 / 10) as f32;
-
-    Ok((temperature, humidity))
 }

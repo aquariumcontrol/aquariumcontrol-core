@@ -95,6 +95,10 @@ pub struct GpioHandler {
     #[cfg(target_os = "linux")]
     i2c_interface: Option<I2cInterface>,
 
+    /// communicatoin with DHT sensor
+    #[cfg(target_os = "linux")]
+    dht: Option<Dht>,
+
     /// input pin for communication with tank level switch
     #[cfg(target_os = "linux")]
     input_pin_tank_level_switch: InputPin,
@@ -184,53 +188,16 @@ impl GpioHandler {
             }
         };
 
-        // read one sample from DHT sensor to verify SW and HW are working ok
-        let mut measurement_successful = false;
-        let mut retry_counter = 0;
-
-        #[cfg(target_os = "linux")]
-        while !measurement_successful {
-            match read_dht_data(
-                &dht_config,
-                &gpio,
-                config.gpio_pin_number_dht22_vcc,
-                config.gpio_pin_number_dht22_io,
-                retry_counter == 0,
-            ) {
-                Ok((temperature, humidity)) => {
-                    info!(
-                        target: LOG_TARGET_GPIO_HANDLER,
-                        "Initial read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
-                        temperature,
-                        humidity,
-                    );
-                    measurement_successful = true;
-                }
-                Err(e) => {
-                    if e == DhtError::Timeout {
-                        retry_counter += 1;
-                        if retry_counter > 3 {
-                            panic!(
-                                "{}: failed to read from DHT sensor (after {} retries, {e:?}",
-                                LOG_TARGET_GPIO_HANDLER, retry_counter,
-                            );
-                        }
-                    } else {
-                        panic!(
-                            "{}: failed to read from DHT sensor ({e:?})",
-                            LOG_TARGET_GPIO_HANDLER
-                        );
-                    }
-                }
-            }
-        }
-
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
             i2c_interface: match use_simulator {
                 true => None,
                 false => Some(I2cInterface::new(i2c_config)),
+            },
+            dht: match use_simulator {
+                true => None,
+                false => Some(Dht::new(dht_config)),
             },
             #[cfg(target_os = "linux")]
             input_pin_tank_level_switch: tank_level_pin.into_input_pullup(),
