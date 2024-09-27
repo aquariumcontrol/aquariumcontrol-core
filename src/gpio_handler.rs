@@ -197,7 +197,11 @@ impl GpioHandler {
             },
             dht: match use_simulator {
                 true => None,
-                false => Some(Dht::new(dht_config)),
+                false => Some(Dht::new(
+                    dht_config,
+                    config.gpio_pin_number_dht22_io,
+                    config.gpio_pin_number_dht22_vcc,
+                )),
             },
             #[cfg(target_os = "linux")]
             input_pin_tank_level_switch: tank_level_pin.into_input_pullup(),

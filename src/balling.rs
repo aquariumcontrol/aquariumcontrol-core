@@ -784,8 +784,8 @@ pub mod tests {
 
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
-        let (tx_balling_to_controllino, _) = mpsc::channel();
-        let (_, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
+        let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();

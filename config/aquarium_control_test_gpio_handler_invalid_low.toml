@@ -121,10 +121,13 @@ gpio_pin_number_dht22_io = 11                           # GPIO pin number where 
 gpio_pin_number_dht22_vcc = 17                          # GPIO pin number for power supply of DHT sensor
 
 [dht]
-sensor_init_pin_down_duration_micros = 800              # duration to keep pin down during start signal in microseconds
-sensor_init_pin_up_duration_micros = 0                  # duration to keep pin up during start signal in microseconds 
-sensor_init_input_duration_micros = 0                   # duration for sensor to respond after sending start signal in microseconds
-timeout_duration_micros = 1000                          # maximum permissible duration for sensor to respond in microseconds
+sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
+sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
+sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds
+sensor_init_pin_down_duration_micros = 2000             # duration to keep pin down during start signal in microseconds
+sensor_init_pin_up_duration_micros = 30			        # duration to keep pin up during start signal in microseconds 
+sensor_init_input_duration_micros = 0			        # duration for sensor to respond after sending start signal in microseconds
+timeout_duration_micros = 10000				            # maximum permissible duration for sensor to respond in microseconds
 
 [i2c_interface]
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph

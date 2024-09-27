@@ -949,7 +949,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
-        let (_, rx_ventilation_from_messaging) = mpsc::channel();
+        let (_tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
 
         scope(|scope| {
             // thread for schedule check

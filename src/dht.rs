@@ -50,63 +50,65 @@ pub struct DhtConfig {
     pub sensor_pause_duration_millis: u64,
 }
 
-#[allow(unused)]
-const DHT22_DATA_LEN: usize = 5;
-#[allow(unused)]
-const DHT22_BYTE0_START_IDX: usize = 1;
-#[allow(unused)]
-const DHT22_BYTE0_STOP_IDX: usize = 8;
-#[allow(unused)]
-const DHT22_BYTE1_START_IDX: usize = 9;
-#[allow(unused)]
-const DHT22_BYTE1_STOP_IDX: usize = 16;
-#[allow(unused)]
-const DHT22_BYTE2_START_IDX: usize = 17;
-#[allow(unused)]
-const DHT22_BYTE2_STOP_IDX: usize = 23;
-#[allow(unused)]
-const DHT22_BYTE3_START_IDX: usize = 24;
-#[allow(unused)]
-const DHT22_BYTE3_STOP_IDX: usize = 31;
-#[allow(unused)]
-const DHT22_BYTE4_START_IDX: usize = 32;
-#[allow(unused)]
-const DHT22_BYTE4_STOP_IDX: usize = 39;
+pub mod dht22_constants {
+    #[allow(unused)]
+    pub const DHT22_DATA_LEN: usize = 5;
+    #[allow(unused)]
+    pub const DHT22_BYTE0_START_IDX: usize = 1;
+    #[allow(unused)]
+    pub const DHT22_BYTE0_STOP_IDX: usize = 8;
+    #[allow(unused)]
+    pub const DHT22_BYTE1_START_IDX: usize = 9;
+    #[allow(unused)]
+    pub const DHT22_BYTE1_STOP_IDX: usize = 16;
+    #[allow(unused)]
+    pub const DHT22_BYTE2_START_IDX: usize = 17;
+    #[allow(unused)]
+    pub const DHT22_BYTE2_STOP_IDX: usize = 23;
+    #[allow(unused)]
+    pub const DHT22_BYTE3_START_IDX: usize = 24;
+    #[allow(unused)]
+    pub const DHT22_BYTE3_STOP_IDX: usize = 31;
+    #[allow(unused)]
+    pub const DHT22_BYTE4_START_IDX: usize = 32;
+    #[allow(unused)]
+    pub const DHT22_BYTE4_STOP_IDX: usize = 39;
 
-#[allow(unused)]
-const DHT22_TRANSMISSION_END_IDX: usize = 86;
+    #[allow(unused)]
+    pub const DHT22_TRANSMISSION_END_IDX: usize = 86;
 
-#[allow(unused)]
-const DHT22_HUMIDITY_START_IDX: usize = 1;
-#[allow(unused)]
-const DHT22_HUMIDITY_STOP_IDX: usize = 16;
+    #[allow(unused)]
+    pub const DHT22_HUMIDITY_START_IDX: usize = 1;
+    #[allow(unused)]
+    pub const DHT22_HUMIDITY_STOP_IDX: usize = 16;
 
-#[allow(unused)]
-const DHT22_TEMPERATURE_START_IDX: usize = 1;
-#[allow(unused)]
-const DHT22_TEMPERATURE_STOP_IDX: usize = 16;
+    #[allow(unused)]
+    pub const DHT22_TEMPERATURE_START_IDX: usize = 1;
+    #[allow(unused)]
+    pub const DHT22_TEMPERATURE_STOP_IDX: usize = 16;
 
-// minimum and maximum value for temperature10 signal range check
-#[allow(unused)]
-const DHT22_MINVAL_TEMP10: i32 = -500;
-#[allow(unused)]
-const DHT22_MAXVAL_TEMP10: i32 = 500;
+    // minimum and maximum value for temperature10 signal range check
+    #[allow(unused)]
+    pub const DHT22_MINVAL_TEMP10: u32 = 0;
+    #[allow(unused)]
+    pub const DHT22_MAXVAL_TEMP10: u32 = 500;
 
-// minimum and maximum value for temperature10 signal range check
-#[cfg(target_os = "linux")]
-const DHT22_MINVAL_HUM10: i32 = -10;
-#[cfg(target_os = "linux")]
-const DHT22_MAXVAL_HUM10: i32 = 1000;
+    // minimum and maximum value for temperature10 signal range check
+    #[allow(unused)]
+    pub const DHT22_MINVAL_HUM10: u32 = 0;
+    #[allow(unused)]
+    pub const DHT22_MAXVAL_HUM10: u32 = 1000;
 
-// timing of (neutral) low phase between data bit
-#[allow(unused)]
-const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
-#[allow(unused)]
-const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
+    // timing of (neutral) low phase between data bit
+    #[allow(unused)]
+    pub const DHT22_NEUTRAL_LEN_MIN: u64 = 30;
+    #[allow(unused)]
+    pub const DHT22_NEUTRAL_LEN_MAX: u64 = 60;
 
-// distinguish between true and false
-#[allow(unused)]
-const DHT22_BIT_TIMING_LIMIT: u64 = 50;
+    // distinguish between true and false
+    #[allow(unused)]
+    pub const DHT22_BIT_TIMING_LIMIT: u64 = 50;
+}
 
 #[derive(Debug, PartialEq)]
 pub enum DhtError {
@@ -141,6 +143,7 @@ pub enum DhtError {
     ChecksumError,
 
     // timeout during transmission of data
+    #[allow(unused)]
     Timeout,
 
     // temperature value is out of range
@@ -152,11 +155,20 @@ pub enum DhtError {
 
 pub struct Dht {
     // configuration for communication with DHT sensor
+    #[allow(unused)]
     config: DhtConfig,
 
     // reference to GPIO interface
     #[cfg(target_os = "linux")]
     gpio: &Gpio,
+
+    /// GPIO pin number for communication with DHT22 sensor
+    #[allow(unused)]
+    gpio_pin_number_dht22_io: u8,
+
+    /// GPIO pin number for providing power to DHT22 sensor
+    #[allow(unused)]
+    gpio_pin_number_dht22_vcc: u8,
 }
 
 impl Dht {
@@ -165,35 +177,48 @@ impl Dht {
     /// * `config` - configuration for communication with DHT sensor
     /// * `gpio` - reference to GPIO interface
     #[cfg(target_os = "linux")]
-    pub fn new(config: DhtConfig, gpio: &Gpio) -> Dht {
+    pub fn new(
+        config: DhtConfig,
+        gpio: &Gpio,
+        gpio_pin_number_dht22_io: u8,
+        gpio_pin_number_dht22_vcc: u8,
+    ) -> Dht {
         Dht {
             config: config,
             gpio: gpio,
         }
     }
-    
+
     /// Provides a struct of type Dht - non-Linux platform specific version (for testing)
     /// # Arguments    
     /// * `config` - configuration for communication with DHT sensor
     #[cfg(target_os = "linux")]
-    pub fn new(config: DhtConfig) -> Dht {
-        Dht {
-            config: config,
-        }
+    pub fn new(
+        config: DhtConfig,
+        gpio_pin_number_dht22_io: u8,
+        gpio_pin_number_dht22_vcc: u8,
+    ) -> Dht {
+        Dht { config: config }
     }
 
+    /// calculates bit array from timing sequence of signal change
+    /// # Arguments
+    /// * `ticks` - timing information stored in array
+    /// * `valid_ticks_received` - number valid (without timeout) interrupt events received
     #[allow(unused)]
     pub fn calc_data_bits(
-        ticks: [u64; DHT22_TRANSMISSION_END_IDX],
+        ticks: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX],
         valid_ticks_received: usize,
-    ) -> [bool; DHT22_TRANSMISSION_END_IDX] {
-        let mut data_bits = [false; DHT22_TRANSMISSION_END_IDX];
+    ) -> [bool; dht22_constants::DHT22_TRANSMISSION_END_IDX] {
+        let mut data_bits = [false; dht22_constants::DHT22_TRANSMISSION_END_IDX];
         let mut count_data_bits = 0;
         for i in 0..(valid_ticks_received + 1) {
-            if ticks[i] > DHT22_NEUTRAL_LEN_MIN && ticks[i] < DHT22_NEUTRAL_LEN_MAX {
+            if ticks[i] > dht22_constants::DHT22_NEUTRAL_LEN_MIN
+                && ticks[i] < dht22_constants::DHT22_NEUTRAL_LEN_MAX
+            {
                 continue;
             }
-            if ticks[i] > DHT22_BIT_TIMING_LIMIT {
+            if ticks[i] > dht22_constants::DHT22_BIT_TIMING_LIMIT {
                 data_bits[i] = true;
             }
             println!(
@@ -211,49 +236,76 @@ impl Dht {
     }
 
     #[allow(unused)]
-    pub fn calc_byte_array(data_bits: [bool; DHT22_BYTE4_STOP_IDX]) -> [u8; DHT22_DATA_LEN] {
-        let mut byte_vals = [0u8; DHT22_DATA_LEN];
-        // calculate byte values as preparation for checksum calculation
-        for idx_bit in DHT22_BYTE0_START_IDX..DHT22_BYTE0_STOP_IDX + 1 {
-            byte_vals[0] |= match data_bits[idx_bit] {
+    /// arranges bit information of one byte
+    /// # Arguments
+    /// * `data_bits` - array with bit data received from sensor
+    pub fn calc_byte(
+        data_bits: [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1],
+        start_index: usize,
+        stop_index: usize,
+    ) -> u8 {
+        let mut byte_val: u8 = 0;
+        for idx_bit in start_index..stop_index {
+            byte_val |= match data_bits[idx_bit] {
                 true => 1,
                 false => 0,
             };
-            byte_vals[0] = byte_vals[0] << 1;
+            byte_val = byte_val << 1;
         }
-        for idx_bit in DHT22_BYTE1_START_IDX..DHT22_BYTE1_STOP_IDX + 1 {
-            byte_vals[1] |= match data_bits[idx_bit] {
-                true => 1,
-                false => 0,
-            };
-            byte_vals[1] = byte_vals[1] << 1;
-        }
-        for idx_bit in DHT22_BYTE2_START_IDX..DHT22_BYTE2_STOP_IDX + 1 {
-            byte_vals[2] |= match data_bits[idx_bit] {
-                true => 1,
-                false => 0,
-            };
-            byte_vals[2] = byte_vals[2] << 1;
-        }
-        for idx_bit in DHT22_BYTE3_START_IDX..DHT22_BYTE3_STOP_IDX + 1 {
-            byte_vals[3] |= match data_bits[idx_bit] {
-                true => 1,
-                false => 0,
-            };
-            byte_vals[3] = byte_vals[3] << 1;
-        }
-        for idx_bit in DHT22_BYTE4_START_IDX..DHT22_BYTE4_STOP_IDX + 1 {
-            byte_vals[4] |= match data_bits[idx_bit] {
-                true => 1,
-                false => 0,
-            };
-            byte_vals[4] = byte_vals[4] << 1;
-        }
+        byte_val |= match data_bits[stop_index] {
+            true => 1,
+            false => 0,
+        };
+        byte_val
+    }
+
+    #[allow(unused)]
+    /// arranges bit information received from sensor into a byte array
+    /// # Arguments
+    /// * `data_bits` - array with bit data received from sensor
+    pub fn calc_byte_array(
+        data_bits: [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1],
+    ) -> [u8; dht22_constants::DHT22_DATA_LEN] {
+        let mut byte_vals = [0u8; dht22_constants::DHT22_DATA_LEN];
+
+        byte_vals[0] = Self::calc_byte(
+            data_bits,
+            dht22_constants::DHT22_BYTE0_START_IDX,
+            dht22_constants::DHT22_BYTE0_STOP_IDX,
+        );
+
+        byte_vals[1] = Self::calc_byte(
+            data_bits,
+            dht22_constants::DHT22_BYTE1_START_IDX,
+            dht22_constants::DHT22_BYTE1_STOP_IDX,
+        );
+
+        byte_vals[2] = Self::calc_byte(
+            data_bits,
+            dht22_constants::DHT22_BYTE2_START_IDX,
+            dht22_constants::DHT22_BYTE2_STOP_IDX,
+        );
+
+        byte_vals[3] = Self::calc_byte(
+            data_bits,
+            dht22_constants::DHT22_BYTE3_START_IDX,
+            dht22_constants::DHT22_BYTE3_STOP_IDX,
+        );
+
+        byte_vals[4] = Self::calc_byte(
+            data_bits,
+            dht22_constants::DHT22_BYTE4_START_IDX,
+            dht22_constants::DHT22_BYTE4_STOP_IDX,
+        );
+
         byte_vals
     }
 
     #[allow(unused)]
-    pub fn calc_checksum(byte_vals: [u8; DHT22_DATA_LEN]) -> Result<u8, DhtError> {
+    /// calculates checksum from byte array
+    /// # Arguments
+    /// * `byte_vals` - array with data received from sensor
+    pub fn calc_checksum(byte_vals: [u8; dht22_constants::DHT22_DATA_LEN]) -> Result<u8, DhtError> {
         // calculate and compare checksum
         let mut checksum_intermediate: u16 =
             byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
@@ -275,19 +327,67 @@ impl Dht {
         Ok(checksum_calculated)
     }
 
-    #[cfg(target_os = "linux")]
-    /// read temperature and humity from DHT sensor
+    #[allow(unused)]
+    /// calculates temperature and humidity values from byte array
     /// # Arguments
-    /// * `config` - configuration for DHT communicationn
-    /// * `pin` - struct of type InputPin
-    pub fn read(
-        &self,
-        reset_sensor: bool,
+    /// * `byte_vals` - array with data received from sensor
+    pub fn calc_signals(
+        byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
     ) -> Result<(f32, f32), DhtError> {
-        let mut ticks = [0u64; DHT22_TRANSMISSION_END_IDX];
+        // calculate integer value for humidity * 10
+        let mut hum10: u32 = byte_vals[0].into();
+        hum10 = hum10 << 8;
+        hum10 += byte_vals[1] as u32;
+
+        // calculate integer value for temperature * 10
+        let mut temp10: u32 = byte_vals[2].into();
+        temp10 = temp10 << 8;
+        temp10 += byte_vals[3] as u32;
+
+        println!("hum10={}, temp10={}", hum10, temp10);
+
+        // range check for temperature
+        if (temp10 < dht22_constants::DHT22_MINVAL_TEMP10)
+            || (temp10 > dht22_constants::DHT22_MAXVAL_TEMP10)
+        {
+            error!(
+                "temperature is out of range (measured {}, limits are {}, {})",
+                (temp10 / 10),
+                dht22_constants::DHT22_MINVAL_TEMP10 / 10,
+                dht22_constants::DHT22_MAXVAL_TEMP10 / 10
+            );
+            return Err(DhtError::TemperatureOutOfRange);
+        }
+
+        // range check for humidity
+        if (hum10 < dht22_constants::DHT22_MINVAL_HUM10)
+            || (hum10 > dht22_constants::DHT22_MAXVAL_HUM10)
+        {
+            error!(
+                "humidity is out of range (measured {}, limits are {}, {})",
+                (hum10 / 10),
+                dht22_constants::DHT22_MINVAL_HUM10 / 10,
+                dht22_constants::DHT22_MAXVAL_HUM10 / 10
+            );
+            return Err(DhtError::HumidityOutOfRange);
+        }
+
+        // calculate final values
+        let temperature: f32 = (temp10 as f32) / 10.0;
+        let humidity: f32 = (hum10 as f32) / 10.0;
+
+        Ok((temperature, humidity))
+    }
+
+    #[cfg(target_os = "linux")]
+    /// reads temperature and humity from DHT sensor
+    /// # Arguments
+    /// * `reset_sensor` - flag to indicate if power supply to sensor shall be interrupted before measuring
+    pub fn read(&self, reset_sensor: bool) -> Result<(f32, f32), DhtError> {
+        let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
         // get pin for providing supply voltage to DHT sensor
-        let mut dht_vcc_pin = match self.gpio.get(self.config.gpio_pin_number_dht22_vcc) {
+        let mut dht_vcc_pin = match self.gpio.get(self.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
             Err(e) => {
                 error!(
@@ -302,7 +402,7 @@ impl Dht {
         // scope to force drop of output pin
         {
             // get pin for triggering DHT sensor
-            let mut data_pin = match gpio.get(self.config.gpio_pin_number_dht22_io) {
+            let mut data_pin = match gpio.get(self.gpio_pin_number_dht22_io) {
                 Ok(c) => c.into_output(),
                 Err(e) => {
                     error!(
@@ -317,12 +417,18 @@ impl Dht {
             // reset of DHT sensor
             if reset_sensor {
                 dht_vcc_pin.set_low();
-                thread::sleep(Duration::from_millis(self.config.sensor_reset_duration_millis));
+                thread::sleep(Duration::from_millis(
+                    self.config.sensor_reset_duration_millis,
+                ));
                 dht_vcc_pin.set_high();
-                thread::sleep(Duration::from_millis(self.config.sensor_startup_duration_millis));
+                thread::sleep(Duration::from_millis(
+                    self.config.sensor_startup_duration_millis,
+                ));
             // give sensor some time to wake up
             } else {
-                thread::sleep(Duration::from_millis(self.config.sensor_pause_duration_millis));
+                thread::sleep(Duration::from_millis(
+                    self.config.sensor_pause_duration_millis,
+                ));
                 // pause between transmissions
             }
 
@@ -338,7 +444,7 @@ impl Dht {
         }
 
         // get pin for reading from DHT sensor
-        let mut data_pin = match gpio.get(self.config.gpio_pin_number_dht22_io) {
+        let mut data_pin = match gpio.get(self.gpio_pin_number_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 error!(
@@ -367,7 +473,7 @@ impl Dht {
         let mut duration_after: Duration;
 
         // observe level changes and record the timing
-        for i in 0..DHT22_TRANSMISSION_END_IDX {
+        for i in 0..DHT22_constants::DHT22_TRANSMISSION_END_IDX {
             // poll the interrupt
             let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
                 Ok(c) => c,
@@ -423,7 +529,7 @@ impl Dht {
 
         let byte_vals = Self::calc_byte_array(data_bits);
 
-        for i in 0..DHT22_DATA_LEN {
+        for i in 0..DHT22_constants::DHT22_DATA_LEN {
             println!("byte_vals[{}] = {}", i, byte_vals[i]);
         }
 
@@ -432,46 +538,6 @@ impl Dht {
             Ok(c) => c,
             Err(e) => return e,
         };
-
-        // calculate humidity
-        let mut hum10: u32 = byte_vals[0].into();
-        hum10 = hum10 << 8;
-        hum10 += byte_vals[1] as u32;
-
-        // calculate temperature
-        let mut temp10: u32 = byte_vals[2].into();
-        temp10 = temp10 << 8;
-        temp10 += byte_vals[3] as u32;
-
-        println!("hum10={}, temp10={}", hum10, temp10);
-
-        // range check for temperature
-        if (temp10 < DHT22_MINVAL_TEMP10) || (temp10 > DHT22_MAXVAL_TEMP10) {
-            error!(
-                "temperature is out of range (measured {}, limits are {}, {})",
-                (temp10 / 10),
-                DHT22_MINVAL_TEMP10 / 10,
-                DHT22_MAXVAL_TEMP10 / 10
-            );
-            return Err(DhtError::TemperatureOutOfRange);
-        }
-
-        // range check for humidity
-        if (hum10 < DHT22_MINVAL_HUM10) || (hum10 > DHT22_MAXVAL_HUM10) {
-            error!(
-                "humidity is out of range (measured {}, limits are {}, {})",
-                (hum10 / 10),
-                DHT22_MINVAL_HUM10 / 10,
-                DHT22_MAXVAL_HUM10 / 10
-            );
-            return Err(DhtError::HumidityOutOfRange);
-        }
-
-        // calculate final values
-        let temperature: f32 = (temp10 / 10) as f32;
-        let humidity: f32 = (hum10 / 10) as f32;
-
-        Ok((temperature, humidity))
     }
 
     #[cfg(target_os = "linux")]
@@ -504,7 +570,7 @@ impl Dht {
                         }
                     } else {
                         error!(
-                            LOG_TARGET_GPIO_HANDLER,
+                            LOG_TARGET_GPIO_HANDLER,kl
                             "failed to read from DHT sensor ({e:?})",
                         );
                     }
@@ -512,5 +578,145 @@ impl Dht {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use assert_float_eq::*;
+
+    use crate::dht::dht22_constants;
+    use crate::dht::Dht;
+    use crate::dht::DhtError;
+    use crate::logger::setup_logger;
+
+    #[cfg(target_os = "linux")]
+    use crate::config::read_config_file;
+    #[cfg(target_os = "linux")]
+    use crate::config::ConfigData;
+    #[cfg(target_os = "linux")]
+    use crate::gpio::Gpio;
+
+    #[test]
+    pub fn test_dht_calc_byte_array() {
+        let stimuli: [bool; 40] = [
+            false, // initial interrupt - to be ignored
+            false, false, false, false, false, false, true, false, // Byte 0
+            true, true, false, false, true, true, false, true, // Byte 1
+            false, false, false, false, false, false, false, // Byte 2 - 7 bits only
+            true, true, true, true, false, true, false, true, // Byte 3
+            true, true, false, false, false, true, false, false, // Byte 4
+        ];
+        for i in 0..40 {
+            println!("stimuli[{}]={}", i, stimuli[i]);
+        }
+
+        let reference: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
+
+        let result = Dht::calc_byte_array(stimuli);
+
+        for i in 0..dht22_constants::DHT22_DATA_LEN {
+            println!(
+                "reference[{}]={} result[{}]={}",
+                i, reference[i], i, result[i]
+            );
+        }
+
+        assert!(reference.iter().eq(result.iter()));
+    }
+
+    #[test]
+    pub fn test_dht_calc_checksum_valid() {
+        setup_logger();
+
+        let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
+
+        let result = Dht::calc_checksum(stimuli);
+
+        assert_eq!(result, Ok(196));
+    }
+
+    #[test]
+    pub fn test_dht_calc_checksum_error() {
+        setup_logger();
+
+        let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [255, 255, 255, 255, 10];
+
+        let result = Dht::calc_checksum(stimuli);
+
+        assert_eq!(result, Err(DhtError::ChecksumError));
+    }
+
+    #[test]
+    pub fn test_dht_calc_signals_valid() {
+        setup_logger();
+
+        let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
+
+        let (temperature, humidity) = match Dht::calc_signals(stimuli) {
+            Ok((c, d)) => (c, d),
+            Err(e) => {
+                panic!("{e:?}");
+            }
+        };
+
+        println!("temperature={}, humidity={}", temperature, humidity);
+        assert_float_absolute_eq!(temperature, 24.5, 0.001);
+        assert_float_absolute_eq!(humidity, 71.7, 0.001);
+    }
+
+    #[test]
+    pub fn test_dht_calc_signals_humidity_too_high() {
+        setup_logger();
+
+        let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [4, 205, 0, 245, 198];
+
+        assert_eq!(
+            Dht::calc_signals(stimuli),
+            Err(DhtError::HumidityOutOfRange)
+        );
+    }
+
+    #[test]
+    pub fn test_dht_calc_signals_temperature_too_high() {
+        setup_logger();
+
+        let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 1, 245, 197];
+
+        assert_eq!(
+            Dht::calc_signals(stimuli),
+            Err(DhtError::TemperatureOutOfRange)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    pub fn test_dht_read() {
+        setup_logger();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
+
+        // open interface to GPIO library
+        let gpio = match Gpio::new() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "{}: could not open interface to GPIO ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER,
+                );
+            }
+        };
+
+        let dht = Dht::new(config.dht, gpio);
+
+        let (temperature, humidity) = match dht.get_data() {
+            Ok((c, d)) => (c, d),
+            Err(e) => {
+                panic!("{e:?}");
+            }
+        };
+
+        println!("temperature={}, humidity={}", temperature, humidity);
     }
 }

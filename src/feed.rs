@@ -426,7 +426,7 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (_, rx_feed_from_messaging) = mpsc::channel();
+        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
