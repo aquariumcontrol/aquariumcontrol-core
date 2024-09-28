@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 
 #[cfg(target_os = "linux")]
-use log::warn;
+use log::{warn, info};
 #[cfg(target_os = "linux")]
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
@@ -136,6 +136,10 @@ pub enum DhtError {
     #[cfg(target_os = "linux")]
     InterruptFailed,
 
+    // transmission yields wrong number of valid bits
+    #[cfg(target_os = "linux")]
+    WrongNumberOfValidTicks,
+
     // error occurred during calculation of checksum
     ChecksumCalculationError,
 
@@ -160,7 +164,7 @@ pub struct Dht {
 
     // reference to GPIO interface
     #[cfg(target_os = "linux")]
-    gpio: &Gpio,
+    gpio: Gpio,
 
     /// GPIO pin number for communication with DHT22 sensor
     #[allow(unused)]
@@ -179,26 +183,16 @@ impl Dht {
     #[cfg(target_os = "linux")]
     pub fn new(
         config: DhtConfig,
-        gpio: &Gpio,
+        gpio: Gpio,
         gpio_pin_number_dht22_io: u8,
         gpio_pin_number_dht22_vcc: u8,
     ) -> Dht {
         Dht {
             config: config,
             gpio: gpio,
+            gpio_pin_number_dht22_io: gpio_pin_number_dht22_io,
+            gpio_pin_number_dht22_vcc: gpio_pin_number_dht22_vcc,
         }
-    }
-
-    /// Provides a struct of type Dht - non-Linux platform specific version (for testing)
-    /// # Arguments    
-    /// * `config` - configuration for communication with DHT sensor
-    #[cfg(target_os = "linux")]
-    pub fn new(
-        config: DhtConfig,
-        gpio_pin_number_dht22_io: u8,
-        gpio_pin_number_dht22_vcc: u8,
-    ) -> Dht {
-        Dht { config: config }
     }
 
     /// calculates bit array from timing sequence of signal change
@@ -209,8 +203,8 @@ impl Dht {
     pub fn calc_data_bits(
         ticks: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX],
         valid_ticks_received: usize,
-    ) -> [bool; dht22_constants::DHT22_TRANSMISSION_END_IDX] {
-        let mut data_bits = [false; dht22_constants::DHT22_TRANSMISSION_END_IDX];
+    ) -> [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1] {
+        let mut data_bits = [false; dht22_constants::DHT22_BYTE4_STOP_IDX + 1];
         let mut count_data_bits = 0;
         for i in 0..(valid_ticks_received + 1) {
             if ticks[i] > dht22_constants::DHT22_NEUTRAL_LEN_MIN
@@ -393,7 +387,7 @@ impl Dht {
                 error!(
                     target: LOG_TARGET_DHT,
                     "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
-                    self.config.gpio_pin_number_dht22_vcc
+                    self.gpio_pin_number_dht22_vcc
                 );
                 return Err(DhtError::VccPinAcquisitionFailed);
             }
@@ -402,13 +396,13 @@ impl Dht {
         // scope to force drop of output pin
         {
             // get pin for triggering DHT sensor
-            let mut data_pin = match gpio.get(self.gpio_pin_number_dht22_io) {
+            let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {
                 Ok(c) => c.into_output(),
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_DHT,
                         "failed to aquire pin {} for triggering DHT sensor ({e:?})",
-                        gpio_pin_number_dht22_io,
+                        self.gpio_pin_number_dht22_io,
                     );
                     return Err(DhtError::DataPinOutputAcquisitionFailed);
                 }
@@ -444,12 +438,12 @@ impl Dht {
         }
 
         // get pin for reading from DHT sensor
-        let mut data_pin = match gpio.get(self.gpio_pin_number_dht22_io) {
+        let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 error!(
                     "failed to aquire pin {} for reading from DHT sensor ({e:?})",
-                    self.config.gpio_pin_number_dht22_io,
+                    self.gpio_pin_number_dht22_io,
                 );
                 return Err(DhtError::DataPinInputAcquisitionFailed);
             }
@@ -469,11 +463,12 @@ impl Dht {
         let mut timeout_occurred = false;
         let mut valid_ticks_received: usize = 0;
 
-        let mut duration_before: Duration = Duration::from_micros(0); // initialization to avoid compiler error
-        let mut duration_after: Duration;
+        // initialization to avoid compiler error
+        let mut duration_before: Duration = Duration::from_micros(0);
+        let mut duration_after: Duration = Duration::from_micros(0);
 
         // observe level changes and record the timing
-        for i in 0..DHT22_constants::DHT22_TRANSMISSION_END_IDX {
+        for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
             // poll the interrupt
             let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
                 Ok(c) => c,
@@ -506,7 +501,7 @@ impl Dht {
             duration_before = duration_after;
 
             // abort measuring, if timeout occurred
-            if ticks[i] > config.timeout_duration_micros {
+            if ticks[i] > self.config.timeout_duration_micros {
                 timeout_occurred = true;
                 break;
             }
@@ -524,20 +519,27 @@ impl Dht {
             return Err(DhtError::Timeout);
         }
 
+        if valid_ticks_received != dht22_constants::DHT22_BYTE4_STOP_IDX {
+            return Err(DhtError::WrongNumberOfValidTicks);
+        }
+
         // identify the data bits and store values in data_bits
         let data_bits = Self::calc_data_bits(ticks, valid_ticks_received);
 
         let byte_vals = Self::calc_byte_array(data_bits);
 
-        for i in 0..DHT22_constants::DHT22_DATA_LEN {
+        for i in 0..dht22_constants::DHT22_DATA_LEN {
             println!("byte_vals[{}] = {}", i, byte_vals[i]);
         }
 
         // checksum calculation
-        let checksum = match Self::calc_checksum(byte_vals) {
-            Ok(c) => c,
-            Err(e) => return e,
-        };
+        match Self::calc_checksum(byte_vals) {
+            Ok(_) => { /* do nothing */ },
+            Err(e) => return Err(e),
+        }
+        
+        // calculate signals (or error code) and directly return it
+        Self::calc_signals(byte_vals)
     }
 
     #[cfg(target_os = "linux")]
@@ -545,18 +547,19 @@ impl Dht {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
+        let mut result_tuple: (f32, f32) = (0.0, 0.0);
 
         while !measurement_successful {
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
                     info!(
-                        target: LOG_TARGET_GPIO_HANDLER,
+                        target: LOG_TARGET_DHT,
                         "read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
                         temperature,
                         humidity,
                     );
                     measurement_successful = true;
-                    return (temperature, humidity);
+                    result_tuple = (temperature, humidity);
                 }
                 Err(e) => {
                     if e == DhtError::Timeout {
@@ -567,17 +570,19 @@ impl Dht {
                                 "failed to read from DHT sensor (after {} retries, {e:?}",
                                 retry_counter,
                             );
+                            return Err(e);
                         }
                     } else {
                         error!(
-                            LOG_TARGET_GPIO_HANDLER,kl
+                            target: LOG_TARGET_DHT,
                             "failed to read from DHT sensor ({e:?})",
                         );
+                        return Err(e);
                     }
-                    return Err(e);
                 }
             }
         }
+        Ok(result_tuple)
     }
 }
 
@@ -595,7 +600,7 @@ pub mod tests {
     #[cfg(target_os = "linux")]
     use crate::config::ConfigData;
     #[cfg(target_os = "linux")]
-    use crate::gpio::Gpio;
+    use rppal::gpio::Gpio;
 
     #[test]
     pub fn test_dht_calc_byte_array() {
@@ -702,13 +707,20 @@ pub mod tests {
             Ok(c) => c,
             Err(e) => {
                 panic!(
-                    "{}: could not open interface to GPIO ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER,
+                    "test_dht_read: could not open interface to GPIO ({e:?})",
                 );
             }
         };
 
-        let dht = Dht::new(config.dht, gpio);
+        let gpio_pin_number_dht22_io = config.gpio_handler.gpio_pin_number_dht22_io;
+        let gpio_pin_number_dht22_vcc = config.gpio_handler.gpio_pin_number_dht22_vcc;
+
+        let dht = Dht::new(
+            config.dht,
+            gpio,
+            gpio_pin_number_dht22_io,
+            gpio_pin_number_dht22_vcc,
+        );
 
         let (temperature, humidity) = match dht.get_data() {
             Ok((c, d)) => (c, d),

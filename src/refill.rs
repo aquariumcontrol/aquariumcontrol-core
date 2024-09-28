@@ -1056,7 +1056,7 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
         let (_tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-        
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         scope(|scope| {

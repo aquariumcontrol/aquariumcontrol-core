@@ -14,9 +14,6 @@ use serde_derive::Deserialize;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 #[cfg(target_os = "linux")]
-use log::info;
-
-#[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
 
 #[cfg(target_os = "linux")]
@@ -26,13 +23,13 @@ use crate::i2c_interface::I2cInterface;
 use rppal::gpio::{Gpio, InputPin};
 
 #[cfg(target_os = "linux")]
-use crate::dht::{read_dht_data, DhtError};
-
-#[cfg(target_os = "linux")]
 use crate::dht::DhtConfig;
 
 #[cfg(target_os = "linux")]
 use crate::i2c_interface::I2cInterfaceConfig;
+
+#[cfg(target_os = "linux")]
+use crate::dht::Dht;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 
@@ -56,6 +53,12 @@ pub struct GpioHandlerConfig {
     /// replacement value for conductivity in case reading from I2C fails
     pub replacement_value_conductivity: f32,
 
+    /// replacement value for ambient temperature in case reading from DHT22 sensor fails
+    pub replacement_value_ambient_temperature: f32,
+    
+    /// replacement value for ambient humidity in case reading from DHT22 sensor fails
+    pub replacement_value_ambient_humidity: f32,
+    
     /// GPIO pin number for tank level sensor
     pub gpio_pin_number_tank_level: u8,
 
@@ -102,6 +105,10 @@ pub struct GpioHandler {
     /// input pin for communication with tank level switch
     #[cfg(target_os = "linux")]
     input_pin_tank_level_switch: InputPin,
+    
+    // buffering of humidity because communication with DHT22 provides both, temperature and humidity
+    #[cfg(target_os = "linux")]
+    buffered_humidity: f32,    
 }
 
 impl GpioHandler {
@@ -188,6 +195,11 @@ impl GpioHandler {
             }
         };
 
+        // clone the values before creating struct
+        let gpio_pin_number_dht22_io = config.gpio_pin_number_dht22_io;
+        let gpio_pin_number_dht22_vcc = config.gpio_pin_number_dht22_vcc;
+        let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
+
         GpioHandler {
             config: config,
             #[cfg(target_os = "linux")]
@@ -199,12 +211,16 @@ impl GpioHandler {
                 true => None,
                 false => Some(Dht::new(
                     dht_config,
-                    config.gpio_pin_number_dht22_io,
-                    config.gpio_pin_number_dht22_vcc,
+                    gpio,
+                    gpio_pin_number_dht22_io,
+                    gpio_pin_number_dht22_vcc,
                 )),
             },
             #[cfg(target_os = "linux")]
             input_pin_tank_level_switch: tank_level_pin.into_input_pullup(),
+            
+            #[cfg(target_os = "linux")]
+            buffered_humidity: replacement_value_ambient_humidity,
         }
     }
 
@@ -269,7 +285,10 @@ impl GpioHandler {
     /// Requests a response from the real hardware
     #[cfg(target_os = "linux")]
     fn get_response_from_hardware(&mut self, internal_command: InternalCommand) -> f32 {
+        // unwrapping is safe, because this function is not called when optional value is None
         let i2c: &mut I2cInterface = self.i2c_interface.as_mut().unwrap();
+        let dht: &mut Dht = self.dht.as_mut().unwrap();
+        
         match internal_command {
             InternalCommand::RequestSignal(signal) => match signal {
                 AquariumSignal::WaterTemperature => {
@@ -288,8 +307,23 @@ impl GpioHandler {
                         Err(_) => self.config.replacement_value_conductivity,
                     }
                 }
-                AquariumSignal::AmbientTemperature => 0.0,
-                AquariumSignal::AmbientHumidity => 0.0,
+                AquariumSignal::AmbientTemperature => {
+                    match dht.get_data() {
+                        // one read operation gets both signals (temperature and humidity)
+                        Ok((temperature, humidity)) => {
+                            self.buffered_humidity = humidity;
+                            temperature
+                        },
+                        Err(_) => {
+                            self.buffered_humidity = self.config.replacement_value_ambient_humidity;
+                            self.config.replacement_value_ambient_temperature
+                        },
+                    }
+                },
+                AquariumSignal::AmbientHumidity => {
+                    // reading already took place with prior request for temperature
+                    self.buffered_humidity
+                },
                 AquariumSignal::TankLevelSwitchPosition => {
                     match self.input_pin_tank_level_switch.is_high() {
                         true => 1.0,

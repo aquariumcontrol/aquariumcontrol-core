@@ -197,7 +197,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
             mpsc::channel();
-        let (_tx_signal_handler_to_mineral_injection, rx_mineral_injection_from_signal_handler) = mpsc::channel();
+        let (_tx_signal_handler_to_mineral_injection, rx_mineral_injection_from_signal_handler) =
+            mpsc::channel();
 
         let mut mineral_injection = MineralInjection::new();
 
