@@ -213,18 +213,21 @@ impl Dht {
                 continue;
             }
             if ticks[i] > dht22_constants::DHT22_BIT_TIMING_LIMIT {
-                data_bits[i] = true;
+                data_bits[count_data_bits] = true;
             }
             println!(
                 "data_bit_len[{}] = {} => {}",
                 count_data_bits,
                 ticks[i],
-                match data_bits[i] {
+                match data_bits[count_data_bits] {
                     true => "TRUE",
                     false => "FALSE",
                 }
             );
             count_data_bits += 1;
+            if count_data_bits > dht22_constants::DHT22_BYTE4_STOP_IDX {
+                break;
+            }
         }
         data_bits
     }
@@ -465,7 +468,7 @@ impl Dht {
 
         // initialization to avoid compiler error
         let mut duration_before: Duration = Duration::from_micros(0);
-        let mut duration_after: Duration = Duration::from_micros(0);
+        let mut duration_after: Duration;
 
         // observe level changes and record the timing
         for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
@@ -477,24 +480,25 @@ impl Dht {
                 }
             };
 
+            // evaluate the recorded timestamp
+            match event_opt {
+                Some(event) => {
+                    duration_after = event.timestamp;
+                }
+                None => {
+                    warn!(
+                        target: LOG_TARGET_DHT,
+                        "empty interrupt event for bit #{}",
+                        i
+                    );
+                    duration_after = duration_before;
+                }
+            }
+
             if i == 0 {
                 // for the first bit timing, no start data is available
                 ticks[0] = 0;
             } else {
-                // evaluate the recorded timestamp
-                match event_opt {
-                    Some(event) => {
-                        duration_after = event.timestamp;
-                    }
-                    None => {
-                        warn!(
-                            target: LOG_TARGET_DHT,
-                            "empty interrupt event for bit #{}",
-                            i
-                        );
-                        duration_after = duration_before;
-                    }
-                }
                 let bit_duration = duration_after - duration_before;
                 ticks[i] = bit_duration.as_micros() as u64;
             }
@@ -507,7 +511,6 @@ impl Dht {
             }
             valid_ticks_received = i;
         }
-
         match data_pin.clear_interrupt() {
             Ok(()) => {}
             Err(_) => {
@@ -522,7 +525,16 @@ impl Dht {
             return Err(DhtError::Timeout);
         }
 
-        if valid_ticks_received != dht22_constants::DHT22_BYTE4_STOP_IDX {
+        if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
+            for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
+                println!("ticks[{}] = {}", i, ticks[i]);
+            }
+            error!(
+                target: LOG_TARGET_DHT,
+                "incorrect number of balid ticks received: target={}, measured={}",
+                dht22_constants::DHT22_TRANSMISSION_END_IDX - 1,
+                valid_ticks_received
+            );
             return Err(DhtError::WrongNumberOfValidTicks);
         }
 
