@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 
 #[cfg(target_os = "linux")]
-use log::{warn, info};
+use log::{info, warn};
 #[cfg(target_os = "linux")]
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
@@ -534,10 +534,10 @@ impl Dht {
 
         // checksum calculation
         match Self::calc_checksum(byte_vals) {
-            Ok(_) => { /* do nothing */ },
+            Ok(_) => { /* do nothing */ }
             Err(e) => return Err(e),
         }
-        
+
         // calculate signals (or error code) and directly return it
         Self::calc_signals(byte_vals)
     }
@@ -706,9 +706,7 @@ pub mod tests {
         let gpio = match Gpio::new() {
             Ok(c) => c,
             Err(e) => {
-                panic!(
-                    "test_dht_read: could not open interface to GPIO ({e:?})",
-                );
+                panic!("test_dht_read: could not open interface to GPIO ({e:?})",);
             }
         };
 

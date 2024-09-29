@@ -55,10 +55,10 @@ pub struct GpioHandlerConfig {
 
     /// replacement value for ambient temperature in case reading from DHT22 sensor fails
     pub replacement_value_ambient_temperature: f32,
-    
+
     /// replacement value for ambient humidity in case reading from DHT22 sensor fails
     pub replacement_value_ambient_humidity: f32,
-    
+
     /// GPIO pin number for tank level sensor
     pub gpio_pin_number_tank_level: u8,
 
@@ -104,11 +104,11 @@ pub struct GpioHandler {
 
     /// input pin for communication with tank level switch
     #[cfg(target_os = "linux")]
-    input_pin_tank_level_switch: InputPin,
-    
+    input_pin_tank_level_switch: Option<InputPin>,
+
     // buffering of humidity because communication with DHT22 provides both, temperature and humidity
     #[cfg(target_os = "linux")]
-    buffered_humidity: f32,    
+    buffered_humidity: f32,
 }
 
 impl GpioHandler {
@@ -162,65 +162,77 @@ impl GpioHandler {
     ) -> GpioHandler {
         let use_simulator = config.use_simulator; // create copy because struct is moved
 
-        // check if GPIO pin configuration is valid
-        if !Self::check_valid_gpio_pin_config(&config) {
-            panic!(
-                "{}: GPIO pin configuration is invalid",
-                LOG_TARGET_GPIO_HANDLER,
-            );
-        }
-
-        // open interface to GPIO library
-        #[cfg(target_os = "linux")]
-        let gpio = match Gpio::new() {
-            Ok(c) => c,
-            Err(e) => {
+        if !use_simulator {
+            // check if GPIO pin configuration is valid
+            if !Self::check_valid_gpio_pin_config(&config) {
                 panic!(
-                    "{}: could not open interface to GPIO ({e:?})",
+                    "{}: GPIO pin configuration is invalid",
                     LOG_TARGET_GPIO_HANDLER,
                 );
             }
-        };
 
-        // get pin for tank level monitoring
-        #[cfg(target_os = "linux")]
-        let tank_level_pin = match gpio.get(config.gpio_pin_number_tank_level) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
+            // open interface to GPIO library
+            #[cfg(target_os = "linux")]
+            let gpio = match Gpio::new() {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "{}: could not open interface to GPIO ({e:?})",
+                        LOG_TARGET_GPIO_HANDLER,
+                    );
+                }
+            };
+
+            // get pin for tank level monitoring
+            #[cfg(target_os = "linux")]
+            let tank_level_pin = match gpio.get(config.gpio_pin_number_tank_level) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
                     "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
                     LOG_TARGET_GPIO_HANDLER,
                     config.gpio_pin_number_tank_level
                 );
-            }
-        };
+                }
+            };
 
-        // clone the values before creating struct
-        let gpio_pin_number_dht22_io = config.gpio_pin_number_dht22_io;
-        let gpio_pin_number_dht22_vcc = config.gpio_pin_number_dht22_vcc;
-        let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
+            // clone the values before creating struct
+            let gpio_pin_number_dht22_io = config.gpio_pin_number_dht22_io;
+            let gpio_pin_number_dht22_vcc = config.gpio_pin_number_dht22_vcc;
+            let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
 
-        GpioHandler {
-            config: config,
-            #[cfg(target_os = "linux")]
-            i2c_interface: match use_simulator {
-                true => None,
-                false => Some(I2cInterface::new(i2c_config)),
-            },
-            dht: match use_simulator {
-                true => None,
-                false => Some(Dht::new(
+            GpioHandler {
+                config: config,
+                #[cfg(target_os = "linux")]
+                i2c_interface: Some(I2cInterface::new(i2c_config)),
+                dht: Some(Dht::new(
                     dht_config,
                     gpio,
                     gpio_pin_number_dht22_io,
                     gpio_pin_number_dht22_vcc,
                 )),
-            },
-            #[cfg(target_os = "linux")]
-            input_pin_tank_level_switch: tank_level_pin.into_input_pullup(),
-            
-            #[cfg(target_os = "linux")]
-            buffered_humidity: replacement_value_ambient_humidity,
+                #[cfg(target_os = "linux")]
+                input_pin_tank_level_switch: Some(tank_level_pin.into_input_pullup()),
+
+                #[cfg(target_os = "linux")]
+                buffered_humidity: replacement_value_ambient_humidity,
+            }
+        } else {
+            // clone the value before creating struct
+            let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
+
+            GpioHandler {
+                config: config,
+                #[cfg(target_os = "linux")]
+                i2c_interface: None,
+                dht: None,
+
+                #[cfg(target_os = "linux")]
+                input_pin_tank_level_switch: None,
+
+                #[cfg(target_os = "linux")]
+                buffered_humidity: replacement_value_ambient_humidity,
+            }
         }
     }
 
@@ -288,7 +300,8 @@ impl GpioHandler {
         // unwrapping is safe, because this function is not called when optional value is None
         let i2c: &mut I2cInterface = self.i2c_interface.as_mut().unwrap();
         let dht: &mut Dht = self.dht.as_mut().unwrap();
-        
+        let input_pin_tank_level_switch = self.input_pin_tank_level_switch.as_mut().unwrap();
+
         match internal_command {
             InternalCommand::RequestSignal(signal) => match signal {
                 AquariumSignal::WaterTemperature => {
@@ -313,19 +326,19 @@ impl GpioHandler {
                         Ok((temperature, humidity)) => {
                             self.buffered_humidity = humidity;
                             temperature
-                        },
+                        }
                         Err(_) => {
                             self.buffered_humidity = self.config.replacement_value_ambient_humidity;
                             self.config.replacement_value_ambient_temperature
-                        },
+                        }
                     }
-                },
+                }
                 AquariumSignal::AmbientHumidity => {
                     // reading already took place with prior request for temperature
                     self.buffered_humidity
-                },
+                }
                 AquariumSignal::TankLevelSwitchPosition => {
-                    match self.input_pin_tank_level_switch.is_high() {
+                    match input_pin_tank_level_switch.is_high() {
                         true => 1.0,
                         false => 0.0,
                     }
