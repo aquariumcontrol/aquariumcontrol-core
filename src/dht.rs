@@ -516,6 +516,9 @@ impl Dht {
         }
 
         if timeout_occurred {
+            for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
+                println!("ticks[{}] = {}", i, ticks[i]);
+            }
             return Err(DhtError::Timeout);
         }
 
