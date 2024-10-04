@@ -199,6 +199,15 @@ pub struct Controllino {
 
     /// Interface to serial port for communication via USB
     pub serial_port_opt: Option<Box<dyn SerialPort>>,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump
+    lock_error_actuate_refill: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to refill control via channel
+    lock_error_channel_send_refill: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from refill control via channel
+    lock_error_channel_receive_refill: bool,
 }
 
 impl Controllino {
@@ -293,6 +302,9 @@ impl Controllino {
             spin_sleeper_opt: spin_sleeper_opt,
             controllino_processing_duration_opt: controllino_processing_duration_opt,
             serial_port_opt: serial_port_opt,
+            lock_error_actuate_refill: false,
+            lock_error_channel_send_refill: false,
+            lock_error_channel_receive_refill: false,
         }
     }
 
@@ -340,6 +352,7 @@ impl Controllino {
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
+                    self.lock_error_channel_receive_refill = false;
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -348,32 +361,48 @@ impl Controllino {
                         &self.controllino_processing_duration_opt,
                         &self.config,
                     ) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_actuate_refill = false;   
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "actuation of refill pump. ({e:?})"
-                            );
+                            if !self.lock_error_actuate_refill {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "actuation of refill pump. ({e:?})"
+                                );
+                                self.lock_error_actuate_refill = true;
+                            }
                         }
                     }
                     match tx_to_refill.send(true) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_channel_send_refill = false;   
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "responding to refill control ({e:?})"
-                            );
+                            if !self.lock_error_channel_send_refill {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "responding to refill control ({e:?})"
+                                );
+                                self.lock_error_channel_send_refill = true;
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_refill = false;
+                        }
                         TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: error when trying to receive command from refill control ({e:?})",
-                                 Self::LOG_TARGET_CONTROLLINO
-                            );
+                            if !self.lock_error_channel_receive_refill {
+                                error!(
+                                    "{}: error when trying to receive command from refill control ({e:?})",
+                                    Self::LOG_TARGET_CONTROLLINO
+                                );
+                                self.lock_error_channel_receive_refill = true;
+                            }
                         }
                     }
                 }
@@ -383,6 +412,7 @@ impl Controllino {
             // *** communication with heating control ***
             match rx_from_heating.try_recv() {
                 Ok(c) => {
+                    self.lock_error_channel_receive_heating = false;
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -391,32 +421,48 @@ impl Controllino {
                         &self.controllino_processing_duration_opt,
                         &self.config,
                     ) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_actuate_heating = false;   
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "actuation of heater ({e:?})"
-                            );
+                            if !self.lock_error_actuate_heating {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "actuation of heater ({e:?})"
+                                );
+                                self.lock_error_actuate_heating = true;
+                            }
                         }
                     }
                     match tx_to_heating.send(true) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_channel_send_heating = false;                           
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "responding to heating control: {e:?}"
-                            );
+                            if !self.lock_error_channel_send_heating {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "responding to heating control: {e:?}"
+                                );
+                                self.lock_error_channel_send_heating = true;
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_heating = false;
+                        }
                         TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from heating control {e:?}",
-                                Self::LOG_TARGET_CONTROLLINO
-                            );
+                            if !self.lock_error_channel_receive_heating {
+                                error!(
+                                    "{}: Error in trying to receive command from heating control {e:?}",
+                                    Self::LOG_TARGET_CONTROLLINO
+                                );
+                                self.lock_error_channel_receive_heating = true;
+                            }
                         }
                     }
                 }
@@ -426,6 +472,7 @@ impl Controllino {
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
+                    self.lock_error_channel_receive_ventilation = false;                    
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -434,32 +481,48 @@ impl Controllino {
                         &self.controllino_processing_duration_opt,
                         &self.config,
                     ) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_actuate_ventilation = false;
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "actuation of ventilation ({e:?})"
-                            );
+                            if !self.lock_error_actuate_ventilation {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "actuation of ventilation ({e:?})"
+                                );
+                                self.lock_error_actuate_ventilation = true;
+                            }
                         }
                     }
                     match tx_to_ventilation.send(true) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_channel_send_ventilation = false;                           
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "responding to ventilation control ({e:?})"
-                            );
+                            if !self.lock_error_channel_send_ventilation {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "responding to ventilation control ({e:?})"
+                                );
+                                self.lock_error_channel_send_ventilation = true;
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_ventilation = false;
+                        }
                         TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from ventilation control {e:?}",
-                                Self::LOG_TARGET_CONTROLLINO
-                            );
+                            if !self.lock_error_channel_receive_ventilation {
+                                error!(
+                                    "{}: Error in trying to receive command from ventilation control {e:?}",
+                                    Self::LOG_TARGET_CONTROLLINO
+                                );
+                                self.lock_error_channel_receive_ventilation = true;
+                            }
                         }
                     }
                 }
@@ -469,6 +532,7 @@ impl Controllino {
             // *** communication with Balling dosing control ***
             match rx_from_balling.try_recv() {
                 Ok(c) => {
+                    self.lock_error_channel_receive_balling = false;
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -477,32 +541,48 @@ impl Controllino {
                         &self.controllino_processing_duration_opt,
                         &self.config,
                     ) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_actuate_balling = false;                           
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "actuation of Balling dosing ({e:?})"
-                            );
+                            if !self.lock_error_actuate_balling {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "actuation of Balling dosing ({e:?})"
+                                );
+                                self.lock_error_actuate_balling = true;
+                            }
                         }
                     }
                     match tx_to_balling.send(true) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_channel_send_balling = false;                           
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "responding to Balling dosing control ({e:?})"
-                            );
+                            if !self.lock_error_channel_send_balling {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "responding to Balling dosing control ({e:?})"
+                                );
+                                self.lock_error_channel_send_balling = true;
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_balling = false;
+                        }
                         TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
-                                Self::LOG_TARGET_CONTROLLINO
-                            );
+                            if !self.lock_error_channel_receive_balling {
+                                error!(
+                                    "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
+                                    Self::LOG_TARGET_CONTROLLINO
+                                );
+                                self.lock_error_channel_receive_balling = true;
+                            }
                         }
                     }
                 }
@@ -512,6 +592,7 @@ impl Controllino {
             // *** communication with feed control ***
             match rx_from_feed.try_recv() {
                 Ok(c) => {
+                    self.lock_error_channel_receive_feed
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -520,32 +601,48 @@ impl Controllino {
                         &self.controllino_processing_duration_opt,
                         &self.config,
                     ) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_actuate_feed = false;    
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "actuation of feeder ({e:?})"
-                            );
+                            if !self.lock_error_actuate_feed {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "actuation of feeder ({e:?})"
+                                );
+                                self.lock_error_actuate_feed = true;
+                            }
                         }
                     }
                     match tx_to_feed.send(true) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            self.lock_error_channel_send_feed = false;                           
+                        }
                         Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_CONTROLLINO,
-                                "responding to feed control ({e:?})"
-                            );
+                            if !self.lock_error_channel_send_feed {
+                                error!(
+                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    "responding to feed control ({e:?})"
+                                );
+                                self.lock_error_channel_send_feed = true;
+                            }
                         }
                     }
                 }
                 Err(e) => {
                     match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_feed = false;
+                        }
                         TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from feed control ({e:?})",
-                                Self::LOG_TARGET_CONTROLLINO
-                            );
+                            if !self.lock_error_channel_receive_feed {
+                                error!(
+                                    "{}: Error in trying to receive command from feed control ({e:?})",
+                                    Self::LOG_TARGET_CONTROLLINO
+                                );
+                                self.lock_error_channel_receive_feed = true;
+                            }
                         }
                     }
                 }
