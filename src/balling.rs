@@ -98,6 +98,18 @@ pub struct Balling {
 
     /// Count down in seconds until next Balling dosing for pump 4
     pub countdown_dosing_pump4: u32,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination_signal: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
+    lock_info_inapplicable_command: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to schedule check
+    lock_error_channel_send_schedule_check: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from schedule check
+    lock_error_channel_receive_schedule_check: bool,
 }
 
 impl ProcessExternalRequestTrait for Balling {}
@@ -133,6 +145,10 @@ impl Balling {
             countdown_dosing_pump2: countdown_dosing_pump2,
             countdown_dosing_pump3: countdown_dosing_pump3,
             countdown_dosing_pump4: countdown_dosing_pump4,
+            lock_error_channel_receive_termination_signal: false,
+            lock_info_inapplicable_command: false,
+            lock_error_channel_send_schedule_check: false,
+            lock_error_channel_receive_schedule_check: false,
         }
     }
 
@@ -346,19 +362,29 @@ impl Balling {
                     Ok(_) => {
                         // now listen for response
                         schedule_check_result = match rx_from_schedule_check.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_schedule_check = false;
+                                c
+                            },
                             Err(e) => {
-                                error!(target: Self::LOG_TARGET_BALLING,
-                                    "Error when reading channel content for schedule check ({e:?})",
-                                );
+                                if !lock_error_channel_receive_schedule_check {
+                                    error!(target: Self::LOG_TARGET_BALLING,
+                                        "Error when reading channel content for schedule check ({e:?})",
+                                    );
+                                    self.lock_error_channel_receive_schedule_check = true;
+                                }
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
+                        lock_error_channel_send_schedule_check = false;
                     }
                     Err(e) => {
-                        error!(target: Self::LOG_TARGET_BALLING,
-                            "Error in channel communication to schedule check: {e:?}"
-                        );
+                        if !self.lock_error_channel_send_schedule_check {
+                            error!(target: Self::LOG_TARGET_BALLING,
+                                "Error in channel communication to schedule check: {e:?}"
+                            );
+                            self.lock_error_channel_send_schedule_check = true;
+                        }
                     }
                 }
 
@@ -507,18 +533,30 @@ impl Balling {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => true,
-                    _ => {
-                        info!(
-                            target: Self::LOG_TARGET_BALLING,
-                            "ignoring inapplicable command {} from signal handler.", c);
-                        false
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_info_inapplicable_command = false;                        
+                            true
+                        },
+                        _ => {
+                            if !self.lock_info_inapplicable_command {
+                                info!(
+                                    target: Self::LOG_TARGET_BALLING,
+                                    "ignoring inapplicable command {} from signal handler.", c);
+                                self.lock_info_inapplicable_command = true;
+                            }
+                            false
+                        }
                     }
                 },
                 Err(e) => {
-                    error!(target: Self::LOG_TARGET_BALLING,
-                        "error when trying to receive termination signal. ({e:?})");
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(target: Self::LOG_TARGET_BALLING,
+                            "error when trying to receive termination signal. ({e:?})");
+                        self.lock_error_channel_receive_termination_signal = true;
+                    }
                     false
                 }
             };
