@@ -78,27 +78,32 @@ pub struct RefillConfig {
 pub struct TankLevelSwitchSignals {
     /// flag indicating if the tank level switch is high (true) or low (false)
     pub tank_level_switch_position: bool,
-    
+
     /// flag indicating that the tank level switch position could not be read
     pub tank_level_switch_invalid: bool,
-    
+
     /// flag indicating that the tank level switch position could not be received via channel
     pub error_receive_tank_level_switch_position: bool,
-    
+
     /// flag indicating that the tank level switch invalid signal could not be received via channel
     pub error_receive_tank_level_switch_invalid: bool,
-    
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending via channel
-    lock_error_channel_send: bool,
-    
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving via channel
-    lock_error_channel_receive: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
+    lock_error_channel_send_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
+    lock_error_channel_receive_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
+    lock_error_channel_send_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
+    lock_error_channel_receive_tank_level_switch_invalid: bool,
 }
 
 const LOG_TARGET_REFILL: &str = "refill";
 
 impl TankLevelSwitchSignals {
-    
     /// provides a struct of type TankLevelSwitchSignals.
     /// # Arguments
     /// * `tank_level_switch_position` - flag indicating if the tank level switch is high (true) or low (false)    
@@ -109,20 +114,20 @@ impl TankLevelSwitchSignals {
         tank_level_switch_position: bool,
         tank_level_switch_invalid: bool,
         error_receive_tank_level_switch_position: bool,
-        error_receive_tank_level_switch_invalid: bool
-    ) {
+        error_receive_tank_level_switch_invalid: bool,
+    ) -> TankLevelSwitchSignals {
         TankLevelSwitchSignals {
             tank_level_switch_position: tank_level_switch_position,
             tank_level_switch_invalid: tank_level_switch_invalid,
             error_receive_tank_level_switch_position: error_receive_tank_level_switch_position,
             error_receive_tank_level_switch_invalid: error_receive_tank_level_switch_invalid,
-            lock_error_channel_send_switch_position: false,
-            lock_error_channel_receive_switch_position: false,           
-            lock_error_channel_send_switch_invalid: false,
-            lock_error_channel_receive_switch_invalid: false,           
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_receive_tank_level_switch_invalid: false,
         }
     }
-    
+
     /// Executes the channel communication to update the tank level switch position signal
     /// as well as the tank level switch invalid signal.
     /// # Arguments
@@ -143,30 +148,30 @@ impl TankLevelSwitchSignals {
                 self.tank_level_switch_position = match rx_from_gpio.recv() {
                     Ok(c) => {
                         self.error_receive_tank_level_switch_position = false;
-                        self.lock_error_channel_receive_switch_position = false;
+                        self.lock_error_channel_receive_tank_level_switch_position = false;
                         c > 0.0
                     }
                     Err(e) => {
-                        if !self.lock_error_channel_receive_switch_position {
+                        if !self.lock_error_channel_receive_tank_level_switch_position {
                             error!(
                                 target: LOG_TARGET_REFILL,
                                 "receiving tank level switch position from GPIO handler failed ({e:?})"
                             );
-                            self.lock_error_channel_receive_switch_position = true;
+                            self.lock_error_channel_receive_tank_level_switch_position = true;
                         }
                         self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
                         false
                     }
                 };
-                self.lock_error_channel_send_switch_position = false;
+                self.lock_error_channel_send_tank_level_switch_position = false;
             }
             Err(e) => {
-                if !self.lock_error_channel_send {
+                if !self.lock_error_channel_send_tank_level_switch_position {
                     error!(
                         target: LOG_TARGET_REFILL,
                         "channel communication for GPIO handler for tank level switch position failed ({e:?})"
                     );
-                    self.lock_error_channel_send_switch_position = true;
+                    self.lock_error_channel_send_tank_level_switch_position = true;
                 }
             }
         }
@@ -179,29 +184,29 @@ impl TankLevelSwitchSignals {
                 // now listen for response
                 self.tank_level_switch_invalid = match rx_from_gpio.recv() {
                     Ok(c) => {
-                        self.error_receive_tank_level_switch_invalid = false;
+                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
                         c > 0.0
                     }
                     Err(e) => {
-                        if !self.error_receive_tank_level_switch_invalid {
+                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
                             error!(
                                 target: LOG_TARGET_REFILL,
                                 "receiving tank level switch invalid from GPIO handler failed ({e:?})"
                             );
-                            self.error_receive_tank_level_switch_invalid = true;
+                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
                         }
                         true
                     }
                 };
-                self.lock_error_channel_send_switch_invalid = false;
+                self.lock_error_channel_send_tank_level_switch_invalid = false;
             }
             Err(e) => {
-                if !self.lock_error_channel_send_switch_invalid {
+                if !self.lock_error_channel_send_tank_level_switch_invalid {
                     error!(
                         target: LOG_TARGET_REFILL,
                         "channel communication for GPIO handler for tank level switch invalid failed ({e:?})"
                     );
-                    self.lock_error_channel_send_switch_invalid = true;
+                    self.lock_error_channel_send_tank_level_switch_invalid = true;
                 }
             }
         }
@@ -280,67 +285,67 @@ impl RefillErrors {
 pub struct Refill {
     /// configuration of refill control
     pub config: RefillConfig,
-    
+
     /// interface to SQL database
     pub sql_interface_refill: SqlInterfaceRefill,
-    
+
     /// flag indicating that tank level switch has not altered its position for some time
     tank_level_switch_position_stabilized: bool,
-    
+
     /// time counter to determine if positition is stabilized
     tank_level_switch_position_high_stabilization_counter: u32,
-    
+
     /// struct of type RefillErrors which includes flags for different kind of errors
     pub refill_errors: RefillErrors,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about stop command being received
     lock_info_stop_command_received: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about start command being received
     lock_info_start_command_received: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about refill volume check of last 24h
     lock_info_refill_check_volume_last_24h: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about refill count check of last 24h
     lock_info_refill_check_count_last_24h: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about refill volume check of last hour
     lock_info_refill_check_volume_last_hour: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about refill count check of last hour
     lock_info_refill_check_count_last_hour: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about refill interval check
-    lock_info_refill_check_interval_last_refill: bool,    
-    
+    lock_info_refill_check_interval_last_refill: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read duration since last refill
     lock_error_read_duration_since_last_refill: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to check if refill log table is empty
     lock_error_check_empty: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill volume of last 24h from SQL database
     lock_error_read_refill_volume_last_24h: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill count of last 24h from SQL database
     lock_error_read_refill_count_last_24h: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill volume of last hour from SQL database
     lock_error_read_refill_volume_last_hour: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read refill count of last hour from SQL database
     lock_error_read_refill_count_last_hour: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to request to schedule check via channel
     lock_error_channel_send_schedule_check: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from schedule check via channel
     lock_error_channel_receive_schedule_check: bool,
-                    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about having received not applicable command from signal handler
     lock_warn_not_applicable_command: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from signal handler via channel
     lock_error_channel_receive_termination_command: bool,
 }
@@ -494,15 +499,16 @@ impl Refill {
     fn get_sql_refill_data(&mut self) -> RefillSqlData {
         let duration_since_last_refill = match self.sql_interface_refill.check_empty() {
             Ok(0) => {
-                self.lock_error_check_empty = false,
-                self.config.min_interval_last_refill + 1,
+                self.lock_error_check_empty = false;
+                self.config.min_interval_last_refill + 1
+            }
             Ok(_) => {
-                self.lock_error_check_empty = false,
+                self.lock_error_check_empty = false;
                 match self.sql_interface_refill.get_duration_since_last_refill() {
                     Ok(c) => {
                         self.lock_error_read_duration_since_last_refill = false;
                         c
-                    },
+                    }
                     Err(e) => {
                         if !self.lock_error_read_duration_since_last_refill {
                             error!(
@@ -514,7 +520,7 @@ impl Refill {
                         99 // @todo: replace with default value
                     }
                 }
-            },
+            }
             Err(e) => {
                 if !self.lock_error_check_empty {
                     error!(
@@ -530,9 +536,9 @@ impl Refill {
         let refill_volume_last_24h = match self.sql_interface_refill.get_refill_volume_of_last_24h()
         {
             Ok(c) => {
-                    self.lock_error_read_refill_volume_last_24h = false;
-                    c
-                },
+                self.lock_error_read_refill_volume_last_24h = false;
+                c
+            }
             Err(e) => {
                 if !self.lock_error_read_refill_volume_last_24h {
                     error!(
@@ -546,9 +552,9 @@ impl Refill {
 
         let refill_count_last_24h = match self.sql_interface_refill.get_refill_count_of_last_24h() {
             Ok(c) => {
-                self.lock_error_read_refill_count_last_24h = false;    
+                self.lock_error_read_refill_count_last_24h = false;
                 c
-            },
+            }
             Err(e) => {
                 if !self.lock_error_read_refill_count_last_24h {
                     error!(
@@ -566,7 +572,7 @@ impl Refill {
                 Ok(c) => {
                     self.lock_error_read_refill_volume_last_hour = false;
                     c
-                },
+                }
                 Err(e) => {
                     if !self.lock_error_read_refill_volume_last_hour {
                         error!(
@@ -582,11 +588,11 @@ impl Refill {
         let refill_count_last_hour = match self.sql_interface_refill.get_refill_count_of_last_hour()
         {
             Ok(c) => {
-                self.lock_error_read_refill_count_last_hour = false;                
+                self.lock_error_read_refill_count_last_hour = false;
                 c
-            },
+            }
             Err(e) => {
-                if !self.lock_error_read_refill_count_last_hour {  
+                if !self.lock_error_read_refill_count_last_hour {
                     error!(
                         target: LOG_TARGET_REFILL,
                         "Could not get refill count of last hour: {e:?}"
@@ -627,7 +633,7 @@ impl Refill {
     ) -> bool {
         // initialize return value with current state
         let mut new_state: bool = current_state;
-        
+
         if stop_command_received {
             if !self.lock_info_stop_command_received {
                 info!(
@@ -637,8 +643,8 @@ impl Refill {
                 self.lock_info_stop_command_received = true;
             }
             new_state = true;
-        else {
-            self.lock_info_stop_command_received = false;            
+        } else {
+            self.lock_info_stop_command_received = false;
         }
         // start command has higher priority than stop command
         // therefore it is evaluated after stop command
@@ -649,8 +655,7 @@ impl Refill {
                     "received Start command. Restarting refill control."
                 );
                 self.lock_info_start_command_received = true;
-            }
-            else {
+            } else {
                 self.lock_info_start_command_received = true;
             }
             new_state = false;
@@ -675,8 +680,7 @@ impl Refill {
                 );
                 self.lock_info_refill_check_volume_last_24h = true;
             }
-        }
-        else {
+        } else {
             self.lock_info_refill_check_volume_last_24h = false;
         }
 
@@ -691,9 +695,8 @@ impl Refill {
                 );
                 self.lock_info_refill_check_count_last_24h = true;
             }
-        }
-        else {
-            self.lock_info_refill_check_count_last_24h = false;            
+        } else {
+            self.lock_info_refill_check_count_last_24h = false;
         }
 
         let refill_check_volume_last_hour =
@@ -707,8 +710,7 @@ impl Refill {
                 );
                 self.lock_info_refill_check_volume_last_hour = true;
             }
-        }
-        else {
+        } else {
             self.lock_info_refill_check_volume_last_hour = false;
         }
 
@@ -723,8 +725,7 @@ impl Refill {
                 );
                 self.lock_info_refill_check_count_last_hour = true;
             }
-        }
-        else {
+        } else {
             self.lock_info_refill_check_count_last_hour = false;
         }
 
@@ -739,8 +740,7 @@ impl Refill {
                 );
                 self.lock_info_refill_check_interval_last_refill = true;
             }
-        }
-        else {
+        } else {
             self.lock_info_refill_check_interval_last_refill = false;
         }
         refill_check_volume_last_24h
@@ -863,14 +863,15 @@ impl Refill {
                                         Ok(c) => {
                                             self.lock_error_channel_receive_schedule_check = false;
                                             c
-                                        },
+                                        }
                                         Err(e) => {
                                             if !self.lock_error_channel_receive_schedule_check {
                                                 error!(
                                                     target: LOG_TARGET_REFILL,
                                                     "reading channel content for schedule check failed ({e:?})"
                                                 );
-                                                self.lock_error_channel_receive_schedule_check = false;                                            
+                                                self.lock_error_channel_receive_schedule_check =
+                                                    false;
                                             }
                                             true // assume we are allowed to actuate when communication is not successful
                                         }
@@ -958,12 +959,12 @@ impl Refill {
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => {
-                    self.lock_error_channel_receive_termination_command = false;                    
+                    self.lock_error_channel_receive_termination_command = false;
                     match c {
                         InternalCommand::Terminate => {
-                            self.lock_warn_not_applicable_command = false; 
+                            self.lock_warn_not_applicable_command = false;
                             true
-                        },
+                        }
                         _ => {
                             if !self.lock_warn_not_applicable_command {
                                 warn!(
@@ -976,7 +977,7 @@ impl Refill {
                             false
                         }
                     }
-                },
+                }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_command {
                         error!(
@@ -1225,7 +1226,7 @@ pub mod tests {
         //*** test if position signal is updating with delay when invalid signal is false ***
         let (config, mut refill, _) = prepare_refill_tests();
         // check transition true -> false
-        let mut tank_level_switch_signals = TankLevelSwitchSignals(false, false, false, false);
+        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
 
         refill.tank_level_switch_position_stabilized = true;
         for i in 0..config

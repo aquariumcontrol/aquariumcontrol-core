@@ -98,16 +98,16 @@ pub struct Balling {
 
     /// Count down in seconds until next Balling dosing for pump 4
     pub countdown_dosing_pump4: u32,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
     lock_info_inapplicable_command: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to schedule check
     lock_error_channel_send_schedule_check: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from schedule check
     lock_error_channel_receive_schedule_check: bool,
 }
@@ -365,9 +365,9 @@ impl Balling {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
                                 c
-                            },
+                            }
                             Err(e) => {
-                                if !lock_error_channel_receive_schedule_check {
+                                if !self.lock_error_channel_receive_schedule_check {
                                     error!(target: Self::LOG_TARGET_BALLING,
                                         "Error when reading channel content for schedule check ({e:?})",
                                     );
@@ -376,7 +376,7 @@ impl Balling {
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
-                        lock_error_channel_send_schedule_check = false;
+                        self.lock_error_channel_send_schedule_check = false;
                     }
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
@@ -537,9 +537,9 @@ impl Balling {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
                         InternalCommand::Terminate => {
-                            self.lock_info_inapplicable_command = false;                        
+                            self.lock_info_inapplicable_command = false;
                             true
-                        },
+                        }
                         _ => {
                             if !self.lock_info_inapplicable_command {
                                 info!(
@@ -550,7 +550,7 @@ impl Balling {
                             false
                         }
                     }
-                },
+                }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
                         error!(target: Self::LOG_TARGET_BALLING,

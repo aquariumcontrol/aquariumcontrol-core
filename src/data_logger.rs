@@ -119,58 +119,57 @@ pub struct DataLogger {
 
     /// filter for the conductivity signal
     filter_conductivity: IIRFilter,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to create timestamp
     lock_error_get_timestamp: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write refill in progress to disk
     lock_error_output_state_refill_in_progress: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write heating is on to disk
     lock_error_output_state_heating_is_on: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation is on to disk
     lock_error_output_state_ventilation_is_on: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature to disk
     lock_error_output_signal_water_temperature: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write pH to disk
-    lock_error_output_signal_pH : bool,
-    
+    lock_error_output_signal_pH: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity to disk
     lock_error_output_signal_conductivity: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature to disk
     lock_error_output_signal_ambient_temperature: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write humidity to disk
     lock_error_output_signal_humidity: bool,
-        
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position to disk
     lock_error_output_state_tank_level_switch_position: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
     lock_error_output_state_tank_level_switch_invalid: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
     lock_error_output_signal_water_temperature_filtered: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write pH filtered to disk
     lock_error_output_signal_pH_filtered: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity filtered to disk
     lock_error_output_signal_conductivity_filtered: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write timestamp to disk
     lock_error_output_timestamp: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
     lock_warn_inapplicable_command: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination: bool,
-    
 }
 
 impl DataLogger {
@@ -272,8 +271,7 @@ impl DataLogger {
             lock_error_output_state_refill_in_progress: false,
             lock_error_output_state_heating_is_on: false,
             lock_error_output_state_ventilation_is_on: false,
-            lock_error_output_signal_water_temperature: false,
-            lock_error_output_signal_pH : false,
+            lock_error_output_signal_pH: false,
             lock_error_output_signal_conductivity: false,
             lock_error_output_signal_ambient_temperature: false,
             lock_error_output_signal_humidity: false,
@@ -292,7 +290,13 @@ impl DataLogger {
     /// # Arguments
     /// * `signal` - signal which shall be converted to human readable format and written to file
     /// * `output_file_name` - name of file where the value shall be written to    
-    fn output_signal(&self, signal: f32, signal_type: AquariumSignal, output_file_name: &String, inhibit_error_log: bool) -> bool {
+    fn output_signal(
+        &self,
+        signal: f32,
+        signal_type: AquariumSignal,
+        output_file_name: &String,
+        inhibit_error_log: bool,
+    ) -> bool {
         if self.config.output_to_disk {
             let signal_string = match signal_type {
                 AquariumSignal::WaterTemperature => format!("{:.1}", signal),
@@ -306,7 +310,7 @@ impl DataLogger {
             match fs::write(output_file_name, signal_string.clone()) {
                 Ok(_) => {
                     /* do nothing */
-                    false   // indicate no error
+                    false // indicate no error
                 }
                 Err(e) => {
                     if !inhibit_error_log {
@@ -316,9 +320,11 @@ impl DataLogger {
                             signal_string, output_file_name
                         );
                     }
-                    true    // indicate error
+                    true // indicate error
                 }
             }
+        } else {
+            false // no output = no error
         }
     }
 
@@ -358,6 +364,8 @@ impl DataLogger {
                     true // indicate error
                 }
             }
+        } else {
+            false // no output = no error
         }
     }
 
@@ -365,7 +373,12 @@ impl DataLogger {
     /// # Arguments
     /// * `data` - string data to be written to file
     /// * `output_file_name` - name of file where the value shall be written to    
-    fn output_timestamp(&self, timestamp: NaiveDateTime, output_file_name: &String, inhibit_error_log: bool) -> bool{
+    fn output_timestamp(
+        &self,
+        timestamp: NaiveDateTime,
+        output_file_name: &String,
+        inhibit_error_log: bool,
+    ) -> bool {
         if self.config.output_to_disk {
             match fs::write(output_file_name, timestamp.to_string()) {
                 Ok(_) => {
@@ -384,6 +397,8 @@ impl DataLogger {
                     true // indicate error
                 }
             }
+        } else {
+            false // no output = no error
         }
     }
 
@@ -537,12 +552,13 @@ impl DataLogger {
                         // now listen for response
                         water_temperature = match rx_from_gpio.recv() {
                             Ok(c) => {
-                                self.lock_error_output_signal_water_temperature = self.output_signal(
-                                    c,
-                                    AquariumSignal::WaterTemperature,
-                                    &self.config.output_file_name_water_temperature,
-                                    self.lock_error_output_signal_water_temperature
-                                );
+                                self.lock_error_output_signal_water_temperature = self
+                                    .output_signal(
+                                        c,
+                                        AquariumSignal::WaterTemperature,
+                                        &self.config.output_file_name_water_temperature,
+                                        self.lock_error_output_signal_water_temperature,
+                                    );
                                 Some(c)
                             }
                             Err(_) => {
@@ -627,12 +643,13 @@ impl DataLogger {
                         // now listen for response
                         ambient_temperature = match rx_from_gpio.recv() {
                             Ok(c) => {
-                                self.lock_error_output_signal_ambient_temperature = self.output_signal(
-                                    c,
-                                    AquariumSignal::AmbientTemperature,
-                                    &self.config.output_file_name_ambient_temperature,
-                                    self.lock_error_output_signal_ambient_temperature,
-                                );
+                                self.lock_error_output_signal_ambient_temperature = self
+                                    .output_signal(
+                                        c,
+                                        AquariumSignal::AmbientTemperature,
+                                        &self.config.output_file_name_ambient_temperature,
+                                        self.lock_error_output_signal_ambient_temperature,
+                                    );
                                 Some(c)
                             }
                             Err(_) => {
@@ -689,13 +706,14 @@ impl DataLogger {
                         // now listen for response
                         tank_level_switch_position = match rx_from_gpio.recv() {
                             Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_position = self.output_state(
-                                    c > 0.0,
-                                    "HIGH",
-                                    "LOW",
-                                    &self.config.output_file_name_tank_level_switch_position,
-                                    self.lock_error_output_state_tank_level_switch_position,
-                                );
+                                self.lock_error_output_state_tank_level_switch_position = self
+                                    .output_state(
+                                        c > 0.0,
+                                        "HIGH",
+                                        "LOW",
+                                        &self.config.output_file_name_tank_level_switch_position,
+                                        self.lock_error_output_state_tank_level_switch_position,
+                                    );
                                 Some(c > 0.0)
                             }
                             Err(_) => {
@@ -721,13 +739,14 @@ impl DataLogger {
                         // now listen for response
                         tank_level_switch_invalid = match rx_from_gpio.recv() {
                             Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_invalid = self.output_state(
-                                    c > 0.0,
-                                    "INVALID",
-                                    "VALID",
-                                    &self.config.output_file_name_tank_level_switch_invalid,
-                                    self.lock_error_output_state_tank_level_switch_invalid,
-                                );
+                                self.lock_error_output_state_tank_level_switch_invalid = self
+                                    .output_state(
+                                        c > 0.0,
+                                        "INVALID",
+                                        "VALID",
+                                        &self.config.output_file_name_tank_level_switch_invalid,
+                                        self.lock_error_output_state_tank_level_switch_invalid,
+                                    );
                                 Some(c > 0.0)
                             }
                             Err(_) => {
@@ -761,7 +780,7 @@ impl DataLogger {
                 }
                 None => None,
             };
-            
+
             let pH_filtered = match ph {
                 Some(c) => {
                     let filtered_pH = self.filter_pH.get_filtered_value(c);
@@ -775,7 +794,7 @@ impl DataLogger {
                 }
                 None => None,
             };
-            
+
             let conductivity_filtered = match conductivity {
                 Some(c) => {
                     let filtered_conductivity = self.filter_conductivity.get_filtered_value(c);
@@ -783,7 +802,7 @@ impl DataLogger {
                         filtered_conductivity,
                         AquariumSignal::Conductivity,
                         &self.config.output_file_name_conductivity_filtered,
-                        self.lock_error_output_signal_conductivity_filtered
+                        self.lock_error_output_signal_conductivity_filtered,
                     );
                     Some(filtered_conductivity)
                 }
@@ -795,7 +814,11 @@ impl DataLogger {
                 true => match SqlInterface::get_current_timestamp(&mut sql_interface_data.conn) {
                     Ok(c) => {
                         self.lock_error_get_timestamp = false;
-                        self.lock_error_output_timestamp = self.output_timestamp(c, &self.config.output_file_name_timestamp, self.lock_error_output_timestamp);
+                        self.lock_error_output_timestamp = self.output_timestamp(
+                            c,
+                            &self.config.output_file_name_timestamp,
+                            self.lock_error_output_timestamp,
+                        );
                         c
                     }
                     Err(e) => {
@@ -856,7 +879,7 @@ impl DataLogger {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command = false;
                         true
-                    },
+                    }
                     _ => {
                         if !self.lock_warn_inapplicable_command {
                             warn!(

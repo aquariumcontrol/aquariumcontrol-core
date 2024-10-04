@@ -199,15 +199,51 @@ pub struct Controllino {
 
     /// Interface to serial port for communication via USB
     pub serial_port_opt: Option<Box<dyn SerialPort>>,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump
     lock_error_actuate_refill: bool,
-    
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate ventilation
+    lock_error_actuate_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate heating
+    lock_error_actuate_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate feed
+    lock_error_actuate_feed: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate Balling mineral dosing
+    lock_error_actuate_balling: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to refill control via channel
     lock_error_channel_send_refill: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from refill control via channel
     lock_error_channel_receive_refill: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to feed control via channel
+    lock_error_channel_send_feed: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from feed control via channel
+    lock_error_channel_receive_feed: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to ventilation control via channel
+    lock_error_channel_send_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from ventilation control via channel
+    lock_error_channel_receive_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to heating control via channel
+    lock_error_channel_send_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from heating control via channel
+    lock_error_channel_receive_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to balling minderal dosing via channel
+    lock_error_channel_send_balling: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via channel
+    lock_error_channel_receive_balling: bool,
 }
 
 impl Controllino {
@@ -303,8 +339,20 @@ impl Controllino {
             controllino_processing_duration_opt: controllino_processing_duration_opt,
             serial_port_opt: serial_port_opt,
             lock_error_actuate_refill: false,
+            lock_error_actuate_ventilation: false,
+            lock_error_actuate_heating: false,
+            lock_error_actuate_feed: false,
+            lock_error_actuate_balling: false,
             lock_error_channel_send_refill: false,
             lock_error_channel_receive_refill: false,
+            lock_error_channel_send_heating: false,
+            lock_error_channel_receive_heating: false,
+            lock_error_channel_send_ventilation: false,
+            lock_error_channel_receive_ventilation: false,
+            lock_error_channel_send_balling: false,
+            lock_error_channel_receive_balling: false,
+            lock_error_channel_send_feed: false,
+            lock_error_channel_receive_feed: false,
         }
     }
 
@@ -362,7 +410,7 @@ impl Controllino {
                         &self.config,
                     ) {
                         Ok(()) => {
-                            self.lock_error_actuate_refill = false;   
+                            self.lock_error_actuate_refill = false;
                         }
                         Err(e) => {
                             if !self.lock_error_actuate_refill {
@@ -376,7 +424,7 @@ impl Controllino {
                     }
                     match tx_to_refill.send(true) {
                         Ok(()) => {
-                            self.lock_error_channel_send_refill = false;   
+                            self.lock_error_channel_send_refill = false;
                         }
                         Err(e) => {
                             if !self.lock_error_channel_send_refill {
@@ -422,7 +470,7 @@ impl Controllino {
                         &self.config,
                     ) {
                         Ok(()) => {
-                            self.lock_error_actuate_heating = false;   
+                            self.lock_error_actuate_heating = false;
                         }
                         Err(e) => {
                             if !self.lock_error_actuate_heating {
@@ -436,7 +484,7 @@ impl Controllino {
                     }
                     match tx_to_heating.send(true) {
                         Ok(()) => {
-                            self.lock_error_channel_send_heating = false;                           
+                            self.lock_error_channel_send_heating = false;
                         }
                         Err(e) => {
                             if !self.lock_error_channel_send_heating {
@@ -472,7 +520,7 @@ impl Controllino {
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
-                    self.lock_error_channel_receive_ventilation = false;                    
+                    self.lock_error_channel_receive_ventilation = false;
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -496,7 +544,7 @@ impl Controllino {
                     }
                     match tx_to_ventilation.send(true) {
                         Ok(()) => {
-                            self.lock_error_channel_send_ventilation = false;                           
+                            self.lock_error_channel_send_ventilation = false;
                         }
                         Err(e) => {
                             if !self.lock_error_channel_send_ventilation {
@@ -542,7 +590,7 @@ impl Controllino {
                         &self.config,
                     ) {
                         Ok(()) => {
-                            self.lock_error_actuate_balling = false;                           
+                            self.lock_error_actuate_balling = false;
                         }
                         Err(e) => {
                             if !self.lock_error_actuate_balling {
@@ -556,7 +604,7 @@ impl Controllino {
                     }
                     match tx_to_balling.send(true) {
                         Ok(()) => {
-                            self.lock_error_channel_send_balling = false;                           
+                            self.lock_error_channel_send_balling = false;
                         }
                         Err(e) => {
                             if !self.lock_error_channel_send_balling {
@@ -592,7 +640,7 @@ impl Controllino {
             // *** communication with feed control ***
             match rx_from_feed.try_recv() {
                 Ok(c) => {
-                    self.lock_error_channel_receive_feed
+                    self.lock_error_channel_receive_feed = false;
                     match actuator.actuate(
                         c,
                         tx_to_tcp_opt.as_ref(),
@@ -602,7 +650,7 @@ impl Controllino {
                         &self.config,
                     ) {
                         Ok(()) => {
-                            self.lock_error_actuate_feed = false;    
+                            self.lock_error_actuate_feed = false;
                         }
                         Err(e) => {
                             if !self.lock_error_actuate_feed {
@@ -616,7 +664,7 @@ impl Controllino {
                     }
                     match tx_to_feed.send(true) {
                         Ok(()) => {
-                            self.lock_error_channel_send_feed = false;                           
+                            self.lock_error_channel_send_feed = false;
                         }
                         Err(e) => {
                             if !self.lock_error_channel_send_feed {

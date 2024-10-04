@@ -383,12 +383,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -459,12 +455,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -528,12 +520,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -609,12 +597,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -677,12 +661,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -775,12 +755,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
@@ -853,12 +829,8 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals = TankLevelSwitchSignals {
-                    tank_level_switch_position: false,
-                    tank_level_switch_invalid: false,
-                    error_receive_tank_level_switch_position: false,
-                    error_receive_tank_level_switch_invalid: false,
-                };
+                let mut tank_level_switch_signals =
+                    TankLevelSwitchSignals::new(false, false, false, false);
 
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
