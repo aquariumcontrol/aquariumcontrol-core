@@ -54,6 +54,54 @@ pub struct ScheduleCheck {
 
     /// SQL database interface for Balling dosing control
     sql_interface_schedule: SqlInterfaceSchedule,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for Balling mineral dosing
+    lock_error_find_balling_schedule: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for refill control
+    lock_error_find_refill_schedule: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for ventilation control
+    lock_error_find_ventilation_schedule: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for heating control
+    lock_error_find_heating_schedule: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from Balling dosing via channel
+    lock_error_channel_receive_balling: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from ventilation control via channel
+    lock_error_channel_receive_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from refill control via channel
+    lock_error_channel_receive_refill: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from heating control via channel
+    lock_error_channel_receive_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to Balling mineral dosing via channel
+    lock_error_channel_send_balling: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to ventilation control via channel
+    lock_error_channel_send_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to refill control via channel
+    lock_error_channel_send_refill: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to heating control via channel
+    lock_error_channel_send_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from Balling mineral dosing
+    lock_warn_inapplicable_command_balling: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from ventilation control
+    lock_warn_inapplicable_command_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from refill control
+    lock_warn_inapplicable_command_refill: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
+    lock_warn_inapplicable_command_heating: bool,
 }
 
 impl ScheduleCheck {
@@ -70,6 +118,22 @@ impl ScheduleCheck {
         ScheduleCheck {
             config: config,
             sql_interface_schedule: sql_interface_schedule,
+            lock_error_find_balling_schedule: false,
+            lock_error_find_refill_schedule: false,
+            lock_error_find_ventilation_schedule: false,
+            lock_error_find_heating_schedule: false,
+            lock_error_channel_receive_balling: false,
+            lock_error_channel_receive_ventilation: false,
+            lock_error_channel_receive_refill: false,
+            lock_error_channel_receive_heating: false,
+            lock_error_channel_send_balling: false,
+            lock_error_channel_send_ventilation: false,
+            lock_error_channel_send_refill: false,
+            lock_error_channel_send_heating: false,
+            lock_warn_inapplicable_command_balling: false,
+            lock_warn_inapplicable_command_ventilation: false,
+            lock_warn_inapplicable_command_refill: false,
+            lock_warn_inapplicable_command_heating: false,
         }
     }
 
@@ -81,44 +145,65 @@ impl ScheduleCheck {
     /// * `rx` - receiver part of channel for communication from one of the above mentioned threads
     /// * `schedule_entry` - schedule data for the specific thread
     fn check_pending_schedule_request(
-        &self,
+        config: &ScheduleCheckConfig,
         tx: &Sender<bool>,
         rx: &Receiver<InternalCommand>,
         schedule_entry: Option<&ScheduleEntry>,
+        lock_error_channel_receive: &mut bool,
+        lock_error_channel_send: &mut bool,
+        lock_warn_inapplicable_command: &mut bool,
     ) {
         match tx.send(match rx.try_recv() {
             Ok(c) => match c {
-                InternalCommand::ScheduleCheck => match schedule_entry {
-                    Some(c) => c.check_if_allowed(),
-                    None => self.config.strategy_if_schedule_not_found,
-                },
+                InternalCommand::ScheduleCheck => {
+                    *lock_warn_inapplicable_command = false;
+                    match schedule_entry {
+                        Some(c) => c.check_if_allowed(),
+                        None => config.strategy_if_schedule_not_found,
+                    }
+                }
                 _ => {
-                    warn!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                        "ignoring not applicable command ({c:?}) from signal handler"
-                    );
+                    if !*lock_warn_inapplicable_command {
+                        warn!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "ignoring not applicable command ({c:?}) from signal handler"
+                        );
+                        *lock_warn_inapplicable_command = true;
+                    }
                     return;
                 }
             },
             Err(e) => {
                 match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        *lock_error_channel_receive = false;
+                    }
                     TryRecvError::Disconnected => {
-                        error!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
+                        if !*lock_error_channel_receive {
+                            error!(
+                                target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                                "receiving command from signal handler failed ({e:?})"
+                            );
+                            *lock_error_channel_receive = true;
+                        }
                     }
                 }
                 return;
             }
         }) {
-            Ok(_) => { /* nothing to be done */ }
+            Ok(_) => {
+                /* nothing to be done */
+                *lock_error_channel_send = false;
+            }
             Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                    "sending back message failed ({e:?})"
-                );
+                if !*lock_error_channel_send {
+                    error!(
+                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        "sending back message failed ({e:?})"
+                    );
+                    *lock_error_channel_send = true;
+                }
             }
         };
     }
@@ -163,92 +248,142 @@ impl ScheduleCheck {
                 break;
             }
 
+            //*********** ventilation ***********
             let schedule_entry_ventilation_opt = match self
                 .sql_interface_schedule
                 .find_schedule(ScheduleType::Ventilation)
             {
-                Ok(c) => Some(c),
+                Ok(c) => {
+                    self.lock_error_find_ventilation_schedule = false;
+                    Some(c)
+                }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                        "could not find schedule for ventilation ({e:?})"
-                    );
+                    if !self.lock_error_find_ventilation_schedule {
+                        error!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "could not find schedule for ventilation ({e:?})"
+                        );
+                        self.lock_error_find_ventilation_schedule = true;
+                    }
                     None
                 }
             };
-            self.check_pending_schedule_request(
+            Self::check_pending_schedule_request(
+                &self.config,
                 &tx_to_ventilation,
                 &rx_from_ventilation,
                 schedule_entry_ventilation_opt,
+                &mut self.lock_error_channel_receive_ventilation,
+                &mut self.lock_error_channel_send_ventilation,
+                &mut self.lock_warn_inapplicable_command_ventilation,
             );
+            //***************************************
 
+            //*********** heating ***********
             let schedule_entry_heating_opt = match self
                 .sql_interface_schedule
                 .find_schedule(ScheduleType::Heating)
             {
-                Ok(c) => Some(c),
+                Ok(c) => {
+                    self.lock_error_find_heating_schedule = false;
+                    Some(c)
+                }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                        "could not find schedule for heating ({e:?})"
-                    );
+                    if !self.lock_error_find_heating_schedule {
+                        error!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "could not find schedule for heating ({e:?})"
+                        );
+                        self.lock_error_find_heating_schedule = true;
+                    }
                     None
                 }
             };
-            self.check_pending_schedule_request(
+            Self::check_pending_schedule_request(
+                &self.config,
                 &tx_to_heating,
                 &rx_from_heating,
                 schedule_entry_heating_opt,
+                &mut self.lock_error_channel_receive_heating,
+                &mut self.lock_error_channel_send_heating,
+                &mut self.lock_warn_inapplicable_command_heating,
             );
+            //***************************************
 
+            //*********** refill ***********
             let schedule_entry_refill_opt = match self
                 .sql_interface_schedule
                 .find_schedule(ScheduleType::Refill)
             {
-                Ok(c) => Some(c),
+                Ok(c) => {
+                    self.lock_error_find_refill_schedule = false;
+                    Some(c)
+                }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                        "could not find schedule for refill ({e:?})"
-                    );
+                    if !self.lock_error_find_refill_schedule {
+                        error!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "could not find schedule for refill ({e:?})"
+                        );
+                        self.lock_error_find_refill_schedule = true;
+                    }
                     None
                 }
             };
-            self.check_pending_schedule_request(
+            Self::check_pending_schedule_request(
+                &self.config,
                 &tx_to_refill,
                 &rx_from_refill,
                 schedule_entry_refill_opt,
+                &mut self.lock_error_channel_receive_refill,
+                &mut self.lock_error_channel_send_refill,
+                &mut self.lock_warn_inapplicable_command_refill,
             );
+            //***************************************
 
+            //*********** Balling ***********
             let schedule_entry_balling_opt = match self
                 .sql_interface_schedule
                 .find_schedule(ScheduleType::Balling)
             {
-                Ok(c) => Some(c),
+                Ok(c) => {
+                    self.lock_error_find_balling_schedule = false;
+                    Some(c)
+                }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
-                        "could not find schedule for balling ({e:?})"
-                    );
+                    if !self.lock_error_find_balling_schedule {
+                        error!(
+                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            "could not find schedule for balling ({e:?})"
+                        );
+                        self.lock_error_find_balling_schedule = true;
+                    }
                     None
                 }
             };
-            self.check_pending_schedule_request(
+            Self::check_pending_schedule_request(
+                &self.config,
                 &tx_to_balling,
                 &rx_from_balling,
                 schedule_entry_balling_opt,
+                &mut self.lock_error_channel_receive_balling,
+                &mut self.lock_error_channel_send_balling,
+                &mut self.lock_warn_inapplicable_command_balling,
             );
+            //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             loop_counter += 1;
         }
+
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.
         info!(
             target: Self::LOG_TARGET_SCHEDULE_CHECK,
             "sending Quit confirmation to signal handler."
         );
+
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
