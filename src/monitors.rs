@@ -43,6 +43,12 @@ pub struct MonitorsConfig {
 pub struct Monitors {
     /// configuration data for monitors
     config: MonitorsConfig,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination_signal: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
+    lock_warn_inapplicable_command: bool,
 }
 
 impl ProcessExternalRequestTrait for Monitors {}
@@ -54,7 +60,11 @@ impl Monitors {
     /// # Arguments
     /// * `config` - configuration data for monitors
     pub fn new(config: MonitorsConfig) -> Monitors {
-        Self { config: config }
+        Self {
+            config: config,
+            lock_error_channel_receive_termination_signal: false,
+            lock_warn_inapplicable_command: false,
+        }
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
@@ -150,22 +160,32 @@ impl Monitors {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => true,
-                    _ => {
-                        warn!(
-                            target: Self::LOG_TARGET_MONITORS,
-                            "ignoring not applicable command {} from signal handler.",
-                            c
-                        );
-                        false
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+
+                    match c {
+                        InternalCommand::Terminate => true,
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
+                                    target: Self::LOG_TARGET_MONITORS,
+                                    "ignoring inapplicable command {} from signal handler.",
+                                    c
+                                );
+                                self.lock_warn_inapplicable_command = true;
+                            }
+                            false
+                        }
                     }
-                },
+                }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_MONITORS,
-                        "receiving termination signal failed ({e:?})"
-                    );
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(
+                            target: Self::LOG_TARGET_MONITORS,
+                            "receiving termination signal failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination_signal = true;
+                    }
                     false
                 }
             };

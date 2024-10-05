@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, info};
+use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -103,7 +103,7 @@ pub struct Balling {
     lock_error_channel_receive_termination_signal: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
-    lock_info_inapplicable_command: bool,
+    lock_warn_inapplicable_command: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to schedule check
     lock_error_channel_send_schedule_check: bool,
@@ -146,7 +146,7 @@ impl Balling {
             countdown_dosing_pump3: countdown_dosing_pump3,
             countdown_dosing_pump4: countdown_dosing_pump4,
             lock_error_channel_receive_termination_signal: false,
-            lock_info_inapplicable_command: false,
+            lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
         }
@@ -537,15 +537,15 @@ impl Balling {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
                         InternalCommand::Terminate => {
-                            self.lock_info_inapplicable_command = false;
+                            self.lock_warn_inapplicable_command = false;
                             true
                         }
                         _ => {
-                            if !self.lock_info_inapplicable_command {
-                                info!(
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
                                     target: Self::LOG_TARGET_BALLING,
                                     "ignoring inapplicable command {} from signal handler.", c);
-                                self.lock_info_inapplicable_command = true;
+                                self.lock_warn_inapplicable_command = true;
                             }
                             false
                         }
