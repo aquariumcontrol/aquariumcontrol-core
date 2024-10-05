@@ -744,4 +744,31 @@ pub mod tests {
 
         println!("temperature={}, humidity={}", temperature, humidity);
     }
+
+    #[test]
+    pub fn test_calc_data_bits() {
+        let stimuli: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX] = [
+            0, 23, 51, 25, 51, 25, 51, 25, 51, 25, 51, 25, 51, 71, 51, 26, 51, 71, 51, 71, 51, 71,
+            51, 25, 51, 71, 51, 25, 51, 71, 51, 27, 51, 25, 51, 25, 51, 25, 51, 25, 51, 25, 51, 25,
+            51, 25, 51, 33, 51, 71, 51, 71, 51, 71, 51, 71, 51, 25, 51, 71, 51, 71, 51, 73, 51, 71,
+            51, 71, 51, 71, 51, 25, 51, 25, 51, 25, 51, 71, 51, 71, 53, 0, 0, 0, 0, 0,
+        ];
+
+        let result = Dht::calc_data_bits(stimuli, 86);
+
+        let reference: [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1] = [
+            false, false, false, false, false, false, false, true, false, true, true, true, false,
+            true, false, true, false, false, false, false, false, false, false, false, true, true,
+            true, true, false, true, true, true, true, true, true, false, false, false, true, true,
+        ];
+
+        for i in 0..dht22_constants::DHT22_BYTE4_STOP_IDX {
+            println!(
+                "reference[{}]={} result[{}]={}",
+                i, reference[i], i, result[i]
+            );
+        }
+
+        assert!(reference.iter().eq(result.iter()));
+    }
 }

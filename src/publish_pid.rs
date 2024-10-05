@@ -48,7 +48,7 @@ impl PublishPid {
                         target: Self::LOG_TARGET_PUBLISH_PID,
                         "PID file ({}) contains invalid content: {e:?}",
                         config.pid_filename
-                    );                    
+                    );
                     panic!(
                         "{}: PID file ({}) contains invalid content: {e:?}",
                         Self::LOG_TARGET_PUBLISH_PID,
@@ -59,9 +59,9 @@ impl PublishPid {
             if process_id_read > 0 {
                 info!(
                     target: Self::LOG_TARGET_PUBLISH_PID,
-                    "PID file ({}) already contains published PID.",                    
+                    "PID file ({}) already contains published PID.",
                     config.pid_filename
-                );                
+                );
                 panic!(
                     "{}: PID file ({}) already contains published PID.",
                     Self::LOG_TARGET_PUBLISH_PID,
