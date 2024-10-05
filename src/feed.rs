@@ -62,6 +62,15 @@ pub struct Feed {
 
     /// communication from trait implementation: id of feed profile to be executed requested externally
     pub profile_id_requested: i32,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from database
+    lock_error_get_feedschedule_entry: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
+    lock_warn_inapplicable_command: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to rceive termination signal via channel
+    lock_error_channel_receive_termination_signal: bool,
 }
 
 impl Feed {
@@ -77,6 +86,9 @@ impl Feed {
             sql_interface_feed: sql_interface_feed,
             execute_command_received: false,
             profile_id_requested: -1,
+            lock_error_get_feedschedule_entry: false,
+            lock_warn_inapplicable_command: false,
+            lock_error_channel_receive_termination_signal: false,
         }
     }
 
@@ -184,6 +196,7 @@ impl Feed {
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entry) => {
+                            self.lock_error_get_feedschedule_entry = false;
                             //println!(
                             //    "Feed schedule entry before update: \
                             //    timestamp={}, profile_name={}, repeat_daily={}",
@@ -241,10 +254,13 @@ impl Feed {
                         }
                     },
                     Err(e) => {
-                        error!(
-                            target: Self::LOG_TARGET_FEED,
-                            "could not retrieve feed schedule information from database ({e:?})"
-                        );
+                        if !self.lock_error_get_feedschedule_entry {
+                            error!(
+                                target: Self::LOG_TARGET_FEED,
+                                "could not retrieve feed schedule information from database ({e:?})"
+                            );
+                            self.lock_error_get_feedschedule_entry = true;
+                        }
                     }
                 };
             }
@@ -322,20 +338,34 @@ impl Feed {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => true,
-                    _ => {
-                        warn!(
-                            target: Self::LOG_TARGET_FEED,
-                            "ignoring not applicable command from signal handler ({})",
-                            c);
-                        false
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command = false;                        
+                            true
+                        },
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
+                                    target: Self::LOG_TARGET_FEED,
+                                    "ignoring inapplicable command from signal handler ({})",
+                                    c
+                                );
+                                self.lock_warn_inapplicable_command = true;
+                            }
+                            false
+                        }
                     }
                 },
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FEED,
-                        "receiving termination signal failed ({e:?})");
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(
+                            target: Self::LOG_TARGET_FEED,
+                            "receiving termination signal failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination_signal = true;
+                    }
                     false
                 }
             };
