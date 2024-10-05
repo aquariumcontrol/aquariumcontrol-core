@@ -170,6 +170,24 @@ fn switch_off_ventilation(
 
 pub struct Ventilation {
     config: VentilationConfig,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination_signal: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
+    lock_warn_inapplicable_command: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to schedule check
+    lock_error_channel_send_schedule_check: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from schedule check
+    lock_error_channel_receive_schedule_check: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to GPIO handler
+    lock_error_channel_send_water_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from GPIO handler
+    lock_error_channel_receive_water_temperature: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -179,7 +197,15 @@ impl Ventilation {
     /// # Arguments
     /// * `config` - configuration data for Ventilation control
     pub fn new(config: VentilationConfig) -> Ventilation {
-        Self { config: config }
+        Self {
+            config: config,
+            lock_error_channel_receive_termination_signal: false,
+            lock_warn_inapplicable_command: false,
+            lock_error_channel_send_schedule_check: false,
+            lock_error_channel_receive_schedule_check: false,
+            lock_error_channel_send_water_temperature: false,
+            lock_error_channel_receive_water_temperature: false,
+        }
     }
 
     /// Calculates a normalized controller deviation between measured value and target value in the range from zero to one.
@@ -240,15 +266,22 @@ impl Ventilation {
                     AquariumSignal::WaterTemperature,
                 )) {
                     Ok(_) => {
+                        self.lock_error_channel_send_water_temperature = false;
                         measurement_error = false;
                         // now listen for response
                         measured_temperature = match rx_from_gpio.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_water_temperature = false;
+                                c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_VENTILATION,
-                                    "reading channel content for water temperature failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_water_temperature {
+                                    error!(
+                                        target: LOG_TARGET_VENTILATION,
+                                        "reading channel content for water temperature failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_water_temperature = true;
+                                }
                                 measurement_error = true;
                                 measured_temperature // keep the old value
                             }
@@ -256,33 +289,46 @@ impl Ventilation {
                     }
                     Err(e) => {
                         measurement_error = true;
-                        error!(
-                            target: LOG_TARGET_VENTILATION,
-                            "channel communication to GPIO handler when requesting water temperature failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_water_temperature {
+                            error!(
+                                target: LOG_TARGET_VENTILATION,
+                                "channel communication to GPIO handler when requesting water temperature failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_water_temperature = true;
+                        }
                     }
                 }
 
                 // schedule check to see if actuation is allowed
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
+                        self.lock_error_channel_send_schedule_check = false;
                         // now listen for response
                         schedule_check_result = match rx_from_schedule_check.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_schedule_check = false;
+                                c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_VENTILATION,
-                                    "reading channel content for schedule check failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_schedule_check {
+                                    error!(
+                                        target: LOG_TARGET_VENTILATION,
+                                        "reading channel content for schedule check failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_schedule_check = true;
+                                }
                                 true // assume we are allowed to actuate when communication is not successful
                             }
                         };
                     }
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_VENTILATION,
-                            "channel communication to schedule check failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_schedule_check {
+                            error!(
+                                target: LOG_TARGET_VENTILATION,
+                                "channel communication to schedule check failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_schedule_check = true;
+                        }
                     }
                 }
 
@@ -470,22 +516,34 @@ impl Ventilation {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => true,
-                    _ => {
-                        warn!(
-                            target: LOG_TARGET_VENTILATION,
-                            "ignoring inapplicable command ({}) from signal handler.",
-                            c
-                        );
-                        false
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command = false;
+                            true
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
+                                    target: LOG_TARGET_VENTILATION,
+                                    "ignoring inapplicable command ({}) from signal handler.",
+                                    c
+                                );
+                                self.lock_warn_inapplicable_command = true;
+                            }
+                            false
+                        }
                     }
-                },
+                }
                 Err(e) => {
-                    error!(
-                        target: LOG_TARGET_VENTILATION,
-                        "receiving termination signal failed ({e:?})"
-                    );
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(
+                            target: LOG_TARGET_VENTILATION,
+                            "receiving termination signal failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination_signal = true;
+                    }
                     false
                 }
             };

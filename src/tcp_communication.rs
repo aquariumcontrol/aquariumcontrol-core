@@ -131,6 +131,9 @@ pub struct TcpCommunication {
 
     /// buffered reader for TCP stream
     buf_reader: BufReader<TcpStream>,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to GPIO handler
+    lock_error_channel_send_gpio: bool,
 }
 
 impl TcpCommunication {
@@ -160,6 +163,7 @@ impl TcpCommunication {
         Ok(TcpCommunication {
             write_stream: stream.try_clone().unwrap(),
             buf_reader: BufReader::new(stream),
+            lock_error_channel_send_gpio: false,
         })
     }
 
@@ -354,16 +358,23 @@ impl TcpCommunication {
                                     match tx_to_gpio_opt {
                                         Some(ref tx_to_gpio) => {
                                             match tx_to_gpio.send(response_value) {
-                                                Ok(()) => {}
+                                                Ok(()) => {
+                                                    /* do nothing */
+                                                    self.lock_error_channel_send_gpio = false;
+                                                }
                                                 Err(e) => {
-                                                    error!(
-                                                        target: Self::LOG_TARGET_TCP_COMMUNICATION,
-                                                        "sending esponse value back to data logger failed ({e:?})"
-                                                    );
+                                                    if !self.lock_error_channel_send_gpio {
+                                                        error!(
+                                                            target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                                                            "sending response value back to data logger failed ({e:?})"
+                                                        );
+                                                        self.lock_error_channel_send_gpio = true;
+                                                    }
                                                 }
                                             }
                                         }
                                         None => {
+                                            // TCP communication is only used for development.
                                             panic!(
                                                 "{}: Missing channel to return value to GpioHandler.",
                                                 Self::LOG_TARGET_TCP_COMMUNICATION

@@ -63,7 +63,7 @@ pub struct ScheduleCheck {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for ventilation control
     lock_error_find_ventilation_schedule: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for heating control
     lock_error_find_heating_schedule: bool,
 
