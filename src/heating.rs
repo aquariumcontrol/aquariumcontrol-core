@@ -237,6 +237,39 @@ pub struct Heating {
 
     /// SQL interface for heating control
     sql_interface_heating: SqlInterfaceHeating,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive water temperature via channel from GPIO handler
+    lock_error_channel_receive_water_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for water temperature via channel to GPIO handler    
+    lock_error_channel_send_water_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive ambient temperature via channel from GPIO handler
+    lock_error_channel_receive_ambient_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for ambient temperature via channel to GPIO handler    
+    lock_error_channel_send_ambient_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch position via channel from GPIO handler
+    lock_error_channel_receive_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch position via channel to GPIO handler    
+    lock_error_channel_send_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch invalid via channel from GPIO handler
+    lock_error_channel_receive_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch invalid via channel to GPIO handler    
+    lock_error_channel_send_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
+    lock_error_channel_receive_schedule_check: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination_signal: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
+    lock_warn_inapplicable_command: bool,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -250,6 +283,17 @@ impl Heating {
         Self {
             config: config,
             sql_interface_heating: sql_interface_heating,
+            lock_error_channel_receive_water_temperature: false,
+            lock_error_channel_send_water_temperature: false,
+            lock_error_channel_receive_ambient_temperature: false,
+            lock_error_channel_send_ambient_temperature: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_invalid: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_receive_schedule_check: false,
+            lock_error_channel_receive_termination_signal: false,
+            lock_warn_inapplicable_command: false,
         }
     }
 
@@ -376,15 +420,22 @@ impl Heating {
                     AquariumSignal::WaterTemperature,
                 )) {
                     Ok(_) => {
+                        self.lock_error_channel_send_water_temperature = false;
                         measurement_error_water_temperature = false;
                         // now listen for response
                         measured_water_temperature = match rx_from_gpio.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_water_temperature = false;
+                                c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_HEATING,
-                                    "receiving water temperature from GPIO handler failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_water_temperature {
+                                    error!(
+                                        target: LOG_TARGET_HEATING,
+                                        "receiving water temperature from GPIO handler failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_water_temperature = true;
+                                }
                                 measurement_error_water_temperature = true;
                                 measured_water_temperature // keep the old value
                             }
@@ -392,10 +443,13 @@ impl Heating {
                     }
                     Err(e) => {
                         measurement_error_water_temperature = true;
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "channel communication to GPIO handler for requesting water temperature failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_water_temperature {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "channel communication to GPIO handler for requesting water temperature failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_water_temperature = true;
+                        }
                     }
                 }
 
@@ -404,15 +458,22 @@ impl Heating {
                     AquariumSignal::AmbientTemperature,
                 )) {
                     Ok(_) => {
+                        self.lock_error_channel_send_ambient_temperature = false;
                         measurement_error_ambient_temperature = false;
                         // now listen for response
                         measured_ambient_temperature = match rx_from_gpio.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_ambient_temperature = true;
+                                c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_HEATING,
-                                    "reading ambient temperature from GPIO handler failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_ambient_temperature {
+                                    error!(
+                                        target: LOG_TARGET_HEATING,
+                                        "reading ambient temperature from GPIO handler failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_ambient_temperature = true;
+                                }
                                 measurement_error_ambient_temperature = true;
                                 measured_ambient_temperature // keep the old value
                             }
@@ -420,10 +481,13 @@ impl Heating {
                     }
                     Err(e) => {
                         measurement_error_ambient_temperature = true;
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "channel communication to GPIO handler for reading ambient temperature failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_water_temperature {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "channel communication to GPIO handler for reading ambient temperature failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_water_temperature = true;
+                        }
                     }
                 }
 
@@ -432,22 +496,33 @@ impl Heating {
                     AquariumSignal::TankLevelSwitchPosition,
                 )) {
                     Ok(_) => {
+                        self.lock_error_channel_send_tank_level_switch_position = false;
                         // now listen for response
                         match rx_from_gpio.recv() {
-                            Ok(c) => measured_tank_level_switch_position = c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_tank_level_switch_position = false;
+                                measured_tank_level_switch_position = c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_HEATING,
-                                    "reading tank level switch position from GPIO handler failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_tank_level_switch_position {
+                                    error!(
+                                        target: LOG_TARGET_HEATING,
+                                        "reading tank level switch position from GPIO handler failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_tank_level_switch_position =
+                                        true;
+                                }
                             }
                         };
                     }
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "channel communication to GPIO handler for reading tank level switch position failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_tank_level_switch_position {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "channel communication to GPIO handler for reading tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_tank_level_switch_position = true;
+                        }
                     }
                 }
 
@@ -456,22 +531,33 @@ impl Heating {
                     AquariumSignal::TankLevelSwitchInvalid,
                 )) {
                     Ok(_) => {
+                        self.lock_error_channel_send_tank_level_switch_invalid = false;
                         // now listen for response
                         match rx_from_gpio.recv() {
-                            Ok(c) => measured_tank_level_switch_invalid = c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_tank_level_switch_invalid = false;
+                                measured_tank_level_switch_invalid = c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_HEATING,
-                                    "reading tank level switch invalid from GPIO handler failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_tank_level_switch_invalid {
+                                    error!(
+                                        target: LOG_TARGET_HEATING,
+                                        "reading tank level switch invalid from GPIO handler failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_tank_level_switch_invalid =
+                                        true;
+                                }
                             }
                         };
                     }
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "channel communication to GPIO handler for reading tank level switch invalid failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_tank_level_switch_invalid {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "channel communication to GPIO handler for reading tank level switch invalid failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_tank_level_switch_invalid = true;
+                        }
                     }
                 }
 
@@ -489,12 +575,18 @@ impl Heating {
                     Ok(_) => {
                         // now listen for response
                         schedule_check_result = match rx_from_schedule_check.recv() {
-                            Ok(c) => c,
+                            Ok(c) => {
+                                self.lock_error_channel_receive_schedule_check = false;
+                                c
+                            }
                             Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_HEATING,
-                                    "receiving from schedule check failed ({e:?})"
-                                );
+                                if !self.lock_error_channel_receive_schedule_check {
+                                    error!(
+                                        target: LOG_TARGET_HEATING,
+                                        "receiving from schedule check failed ({e:?})"
+                                    );
+                                    self.lock_error_channel_receive_schedule_check = true;
+                                }
                                 false // assume we are not allowed to actuate when communication is not successful
                             }
                         };
@@ -733,20 +825,33 @@ impl Heating {
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => true,
-                    _ => {
-                        warn!(
-                            target: LOG_TARGET_HEATING,
-                            "ignoring not applicable command from signal handler (c)"
-                        );
-                        false
+                Ok(c) => {
+                    self.lock_error_channel_receive_termination_signal = false;
+                    match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command = false;
+                            true
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command {
+                                warn!(
+                                    target: LOG_TARGET_HEATING,
+                                    "ignoring not applicable command from signal handler (c)"
+                                );
+                                self.lock_warn_inapplicable_command = true;
+                            }
+                            false
+                        }
                     }
-                },
+                }
                 Err(e) => {
-                    error!(
-                        target: LOG_TARGET_HEATING,
-                        "receiving termination signal from signal handler failed ({e:?})");
+                    if !self.lock_error_channel_receive_termination_signal {
+                        error!(
+                            target: LOG_TARGET_HEATING,
+                            "receiving termination signal from signal handler failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination_signal = true;
+                    }
                     false
                 }
             };

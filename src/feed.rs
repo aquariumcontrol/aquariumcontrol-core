@@ -62,13 +62,13 @@ pub struct Feed {
 
     /// communication from trait implementation: id of feed profile to be executed requested externally
     pub profile_id_requested: i32,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from database
     lock_error_get_feedschedule_entry: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
     lock_warn_inapplicable_command: bool,
-    
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to rceive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,
 }
@@ -342,9 +342,9 @@ impl Feed {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
                         InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;                        
+                            self.lock_warn_inapplicable_command = false;
                             true
-                        },
+                        }
                         _ => {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
@@ -357,7 +357,7 @@ impl Feed {
                             false
                         }
                     }
-                },
+                }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
                         error!(
