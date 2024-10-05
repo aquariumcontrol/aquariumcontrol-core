@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use log::info;
 use serde_derive::Deserialize;
 use std::fs;
 use std::process;
@@ -43,6 +44,11 @@ impl PublishPid {
             let process_id_read: u32 = match file_data_trimmed.parse() {
                 Ok(c) => c,
                 Err(e) => {
+                    info!(
+                        target: Self::LOG_TARGET_PUBLISH_PID,
+                        "PID file ({}) contains invalid content: {e:?}",
+                        config.pid_filename
+                    );                    
                     panic!(
                         "{}: PID file ({}) contains invalid content: {e:?}",
                         Self::LOG_TARGET_PUBLISH_PID,
@@ -51,6 +57,11 @@ impl PublishPid {
                 }
             };
             if process_id_read > 0 {
+                info!(
+                    target: Self::LOG_TARGET_PUBLISH_PID,
+                    "PID file ({}) already contains published PID.",                    
+                    config.pid_filename
+                );                
                 panic!(
                     "{}: PID file ({}) already contains published PID.",
                     Self::LOG_TARGET_PUBLISH_PID,
