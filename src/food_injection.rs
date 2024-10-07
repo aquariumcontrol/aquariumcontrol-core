@@ -33,7 +33,7 @@ pub trait FoodInjectionTrait {
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
-    );
+    ) -> bool;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -308,7 +308,7 @@ impl FoodInjectionTrait for FoodInjection {
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
-    ) {
+    ) -> bool {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: i16 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
@@ -318,7 +318,7 @@ impl FoodInjectionTrait for FoodInjection {
         let mut target_aux_pump1_state: ActuatorState;
         let mut target_aux_pump2_state: ActuatorState;
         let mut sleep_counter_millis: i16;
-        let mut quit_command_received: bool;
+        let mut quit_command_received: bool = false;
 
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
@@ -437,6 +437,8 @@ impl FoodInjectionTrait for FoodInjection {
             tx_to_controllino,
             rx_from_controllino,
         );
+        
+        quit_command_received
     }
 }
 
