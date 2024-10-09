@@ -9,8 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::error;
 
-#[cfg(target_os = "linux")]
-use log::{info, warn};
+//#[cfg(target_os = "linux")]
+//use log::{info, warn};
 #[cfg(target_os = "linux")]
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
@@ -215,7 +215,7 @@ impl Dht {
             if ticks[i] > dht22_constants::DHT22_BIT_TIMING_LIMIT {
                 data_bits[count_data_bits] = true;
             }
-            println!(
+            /*println!(
                 "data_bit_len[{}] = {} => {}",
                 count_data_bits,
                 ticks[i],
@@ -223,7 +223,7 @@ impl Dht {
                     true => "TRUE",
                     false => "FALSE",
                 }
-            );
+            );*/
             count_data_bits += 1;
             if count_data_bits > dht22_constants::DHT22_BYTE4_STOP_IDX {
                 break;
@@ -341,7 +341,7 @@ impl Dht {
         temp10 = temp10 << 8;
         temp10 += byte_vals[3] as u32;
 
-        println!("hum10={}, temp10={}", hum10, temp10);
+        //println!("hum10={}, temp10={}", hum10, temp10);
 
         // range check for temperature
         if (temp10 < dht22_constants::DHT22_MINVAL_TEMP10)
@@ -486,11 +486,11 @@ impl Dht {
                     duration_after = event.timestamp;
                 }
                 None => {
-                    warn!(
+                    /*warn!(
                         target: LOG_TARGET_DHT,
                         "empty interrupt event for bit #{}",
                         i
-                    );
+                    );*/
                     duration_after = duration_before;
                 }
             }
@@ -519,16 +519,16 @@ impl Dht {
         }
 
         if timeout_occurred {
-            for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
+            /*for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
                 println!("ticks[{}] = {}", i, ticks[i]);
-            }
+            }*/
             return Err(DhtError::Timeout);
         }
 
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
-            for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
+            /*for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
                 println!("ticks[{}] = {}", i, ticks[i]);
-            }
+            }*/
             error!(
                 target: LOG_TARGET_DHT,
                 "incorrect number of balid ticks received: target={}, measured={}",
@@ -543,9 +543,9 @@ impl Dht {
 
         let byte_vals = Self::calc_byte_array(data_bits);
 
-        for i in 0..dht22_constants::DHT22_DATA_LEN {
+        /*for i in 0..dht22_constants::DHT22_DATA_LEN {
             println!("byte_vals[{}] = {}", i, byte_vals[i]);
-        }
+        }*/
 
         // checksum calculation
         match Self::calc_checksum(byte_vals) {
@@ -567,17 +567,17 @@ impl Dht {
         while !measurement_successful {
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
-                    info!(
+                    /*info!(
                         target: LOG_TARGET_DHT,
                         "read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
                         temperature,
                         humidity,
-                    );
+                    );*/
                     measurement_successful = true;
                     result_tuple = (temperature, humidity);
                 }
                 Err(e) => {
-                    if e == DhtError::Timeout {
+                    if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
                         retry_counter += 1;
                         if retry_counter > 3 {
                             error!(

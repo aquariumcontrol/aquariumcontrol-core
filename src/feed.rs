@@ -106,15 +106,16 @@ impl Feed {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-    ) -> Result<(), ()> {
+    ) -> (Result<(), ()>, bool) {
+        let mut quit_command_received: bool = false;
         // load feed pattern from database
-        match self
+        let result = match self
             .sql_interface_feed
             .get_single_feedpattern_from_database(profile_id)
         {
             Ok(feed_pattern) => {
                 //*** execute feed pattern ***
-                food_injection.inject_food(
+                quit_command_received = food_injection.inject_food(
                     &tx_to_controllino,
                     &rx_from_controllino,
                     &rx_from_signal_handler,
@@ -129,7 +130,7 @@ impl Feed {
                                 target: Self::LOG_TARGET_FEED,
                                 "could not get current timestamp from database ({e:?})"
                             );
-                            return Err(());
+                            return (Err(()), quit_command_received);
                         }
                     };
 
@@ -157,7 +158,8 @@ impl Feed {
                 );
                 Err(())
             }
-        }
+        };
+        (result, quit_command_received)
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
@@ -184,7 +186,10 @@ impl Feed {
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
         let mut execution_blocked: bool = false;
-
+        let mut quit_command_received: bool = false;  // request to end the application has been received
+        let mut start_command_received: bool; // request to (re-)start feed has been received
+        let mut stop_command_received: bool;  // request to (temporarily) stop feed has been received
+ 
         loop {
             if self.config.active
                 && !feed_inhibited
@@ -211,13 +216,17 @@ impl Feed {
                                     let mut mutex_data =
                                         mutex_device_scheduler_feed.lock().unwrap();
 
-                                    match self.execute_feed(
+                                    let (result, quit_command_received_during_feed) = self.execute_feed(
                                         feed_schedule_entry.profile_id,
                                         food_injection,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
                                         &rx_from_signal_handler,
-                                    ) {
+                                    );
+                                    
+                                    quit_command_received = quit_command_received_during_feed;
+
+                                    match result {
                                         Ok(_) => { /* do nothing */ }
                                         Err(_) => {
                                             // error occurred. Block subsequent executions
@@ -264,9 +273,13 @@ impl Feed {
                     }
                 };
             }
+            // exit loop right after feed execution if quit command has been received meanwhile
+            if quit_command_received {
+                break;
+            }
 
             // check and process external requests
-            let (
+            (
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
@@ -294,21 +307,26 @@ impl Feed {
                     // scope to limit lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
-                    match self.execute_feed(
+                    let (result, quit_command_received_during_requested_feed) = self.execute_feed(
                         self.profile_id_requested,
                         food_injection,
                         &tx_to_controllino,
                         &rx_from_controllino,
                         &rx_from_signal_handler,
-                    ) {
+                    );
+                    match result {
                         Ok(_) => { /* do nothing */ }
                         Err(_) => {
                             // error occurred. Block subsequent executions
                             execution_blocked = true;
                         }
                     }
+                    quit_command_received = quit_command_received_during_requested_feed;
                     *mutex_data += 1;
                 }
+            }
+            if quit_command_received {
+                break;
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -416,13 +434,14 @@ pub mod tests {
             _rx_from_controllino: &Receiver<bool>,
             _rx_from_signal_handler: &Receiver<InternalCommand>,
             feed_pattern: &Feedpattern,
-        ) {
+        ) -> bool {
             // do nothing except for logging the profile id of the feed pattern
             self.profile_ids_executed.push(feed_pattern.profile_id);
             println!(
                 "inject_food (mock): logging profile id {}",
                 feed_pattern.profile_id
             );
+            false
         }
     }
 

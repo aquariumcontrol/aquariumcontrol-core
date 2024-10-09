@@ -13,9 +13,9 @@ peristaltic_pump1_id = 12                               # relay id for peristalt
 peristaltic_pump2_id = 13                               # relay id for peristaltic pump #2
 peristaltic_pump3_id = 14                               # relay id for peristaltic pump #3
 peristaltic_pump4_id = 15                               # relay id for peristaltic pump #4
-use_simulator = true                                   # if true, then do not use real HW
+use_simulator = false                                   # if true, then do not use real HW
 baud_rate = 9600                                        # baud rate for communication via serial port
-port_name = "/dev/ttyUSB0"                              # port name for communication via serial port
+port_name = "/dev/ttyACM0"                              # port name for communication via serial port
 timeout_millis = 10                                     # timeout in milliseconds for serial port communication
 controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
 
@@ -69,7 +69,7 @@ max_refill_volume = 2.0                                 # maximum allowed refill
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [feed]
-active = true
+active = false
 schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
 device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 
@@ -77,7 +77,7 @@ device_switch_delay_millis = 150                        # waiting time in millis
 active = true
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
-switch_on_when_terminating = true           		# behavior when terminating the application
+switch_on_when_terminating = false           		# behavior when terminating the application
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
@@ -87,12 +87,12 @@ active = true
 pump1_active = true					# determines if pump 1 shall be used or not
 pump2_active = true					# determines if pump 2 shall be used or not
 pump3_active = true					# determines if pump 3 shall be used or not
-pump4_active = true					# determines if pump 4 shall be used or not
+pump4_active = false					# determines if pump 4 shall be used or not
 schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
 dosing_interval_pump1 = 3600                            # inject Balling minerals with pump 1 after each period
-dosing_interval_pump2 = 3200                            # inject Balling minerals with pump 2 after each period
-dosing_interval_pump3 = 2800                            # inject Balling minerals with pump 3 after each period
-dosing_interval_pump4 = 2400                            # inject Balling minerals with pump 4 after each period
+dosing_interval_pump2 = 3600                            # inject Balling minerals with pump 2 after each period
+dosing_interval_pump3 = 3600                            # inject Balling minerals with pump 3 after each period
+dosing_interval_pump4 = 3600                            # inject Balling minerals with pump 4 after each period
 pump_switch_delay_millis = 500                          # waiting period between usage of different pumps
 
 [monitors]
@@ -112,13 +112,13 @@ switch_on_when_external_stop = false                    # strategy when external
 
 [gpio_handler]
 active = true						# used for testing purposes
-use_simulator = true                                   # if true, then do not use real HW
+use_simulator = false                                   # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
-gpio_pin_number_tank_level = 23                         # GPIO pin number where tank level sensor is connected
+gpio_pin_number_tank_level = 20                         # GPIO pin number where tank level sensor is connected
 gpio_pin_number_dht22_io = 11                           # GPIO pin number where DHT sensor is connected
 gpio_pin_number_dht22_vcc = 17                          # GPIO pin number for power supply of DHT sensor
 

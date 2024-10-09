@@ -916,26 +916,29 @@ impl Refill {
                 }
             }
 
-            // wait for configured time period before rechecking the sensor signal
-            // check for external requests while waiting
-            i = 0;
-            while i < self.config.check_interval * 10 {
-                i = i + 1;
-                (
-                    quit_command_received,
-                    start_command_received,
-                    stop_command_received,
-                ) = self
+            // skip further waiting if quit command has been received during refilling
+            if !quit_command_received {
+                // wait for configured time period before rechecking the sensor signal
+                // check for external requests while waiting
+                i = 0;
+                while i < self.config.check_interval * 10 {
+                    i = i + 1;
+                    (
+                        quit_command_received,
+                        start_command_received,
+                        stop_command_received,
+                    ) = self
                     .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
-                refill_inhibited = self.calc_inhibition_flag(
-                    refill_inhibited,
-                    start_command_received,
-                    stop_command_received,
-                );
-                if quit_command_received {
-                    break;
+                    refill_inhibited = self.calc_inhibition_flag(
+                        refill_inhibited,
+                        start_command_received,
+                        stop_command_received,
+                    );
+                    if quit_command_received {
+                        break;
+                    }
+                    spin_sleeper.sleep(sleep_duration_hundred_millis);
                 }
-                spin_sleeper.sleep(sleep_duration_hundred_millis);
             }
         }
 
