@@ -13,11 +13,10 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use crate::channel_content::{AquariumDevice, InternalCommand};
+use crate::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
-use crate::refill::TankLevelSwitchSignals;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
@@ -29,8 +28,8 @@ pub trait WaterInjectionTrait {
     /// # Arguments
     /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Reference to Receiver part of channel for communication from Controllino
-    /// * `tx_to_gpio` - Reference to sender part of channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Reference to receiver part of channel for communication from GPIO handler
+    /// * `tx_to_tank_level_switch - Reference to sender part of channel for communication to tank level switch calculation
+    /// * `tx_from_tank_level_switch` - Reference to receiver part of channel for communication from tank level switch calculation
     /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `tank_level_switch_signals` - Reference to struct of type TankLevelSwitchSignals which implements the logic for signal interpretation
@@ -41,13 +40,11 @@ pub trait WaterInjectionTrait {
         &mut self,
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_datalogger: &Sender<bool>,
-        tank_level_switch_signals: &mut TankLevelSwitchSignals,
         refill_errors: &mut RefillErrors,
-        config: &RefillConfig,
         sql_interface_refill: &mut SqlInterfaceRefill,
     ) -> bool;
 }
@@ -60,11 +57,130 @@ pub trait WaterInjectionTrait {
 /// graph LR
 ///     water_injection[Mineral injection] --> controllino[Controllino]
 ///     controllino --> water_injection
-///     water_injection --> gpio_handler[GPIO handler]
-///     gpio_handler --> water_injection
+///     water_injection --> tank_level_switch[tank level switch calculation]
+///     tank_level_switch --> water_injection
 ///     signal_handler[Signal handler] --> water_injection
 /// ```
-pub struct WaterInjection;
+pub struct WaterInjection {
+    refill_increment: f64,         // value is calculated based on RefillConfig
+    additional_refill_volume: f64, // value is copied from RefillConfig
+    max_refill_volume: f64,        // value is copied from RefillConfig
+    spin_sleeper: SpinSleeper,
+    sleep_duration_hundred_milli_sec: Duration,
+    sleep_interval_seconds: f64,
+    lock_error_channel_send_tank_level_switch_position: bool,
+    lock_error_channel_receive_tank_level_switch_position: bool,
+    lock_error_channel_send_tank_level_switch_invalid: bool,
+    lock_error_channel_receive_tank_level_switch_invalid: bool,
+}
+
+impl WaterInjection {
+    /// Provide a struct of type WaterInjection
+    pub fn new(config: &RefillConfig) -> WaterInjection {
+        let sleep_interval_millis = 100;
+        let sleep_interval_seconds: f64 = (sleep_interval_millis as f64) / (1000 as f64);
+
+        WaterInjection {
+            refill_increment: sleep_interval_seconds * config.refill_pump_flow,
+            additional_refill_volume: config.additional_refill_volume,
+            max_refill_volume: config.max_refill_volume,
+            spin_sleeper: SpinSleeper::default(),
+            sleep_duration_hundred_milli_sec: Duration::from_millis(sleep_interval_millis),
+            sleep_interval_seconds: sleep_interval_seconds,
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_receive_tank_level_switch_invalid: false,
+        }
+    }
+
+    // Channel communication with tank level switch calculation
+    // The function returns a tuple of boolean variables.
+    /// # Arguments
+    /// * `tx_to_tank_level_switch` - reference to sender part of channel
+    /// * `rx_from_tank_level_switch` - reference to receiver part of channel
+    fn get_tank_level_switch_signals(
+        &mut self,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<f32>,
+    ) -> (bool, bool) {
+        // send request for tank level switch position
+        let tank_level_switch_position = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_position = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_position = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_position {
+                            error!(
+                                target: LOG_TARGET_WATER_INJECTION,
+                                "receiving tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_position = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_position {
+                    error!(
+                        target: LOG_TARGET_WATER_INJECTION,
+                        "channel communication for tank level switch position failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_position = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        // send request for tank level switch position
+        let tank_level_switch_invalid = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_invalid = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
+                            error!(
+                                target: LOG_TARGET_WATER_INJECTION,
+                                "receiving tank level switch invalid failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_invalid {
+                    error!(
+                        target: LOG_TARGET_WATER_INJECTION,
+                        "channel communication for tank level switch invalid failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_invalid = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        (tank_level_switch_position, tank_level_switch_invalid)
+    }
+}
 
 impl WaterInjectionTrait for WaterInjection {
     /// this function executes the refill operation
@@ -72,13 +188,11 @@ impl WaterInjectionTrait for WaterInjection {
         &mut self,
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<f32>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_datalogger: &Sender<bool>,
-        tank_level_switch_signals: &mut TankLevelSwitchSignals,
         refill_errors: &mut RefillErrors,
-        config: &RefillConfig,
         sql_interface_refill: &mut SqlInterfaceRefill,
     ) -> bool {
         // inform data logger that refill is in progress
@@ -116,43 +230,42 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         //*** wait for condition to stop refilling ***
-        let spin_sleeper = SpinSleeper::default();
-        let sleep_interval_millis = 100;
-        let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis);
-        let sleep_interval_seconds: f64 = (sleep_interval_millis as f64) / (1000 as f64);
         let mut refill_volume = 0.0;
         let mut refill_time_seconds = 0.0;
         let mut refill_error_code = 0;
         let mut additional_refill_volume_executed = 0.0;
-        let refill_increment = sleep_interval_seconds * config.refill_pump_flow;
 
         loop {
-            spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
-            refill_time_seconds += sleep_interval_seconds;
-            tank_level_switch_signals.update_tank_level_switch_signals(&tx_to_gpio, rx_from_gpio);
-            if tank_level_switch_signals.tank_level_switch_position
-                && additional_refill_volume_executed > config.additional_refill_volume
+            self.spin_sleeper
+                .sleep(self.sleep_duration_hundred_milli_sec);
+            refill_time_seconds += self.sleep_interval_seconds;
+
+            let (tank_level_switch_position, tank_level_switch_invalid) = self
+                .get_tank_level_switch_signals(tx_to_tank_level_switch, rx_from_tank_level_switch);
+
+            if tank_level_switch_position
+                && additional_refill_volume_executed > self.additional_refill_volume
             {
                 // water level changed to high
                 break;
             }
-            if tank_level_switch_signals.tank_level_switch_invalid {
+            if tank_level_switch_invalid {
                 // switch signal is invalid
                 refill_error_code = 1;
                 break;
             }
 
             // calculate volume refilled in this operation
-            refill_volume += refill_increment;
-            if tank_level_switch_signals.tank_level_switch_position {
-                additional_refill_volume_executed += refill_increment;
+            refill_volume += self.refill_increment;
+            if tank_level_switch_position {
+                additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
-            if refill_volume > config.max_refill_volume {
+            if refill_volume > self.max_refill_volume {
                 refill_errors.error_switch_stuck_low = true;
                 refill_error_code = 2;
                 break;
@@ -295,7 +408,7 @@ pub mod tests {
         signal_invalid: bool,
     ) {
         loop {
-            match rx_gpio_from_water_injection.try_recv() {
+            match rx_tank_level_switch_from_water_injection.try_recv() {
                 Ok(_) => {
                     println!("run_main_cycle_with_sensor_signals_and_abort: Sending to water injection (1).");
                     let _ = tx_gpio_to_water_injection.send(match signal_position {

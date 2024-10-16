@@ -257,6 +257,13 @@ impl TcpCommunication {
             AquariumSignal::AmbientHumidity => category::DHT22,
             AquariumSignal::TankLevelSwitchPosition => category::TANKLEVELSWITCH,
             AquariumSignal::TankLevelSwitchInvalid => category::TANKLEVELSWITCH,
+            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                panic!(
+                    "{}: Internal error - illegal signal request {} to simulator",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    aquarium_signal
+                );
+            }
         };
         let tcp_signal_identifier = match aquarium_signal {
             AquariumSignal::WaterTemperature => signal::ATLASSCIENTIFICTEMPERATURE,
@@ -266,6 +273,13 @@ impl TcpCommunication {
             AquariumSignal::AmbientHumidity => signal::AMBIENTHUMIDITY,
             AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
             AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,
+            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                panic!(
+                    "{}: Internal error - illegal signal request {} to simulator",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    aquarium_signal
+                );
+            }
         };
         let request =
             category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";

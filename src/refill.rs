@@ -54,10 +54,6 @@ pub struct RefillConfig {
     /// minimum time which has to pass after a refill operation before a subsequent refill operation is started
     min_interval_last_refill: i64,
 
-    /// number of tank level switch position measurements which need to indicate a low level before the refill control assumes that the water level is low
-    /// - Caution: Also consider the check_interval when calibrating this variable.
-    tank_level_switch_position_high_stabilization_count: u32,
-
     /// time interval in seconds which need to pass before the application recognizes a potential tank level switch fault
     max_duration_since_last_refill: i64,
 
@@ -73,158 +69,7 @@ pub struct RefillConfig {
     pub additional_refill_volume: f64,
 }
 
-/// Contains the communication between Refill thread and GpioHandler thread via channels.
-/// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
-pub struct TankLevelSwitchSignals {
-    /// flag indicating if the tank level switch is high (true) or low (false)
-    pub tank_level_switch_position: bool,
-
-    /// flag indicating that the tank level switch position could not be read
-    pub tank_level_switch_invalid: bool,
-
-    /// flag indicating that the tank level switch position could not be received via channel
-    pub error_receive_tank_level_switch_position: bool,
-
-    /// flag indicating that the tank level switch invalid signal could not be received via channel
-    pub error_receive_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
-    lock_error_channel_send_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
-    lock_error_channel_receive_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
-    lock_error_channel_send_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
-    lock_error_channel_receive_tank_level_switch_invalid: bool,
-}
-
 const LOG_TARGET_REFILL: &str = "refill";
-
-impl TankLevelSwitchSignals {
-    /// provides a struct of type TankLevelSwitchSignals.
-    /// # Arguments
-    /// * `tank_level_switch_position` - flag indicating if the tank level switch is high (true) or low (false)    
-    /// * `tank_level_switch_invalid` - flag indicating that the tank level switch position could not be read    
-    /// * `error_receive_tank_level_switch_position` - flag indicating that the tank level switch position could not be received via channel    
-    /// * `error_receive_tank_level_switch_invalid` -  flag indicating that the tank level switch invalid signal could not be received via channel   
-    pub fn new(
-        tank_level_switch_position: bool,
-        tank_level_switch_invalid: bool,
-        error_receive_tank_level_switch_position: bool,
-        error_receive_tank_level_switch_invalid: bool,
-    ) -> TankLevelSwitchSignals {
-        TankLevelSwitchSignals {
-            tank_level_switch_position: tank_level_switch_position,
-            tank_level_switch_invalid: tank_level_switch_invalid,
-            error_receive_tank_level_switch_position: error_receive_tank_level_switch_position,
-            error_receive_tank_level_switch_invalid: error_receive_tank_level_switch_invalid,
-            lock_error_channel_send_tank_level_switch_position: false,
-            lock_error_channel_receive_tank_level_switch_position: false,
-            lock_error_channel_send_tank_level_switch_invalid: false,
-            lock_error_channel_receive_tank_level_switch_invalid: false,
-        }
-    }
-
-    /// Executes the channel communication to update the tank level switch position signal
-    /// as well as the tank level switch invalid signal.
-    /// # Arguments
-    /// * `tx_to_gpio` - sender part of the channel for communication to GPIO handler
-    /// * `rx_from_gpio` - receiver part of the channel for communication from GPIO handler
-    pub fn update_tank_level_switch_signals(
-        &mut self,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
-    ) {
-        // send request for tank level switch position
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchPosition,
-        )) {
-            Ok(_) => {
-                // Sent request for tank level switch position.
-                // now listen for response
-                self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.error_receive_tank_level_switch_position = false;
-                        self.lock_error_channel_receive_tank_level_switch_position = false;
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_position {
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "receiving tank level switch position from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_position = true;
-                        }
-                        self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
-                        false
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_position = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_position {
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "channel communication for GPIO handler for tank level switch position failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_position = true;
-                }
-            }
-        }
-
-        // send request for tank level switch invalid
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchInvalid,
-        )) {
-            Ok(_) => {
-                // now listen for response
-                self.tank_level_switch_invalid = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "receiving tank level switch invalid from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
-                        }
-                        true
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_invalid = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_invalid {
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "channel communication for GPIO handler for tank level switch invalid failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_invalid = true;
-                }
-            }
-        }
-
-        //println!(
-        //    "Refill: update_tank_level_switch_signals set struct variables \
-        //                tank_level_switch_position={} and tank_level_switch_invalid={}",
-        //    match self.tank_level_switch_position {
-        //        true => "high",
-        //        false => "low",
-        //    },
-        //    match self.tank_level_switch_invalid {
-        //        true => "invalid",
-        //        false => "valid",
-        //    }
-        //);
-    }
-}
 
 /// Contains the error flags for the refill component.
 pub struct RefillErrors {
@@ -249,11 +94,11 @@ impl RefillErrors {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-/// refill[Refill control] --> gpio_handler[GPIO handler]
+/// refill[Refill control] --> tank_level_switch[Tank level switch calculation]
 /// refill --> water_injection[Water injection]
-/// water_injection --> gpio_handler
-/// gpio_handler --> refill
-/// gpio_handler --> water_injection
+/// water_injection --> tank_level_switch
+/// tank_level_switch --> refill
+/// tank_level_switch --> water_injection
 /// water_injection --> controllino[Controllino]
 /// controllino --> water_injection
 /// refill --> signal_handler[Signal handler]
@@ -267,7 +112,7 @@ impl RefillErrors {
 /// Communication channel to and from Controllino is forwarded to implementation of WaterInjectionTrait.
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
-/// GPIO handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
+/// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 
 /// Architecture of the component is as follows:
 /// ```mermaid
@@ -288,12 +133,6 @@ pub struct Refill {
 
     /// interface to SQL database
     pub sql_interface_refill: SqlInterfaceRefill,
-
-    /// flag indicating that tank level switch has not altered its position for some time
-    tank_level_switch_position_stabilized: bool,
-
-    /// time counter to determine if positition is stabilized
-    tank_level_switch_position_high_stabilization_counter: u32,
 
     /// struct of type RefillErrors which includes flags for different kind of errors
     pub refill_errors: RefillErrors,
@@ -348,6 +187,24 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from signal handler via channel
     lock_error_channel_receive_termination_command: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
+    lock_error_channel_send_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
+    lock_error_channel_receive_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
+    lock_error_channel_send_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
+    lock_error_channel_receive_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position stabilized via channel
+    lock_error_channel_send_tank_level_switch_position_stabilized: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position stabilized via channel
+    lock_error_channel_receive_tank_level_switch_position_stabilized: bool,
 }
 
 /// Contains the data retrieved from SQL database.
@@ -389,8 +246,6 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
-            tank_level_switch_position_stabilized: true,
-            tank_level_switch_position_high_stabilization_counter: 0,
             refill_errors: RefillErrors {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
@@ -414,6 +269,12 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
+            lock_error_channel_receive_tank_level_switch_invalid: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_position_stabilized: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_position_stabilized: false,
         }
     }
 
@@ -431,8 +292,6 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
-            tank_level_switch_position_stabilized: true,
-            tank_level_switch_position_high_stabilization_counter: 0,
             refill_errors: refill_errors,
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
@@ -451,42 +310,6 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
-        }
-    }
-
-    /// Calculates a stabilized tank level switch position signal considering:
-    /// - if invalid bit of signal is true, then use the current value of the stabilized position signal.
-    /// - if the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
-    /// - if the the new signal is false (indicating low water level), then set increase the stabilization counter.
-    /// - if the stabiliyation counter exceeds the configured limit, then set the counter to zero and set the stabilized
-    /// signal to true indicating high water level.
-    /// # Arguments
-    /// * `tank_level_switch_signals` - struct containing the refill-relevant signal data
-    fn calc_tank_level_switch_position_stabilized(
-        &mut self,
-        tank_level_switch_signals: &TankLevelSwitchSignals,
-    ) {
-        if !tank_level_switch_signals.tank_level_switch_invalid {
-            // update stabilized signal only when new signal is not invalid
-            self.tank_level_switch_position_stabilized =
-                match tank_level_switch_signals.tank_level_switch_position {
-                    true => {
-                        self.tank_level_switch_position_high_stabilization_counter = 0;
-                        true // set stabilized to true without delay
-                    }
-                    false => {
-                        if self.tank_level_switch_position_high_stabilization_counter
-                            < self
-                                .config
-                                .tank_level_switch_position_high_stabilization_count
-                        {
-                            self.tank_level_switch_position_high_stabilization_counter += 1;
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                }
         }
     }
 
@@ -750,11 +573,141 @@ impl Refill {
             | refill_check_interval_last_refill
     }
 
+    // Channel communication with tank level switch calculation
+    // The function returns a tuple of boolean variables.
+    /// # Arguments
+    /// * `tx_to_tank_level_switch` - reference to sender part of channel
+    /// * `rx_from_tank_level_switch` - reference to receiver part of channel
+    pub fn get_tank_level_switch_signals(
+        &mut self,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<f32>,
+    ) -> (bool, bool, bool) {
+        // send request for tank level switch position
+        let tank_level_switch_position = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_position = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_position = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_position {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_position = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_position {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch position failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_position = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        // send request for tank level switch position
+        let tank_level_switch_invalid = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_invalid = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch invalid failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_invalid {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch invalid failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_invalid = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        // send request for tank level switch position
+        let tank_level_switch_position_stabilized = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPositionStabilized),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_position_stabilized = false;
+                // Sent request for tank level switch position stabilized.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_position_stabilized =
+                            false;
+                        c > 0.0
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_position_stabilized {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_position_stabilized =
+                                true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_position_stabilized {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch position stabilized failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_position_stabilized = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        (
+            tank_level_switch_position,
+            tank_level_switch_invalid,
+            tank_level_switch_position_stabilized,
+        )
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to tank level switch calculation
+    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from tank level switch calculation
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
@@ -766,8 +719,8 @@ impl Refill {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
+        tx_to_tank_level_switch: Sender<InternalCommand>,
+        rx_from_tank_level_switch: Receiver<f32>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -781,8 +734,9 @@ impl Refill {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
-        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
         let mut schedule_check_result: bool = false;
+        let mut tank_level_switch_invalid: bool = false;
+        let mut tank_level_switch_position_stabilized: bool = true;
 
         // retrieving data from SQL data base
         let mut sql_refill_data = self.get_sql_refill_data();
@@ -836,18 +790,19 @@ impl Refill {
                     sql_refill_data.duration_since_last_refill,
                 );
 
-                // either communicate with real HW or with simulator to get updated signal information
-                // this call will also update the stabilized tank level position.
-                tank_level_switch_signals
-                    .update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
-
-                self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-
                 if !quit_command_received
-                    && !self.tank_level_switch_position_stabilized
-                    && !tank_level_switch_signals.tank_level_switch_invalid
+                    && !tank_level_switch_position_stabilized
+                    && !tank_level_switch_invalid
                     && !refill_inhibited
                 {
+                    (
+                        _,
+                        tank_level_switch_invalid,
+                        tank_level_switch_position_stabilized,
+                    ) = self.get_tank_level_switch_signals(
+                        &tx_to_tank_level_switch,
+                        &rx_from_tank_level_switch,
+                    );
                     sql_refill_data = self.get_sql_refill_data();
 
                     // execute checks before initiating refill
@@ -899,13 +854,11 @@ impl Refill {
                                     quit_command_received = water_injection.inject_water(
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_gpio,
-                                        &rx_from_gpio,
+                                        &tx_to_tank_level_switch,
+                                        &rx_from_tank_level_switch,
                                         &rx_from_signal_handler,
                                         &tx_to_datalogger,
-                                        &mut tank_level_switch_signals,
                                         &mut self.refill_errors,
-                                        &self.config,
                                         &mut self.sql_interface_refill,
                                     );
                                     *mutex_data += 1;
@@ -927,8 +880,10 @@ impl Refill {
                         quit_command_received,
                         start_command_received,
                         stop_command_received,
-                    ) = self
-                    .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+                    ) = self.process_external_request(
+                        &rx_from_signal_handler,
+                        Some(&rx_from_messaging),
+                    );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,
                         start_command_received,
@@ -955,7 +910,7 @@ impl Refill {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino, GpioHandler).
+        // this thread has channel connection to underlying threads (Controllino, Tank level switch).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
         let mut termination_command_received = false;
@@ -1016,7 +971,7 @@ pub mod tests {
     use crate::refill::Refill;
     use crate::refill::RefillConfig;
     use crate::refill::RefillErrors;
-    use crate::refill::TankLevelSwitchSignals;
+    use crate::refill::TankLevelSwitch;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
     use crate::water_injection::WaterInjection;

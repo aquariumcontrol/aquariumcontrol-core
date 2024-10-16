@@ -101,6 +101,9 @@ pub enum AquariumSignal {
 
     /// status bit of tank level switch signal
     TankLevelSwitchInvalid,
+
+    /// stabilized position of tank level switch
+    TankLevelSwitchPositionStabilized,
 }
 
 impl fmt::Display for AquariumSignal {
@@ -116,6 +119,9 @@ impl fmt::Display for AquariumSignal {
             AquariumSignal::AmbientHumidity => write!(f, "AmbientHumidity"),
             AquariumSignal::TankLevelSwitchPosition => write!(f, "TankLevelSwitchPosition"),
             AquariumSignal::TankLevelSwitchInvalid => write!(f, "TankLevelSwitchInvalid"),
+            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                write!(f, "TankLevelSwitchPositionStabilized")
+            }
         }
     }
 }

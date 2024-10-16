@@ -75,6 +75,8 @@ pub fn handle_signals(
     tx_to_messaging: Sender<InternalCommand>,
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
+    tx_to_tank_level_switch: Sender<InternalCommand>,
+    rx_from_tank_level_switch: Receiver<bool>,
     tx_to_heating: Sender<InternalCommand>,
     rx_from_heating: Receiver<bool>,
     tx_to_controllino: Sender<InternalCommand>,
@@ -149,7 +151,7 @@ pub fn handle_signals(
         Err(e) => {
             error!(
                 target: LOG_TARGET_SIGNAL_HANDLER,
-                "hannel communication to refill control failed when sending Quit command ({e:?})"
+                "channel communication to refill control failed when sending Quit command ({e:?})"
             );
         }
     }
@@ -194,6 +196,27 @@ pub fn handle_signals(
             error!(
                 target: LOG_TARGET_SIGNAL_HANDLER,
                 "channel communication to ventilation control failed when sending Quit command ({e:?})"
+            );
+        }
+    }
+
+    // next, let's shut down the tank level switch calculation
+    match tx_to_tank_level_switch.send(InternalCommand::Quit) {
+        Ok(_) => {
+            match rx_from_tank_level_switch.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from tank level switch thread ({e:?})"
+                    );
+                }
+            };
+        }
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to tank level switch calculation thread failed when sending Quit command ({e:?})"
             );
         }
     }
@@ -445,6 +468,17 @@ pub fn handle_signals(
             error!(
                 target: LOG_TARGET_SIGNAL_HANDLER,
                 "channel communication to refill control failed when sending Terminate command ({e:?})"
+            );
+        }
+    }
+
+    // TankLevelSwitch thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_tank_level_switch.send(InternalCommand::Terminate) {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to TankLevelSwitch failed when sending Terminate command ({e:?})"
             );
         }
     }

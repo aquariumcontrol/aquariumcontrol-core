@@ -20,6 +20,7 @@ use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::heating::HeatingConfig;
 use crate::i2c_interface::I2cInterfaceConfig;
+use crate::tank_level_switch::TankLevelSwitchConfig;
 
 #[cfg(target_os = "linux")]
 use crate::messaging::MessagingConfig;
@@ -52,6 +53,9 @@ pub struct ConfigData {
 
     /// configuration of the fresh water refill control
     pub refill: RefillConfig,
+
+    /// configuration of the tank level switch calculation
+    pub tank_level_switch: TankLevelSwitchConfig,
 
     /// configuratino of the heating control
     pub heating: HeatingConfig,

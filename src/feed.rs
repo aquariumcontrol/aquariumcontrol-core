@@ -186,10 +186,10 @@ impl Feed {
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
         let mut execution_blocked: bool = false;
-        let mut quit_command_received: bool = false;  // request to end the application has been received
+        let mut quit_command_received: bool = false; // request to end the application has been received
         let mut start_command_received: bool; // request to (re-)start feed has been received
-        let mut stop_command_received: bool;  // request to (temporarily) stop feed has been received
- 
+        let mut stop_command_received: bool; // request to (temporarily) stop feed has been received
+
         loop {
             if self.config.active
                 && !feed_inhibited
@@ -216,14 +216,15 @@ impl Feed {
                                     let mut mutex_data =
                                         mutex_device_scheduler_feed.lock().unwrap();
 
-                                    let (result, quit_command_received_during_feed) = self.execute_feed(
-                                        feed_schedule_entry.profile_id,
-                                        food_injection,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &rx_from_signal_handler,
-                                    );
-                                    
+                                    let (result, quit_command_received_during_feed) = self
+                                        .execute_feed(
+                                            feed_schedule_entry.profile_id,
+                                            food_injection,
+                                            &tx_to_controllino,
+                                            &rx_from_controllino,
+                                            &rx_from_signal_handler,
+                                        );
+
                                     quit_command_received = quit_command_received_during_feed;
 
                                     match result {

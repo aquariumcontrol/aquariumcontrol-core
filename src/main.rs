@@ -54,6 +54,7 @@ mod sql_interface_feed;
 mod sql_interface_heating;
 mod sql_interface_refill;
 mod sql_interface_schedule;
+mod tank_level_switch;
 mod tcp_communication;
 mod ventilation;
 mod version_information;
@@ -95,6 +96,7 @@ use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::tank_level_switch::TankLevelSwitch;
 use crate::tcp_communication::TcpCommunication;
 use crate::ventilation::Ventilation;
 use crate::version_information::VersionInformation;
@@ -107,8 +109,10 @@ const LOG_TARGET_MAIN: &str = "main";
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     refill[Refill] --> gpio_handler[GpioHandler]
-///     gpio_handler --> refill
+///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
+///     tank_level_switch --> refill
+///     tank_level_switch --> gpio_handler[GpioHandler]
+///     gpio_handler --> tank_level_switch
 ///     refill --> controllino[Controllino]
 ///     controllino --> refill
 ///     datalogger[DataLogger] --> gpio_handler
@@ -116,6 +120,8 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     refill --> datalogger
 ///     signal_handler[SignalHandler] --> refill
 ///     refill --> signal_handler
+///     signal_handler --> tank_level_switch
+///     tank_level_switch --> signal_handler
 ///     signal_handler --> gpio_handler
 ///     gpio_handler --> signal_handler
 ///     signal_handler --> tcp_communication[TcpCommunication]
@@ -368,12 +374,26 @@ fn main() {
         mpsc::channel();
     // ****************************
 
-    // *** refill <=> gpio ***
-    let (tx_refill_to_gpio, rx_gpio_from_refill): (
+    // *** refill <=> tank_level_switch ***
+    let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_gpio_to_refill, rx_refill_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
+    // *****************************
+
+    // *** tank_level_switch <=> gpio ***
+    let (tx_tank_level_switch_to_gpio, rx_gpio_from_tank_level_switch): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_gpio_to_tank_level_switch, rx_tank_level_switch_from_gpio): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
     // *****************************
 
     // *** heating <=> gpio ***
@@ -597,6 +617,17 @@ fn main() {
     // ***********************************
 
     // *** signal handler <=> gpio ***
+    let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // *********************************
+
+    // *** signal handler <=> gpio ***
     let (tx_signal_handler_to_gpio, rx_gpio_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
@@ -701,6 +732,7 @@ fn main() {
 
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
+    let mut water_injection = WaterInjection::new(&config.refill);
 
     #[cfg(target_os = "linux")]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
@@ -713,6 +745,7 @@ fn main() {
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
 
+    let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch);
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
     let mut feed = Feed::new(config.feed, sql_interface_feed);
@@ -783,6 +816,8 @@ fn main() {
                 tx_signal_handler_to_messaging,
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,
+                tx_signal_handler_to_tank_level_switch,
+                rx_signal_handler_from_tank_level_switch,
                 tx_signal_handler_to_heating,
                 rx_signal_handler_from_heating,
                 tx_signal_handler_to_controllino,
@@ -829,8 +864,8 @@ fn main() {
                 rx_gpio_from_tcp_opt,
                 tx_gpio_to_data_logger,
                 rx_gpio_from_data_logger,
-                tx_gpio_to_refill,
-                rx_gpio_from_refill,
+                tx_gpio_to_tank_level_switch,
+                rx_gpio_from_tank_level_switch,
                 tx_gpio_to_heating,
                 rx_gpio_from_heating,
                 tx_gpio_to_ventilation,
@@ -858,16 +893,26 @@ fn main() {
             trace!(target: LOG_TARGET_MAIN, "Data logger terminated.");
         });
 
+        scope.spawn(move || {
+            tank_level_switch.execute(
+                tx_tank_level_switch_to_gpio,
+                rx_tank_level_switch_from_gpio,
+                tx_tank_level_switch_to_refill,
+                rx_tank_level_switch_from_refill,
+                tx_tank_level_switch_to_signal_handler,
+                rx_tank_level_switch_from_signal_handler,
+            );
+            trace!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
+        });
+
         // Refill needs actuation of relay
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
-
-        let mut water_injection = WaterInjection;
 
         scope.spawn(move || {
             refill.execute(
                 mutex_device_scheduler_refill,
-                tx_refill_to_gpio,
-                rx_refill_from_gpio,
+                tx_refill_to_tank_level_switch,
+                rx_refill_from_tank_level_switch,
                 tx_refill_to_controllino,
                 rx_refill_from_controllino,
                 tx_refill_to_signal_handler,
