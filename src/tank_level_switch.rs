@@ -65,8 +65,8 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received request for signal which cannot be processed by this thread
-    lock_error_invalid_signal_request: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received request from refill thread for signal which cannot be processed by this thread
+    lock_error_invalid_signal_request_refill: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid command from refill thread
     lock_warn_inapplicable_command_refill: bool,
@@ -76,6 +76,18 @@ pub struct TankLevelSwitch {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to refill thread
     lock_error_refill_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received request from data logger thread for signal which cannot be processed by this thread
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid command from data logger thread
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive request from data logger thread
+    lock_error_channel_receive_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to data logger thread
+    lock_error_data_logger_response: bool,
 }
 
 impl ProcessExternalRequestTrait for TankLevelSwitch {}
@@ -95,10 +107,14 @@ impl TankLevelSwitch {
             lock_error_channel_receive_tank_level_switch_invalid: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            lock_error_invalid_signal_request: false,
+            lock_error_invalid_signal_request_refill: false,
             lock_warn_inapplicable_command_refill: false,
             lock_error_channel_receive_refill: false,
             lock_error_refill_response: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_error_data_logger_response: false,
         }
     }
 
@@ -220,6 +236,8 @@ impl TankLevelSwitch {
         &mut self,
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
+        tx_to_data_logger: Sender<f32>,
+        rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_refill: Sender<f32>,
         rx_from_refill: Receiver<InternalCommand>,
         tx_to_signal_handler: Sender<bool>,
@@ -253,25 +271,25 @@ impl TankLevelSwitch {
                             self.lock_warn_inapplicable_command_refill = false;
                             match d {
                                 AquariumSignal::TankLevelSwitchPosition => {
-                                    self.lock_error_invalid_signal_request = false;
+                                    self.lock_error_invalid_signal_request_refill = false;
                                     Some(self.tank_level_switch_position)
                                 }
                                 AquariumSignal::TankLevelSwitchInvalid => {
-                                    self.lock_error_invalid_signal_request = false;
+                                    self.lock_error_invalid_signal_request_refill = false;
                                     Some(self.tank_level_switch_invalid)
                                 }
                                 AquariumSignal::TankLevelSwitchPositionStabilized => {
-                                    self.lock_error_invalid_signal_request = false;
+                                    self.lock_error_invalid_signal_request_refill = false;
                                     Some(self.tank_level_switch_position_stabilized)
                                 }
                                 _ => {
-                                    if !self.lock_error_invalid_signal_request {
+                                    if !self.lock_error_invalid_signal_request_refill {
                                         error!(
                                             target: LOG_TARGET_TANK_LEVEL_SWITCH,
                                             "internal error: received request for invalid signal {}",
                                             d
                                         );
-                                        self.lock_error_invalid_signal_request = true;
+                                        self.lock_error_invalid_signal_request_refill = true;
                                     }
                                     None
                                 }
@@ -332,6 +350,93 @@ impl TankLevelSwitch {
                 }
             };
 
+            let response_to_data_logger = match rx_from_data_logger.try_recv() {
+                Ok(c) => {
+                    self.lock_error_channel_receive_data_logger = false;
+                    match c {
+                        InternalCommand::RequestSignal(d) => {
+                            self.lock_warn_inapplicable_command_data_logger = false;
+                            match d {
+                                AquariumSignal::TankLevelSwitchPosition => {
+                                    self.lock_error_invalid_signal_request_data_logger = false;
+                                    Some(self.tank_level_switch_position)
+                                }
+                                AquariumSignal::TankLevelSwitchInvalid => {
+                                    self.lock_error_invalid_signal_request_data_logger = false;
+                                    Some(self.tank_level_switch_invalid)
+                                }
+                                AquariumSignal::TankLevelSwitchPositionStabilized => {
+                                    self.lock_error_invalid_signal_request_data_logger = false;
+                                    Some(self.tank_level_switch_position_stabilized)
+                                }
+                                _ => {
+                                    if !self.lock_error_invalid_signal_request_data_logger {
+                                        error!(
+                                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                            "internal error: received request for invalid signal {} from data logger",
+                                            d
+                                        );
+                                        self.lock_error_invalid_signal_request_data_logger = true;
+                                    }
+                                    None
+                                }
+                            }
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command_data_logger {
+                                warn!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "ignoring inapplicable command from data logger thread."
+                                );
+                                self.lock_warn_inapplicable_command_data_logger = true;
+                            }
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_data_logger = false;
+                        }
+                        TryRecvError::Disconnected => {
+                            if !self.lock_error_channel_receive_data_logger {
+                                error!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "receiving command from data logger thread failed ({e:?})"
+                                );
+                                self.lock_error_channel_receive_data_logger = true;
+                            }
+                        }
+                    }
+                    None
+                }
+            };
+
+            match response_to_data_logger {
+                Some(c) => {
+                    _ = match tx_to_data_logger.send(c.into()) {
+                        Ok(()) => {
+                            self.lock_error_data_logger_response = false;
+                        }
+                        Err(e) => {
+                            if !self.lock_error_data_logger_response {
+                                error!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "responding back to data logger thread failed ({e:?})"
+                                );
+                                self.lock_error_data_logger_response = true;
+                            }
+                        }
+                    };
+                }
+                None => {
+                    // do nothing
+                    self.lock_error_data_logger_response = false;
+                }
+            };
+
             spin_sleeper.sleep(sleep_duration_one_second);
         }
 
@@ -381,5 +486,123 @@ impl TankLevelSwitch {
             };
             spin_sleeper.sleep(sleep_duration_one_millisec);
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use chrono::DateTime;
+    use chrono::Local;
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    use crate::channel_content::AquariumSignal;
+    use crate::channel_content::InternalCommand;
+    use crate::config::read_config_file;
+    use crate::config::ConfigData;
+    use crate::proc_ext_req::ProcessExternalRequestTrait;
+
+    // @todo: redo this test case completely
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid(
+    ) {
+        let (tx_tank_level_switch_to_gpio, rx_gpio_from_tank_level_switch) = mpsc::channel();
+        let (tx_gpio_to_tank_level_switch, rx_tank_level_switch_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
+        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
+            mpsc::channel();
+
+        //*** test if position signal is not updating when invalid signal is true ***
+        let (_, mut refill, _) = prepare_refill_tests();
+        // check transition false -> true
+        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
+
+        refill.tank_level_switch_position_stabilized = false;
+        for _ in 0..10 {
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+            assert_eq!(refill.tank_level_switch_position_stabilized, false);
+        }
+        println!("* [Refill] checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
+    }
+
+    // @todo: redo this test case completely
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid(
+    ) {
+        //*** test if position signal is not updating when invalid signal is true ***
+        let (_, mut refill, _) = prepare_refill_tests();
+        // check transition true -> false
+        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
+
+        refill.tank_level_switch_position_stabilized = true;
+        for _ in 0..10 {
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+            assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        }
+        println!("* [Refill] checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
+    }
+
+    // @todo: redo this test case completely
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
+        //*** test if position signal is updating without delay when invalid signal is false ***
+        let (_, mut refill, _) = prepare_refill_tests();
+        // check transition true -> false
+        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, false, false, false);
+
+        refill.tank_level_switch_position_stabilized = false;
+        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+        assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        println!("* [Refill] checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
+    }
+
+    // @todo: redo this test case completely
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
+        //*** test if position signal is updating with delay when invalid signal is false ***
+        let (config, mut refill, _) = prepare_refill_tests();
+        // check transition true -> false
+        let tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
+
+        refill.tank_level_switch_position_stabilized = true;
+        for _ in 0..config
+            .refill
+            .tank_level_switch_position_high_stabilization_count
+        {
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+            assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        }
+        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+        assert_eq!(refill.tank_level_switch_position_stabilized, false);
+        println!("* [Refill] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
+    }
+
+    // @todo: redo this test case completely
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_toggle_input() {
+        //*** test if position signal is updating with delay when invalid signal is false ***
+        let (config, mut refill, _) = prepare_refill_tests();
+        // check transition true -> false
+        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
+
+        refill.tank_level_switch_position_stabilized = true;
+        for i in 0..config
+            .refill
+            .tank_level_switch_position_high_stabilization_count
+            * 4
+        {
+            // toggle the input
+            tank_level_switch_signals.tank_level_switch_position = (i % 2) > 0;
+            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
+            assert_eq!(refill.tank_level_switch_position_stabilized, true);
+        }
+        println!("* [Refill] checking no change true -> false for stabilized tank level position when toggling input succeeded.");
     }
 }

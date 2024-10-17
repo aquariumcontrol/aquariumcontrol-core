@@ -77,6 +77,9 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for current value of tank level switch invalid
     output_file_name_tank_level_switch_invalid: String,
 
+    /// output file name (in ramdisk) for current value of tank level switch position
+    output_file_name_tank_level_switch_position_stabilized: String,
+
     /// output file name (in ramdisk) for current value of ventilation
     output_file_name_ventilation_is_on: String,
 
@@ -152,6 +155,9 @@ pub struct DataLogger {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
     lock_error_output_state_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position stabilized to disk
+    lock_error_output_state_tank_level_switch_position_stabilized: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
     lock_error_output_signal_water_temperature_filtered: bool,
@@ -277,6 +283,7 @@ impl DataLogger {
             lock_error_output_signal_humidity: false,
             lock_error_output_state_tank_level_switch_position: false,
             lock_error_output_state_tank_level_switch_invalid: false,
+            lock_error_output_state_tank_level_switch_position_stabilized: false,
             lock_error_output_signal_water_temperature_filtered: false,
             lock_error_output_signal_pH_filtered: false,
             lock_error_output_signal_conductivity_filtered: false,
@@ -417,6 +424,8 @@ impl DataLogger {
         mut sql_interface_data: SqlInterfaceData,
         tx_to_gpio: Sender<InternalCommand>,
         rx_from_gpio: Receiver<f32>,
+        tx_to_tank_level_switch: Sender<InternalCommand>,
+        rx_from_tank_level_switch: Receiver<f32>,
         rx_from_refill: Receiver<bool>,
         rx_from_heating: Receiver<bool>,
         rx_from_ventilation: Receiver<bool>,
@@ -435,6 +444,7 @@ impl DataLogger {
         let mut ambient_humidity: Option<f32> = Some(0.0);
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(false);
+        let mut tank_level_switch_position_stabilized: Option<bool> = Some(false);
         let mut refill_in_progress: bool = false;
         let mut heater_is_on: bool = false;
         let mut ventilation_is_on: bool = false;
@@ -442,6 +452,7 @@ impl DataLogger {
         let mut refill_channel_disconnected = false;
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
+        let mut tank_level_switch_channel_disconnected = false;
         let mut gpio_channel_disconnected = false;
 
         loop {
@@ -697,14 +708,16 @@ impl DataLogger {
                         gpio_channel_disconnected = true;
                     }
                 }
+            }
 
+            if !tank_level_switch_channel_disconnected {
                 // send request for tank level switch position
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchPosition,
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        tank_level_switch_position = match rx_from_gpio.recv() {
+                        tank_level_switch_position = match rx_from_tank_level_switch.recv() {
                             Ok(c) => {
                                 self.lock_error_output_state_tank_level_switch_position = self
                                     .output_state(
@@ -717,7 +730,7 @@ impl DataLogger {
                                 Some(c > 0.0)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                tank_level_switch_channel_disconnected = true;
                                 None
                             }
                         };
@@ -725,19 +738,19 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting tank level switch position failed ({e:?})"
+                            "channel communication to tank level switch thread failed when requesting tank level switch position ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        tank_level_switch_channel_disconnected = true;
                     }
                 }
 
                 // send request for tank level switch invalid
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchInvalid,
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        tank_level_switch_invalid = match rx_from_gpio.recv() {
+                        tank_level_switch_invalid = match rx_from_tank_level_switch.recv() {
                             Ok(c) => {
                                 self.lock_error_output_state_tank_level_switch_invalid = self
                                     .output_state(
@@ -750,7 +763,7 @@ impl DataLogger {
                                 Some(c > 0.0)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                tank_level_switch_channel_disconnected = true;
                                 None
                             }
                         };
@@ -758,9 +771,44 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting tank level switch invalid failed ({e:?})"
+                            "channel communication to tank level switch thread failed when requesting tank level switch invalid  ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        tank_level_switch_channel_disconnected = true;
+                    }
+                }
+
+                // send request for tank level switch invalid
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchPositionStabilized,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        tank_level_switch_position_stabilized = match rx_from_tank_level_switch
+                            .recv()
+                        {
+                            Ok(c) => {
+                                self.lock_error_output_state_tank_level_switch_position_stabilized = self
+                                    .output_state(
+                                        c > 0.0,
+                                        "INVALID",
+                                        "VALID",
+                                        &self.config.output_file_name_tank_level_switch_position_stabilized,
+                                        self.lock_error_output_state_tank_level_switch_position_stabilized,
+                                    );
+                                Some(c > 0.0)
+                            }
+                            Err(_) => {
+                                tank_level_switch_channel_disconnected = true;
+                                None
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        error!(
+                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
+                        );
+                        tank_level_switch_channel_disconnected = true;
                     }
                 }
             }
@@ -848,6 +896,7 @@ impl DataLogger {
                 refill_in_progress: Some(refill_in_progress),
                 tank_level_switch_position: tank_level_switch_position,
                 tank_level_switch_invalid: tank_level_switch_invalid,
+                tank_level_switch_position_stabilized: tank_level_switch_position_stabilized,
                 surface_ventilation_status: Some(ventilation_is_on),
                 ambient_temperature: ambient_temperature,
                 ambient_humidity: ambient_humidity,

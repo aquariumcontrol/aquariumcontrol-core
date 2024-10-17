@@ -55,6 +55,9 @@ pub struct DataFrame {
     /// tank level switch validity bit (true=invalid, false=valid)
     pub tank_level_switch_invalid: Option<bool>,
 
+    /// calculated tank level switch position stabilized (true=high, false=low)
+    pub tank_level_switch_position_stabilized: Option<bool>,
+
     /// status bit indicating that ventilation is switched on
     pub surface_ventilation_status: Option<bool>,
 

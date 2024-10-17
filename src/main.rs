@@ -146,6 +146,8 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     heating --> datalogger
 ///     heating --> controllino
 ///     controllino --> heating
+///     tank_level_switch --> datalogger
+///     datalogger --> tank_level_switch
 ///     ventilation --> datalogger
 ///     ventilation --> controllino
 ///     controllino --> ventilation
@@ -380,6 +382,17 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
+    // *****************************
+
+    // *** data logger <=> tank_level_switch ***
+    let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch): (
         Sender<f32>,
         Receiver<f32>,
     ) = mpsc::channel();
@@ -884,6 +897,8 @@ fn main() {
                 sql_interface_data,
                 tx_data_logger_to_gpio,
                 rx_data_logger_from_gpio,
+                tx_data_logger_to_tank_level_switch,
+                rx_data_logger_from_tank_level_switch,
                 rx_datalogger_from_refill,
                 rx_datalogger_from_heating,
                 rx_datalogger_from_ventilation,
@@ -897,6 +912,8 @@ fn main() {
             tank_level_switch.execute(
                 tx_tank_level_switch_to_gpio,
                 rx_tank_level_switch_from_gpio,
+                tx_tank_level_switch_to_data_logger,
+                rx_tank_level_switch_from_data_logger,
                 tx_tank_level_switch_to_refill,
                 rx_tank_level_switch_from_refill,
                 tx_tank_level_switch_to_signal_handler,
