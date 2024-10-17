@@ -46,6 +46,7 @@ output_file_name_conductivity = "/var/local/aquarium-ctrl/atlsscntfc-conduc"    
 output_file_name_conductivity_filtered = "/var/local/aquarium-ctrl/atlsscntfc-conducfltrd"      # output file name (in ramdisk) for current value of conductivity filtered
 output_file_name_tank_level_switch_position = "/var/local/aquarium-ctrl/tnklvlswtch"            # output file name (in ramdisk) for current value of tank level switch position
 output_file_name_tank_level_switch_invalid = "/var/local/aquarium-ctrl/tnklvlswtch_invld"       # output file name (in ramdisk) for current value of tank level switch invalid
+output_file_name_tank_level_switch_position_stabilized = "/var/local/aquarium-ctrl/tnklvlswtch_stblzd"  # output file name (in ramdisk) for current value of tank level switch stabailized
 output_file_name_ventilation_is_on = "/var/local/aquarium-ctrl/srfcvntltn"                      # output file name (in ramdisk) for current value of ventilation
 output_file_name_heating_is_on = "/var/local/aquarium-ctrl/htng"                                # output file name (in ramdisk) for current value of heating
 output_file_name_ambient_temperature = "/var/local/aquarium-ctrl/ambtemp"                       # output file name (in ramdisk) for current value of ambient air temperature
@@ -61,11 +62,13 @@ max_refill_volume_24h = 6.0                             # max. allowed refill vo
 max_refill_count_hour = 5                               # max. allowed refill operations per hour
 max_refill_volume_hour = 2.0                            # max. allowed refill volume per hour
 min_interval_last_refill = 600                          # min. required time interval in seconds between two refill operations
-tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
 refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
 max_refill_volume = 2.0                                 # maximum allowed refill volume in one refill operation
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
+
+[tank_level_switch]
+tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [feed]
 active = true
