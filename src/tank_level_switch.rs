@@ -14,6 +14,8 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
+use rppal::gpio::InputPin; 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
@@ -91,7 +93,7 @@ pub struct TankLevelSwitch {
 
     // reference to GPIO interface
     #[cfg(target_os = "linux")]
-    gpio: Gpio,
+    input_pin_opt: Option<InputPin>,
 }
 
 impl ProcessExternalRequestTrait for TankLevelSwitch {}
@@ -131,7 +133,7 @@ impl TankLevelSwitch {
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
-        gpio: &Gpio,
+        input_pin_opt: Option<InputPin>,
     ) -> TankLevelSwitch {
         TankLevelSwitch {
             config: config,
@@ -153,7 +155,7 @@ impl TankLevelSwitch {
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_channel_receive_data_logger: false,
             lock_error_data_logger_response: false,
-            gpio: gpio,
+            input_pin_opt: input_pin_opt,
         }
     }
 

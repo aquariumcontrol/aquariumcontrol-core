@@ -748,7 +748,7 @@ fn main() {
     let mut water_injection = WaterInjection::new(&config.refill);
 
     #[cfg(target_os = "linux")]
-    let mut gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
+    let (mut gpio_handler, mut tank_level_switch_input_pin) = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
     #[cfg(not(target_os = "linux"))]
     let mut gpio_handler = GpioHandler::new(config.gpio_handler);
 
@@ -760,7 +760,7 @@ fn main() {
 
     #[cfg(target_os = "linux")]
     let mut tank_level_switch =
-        TankLevelSwitch::new(config.tank_level_switch, true, gpio_handler.get_interface());
+        TankLevelSwitch::new(config.tank_level_switch, true, tank_level_switch_input_pin);
     #[cfg(not(target_os = "linux"))]
     let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
