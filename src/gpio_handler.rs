@@ -207,7 +207,7 @@ impl GpioHandler {
                 i2c_interface: Some(I2cInterface::new(i2c_config)),
                 dht: Some(Dht::new(
                     dht_config,
-                    gpio,
+                    gpio.clone(),
                     gpio_pin_number_dht22_io,
                     gpio_pin_number_dht22_vcc,
                 )),
@@ -256,6 +256,12 @@ impl GpioHandler {
         }
 
         GpioHandler { config: config }
+    }
+
+    /// Clone the GPIO interface
+    #[cfg(target_os = "linux")]
+    pub fn get_interface() -> Gpio {
+        self.gpio.clone();
     }
 
     /// Requests a response from the simulator via TCP communication by sending
@@ -372,8 +378,8 @@ impl GpioHandler {
     /// * `rx_from_tcp_opt` -  receiver part of channel for communication with signal handler
     /// * `tx_to_data_logger` - sender part of channel for communication to data logger
     /// * `rx_to_data_logger` - receiver part of channel for communication from data logger
-    /// * `tx_from_refill` - sender part of channel for communication to refill thread
-    /// * `rx_from_refill` - receiver part of channel for communication from refill thread
+    /// * `tx_from_tank_level_switch` - sender part of channel for communication to tank level switch thread
+    /// * `rx_from_tank_level_switch` - receiver part of channel for communication from tank level switch thread
     /// * `tx_to_heating` - sender part of channel for communication to heating thread
     /// * `rx_from_heating` - receiver part of channel for communication from heating thread    
     /// * `tx_to_ventilation` - sender part of channel for communication to ventilation thread
@@ -388,8 +394,8 @@ impl GpioHandler {
         rx_from_tcp_opt: Option<Receiver<f32>>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
-        tx_to_refill: Sender<f32>,
-        rx_from_refill: Receiver<InternalCommand>,
+        tx_to_tank_level_switch: Sender<f32>,
+        rx_from_tank_level_switch: Receiver<InternalCommand>,
         tx_to_heating: Sender<f32>,
         rx_from_heating: Receiver<InternalCommand>,
         tx_to_ventilation: Sender<f32>,
@@ -401,7 +407,7 @@ impl GpioHandler {
     ) {
         let mut response_value: f32 = 0.0;
         let mut data_logger_channel_disconnected = false;
-        let mut refill_channel_disconnected = false;
+        let mut tank_level_switch_channel_disconnected = false;
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
         let mut monitors_channel_disconnected = false;
@@ -464,9 +470,9 @@ impl GpioHandler {
             }
             // **********************************
 
-            // *** communication with refill control ***
-            if !refill_channel_disconnected {
-                match rx_from_refill.try_recv() {
+            // *** communication with tank level switch thread ***
+            if !tank_level_switch_channel_disconnected {
+                match rx_from_tank_level_switch.try_recv() {
                     Ok(c) => {
                         if self.config.active {
                             if self.config.use_simulator {
@@ -479,14 +485,14 @@ impl GpioHandler {
                                 response_value = self.get_response_from_hardware(c);
                             }
                         }
-                        match tx_to_refill.send(response_value) {
+                        match tx_to_tank_level_switch.send(response_value) {
                             Ok(()) => {}
                             Err(e) => {
                                 error!(
                                     target: LOG_TARGET_GPIO_HANDLER,
-                                    "sending response value back to refill control failed ({e:?})"
+                                    "sending response value back to tank level switch thread failed ({e:?})"
                                 );
-                                refill_channel_disconnected = true;
+                                tank_level_switch_channel_disconnected = true;
                             }
                         }
                     }
@@ -496,9 +502,9 @@ impl GpioHandler {
                             TryRecvError::Disconnected => {
                                 error!(
                                     target: LOG_TARGET_GPIO_HANDLER,
-                                    "receiving command from refill control failed ({e:?})"
+                                    "receiving command from tank level switch thread failed ({e:?})"
                                 );
-                                refill_channel_disconnected = true;
+                                tank_level_switch_channel_disconnected = true;
                             }
                         }
                     }

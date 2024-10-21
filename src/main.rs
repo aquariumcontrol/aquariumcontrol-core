@@ -758,7 +758,12 @@ fn main() {
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
 
-    let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch);
+    #[cfg(target_os = "linux")]
+    let mut tank_level_switch =
+        TankLevelSwitch::new(config.tank_level_switch, true, gpio_handler.get_interface());
+    #[cfg(not(target_os = "linux"))]
+    let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
     let mut feed = Feed::new(config.feed, sql_interface_feed);
@@ -910,14 +915,14 @@ fn main() {
 
         scope.spawn(move || {
             tank_level_switch.execute(
-                tx_tank_level_switch_to_gpio,
-                rx_tank_level_switch_from_gpio,
-                tx_tank_level_switch_to_data_logger,
-                rx_tank_level_switch_from_data_logger,
-                tx_tank_level_switch_to_refill,
-                rx_tank_level_switch_from_refill,
-                tx_tank_level_switch_to_signal_handler,
-                rx_tank_level_switch_from_signal_handler,
+                &tx_tank_level_switch_to_gpio,
+                &rx_tank_level_switch_from_gpio,
+                &tx_tank_level_switch_to_data_logger,
+                &rx_tank_level_switch_from_data_logger,
+                &tx_tank_level_switch_to_refill,
+                &rx_tank_level_switch_from_refill,
+                &tx_tank_level_switch_to_signal_handler,
+                &rx_tank_level_switch_from_signal_handler,
             );
             trace!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
         });
