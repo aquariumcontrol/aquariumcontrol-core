@@ -14,17 +14,21 @@ use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-#[cfg(target_os = "linux")]
-use rppal::gpio::InputPin; 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
+#[cfg(target_os = "linux")]
+use rppal::gpio::InputPin;
 
 /// Holds the configuration data for the tank level switch calculation.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
 pub struct TankLevelSwitchConfig {
+    /// flag to determine if application shall communicate with hardware directly or via TCP with a simulator
+    pub use_simulator: bool,
+
     /// number of seconds which need to indicate a low level before the refill control assumes that the water level is low
     tank_level_switch_position_high_stabilization_count: u32,
 }
@@ -49,18 +53,6 @@ pub struct TankLevelSwitch {
     /// time counter to determine if positition is stabilized
     tank_level_switch_position_high_stabilization_counter: u32,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
-    lock_error_channel_send_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
-    lock_error_channel_receive_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
-    lock_error_channel_send_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
-    lock_error_channel_receive_tank_level_switch_invalid: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from signal handler
     lock_warn_inapplicable_command_signal_handler: bool,
 
@@ -78,6 +70,18 @@ pub struct TankLevelSwitch {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to refill thread
     lock_error_refill_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received request from heating thread for signal  which cannot be processed by this thread
+    lock_error_invalid_signal_request_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid command from heating thread
+    lock_warn_inapplicable_command_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive request from heating thread
+    lock_error_channel_receive_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to heating thread
+    lock_error_heating_response: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received request from data logger thread for signal which cannot be processed by this thread
     lock_error_invalid_signal_request_data_logger: bool,
@@ -98,6 +102,8 @@ pub struct TankLevelSwitch {
 
 impl ProcessExternalRequestTrait for TankLevelSwitch {}
 
+impl GetResponseFromSimulatorTrait for TankLevelSwitch {}
+
 impl TankLevelSwitch {
     #[cfg(not(target_os = "linux"))]
     /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms
@@ -111,16 +117,16 @@ impl TankLevelSwitch {
             tank_level_switch_invalid: false, // initialization value assuming no error
             tank_level_switch_position_stabilized: initial_position_stabilized,
             tank_level_switch_position_high_stabilization_counter: 0,
-            lock_error_channel_send_tank_level_switch_position: false,
-            lock_error_channel_receive_tank_level_switch_position: false,
-            lock_error_channel_send_tank_level_switch_invalid: false,
-            lock_error_channel_receive_tank_level_switch_invalid: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_error_invalid_signal_request_refill: false,
             lock_warn_inapplicable_command_refill: false,
             lock_error_channel_receive_refill: false,
             lock_error_refill_response: false,
+            lock_error_invalid_signal_request_heating: false,
+            lock_warn_inapplicable_command_heating: false,
+            lock_error_channel_receive_heating: false,
+            lock_error_heating_response: false,
             lock_error_invalid_signal_request_data_logger: false,
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_channel_receive_data_logger: false,
@@ -135,22 +141,26 @@ impl TankLevelSwitch {
         initial_position_stabilized: bool,
         input_pin_opt: Option<InputPin>,
     ) -> TankLevelSwitch {
+        if !config.use_simulator && !input_pin_opt.is_some() {
+            panic!("{}: application shall use real HW, but GPIO pin interface not provided.");
+        }
+
         TankLevelSwitch {
             config: config,
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
             tank_level_switch_position_stabilized: initial_position_stabilized,
             tank_level_switch_position_high_stabilization_counter: 0,
-            lock_error_channel_send_tank_level_switch_position: false,
-            lock_error_channel_receive_tank_level_switch_position: false,
-            lock_error_channel_send_tank_level_switch_invalid: false,
-            lock_error_channel_receive_tank_level_switch_invalid: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_error_invalid_signal_request_refill: false,
             lock_warn_inapplicable_command_refill: false,
             lock_error_channel_receive_refill: false,
             lock_error_refill_response: false,
+            lock_error_invalid_signal_request_heating: false,
+            lock_warn_inapplicable_command_heating: false,
+            lock_error_channel_receive_heating: false,
+            lock_error_heating_response: false,
             lock_error_invalid_signal_request_data_logger: false,
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_channel_receive_data_logger: false,
@@ -166,78 +176,24 @@ impl TankLevelSwitch {
     /// * `rx_from_gpio` - receiver part of the channel for communication from GPIO handler
     pub fn update_tank_level_switch_signals(
         &mut self,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
+        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_from_tcp_opt: &Option<Receiver<f32>>,
     ) {
-        // send request for tank level switch position
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchPosition,
-        )) {
-            Ok(_) => {
-                // Sent request for tank level switch position.
-                // now listen for response
-                self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_tank_level_switch_position = false;
-                        println!("update_tank_level_switch_signals: received {} from gpio handler for switch position", c);
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_position {
-                            error!(
-                                target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                                "receiving tank level switch position from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_position = true;
-                        }
-                        false
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_position = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_position {
-                    error!(
-                        target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                        "channel communication for GPIO handler for tank level switch position failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_position = true;
-                }
-            }
-        }
+        if self.config.use_simulator {
+            let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
+            let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
+            self.tank_level_switch_position = Self::get_response_from_simulator(
+                &tx_to_tcp,
+                &rx_from_tcp,
+                InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
+            ) > 0.0;
+        } else {
+            #[cfg(target_os = "linux")]
+            {
+                // unwrap is safe, because tested in constructor
+                let input_pin = self.input_pin_opt.unwrap();
 
-        // send request for tank level switch invalid
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchInvalid,
-        )) {
-            Ok(_) => {
-                // now listen for response
-                self.tank_level_switch_invalid = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
-                            error!(
-                                target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                                "receiving tank level switch invalid from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
-                        }
-                        true
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_invalid = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_invalid {
-                    error!(
-                        target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                        "channel communication for GPIO handler for tank level switch invalid failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_invalid = true;
-                }
+                self.tank_level_switch_position = input_pin.is_high();
             }
         }
     }
@@ -280,18 +236,27 @@ impl TankLevelSwitch {
 
     pub fn execute(
         &mut self,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
+        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_from_tcp_opt: &Option<Receiver<f32>>,
         tx_to_data_logger: &Sender<f32>,
         rx_from_data_logger: &Receiver<InternalCommand>,
         tx_to_refill: &Sender<f32>,
         rx_from_refill: &Receiver<InternalCommand>,
+        tx_to_heating: &Sender<f32>,
+        rx_from_heating: &Receiver<InternalCommand>,
         tx_to_signal_handler: &Sender<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
     ) {
         let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
+        if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
+            panic!(
+                "{}: configured to run with simulator, but no channel to TCP thread provided.",
+                LOG_TARGET_TANK_LEVEL_SWITCH
+            );
+        }
 
         loop {
             let (
@@ -304,7 +269,7 @@ impl TankLevelSwitch {
             }
 
             // either communicate with real HW or with simulator to get updated signal information
-            self.update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
+            self.update_tank_level_switch_signals(&tx_to_tcp_opt, &rx_from_tcp_opt);
 
             self.calc_tank_level_switch_position_stabilized();
 
@@ -374,7 +339,6 @@ impl TankLevelSwitch {
 
             match response_to_refill {
                 Some(c) => {
-                    println!("Sending {} back to test environment", c);
                     _ = match tx_to_refill.send(c.into()) {
                         Ok(()) => {
                             self.lock_error_refill_response = false;
@@ -393,6 +357,93 @@ impl TankLevelSwitch {
                 None => {
                     // do nothing
                     self.lock_error_refill_response = false;
+                }
+            };
+
+            let response_to_heating = match rx_from_heating.try_recv() {
+                Ok(c) => {
+                    self.lock_error_channel_receive_heating = false;
+                    match c {
+                        InternalCommand::RequestSignal(d) => {
+                            self.lock_warn_inapplicable_command_heating = false;
+                            match d {
+                                AquariumSignal::TankLevelSwitchPosition => {
+                                    self.lock_error_invalid_signal_request_heating = false;
+                                    Some(self.tank_level_switch_position)
+                                }
+                                AquariumSignal::TankLevelSwitchInvalid => {
+                                    self.lock_error_invalid_signal_request_heating = false;
+                                    Some(self.tank_level_switch_invalid)
+                                }
+                                AquariumSignal::TankLevelSwitchPositionStabilized => {
+                                    self.lock_error_invalid_signal_request_heating = false;
+                                    Some(self.tank_level_switch_position_stabilized)
+                                }
+                                _ => {
+                                    if !self.lock_error_invalid_signal_request_heating {
+                                        error!(
+                                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                            "internal error: received request for invalid signal {}",
+                                            d
+                                        );
+                                        self.lock_error_invalid_signal_request_heating = true;
+                                    }
+                                    None
+                                }
+                            }
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command_heating {
+                                warn!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "ignoring inapplicable command from heating thread."
+                                );
+                                self.lock_warn_inapplicable_command_heating = true;
+                            }
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => {
+                            /* empty buffer - no action required */
+                            self.lock_error_channel_receive_heating = false;
+                        }
+                        TryRecvError::Disconnected => {
+                            if !self.lock_error_channel_receive_heating {
+                                error!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "receiving command from heating thread failed ({e:?})"
+                                );
+                                self.lock_error_channel_receive_heating = true;
+                            }
+                        }
+                    }
+                    None
+                }
+            };
+
+            match response_to_heating {
+                Some(c) => {
+                    _ = match tx_to_heating.send(c.into()) {
+                        Ok(()) => {
+                            self.lock_error_heating_response = false;
+                        }
+                        Err(e) => {
+                            if !self.lock_error_heating_response {
+                                error!(
+                                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                    "responding back to heating thread failed ({e:?})"
+                                );
+                                self.lock_error_heating_response = true;
+                            }
+                        }
+                    };
+                }
+                None => {
+                    // do nothing
+                    self.lock_error_heating_response = false;
                 }
             };
 

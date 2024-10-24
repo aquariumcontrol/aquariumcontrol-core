@@ -17,6 +17,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Ventilation control
 //! - Automatic feeding
 
+mod ambient;
+mod atlas_scientific;
 mod balling;
 mod channel_content;
 mod config;
@@ -31,6 +33,7 @@ mod dht;
 mod feed;
 mod feedpattern;
 mod food_injection;
+mod get_resp_sim;
 mod gpio_handler;
 mod heating;
 mod iir_filter;
@@ -66,6 +69,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 
+use crate::ambient::Ambient;
+use crate::atlas_scientific::AtlasScientific;
 use crate::balling::Balling;
 use crate::channel_content::InternalCommand;
 use crate::config::read_config_file;
@@ -366,14 +371,38 @@ fn main() {
         mpsc::channel();
     // ****************************
 
-    // *** data_logger <=> gpio ***
-    let (tx_data_logger_to_gpio, rx_gpio_from_data_logger): (
+    let (tx_ambient_to_data_logger, rx_data_logger_from_ambient): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
+    // ****************************
+
+    // *** data_logger <=> atlas_scientific ***
+    let (tx_data_logger_to_atlas_scientific, rx_atlas_scientific_from_data_logger): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
 
-    let (tx_gpio_to_data_logger, rx_data_logger_from_gpio): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
+    let (tx_atlas_scientific_to_data_logger, rx_data_logger_from_atlas_scientific): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
+    // ****************************
+
+    // *** data_logger <=> ambient ***
+    let (tx_data_logger_to_ambient, rx_ambient_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+
+    // *** heating <=> atlas_scientific ***
+    let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+
+    let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
     // ****************************
 
     // *** refill <=> tank_level_switch ***
@@ -382,6 +411,17 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
     let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
+    // *****************************
+
+    // *** heating <=> tank_level_switch ***
+    let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch): (
         Sender<f32>,
         Receiver<f32>,
     ) = mpsc::channel();
@@ -398,41 +438,24 @@ fn main() {
     ) = mpsc::channel();
     // *****************************
 
-    // *** tank_level_switch <=> gpio ***
-    let (tx_tank_level_switch_to_gpio, rx_gpio_from_tank_level_switch): (
+    // *** heating <=> ambient ***
+    let (tx_heating_to_ambient, rx_ambient_from_heating): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_gpio_to_tank_level_switch, rx_tank_level_switch_from_gpio): (
+    let (tx_ambient_to_heating, rx_heating_from_ambient): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
+    // *****************************
+
+    // *** ventilation <=> atlas_scientific ***
+    let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific): (
         Sender<f32>,
         Receiver<f32>,
     ) = mpsc::channel();
-    // *****************************
-
-    // *** heating <=> gpio ***
-    let (tx_heating_to_gpio, rx_gpio_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_gpio_to_heating, rx_heating_from_gpio): (Sender<f32>, Receiver<f32>) = mpsc::channel();
-    // *****************************
-
-    // *** ventilation <=> gpio ***
-    let (tx_ventilation_to_gpio, rx_gpio_from_ventilation): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_gpio_to_ventilation, rx_ventilation_from_gpio): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
-    // *****************************
-
-    // *** monitors <=> gpio ***
-    let (tx_monitors_to_gpio, rx_gpio_from_monitors): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_gpio_to_monitors, rx_monitors_from_gpio): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
     // *****************************
 
     // *** refill => datalogger ***
@@ -640,15 +663,6 @@ fn main() {
     ) = mpsc::channel();
     // *********************************
 
-    // *** signal handler <=> gpio ***
-    let (tx_signal_handler_to_gpio, rx_gpio_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_gpio_to_signal_handler, rx_signal_handler_from_gpio): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *********************************
-
     // *** signal handler <=> controllino ***
     let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler): (
         Sender<InternalCommand>,
@@ -671,6 +685,28 @@ fn main() {
     ) = mpsc::channel();
     // **************************************
 
+    // *** signal handler <=> atlas_scientific ***
+    let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_atlas_scientific_to_signal_handler, rx_signal_handler_from_atlas_scientific): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // **************************************
+
+    // *** signal handler <=> atlas_scientific ***
+    let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    // **************************************
+
     // *** signal handler <=> tcp ***
     let (tx_signal_handler_to_tcp, rx_tcp_from_signal_handler): (
         Sender<InternalCommand>,
@@ -687,10 +723,30 @@ fn main() {
     ) = mpsc::channel();
     // ****************************
 
-    // *** gpio <=> tcp ***
-    let (tx_gpio_to_tcp, rx_tcp_from_gpio): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+    // *** ambient <=> tcp ***
+    let (tx_ambient_to_tcp, rx_tcp_from_ambient): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tcp_to_ambient, rx_ambient_from_tcp): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    // **********************
+
+    // *** atlas_scientific <=> tcp ***
+    let (tx_atlas_scientific_to_tcp, rx_tcp_from_atlas_scientific): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tcp_to_atlas_scientific, rx_atlas_scientific_from_tcp): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
-    let (tx_tcp_to_gpio, rx_gpio_from_tcp): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    // **********************
+
+    // *** tank_level_switch <=> tcp ***
+    let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
     // **********************
 
     // wrapping sender/receiver for communication with TCP thread
@@ -716,27 +772,75 @@ fn main() {
             false => None,
         };
 
-    let tx_gpio_to_tcp_opt: Option<Sender<InternalCommand>> =
-        match config.gpio_handler.use_simulator {
-            true => Some(tx_gpio_to_tcp),
+    let tx_tank_level_switch_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.tank_level_switch.use_simulator {
+            true => Some(tx_tank_level_switch_to_tcp),
             false => None,
         };
 
-    let rx_tcp_from_gpio_opt: Option<Receiver<InternalCommand>> =
-        match config.gpio_handler.use_simulator {
-            true => Some(rx_tcp_from_gpio),
+    let rx_tcp_from_tank_level_switch_opt: Option<Receiver<InternalCommand>> =
+        match config.tank_level_switch.use_simulator {
+            true => Some(rx_tcp_from_tank_level_switch),
             false => None,
         };
 
-    let tx_tcp_to_gpio_opt: Option<Sender<f32>> = match config.gpio_handler.use_simulator {
-        true => Some(tx_tcp_to_gpio),
+    let tx_tcp_to_tank_level_switch_opt: Option<Sender<f32>> =
+        match config.tank_level_switch.use_simulator {
+            true => Some(tx_tcp_to_tank_level_switch),
+            false => None,
+        };
+
+    let rx_tank_level_switch_from_tcp_opt: Option<Receiver<f32>> =
+        match config.tank_level_switch.use_simulator {
+            true => Some(rx_tank_level_switch_from_tcp),
+            false => None,
+        };
+
+    let tx_ambient_to_tcp_opt: Option<Sender<InternalCommand>> = match config.ambient.use_simulator
+    {
+        true => Some(tx_ambient_to_tcp),
         false => None,
     };
 
-    let rx_gpio_from_tcp_opt: Option<Receiver<f32>> = match config.gpio_handler.use_simulator {
-        true => Some(rx_gpio_from_tcp),
+    let rx_tcp_from_ambient_opt: Option<Receiver<InternalCommand>> =
+        match config.ambient.use_simulator {
+            true => Some(rx_tcp_from_ambient),
+            false => None,
+        };
+
+    let tx_tcp_to_ambient_opt: Option<Sender<f32>> = match config.ambient.use_simulator {
+        true => Some(tx_tcp_to_ambient),
         false => None,
     };
+
+    let rx_ambient_from_tcp_opt: Option<Receiver<f32>> = match config.ambient.use_simulator {
+        true => Some(rx_ambient_from_tcp),
+        false => None,
+    };
+
+    let tx_atlas_scientific_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.atlas_scientific.use_simulator {
+            true => Some(tx_atlas_scientific_to_tcp),
+            false => None,
+        };
+
+    let rx_tcp_from_atlas_scientific_opt: Option<Receiver<InternalCommand>> =
+        match config.atlas_scientific.use_simulator {
+            true => Some(rx_tcp_from_atlas_scientific),
+            false => None,
+        };
+
+    let tx_tcp_to_atlas_scientific_opt: Option<Sender<f32>> =
+        match config.atlas_scientific.use_simulator {
+            true => Some(tx_tcp_to_atlas_scientific),
+            false => None,
+        };
+
+    let rx_atlas_scientific_from_tcp_opt: Option<Receiver<f32>> =
+        match config.atlas_scientific.use_simulator {
+            true => Some(rx_atlas_scientific_from_tcp),
+            false => None,
+        };
 
     let publish_pid = PublishPid::new(config.publish_pid);
 
@@ -748,9 +852,25 @@ fn main() {
     let mut water_injection = WaterInjection::new(&config.refill);
 
     #[cfg(target_os = "linux")]
-    let (mut gpio_handler, mut tank_level_switch_input_pin) = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
+    let (mut gpio_handler, mut tank_level_switch_input_pin_opt, mut dht_opt) =
+        GpioHandler::new(config.gpio_handler);
     #[cfg(not(target_os = "linux"))]
-    let mut gpio_handler = GpioHandler::new(config.gpio_handler);
+    let _ = GpioHandler::new(config.gpio_handler);
+
+    #[cfg(not(target_os = "linux"))]
+    let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+    #[cfg(target_os = "linux")]
+    {
+        let i2c_interface = I2cInterface::new(config.i2c_interface);
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific, i2c_interface);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    let mut ambient = Ambient::new(config.ambient);
+    #[cfg(target_os = "linux")]
+    {
+        let mut ambient = Ambient::new(config.ambient, dht);
+    }
 
     let mut controllino = Controllino::new(config.controllino);
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
@@ -780,8 +900,12 @@ fn main() {
             scope.spawn(move || {
                 tcp_connection.execute(
                     rx_tcp_from_controllino_opt,
-                    rx_tcp_from_gpio_opt,
-                    tx_tcp_to_gpio_opt,
+                    rx_tcp_from_ambient_opt,
+                    tx_tcp_to_ambient_opt,
+                    rx_tcp_from_atlas_scientific_opt,
+                    tx_tcp_to_atlas_scientific_opt,
+                    rx_tcp_from_tank_level_switch_opt,
+                    tx_tcp_to_tank_level_switch_opt,
                     tx_tcp_to_signal_handler,
                     rx_tcp_from_signal_handler,
                 );
@@ -840,8 +964,10 @@ fn main() {
                 rx_signal_handler_from_heating,
                 tx_signal_handler_to_controllino,
                 rx_signal_handler_from_controllino,
-                tx_signal_handler_to_gpio,
-                rx_signal_handler_from_gpio,
+                tx_signal_handler_to_atlas_scientific,
+                rx_signal_handler_from_atlas_scientific,
+                tx_signal_handler_to_ambient,
+                rx_signal_handler_from_ambient,
                 tx_signal_handler_to_datalogger,
                 rx_signal_handler_from_datalogger,
                 tx_signal_handler_to_balling,
@@ -877,31 +1003,43 @@ fn main() {
         });
 
         scope.spawn(move || {
-            gpio_handler.execute(
-                tx_gpio_to_tcp_opt,
-                rx_gpio_from_tcp_opt,
-                tx_gpio_to_data_logger,
-                rx_gpio_from_data_logger,
-                tx_gpio_to_tank_level_switch,
-                rx_gpio_from_tank_level_switch,
-                tx_gpio_to_heating,
-                rx_gpio_from_heating,
-                tx_gpio_to_ventilation,
-                rx_gpio_from_ventilation,
-                tx_gpio_to_monitors,
-                rx_gpio_from_monitors,
-                tx_gpio_to_signal_handler,
-                rx_gpio_from_signal_handler,
+            atlas_scientific.execute(
+                tx_atlas_scientific_to_tcp_opt,
+                rx_atlas_scientific_from_tcp_opt,
+                tx_atlas_scientific_to_heating,
+                rx_atlas_scientific_from_heating,
+                tx_atlas_scientific_to_ventilation,
+                rx_atlas_scientific_from_ventilation,
+                tx_atlas_scientific_to_data_logger,
+                rx_atlas_scientific_from_data_logger,
+                tx_atlas_scientific_to_signal_handler,
+                rx_atlas_scientific_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "GPIO handler terminated.");
+            trace!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
+        });
+
+        scope.spawn(move || {
+            ambient.execute(
+                &tx_ambient_to_tcp_opt,
+                &rx_ambient_from_tcp_opt,
+                tx_ambient_to_heating,
+                rx_ambient_from_heating,
+                tx_ambient_to_data_logger,
+                rx_ambient_from_data_logger,
+                tx_ambient_to_signal_handler,
+                rx_ambient_from_signal_handler,
+            );
+            trace!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
 
         scope.spawn(move || {
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                tx_data_logger_to_gpio,
-                rx_data_logger_from_gpio,
+                tx_data_logger_to_ambient,
+                rx_data_logger_from_ambient,
+                tx_data_logger_to_atlas_scientific,
+                rx_data_logger_from_atlas_scientific,
                 tx_data_logger_to_tank_level_switch,
                 rx_data_logger_from_tank_level_switch,
                 rx_datalogger_from_refill,
@@ -915,12 +1053,14 @@ fn main() {
 
         scope.spawn(move || {
             tank_level_switch.execute(
-                &tx_tank_level_switch_to_gpio,
-                &rx_tank_level_switch_from_gpio,
+                &tx_tank_level_switch_to_tcp_opt,
+                &rx_tank_level_switch_from_tcp_opt,
                 &tx_tank_level_switch_to_data_logger,
                 &rx_tank_level_switch_from_data_logger,
                 &tx_tank_level_switch_to_refill,
                 &rx_tank_level_switch_from_refill,
+                &tx_tank_level_switch_to_heating,
+                &rx_tank_level_switch_from_heating,
                 &tx_tank_level_switch_to_signal_handler,
                 &rx_tank_level_switch_from_signal_handler,
             );
@@ -956,8 +1096,12 @@ fn main() {
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
-                tx_heating_to_gpio,
-                rx_heating_from_gpio,
+                tx_heating_to_ambient,
+                rx_heating_from_ambient,
+                tx_heating_to_atlas_scientific,
+                rx_heating_from_atlas_scientific,
+                tx_heating_to_tank_level_switch,
+                rx_heating_from_tank_level_switch,
                 tx_heating_to_controllino,
                 rx_heating_from_controllino,
                 tx_heating_to_signal_handler,
@@ -978,8 +1122,8 @@ fn main() {
         scope.spawn(move || {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
-                tx_ventilation_to_gpio,
-                rx_ventilation_from_gpio,
+                tx_ventilation_to_atlas_scientific,
+                rx_ventilation_from_atlas_scientific,
                 tx_ventilation_to_controllino,
                 rx_ventilation_from_controllino,
                 tx_ventilation_to_signal_handler,
@@ -998,8 +1142,6 @@ fn main() {
         scope.spawn(move || {
             monitors.execute(
                 mutex_device_scheduler_monitors,
-                tx_monitors_to_gpio,
-                rx_monitors_from_gpio,
                 tx_monitors_to_controllino,
                 rx_monitors_from_controllino,
                 tx_monitors_to_signal_handler,

@@ -188,7 +188,6 @@ impl I2cInterface {
     #[cfg(target_os = "linux")]
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
-            #[cfg(target_os = "linux")]
             i2c: {
                 let i2c = match I2c::new() {
                     Ok(c) => c,

@@ -77,6 +77,9 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
 pub struct HeatingConfig {
+    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator    
+    pub use_simulator: bool,
+
     /// Control will only be active when the flag is set to true.
     active: bool,
 
@@ -342,8 +345,12 @@ impl Heating {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
+        tx_to_ambient: Sender<InternalCommand>,
+        rx_from_ambient: Receiver<f32>,
+        tx_to_atlas_scientific: Sender<InternalCommand>,
+        rx_from_atlas_scientific: Receiver<f32>,
+        tx_to_tank_level_switch: Sender<InternalCommand>,
+        rx_from_tank_level_switch: Receiver<f32>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -416,14 +423,14 @@ impl Heating {
             // run the temperature control only once per second
             if (loop_counter % 10 == 0) && (self.config.active) {
                 // send request for water temperature
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
                 )) {
                     Ok(_) => {
                         self.lock_error_channel_send_water_temperature = false;
                         measurement_error_water_temperature = false;
                         // now listen for response
-                        measured_water_temperature = match rx_from_gpio.recv() {
+                        measured_water_temperature = match rx_from_atlas_scientific.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_water_temperature = false;
                                 c
@@ -432,7 +439,7 @@ impl Heating {
                                 if !self.lock_error_channel_receive_water_temperature {
                                     error!(
                                         target: LOG_TARGET_HEATING,
-                                        "receiving water temperature from GPIO handler failed ({e:?})"
+                                        "receiving water temperature from Atlas Scientific thread failed ({e:?})"
                                     );
                                     self.lock_error_channel_receive_water_temperature = true;
                                 }
@@ -446,7 +453,7 @@ impl Heating {
                         if !self.lock_error_channel_send_water_temperature {
                             error!(
                                 target: LOG_TARGET_HEATING,
-                                "channel communication to GPIO handler for requesting water temperature failed ({e:?})"
+                                "channel communication to Atlas Scientific thread for requesting water temperature failed ({e:?})"
                             );
                             self.lock_error_channel_send_water_temperature = true;
                         }
@@ -454,14 +461,14 @@ impl Heating {
                 }
 
                 // send request for ambient temperature
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_ambient.send(InternalCommand::RequestSignal(
                     AquariumSignal::AmbientTemperature,
                 )) {
                     Ok(_) => {
                         self.lock_error_channel_send_ambient_temperature = false;
                         measurement_error_ambient_temperature = false;
                         // now listen for response
-                        measured_ambient_temperature = match rx_from_gpio.recv() {
+                        measured_ambient_temperature = match rx_from_ambient.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_ambient_temperature = true;
                                 c
@@ -492,13 +499,13 @@ impl Heating {
                 }
 
                 // send request for water level switch position
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchPosition,
                 )) {
                     Ok(_) => {
                         self.lock_error_channel_send_tank_level_switch_position = false;
                         // now listen for response
-                        match rx_from_gpio.recv() {
+                        match rx_from_tank_level_switch.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_tank_level_switch_position = false;
                                 measured_tank_level_switch_position = c
@@ -527,13 +534,13 @@ impl Heating {
                 }
 
                 // send request for water level switch invalid
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchInvalid,
                 )) {
                     Ok(_) => {
                         self.lock_error_channel_send_tank_level_switch_invalid = false;
                         // now listen for response
-                        match rx_from_gpio.recv() {
+                        match rx_from_tank_level_switch.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_tank_level_switch_invalid = false;
                                 measured_tank_level_switch_invalid = c

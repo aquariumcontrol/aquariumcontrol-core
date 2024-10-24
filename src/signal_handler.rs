@@ -27,8 +27,6 @@ use std::time::Duration;
 /// * `rx_from_heating` - receiver part of channel for communication from heating control
 /// * `tx_to_controllino` - sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_gpio` - sender part of channel for communication to GPIO handler
-/// * `rx_from_gpio` - receiver part of channel for communication from GPIO handler
 /// * `tx_to_datalogger` - sender part of channel for communication to data logger
 /// * `rx_from_datalogger` - receiver part of channel for communication from data logger
 /// * `tx_to_balling` - sender part of channel for communication to Balling dosing control
@@ -51,8 +49,6 @@ use std::time::Duration;
 ///     heating --> signal_handler
 ///     signal_handler --> controllino[Controllino]
 ///     controllino --> signal_handler
-///     signal_handler --> gpio_handler[GPIO handler]
-///     gpio_handler --> signal_handler
 ///     signal_handler --> data_logger[Data logger]
 ///     data_logger --> signal_handler
 ///     signal_handler --> balling[Balling dosing control]
@@ -81,8 +77,10 @@ pub fn handle_signals(
     rx_from_heating: Receiver<bool>,
     tx_to_controllino: Sender<InternalCommand>,
     rx_from_controllino: Receiver<bool>,
-    tx_to_gpio: Sender<InternalCommand>,
-    rx_from_gpio: Receiver<bool>,
+    tx_to_atlas_scientific: Sender<InternalCommand>,
+    rx_from_atlas_scientific: Receiver<bool>,
+    tx_to_ambient: Sender<InternalCommand>,
+    rx_from_ambient: Receiver<bool>,
     tx_to_datalogger: Sender<InternalCommand>,
     rx_from_datalogger: Receiver<bool>,
     tx_to_balling: Sender<InternalCommand>,
@@ -221,6 +219,48 @@ pub fn handle_signals(
         }
     }
 
+    // next, let's shut down the communication with Atlas Scientific sensor unit
+    match tx_to_atlas_scientific.send(InternalCommand::Quit) {
+        Ok(_) => {
+            match rx_from_atlas_scientific.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from Atlas Scientific thread ({e:?})"
+                    );
+                }
+            };
+        }
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Atlas Scientific thread failed when sending Quit command ({e:?})"
+            );
+        }
+    }
+
+    // next, let's shut down the communication with DHT sensor
+    match tx_to_ambient.send(InternalCommand::Quit) {
+        Ok(_) => {
+            match rx_from_ambient.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "could not receive answer from Ambient thread ({e:?})"
+                    );
+                }
+            };
+        }
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Ambient thread failed when sending Quit command ({e:?})"
+            );
+        }
+    }
+
     // next, let's shut down the monitors
     match tx_to_monitors.send(InternalCommand::Quit) {
         Ok(_) => {
@@ -347,27 +387,6 @@ pub fn handle_signals(
         }
     }
 
-    // next, let's shut down GpioHandler
-    match tx_to_gpio.send(InternalCommand::Quit) {
-        Ok(_) => {
-            match rx_from_gpio.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from GpioHandler thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to GpioHandler failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
     // finally, let's shut down TcpCommunication
     match tx_to_tcp_opt {
         Some(tx_to_tcp) => match tx_to_tcp.send(InternalCommand::Quit) {
@@ -424,6 +443,28 @@ pub fn handle_signals(
             error!(
                 target: LOG_TARGET_SIGNAL_HANDLER,
                 "channel communication to ventilation control failed when sending Terminate command ({e:?})"
+            );
+        }
+    }
+
+    // Atlas Scientific thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_atlas_scientific.send(InternalCommand::Terminate) {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Atlas Scientific failed when sending Terminate command ({e:?})"
+            );
+        }
+    }
+
+    // Ambient thread has already ceased operation. It is now awaiting termination command.
+    match tx_to_ambient.send(InternalCommand::Terminate) {
+        Ok(_) => {}
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_SIGNAL_HANDLER,
+                "channel communication to Ambient failed when sending Terminate command ({e:?})"
             );
         }
     }

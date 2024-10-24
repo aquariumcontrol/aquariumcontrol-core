@@ -131,9 +131,6 @@ pub struct TcpCommunication {
 
     /// buffered reader for TCP stream
     buf_reader: BufReader<TcpStream>,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to GPIO handler
-    lock_error_channel_send_gpio: bool,
 }
 
 impl TcpCommunication {
@@ -163,7 +160,6 @@ impl TcpCommunication {
         Ok(TcpCommunication {
             write_stream: stream.try_clone().unwrap(),
             buf_reader: BufReader::new(stream),
-            lock_error_channel_send_gpio: false,
         })
     }
 
@@ -336,6 +332,39 @@ impl TcpCommunication {
         }
     }
 
+    fn receive_and_answer(&mut self, rx: &Receiver<InternalCommand>, tx: &Sender<f32>) {
+        match rx.try_recv() {
+            Ok(c) => {
+                match c {
+                    InternalCommand::RequestSignal(s) => {
+                        let response_value = self.get_signal(s);
+                        match tx.send(response_value) {
+                            Ok(()) => { /* do nothing */ }
+                            Err(e) => {
+                                panic!(
+                                    "{}: sending response value via channel failed ({e:?})",
+                                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                                );
+                            }
+                        }
+                    }
+                    _ => { /* Do nothing for all other commands */ }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        panic!(
+                            "{}: Error in trying to receive command from data logger: {e:?}",
+                            Self::LOG_TARGET_TCP_COMMUNICATION
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting.
     /// # Arguments
     /// * `rx_from_controllino_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
@@ -346,8 +375,12 @@ impl TcpCommunication {
     pub fn execute(
         &mut self,
         rx_from_controllino_opt: Option<Receiver<InternalCommand>>,
-        rx_from_gpio_opt: Option<Receiver<InternalCommand>>,
-        tx_to_gpio_opt: Option<Sender<f32>>,
+        rx_from_ambient_opt: Option<Receiver<InternalCommand>>,
+        tx_to_ambient_opt: Option<Sender<f32>>,
+        rx_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
+        tx_to_atlas_scientific_opt: Option<Sender<f32>>,
+        rx_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
+        tx_to_tank_level_switch_opt: Option<Sender<f32>>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -361,61 +394,41 @@ impl TcpCommunication {
                 break;
             }
 
-            // *** communication with GpioHandler - response required ***
-            match rx_from_gpio_opt {
-                Some(ref rx_from_gpio) => {
-                    match rx_from_gpio.try_recv() {
-                        Ok(c) => {
-                            match c {
-                                InternalCommand::RequestSignal(s) => {
-                                    let response_value = self.get_signal(s);
-                                    match tx_to_gpio_opt {
-                                        Some(ref tx_to_gpio) => {
-                                            match tx_to_gpio.send(response_value) {
-                                                Ok(()) => {
-                                                    /* do nothing */
-                                                    self.lock_error_channel_send_gpio = false;
-                                                }
-                                                Err(e) => {
-                                                    if !self.lock_error_channel_send_gpio {
-                                                        error!(
-                                                            target: Self::LOG_TARGET_TCP_COMMUNICATION,
-                                                            "sending response value back to data logger failed ({e:?})"
-                                                        );
-                                                        self.lock_error_channel_send_gpio = true;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        None => {
-                                            // TCP communication is only used for development.
-                                            panic!(
-                                                "{}: Missing channel to return value to GpioHandler.",
-                                                Self::LOG_TARGET_TCP_COMMUNICATION
-                                            );
-                                        }
-                                    }
-                                }
-                                _ => { /* Do nothing for all other commands */ }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
-                                        "TcpCommunication: Error in trying to receive command from data logger: {e:?}"
-                                    );
-                                }
-                            }
-                        }
+            // *** communication with Ambient ***
+            match rx_from_ambient_opt {
+                Some(ref rx_from_ambient) => match tx_to_ambient_opt {
+                    Some(ref tx_to_ambient) => {
+                        self.receive_and_answer(&rx_from_ambient, &tx_to_ambient);
                     }
-                }
-                None => {
-                    // no value provided - do nothing
-                }
+                    None => {}
+                },
+                None => {}
             }
-            // **********************************
+
+            // *** communication with Atlas Scientific ***
+            match rx_from_atlas_scientific_opt {
+                Some(ref rx_from_atlas_scientific) => match tx_to_atlas_scientific_opt {
+                    Some(ref tx_to_atlas_scientific) => {
+                        self.receive_and_answer(&rx_from_atlas_scientific, &tx_to_atlas_scientific);
+                    }
+                    None => {}
+                },
+                None => {}
+            }
+
+            // *** communication with Tank level switch ***
+            match rx_from_tank_level_switch_opt {
+                Some(ref rx_from_tank_level_switch) => match tx_to_tank_level_switch_opt {
+                    Some(ref tx_to_tank_level_switch) => {
+                        self.receive_and_answer(
+                            &rx_from_tank_level_switch,
+                            &tx_to_tank_level_switch,
+                        );
+                    }
+                    None => {}
+                },
+                None => {}
+            }
 
             // *** communication with Controllino - no response required ***
             match rx_from_controllino_opt {

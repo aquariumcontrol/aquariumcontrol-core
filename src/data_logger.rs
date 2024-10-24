@@ -422,8 +422,10 @@ impl DataLogger {
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
+        tx_to_ambient: Sender<InternalCommand>,
+        rx_from_ambient: Receiver<f32>,
+        tx_to_atlas_scientific: Sender<InternalCommand>,
+        rx_from_atlas_scientific: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
         rx_from_tank_level_switch: Receiver<f32>,
         rx_from_refill: Receiver<bool>,
@@ -453,7 +455,8 @@ impl DataLogger {
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
         let mut tank_level_switch_channel_disconnected = false;
-        let mut gpio_channel_disconnected = false;
+        let mut atlas_scientific_channel_disconnected = false;
+        let mut ambient_channel_disconnected = false;
 
         loop {
             i = 0;
@@ -554,14 +557,14 @@ impl DataLogger {
                 }
             }
 
-            if !gpio_channel_disconnected {
+            if !atlas_scientific_channel_disconnected {
                 // send request for water temperature
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        water_temperature = match rx_from_gpio.recv() {
+                        water_temperature = match rx_from_atlas_scientific.recv() {
                             Ok(c) => {
                                 self.lock_error_output_signal_water_temperature = self
                                     .output_signal(
@@ -573,7 +576,7 @@ impl DataLogger {
                                 Some(c)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                ambient_channel_disconnected = true;
                                 None
                             }
                         };
@@ -581,17 +584,19 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting water temperature failed ({e:?})"
+                            "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        atlas_scientific_channel_disconnected = true;
                     }
                 }
 
                 // send request for pH
-                match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::pH)) {
+                match tx_to_atlas_scientific
+                    .send(InternalCommand::RequestSignal(AquariumSignal::pH))
+                {
                     Ok(_) => {
                         // now listen for response
-                        ph = match rx_from_gpio.recv() {
+                        ph = match rx_from_atlas_scientific.recv() {
                             Ok(c) => {
                                 self.lock_error_output_signal_pH = self.output_signal(
                                     c,
@@ -602,7 +607,7 @@ impl DataLogger {
                                 Some(c)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                atlas_scientific_channel_disconnected = true;
                                 None
                             }
                         };
@@ -610,18 +615,19 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting pH failed ({e:?})"
+                            "channel communication to Atlas Scientific thread when requesting pH failed ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        atlas_scientific_channel_disconnected = true;
                     }
                 }
 
                 // send request for conductivity
-                match tx_to_gpio.send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
+                match tx_to_atlas_scientific
+                    .send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
                 {
                     Ok(_) => {
                         // now listen for response
-                        conductivity = match rx_from_gpio.recv() {
+                        conductivity = match rx_from_atlas_scientific.recv() {
                             Ok(c) => {
                                 self.lock_error_output_signal_conductivity = self.output_signal(
                                     c,
@@ -632,7 +638,7 @@ impl DataLogger {
                                 Some(c)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                atlas_scientific_channel_disconnected = true;
                                 None
                             }
                         };
@@ -640,19 +646,21 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting conductivity failed ({e:?})"
+                            "channel communication to Atlas Scientific thread when requesting conductivity failed ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        atlas_scientific_channel_disconnected = true;
                     }
                 }
+            }
 
+            if !ambient_channel_disconnected {
                 // send request for ambient temperature
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_ambient.send(InternalCommand::RequestSignal(
                     AquariumSignal::AmbientTemperature,
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        ambient_temperature = match rx_from_gpio.recv() {
+                        ambient_temperature = match rx_from_ambient.recv() {
                             Ok(c) => {
                                 self.lock_error_output_signal_ambient_temperature = self
                                     .output_signal(
@@ -664,7 +672,7 @@ impl DataLogger {
                                 Some(c)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                ambient_channel_disconnected = true;
                                 None
                             }
                         };
@@ -672,19 +680,19 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting ambient temperature failed ({e:?})"
+                            "channel communication to Ambient thread when requesting ambient temperature failed ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        ambient_channel_disconnected = true;
                     }
                 }
 
                 // send request for ambient humidity
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_ambient.send(InternalCommand::RequestSignal(
                     AquariumSignal::AmbientHumidity,
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        ambient_humidity = match rx_from_gpio.recv() {
+                        ambient_humidity = match rx_from_ambient.recv() {
                             Ok(c) => {
                                 self.lock_error_output_signal_humidity = self.output_signal(
                                     c,
@@ -695,7 +703,7 @@ impl DataLogger {
                                 Some(c)
                             }
                             Err(_) => {
-                                gpio_channel_disconnected = true;
+                                ambient_channel_disconnected = true;
                                 None
                             }
                         };
@@ -703,9 +711,9 @@ impl DataLogger {
                     Err(e) => {
                         error!(
                             target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to GPIO handler when requesting ambient humidity failed ({e:?})"
+                            "channel communication to Ambient thread when requesting ambient humidity failed ({e:?})"
                         );
-                        gpio_channel_disconnected = true;
+                        ambient_channel_disconnected = true;
                     }
                 }
             }
@@ -918,7 +926,7 @@ impl DataLogger {
             }
         };
 
-        // this thread has channel connection to underlying threads (GpioHandler).
+        // this thread has channel connection to underlying threads.
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
         let mut termination_command_received = false;

@@ -12,6 +12,8 @@ use serde_derive::Deserialize;
 use std::env;
 use std::fs;
 
+use crate::ambient::AmbientConfig;
+use crate::atlas_scientific::AtlasScientificConfig;
 use crate::balling::BallingConfig;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
@@ -44,6 +46,12 @@ pub struct ConfigData {
 
     /// configuration of the data logger
     pub data_logger: DataLoggerConfig,
+
+    /// configuration for AtlasScientific
+    pub atlas_scientific: AtlasScientificConfig,
+
+    /// configuration for Ambient
+    pub ambient: AmbientConfig,
 
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,

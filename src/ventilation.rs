@@ -225,8 +225,8 @@ impl Ventilation {
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific thread
+    /// * `rx_from_atlas_scientific` - Receiver part of channel for communication from Atlas Scientific thread
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
@@ -237,8 +237,8 @@ impl Ventilation {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
+        tx_to_atlas_scientific: Sender<InternalCommand>,
+        rx_from_atlas_scientific: Receiver<f32>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -262,14 +262,14 @@ impl Ventilation {
             // run the temperature control only once per second
             if (loop_counter % 10 == 0) && (self.config.active) {
                 // send request for temperature
-                match tx_to_gpio.send(InternalCommand::RequestSignal(
+                match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
                 )) {
                     Ok(_) => {
                         self.lock_error_channel_send_water_temperature = false;
                         measurement_error = false;
                         // now listen for response
-                        measured_temperature = match rx_from_gpio.recv() {
+                        measured_temperature = match rx_from_atlas_scientific.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_water_temperature = false;
                                 c

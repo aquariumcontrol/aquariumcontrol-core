@@ -15,7 +15,6 @@ use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::food_injection::FoodInjection;
-use crate::gpio_handler::GpioHandler;
 
 #[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
@@ -299,21 +298,6 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
 impl ProcessExternalRequestTrait for Controllino {
     /// Checks if there are new messages in the channel.
     /// Implementation for Controllino
-    /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `_` - ignored
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
-    }
-}
-
-impl ProcessExternalRequestTrait for GpioHandler {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for GpioHandler
     /// # Arguments
     /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
     /// * `_` - ignored
