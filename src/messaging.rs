@@ -169,7 +169,7 @@ pub struct MessagingConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
 ///     signal_handler[Signal handler] --> messaging[Messaging]

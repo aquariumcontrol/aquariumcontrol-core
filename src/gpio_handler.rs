@@ -43,33 +43,17 @@ pub struct GpioHandlerConfig {
     pub use_simulator: bool,
 
     /// GPIO pin number for tank level sensor
-    pub gpio_pin_number_tank_level: u8,
+    gpio_pin_number_tank_level: u8,
 
     /// GPIO pin number for communication with DHT22 sensor
-    pub gpio_pin_number_dht22_io: u8,
+    gpio_pin_number_dht22_io: u8,
 
     /// GPIO pin number for providing power to DHT22 sensor
-    pub gpio_pin_number_dht22_vcc: u8,
+    gpio_pin_number_dht22_vcc: u8,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
-/// Thread communication is as follows:
-/// ```mermaid
-/// graph LR
-///     gpio_handler[GPIO handler] --> tcp_communication[TCP communication]
-///     tcp_communication --> gpio_handler
-///     gpio_handler --> data_logger[Data logger]
-///     data_logger --> gpio_handler
-///     gpio_handler --> refill[Refill control]
-///     refill --> gpio_handler
-///     gpio_handler --> heating[Heating control]
-///     heating --> gpio_handler
-///     gpio_handler --> monitors[Monitors]
-///     monitors --> gpio_handler
-///     gpio_handler --> signal_handler[Signal handler]
-///     signal_handler --> gpio_handler
-/// ```
 
 pub struct GpioHandler {
     /// I2C interface for communication with Atlas Scientific sensor units

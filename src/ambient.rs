@@ -31,41 +31,79 @@ const MEASUREMENT_INTERVAL_SECS: i32 = 60;
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
+
 #[derive(Deserialize, Debug)]
 pub struct AmbientConfig {
     /// flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
     /// replacement value for ambient temperature in case reading from DHT22 sensor fails
-    pub replacement_value_ambient_temperature: f32,
+    replacement_value_ambient_temperature: f32,
 
     /// replacement value for ambient humidity in case reading from DHT22 sensor fails
-    pub replacement_value_ambient_humidity: f32,
+    replacement_value_ambient_humidity: f32,
 }
 
-/// Contains the communication with DHT ambient temperature and humidity sensor
+/// Contains the communication with DHT ambient temperature and humidity sensor.
+/// Alternatively, TCP communication is used when configured to run with simulator.
+/// Sensor data is read periodically and stored.
+/// Requests from data logger and heating control are answered with last measured data.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     ambient[Ambient] --> datalogger[DataLogger]
+///     datalogger --> ambient
+///     ambient --> tcp_communication[TcpCommunication]
+///     tcp_communication --> ambient
+///     heating[Heating] --> ambient
+///     ambient --> heating
+///     signal_handler[SignalHandler] --> ambient
+///     ambient --> signal_handler
+/// ```
 pub struct Ambient {
     // configuration data for Ambient
-    pub config: AmbientConfig,
+    config: AmbientConfig,
 
     /// ambient temperature in °C
-    pub ambient_temperature: f32,
+    ambient_temperature: f32,
 
     /// humidity in %
-    pub ambient_humidity: f32,
+    ambient_humidity: f32,
 
-    pub lock_error_channel_receive_termination: bool,
-    pub lock_warn_inapplicable_command_signal_handler: bool,
-    pub lock_error_channel_receive_data_logger: bool,
-    pub lock_error_data_logger_response: bool,
-    pub lock_warn_inapplicable_command_data_logger: bool,
-    pub lock_error_invalid_signal_request_data_logger: bool,
-    pub lock_error_channel_receive_heating: bool,
-    pub lock_error_heating_response: bool,
-    pub lock_warn_inapplicable_command_heating: bool,
-    pub lock_error_invalid_signal_request_heating: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination: bool,
 
-    pub dht_opt: Option<Dht>,
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from signal handler thread
+    lock_warn_inapplicable_command_signal_handler: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via channel
+    lock_error_channel_receive_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger thread via channel
+    lock_error_data_logger_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from data logger thread
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from data logger thread
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control  thread via channel
+    lock_error_channel_receive_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to heating control thread via channel
+    lock_error_heating_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from heating control thread    
+    lock_warn_inapplicable_command_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
+    lock_error_invalid_signal_request_heating: bool,
+
+    /// struct of type Dht wrapped as optional
+    #[allow(dead_code)]
+    dht_opt: Option<Dht>,
 }
 
 impl ProcessExternalRequestTrait for Ambient {}
@@ -74,7 +112,10 @@ impl GetResponseFromSimulatorTrait for Ambient {}
 
 impl Ambient {
     #[cfg(target_os = "linux")]
-    /// provides a struct of type Ambient for Linux platforms
+    /// provides a struct of type Ambient for Linux platform
+    /// # Arguments
+    /// * `config` - configuration data for Ambient
+    /// * `dht_opt` - struct of type Dht wrapped as optional          
     pub fn new(config: AmbientConfig, dht_opt: Dht) -> Ambient {
         if !config.use_simulator && !dht_opt.is_some() {
             panic!("{}: application shall use real HW, but DHT interface not provided.");
@@ -98,7 +139,9 @@ impl Ambient {
     }
 
     #[cfg(not(target_os = "linux"))]
-    /// provides a struct of type Ambient for Linux platforms
+    /// provides a struct of type Ambient for non-Linux platforms
+    /// # Arguments
+    /// * `config` - configuration data for Ambient
     pub fn new(config: AmbientConfig) -> Ambient {
         Ambient {
             config: config,
@@ -118,6 +161,16 @@ impl Ambient {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
+    /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
+    /// * `tx_to_heating` - Sender part of channel for communication to heating control
+    /// * `rx_from_heating` - Receiver part of channel for communication from heating control
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -132,6 +185,10 @@ impl Ambient {
         let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
+        // initialize signals with replacement values
+        self.ambient_temperature = self.config.replacement_value_ambient_temperature;
+        self.ambient_humidity = self.config.replacement_value_ambient_humidity;
 
         // initialize countdown
         let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 100;

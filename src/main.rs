@@ -8,14 +8,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #![deny(missing_docs)]
-//#![allow(warnings)]
 //! Aquarium control is an open-source application which is part of a control system for salt-water aquariums.
 //! It contains the following functionality:
-//! - Data acquisition of sensors (water temperature, pH, conductivity)
+//! - Data acquisition of sensors (water temperature, pH, conductivity, ambient air temperature, ambient humidity)
 //! - Fresh water refill
 //! - Heating control
 //! - Ventilation control
 //! - Automatic feeding
+//! - Balling mineral dosing
 
 mod ambient;
 mod atlas_scientific;
@@ -29,17 +29,15 @@ mod data_injection;
 mod data_logger;
 mod device_relay_logic;
 mod dht;
-
 mod feed;
 mod feedpattern;
 mod food_injection;
 mod get_resp_sim;
 mod gpio_handler;
 mod heating;
+mod i2c_interface;
 mod iir_filter;
 mod logger;
-
-mod i2c_interface;
 #[cfg(target_os = "linux")]
 mod messaging;
 mod mineral_injection;
@@ -111,24 +109,20 @@ const LOG_TARGET_MAIN: &str = "main";
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
-/// Thread communication is as follows:
+/// Global thread communication is as follows:
 /// ```mermaid
 /// graph LR
 ///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
 ///     tank_level_switch --> refill
-///     tank_level_switch --> gpio_handler[GpioHandler]
-///     gpio_handler --> tank_level_switch
 ///     refill --> controllino[Controllino]
 ///     controllino --> refill
-///     datalogger[DataLogger] --> gpio_handler
-///     gpio_handler --> datalogger
+///     ambient[Ambient] --> datalogger[DataLogger]
+///     datalogger --> ambient
 ///     refill --> datalogger
 ///     signal_handler[SignalHandler] --> refill
 ///     refill --> signal_handler
 ///     signal_handler --> tank_level_switch
 ///     tank_level_switch --> signal_handler
-///     signal_handler --> gpio_handler
-///     gpio_handler --> signal_handler
 ///     signal_handler --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> signal_handler
 ///     signal_handler --> controllino
@@ -142,26 +136,42 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     ventilation[Ventilation] --> signal_handler
 ///     signal_handler --> ventilation
 ///     controllino --> tcp_communication
-///     gpio_handler --> tcp_communication
-///     tcp_communication --> gpio_handler
+///     ambient --> tcp_communication
+///     tcp_communication --> ambient
+///     atlas_scientific --> tcp_communication
+///     tcp_communication --> atlas_scientific
+///     tank_level_switch --> tcp_communication
+///     tcp_communication --> tank_level_switch
 ///     balling --> controllino
 ///     controllino --> balling
 ///     feed --> controllino
 ///     controllino --> feed
+///     atlas_scientific --> datalogger
+///     datalogger --> atlas_scientific
 ///     heating --> datalogger
+///     heating --> atlas_scientific[AtlasScientific]
+///     atlas_scientific --> heating
 ///     heating --> controllino
 ///     controllino --> heating
+///     heating --> tank_level_switch
+///     tank_level_switch --> heating
+///     heating --> ambient
+///     ambient --> heating
 ///     tank_level_switch --> datalogger
 ///     datalogger --> tank_level_switch
 ///     ventilation --> datalogger
+///     signal_handler --> datalogger
+///     datalogger --> signal_handler
 ///     ventilation --> controllino
+///     ventilation --> atlas_scientific
+///     atlas_scientific --> ventilation
 ///     controllino --> ventilation
-///     monitors[Monitors] --> gpio_handler
-///     gpio_handler --> monitors
-///     monitors --> controllino
+///     monitors[Monitors] --> controllino
 ///     controllino --> monitors
 ///     monitors --> refill
 ///     refill --> monitors
+///     monitors --> signal_handler
+///     signal_handler --> monitors
 ///     ventilation --> schedule_check[ScheduleCheck]
 ///     schedule_check --> ventilation
 ///     heating --> schedule_check
@@ -172,27 +182,34 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
-///	signal_handler --> messaging[Messaging]
-///	messaging[Messaging] --> refill
-///	messaging --> ventilation
-///	messaging --> heating
-///	messaging --> balling
-///	messaging --> feed
-///	messaging --> monitors
+///	    signal_handler --> messaging[Messaging]
+///     signal_handler --> ambient
+///     ambient --> signal_handler
+///     signal_handler --> atlas_scientific
+///     atlas_scientific --> signal_handler
+///	    messaging --> refill
+///	    messaging --> ventilation
+///	    messaging --> heating
+///	    messaging --> balling
+///	    messaging --> feed
+///	    messaging --> monitors
 /// ```
 
 fn main() {
+    // setup logging to write to log output file and stdout
     setup_logger();
 
-    //env::set_var("RUST_BACKTRACE", "1");
+    // read configuration file for operating the control system
     let config = read_config_file("/config/aquarium_control.toml".to_string());
 
+    // calculate hash of executable
     let version_information = VersionInformation::new();
     info!(target: LOG_TARGET_MAIN,
         "hash of this executable is: {}",
         version_information.hash
     );
 
+    // connect to SQL database, subsequently setup component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
@@ -286,7 +303,12 @@ fn main() {
         target: LOG_TARGET_MAIN,
         "{}", tables_string);
 
-    let use_simulator = config.gpio_handler.use_simulator | config.controllino.use_simulator;
+    // check if any of the components requires use of simulator
+    let use_simulator = config.gpio_handler.use_simulator
+        | config.controllino.use_simulator
+        | config.ambient.use_simulator
+        | config.atlas_scientific.use_simulator
+        | config.tank_level_switch.use_simulator;
 
     // create channels for communication between threads
     // *** signal_handler => messaging ***
@@ -300,7 +322,6 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-
     // ****************************
 
     // *** messaging => refill ***
@@ -371,6 +392,11 @@ fn main() {
         mpsc::channel();
     // ****************************
 
+    // *** data_logger <=> ambient ***
+    let (tx_data_logger_to_ambient, rx_ambient_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
     let (tx_ambient_to_data_logger, rx_data_logger_from_ambient): (Sender<f32>, Receiver<f32>) =
         mpsc::channel();
     // ****************************
@@ -380,18 +406,11 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-
     let (tx_atlas_scientific_to_data_logger, rx_data_logger_from_atlas_scientific): (
         Sender<f32>,
         Receiver<f32>,
     ) = mpsc::channel();
     // ****************************
-
-    // *** data_logger <=> ambient ***
-    let (tx_data_logger_to_ambient, rx_ambient_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
 
     // *** heating <=> atlas_scientific ***
     let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating): (
@@ -696,7 +715,7 @@ fn main() {
     ) = mpsc::channel();
     // **************************************
 
-    // *** signal handler <=> atlas_scientific ***
+    // *** signal handler <=> ambient ***
     let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
@@ -872,7 +891,7 @@ fn main() {
         let mut ambient = Ambient::new(config.ambient, dht);
     }
 
-    let mut controllino = Controllino::new(config.controllino);
+    let mut controllino = Controllino::new(config.controllino.clone());
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
 
     let mut data_injection = DataInjection;
@@ -912,7 +931,7 @@ fn main() {
             });
         };
 
-        if use_simulator {
+        if config.controllino.use_simulator {
             scope.spawn(move || {
                 controllino.execute(
                     tx_controllino_to_tcp_opt,

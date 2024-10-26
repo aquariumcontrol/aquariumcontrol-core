@@ -15,7 +15,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
+const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
+
 /// Handles the termination signal from operating system (SIGTERM).
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
@@ -39,6 +40,7 @@ use std::time::Duration;
 /// * `rx_from_feed` - receiver part of channel for communication from feed control
 /// * `tx_to_feed` - sender part of channel for communication to TcpCommunication wrapped in Option
 /// * `rx_from_feed` - receiver part of channel for communication from TcpCommunication wrapped in Option
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
@@ -59,13 +61,17 @@ use std::time::Duration;
 ///     monitors --> signal_handler
 ///     signal_handler --> feed[Feed control]
 ///     feed --> signal_handler
-///     signal_handler --> schedule_check[Schedule check]
-///     schedule_check --> signal_handler
+///     atlas_scientific[AtlasScientific] --> signal_handler
+///     signal_handler --> atlas_scientific
+///     ambient[Ambient] --> signal_handler
+///     signal_handler --> ambient
+///     tank_level_switch[TankLevelSwitch] --> signal_handler
+///     signal_handler --> tank_level_switch
+///     schedule_check[ScheduleCheck] --> signal_handler
+///     signal_handler --> schedule_check
 ///     signal_handler --> tcp_communication[TCP communication]
 ///     tcp_communication --> signal_handler
 /// ```
-
-const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
 pub fn handle_signals(
     tx_to_messaging: Sender<InternalCommand>,

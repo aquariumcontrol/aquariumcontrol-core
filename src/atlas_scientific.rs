@@ -46,50 +46,97 @@ pub struct AtlasScientificConfig {
 }
 
 /// Contains the communication Atlas Scientific sensors via I2C.
+/// Alternatively, TCP communication is used when configured to run with simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
+/// Sensor data is read periodically and stored.
+/// Requests from data logger, ventilation control and heating control are answered with last measured data.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// creates the channels and sets up threads.
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     atlas_scientific[AtlasScientific] --> tcp_communication[TcpCommunication]
+///     tcp_communication --> atlas_scientific
+///     heating[Heating] --> atlas_scientific
+///     atlas_scientific --> heating
+///     ventilation[Ventilation] --> atlas_scientific
+///     atlas_scientific --> ventilation
+///     atlas_scientific --> signal_handler[SignalHandler]
+///     signal_handler --> atlas_scientific
+///     atlas_scientific --> datalogger[DataLogger]
+///     datalogger --> atlas_scientific
+/// ```
+
 pub struct AtlasScientific {
     // configuration data for AtlasScientific
-    pub config: AtlasScientificConfig,
+    config: AtlasScientificConfig,
 
     /// water temperature in °C
-    pub water_temperature: f32,
+    water_temperature: f32,
 
     /// flag indicating that the water temperature may be inaccurate
-    pub water_temperature_invalid: bool,
+    #[allow(dead_code)]
+    water_temperature_invalid: bool,
 
     /// conductivity in mS
-    pub conductivity: f32,
+    conductivity: f32,
 
     /// flag indicating that the conductivity may be inaccurate
-    pub conductivity_invalid: bool,
+    #[allow(dead_code)]
+    conductivity_invalid: bool,
 
     /// pH value
-    pub pH: f32,
+    pH: f32,
 
     /// flag indicating that the pH value may be inaccurate
-    pub pH_invalid: bool,
+    #[allow(dead_code)]
+    pH_invalid: bool,
 
     // I2C interface
     #[cfg(target_os = "linux")]
     i2c_interface_opt: Option<I2cInterface>,
 
-    pub lock_error_channel_receive_termination: bool,
-    pub lock_warn_inapplicable_command_signal_handler: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    lock_error_channel_receive_termination: bool,
 
-    pub lock_error_channel_receive_data_logger: bool,
-    pub lock_error_data_logger_response: bool,
-    pub lock_warn_inapplicable_command_data_logger: bool,
-    pub lock_error_invalid_signal_request_data_logger: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from signal handler thread    
+    lock_warn_inapplicable_command_signal_handler: bool,
 
-    pub lock_error_channel_receive_heating: bool,
-    pub lock_error_heating_response: bool,
-    pub lock_warn_inapplicable_command_heating: bool,
-    pub lock_error_invalid_signal_request_heating: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via channel
+    lock_error_channel_receive_data_logger: bool,
 
-    pub lock_error_channel_receive_ventilation: bool,
-    pub lock_error_ventilation_response: bool,
-    pub lock_warn_inapplicable_command_ventilation: bool,
-    pub lock_error_invalid_signal_request_ventilation: bool,
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger thread via channel
+    lock_error_data_logger_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from data logger thread  
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from data logger thread
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control  thread via channel
+    lock_error_channel_receive_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to heating control thread via channel
+    lock_error_heating_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from heating control thread    
+    lock_warn_inapplicable_command_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
+    lock_error_invalid_signal_request_heating: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from ventilation control thread via channel
+    lock_error_channel_receive_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to ventilation control thread via channel
+    lock_error_ventilation_response: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from ventilation control thread        
+    lock_warn_inapplicable_command_ventilation: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from ventilation control thread    
+    lock_error_invalid_signal_request_ventilation: bool,
 }
 
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -99,6 +146,9 @@ impl GetResponseFromSimulatorTrait for AtlasScientific {}
 impl AtlasScientific {
     #[cfg(target_os = "linux")]
     /// provides a struct of type AtlasScientific for Linux platforms
+    /// # Arguments
+    /// * `config` - configuration data for AtlasScientific
+    /// * `i2c_interface_opt` - struct of type I2cInterface wrapped as optional          
     pub fn new(
         config: AtlasScientificConfig,
         i2c_interface_opt: Option<I2cInterface>,
@@ -134,6 +184,8 @@ impl AtlasScientific {
 
     #[cfg(not(target_os = "linux"))]
     /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms
+    /// # Arguments
+    /// * `config` - configuration data for AtlasScientific
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         AtlasScientific {
             config: config,
@@ -160,6 +212,18 @@ impl AtlasScientific {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
+    /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
+    /// * `tx_to_heating` - Sender part of channel for communication to heating control
+    /// * `rx_from_heating` - Receiver part of channel for communication from heating control
+    /// * `tx_to_ventilation` - Sender part of channel for communication to ventilation control
+    /// * `rx_from_ventilation` - Receiver part of channel for communication from ventilation control
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
@@ -177,6 +241,11 @@ impl AtlasScientific {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
+        // initialize signals with replacement values
+        self.water_temperature = self.config.replacement_value_water_temperature;
+        self.pH = self.config.replacement_value_ph;
+        self.conductivity = self.config.replacement_value_conductivity;
+        
         // initialize countdown
         let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 100;
 
@@ -217,7 +286,7 @@ impl AtlasScientific {
                             }
                             Err(_) => {
                                 self.water_temperature_invalid = true;
-                                self.config.replacement_value_water_temperature
+                                self.water_temperature // use previously measured value
                             }
                         };
                         self.conductivity = match self
@@ -230,7 +299,7 @@ impl AtlasScientific {
                             }
                             Err(_) => {
                                 self.conductivity_invalid = true;
-                                self.config.replacement_value_conductivity
+                                self.conductivity // use previously measured value
                             }
                         };
                         self.pH = match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH)
@@ -241,7 +310,7 @@ impl AtlasScientific {
                             }
                             Err(_) => {
                                 self.pH_invalid = true;
-                                self.config.replacement_value_ph
+                                self.pH // use previously measured value
                             }
                         };
                     }

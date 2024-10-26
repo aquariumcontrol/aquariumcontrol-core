@@ -101,8 +101,12 @@ pub struct DataLoggerConfig {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     data_logger[Data logger] --> gpio_handler[GPIO handler]
-///     gpio_handler --> data_logger
+///     data_logger[Data logger] --> atlas_scientific[AtlasScientific]
+///     atlas_scientific --> data_logger
+///     data_logger --> ambient[Ambient]
+///     ambient --> data_logger
+///     data_logger --> tank_level_switch[TankLevelSwitch]
+///     tank_level_switch --> data_logger
 ///     refill[Refill control] --> data_logger
 ///     heating[Heating control] --> data_logger
 ///     ventilation[Ventilation control] --> data_logger

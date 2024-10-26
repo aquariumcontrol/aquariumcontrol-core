@@ -69,7 +69,7 @@ pub struct Feed {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
     lock_warn_inapplicable_command: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to rceive termination signal via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,
 }
 

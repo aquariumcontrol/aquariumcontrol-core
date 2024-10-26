@@ -91,10 +91,10 @@ impl RefillErrors {
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Thread communication is as follows:
+/// Thread communication  of this component is as follows:
 /// ```mermaid
 /// graph LR
-/// refill[Refill control] --> tank_level_switch[Tank level switch calculation]
+/// refill[Refill control] --> tank_level_switch[TankLevelSwitchxx§]
 /// refill --> water_injection[Water injection]
 /// water_injection --> tank_level_switch
 /// tank_level_switch --> refill
@@ -129,10 +129,10 @@ impl RefillErrors {
 /// ```
 pub struct Refill {
     /// configuration of refill control
-    pub config: RefillConfig,
+    config: RefillConfig,
 
     /// interface to SQL database
-    pub sql_interface_refill: SqlInterfaceRefill,
+    sql_interface_refill: SqlInterfaceRefill,
 
     /// struct of type RefillErrors which includes flags for different kind of errors
     pub refill_errors: RefillErrors,

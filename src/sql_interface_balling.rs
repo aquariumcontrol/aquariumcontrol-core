@@ -19,13 +19,14 @@ use crate::sql_interface::SqlInterfaceError;
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
     /// Connection to database
-    pub conn: PooledConn,
+    conn: PooledConn,
 }
 
 /// Contains set value data for each pump.
 pub struct BallingSetVal {
     /// ID of the pump
-    pub pump_id: i32,
+    #[allow(unused)]
+    pump_id: i32,
 
     /// flow rate of the pump in ml/sec
     pub dosing_speed: f32,
@@ -34,7 +35,8 @@ pub struct BallingSetVal {
     pub dosing_volume: f32,
 
     /// label which describes the fluid that the pump is delivering
-    pub label: String,
+    #[allow(unused)]
+    label: String,
 }
 
 impl SqlInterfaceBalling {

@@ -63,7 +63,7 @@ pub struct BallingConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 
 /// graph LR
@@ -88,16 +88,16 @@ pub struct Balling {
     sql_interface_balling: SqlInterfaceBalling,
 
     /// Count down in seconds until next Balling dosing for pump 1
-    pub countdown_dosing_pump1: u32,
+    countdown_dosing_pump1: u32,
 
     /// Count down in seconds until next Balling dosing for pump 2
-    pub countdown_dosing_pump2: u32,
+    countdown_dosing_pump2: u32,
 
     /// Count down in seconds until next Balling dosing for pump 3
-    pub countdown_dosing_pump3: u32,
+    countdown_dosing_pump3: u32,
 
     /// Count down in seconds until next Balling dosing for pump 4
-    pub countdown_dosing_pump4: u32,
+    countdown_dosing_pump4: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,

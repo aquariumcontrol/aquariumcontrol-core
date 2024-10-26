@@ -35,20 +35,38 @@ pub struct TankLevelSwitchConfig {
 
 const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
 
-/// Contains the communication between Refill thread and GpioHandler thread via channels.
+/// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
+/// Tank level position is measured by accessing the state of a dedicated GPIO pin.
+/// Alternatively, TCP communication is used when configured to run with simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
+///     tank_level_switch --> refill
+///     signal_handler[SignalHandler] --> tank_level_switch
+///     tank_level_switch --> signal_handler
+///     tank_level_switch --> tcp_communication[TcpCommunication]
+///     tcp_communication --> tank_level_switch
+///     heating[Heating] --> tank_level_switch
+///     tank_level_switch --> heating
+///     tank_level_switch --> datalogger[DataLogger]
+///     datalogger --> tank_level_switch
+/// ```
+
 pub struct TankLevelSwitch {
     /// configuration of tank level switch calculation
     config: TankLevelSwitchConfig,
 
     /// flag indicating if the last measurement of tank level switch indicates high (true) or low (false)
-    pub tank_level_switch_position: bool,
+    tank_level_switch_position: bool,
 
     /// flag indicating if the stabilized tank level switch indicates high (true) or low (false)
-    pub tank_level_switch_position_stabilized: bool,
+    tank_level_switch_position_stabilized: bool,
 
     /// flag indicating that the tank level switch position may be inaccurate
-    pub tank_level_switch_invalid: bool,
+    tank_level_switch_invalid: bool,
 
     /// time counter to determine if positition is stabilized
     tank_level_switch_position_high_stabilization_counter: u32,
@@ -95,7 +113,7 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to data logger thread
     lock_error_data_logger_response: bool,
 
-    // reference to GPIO interface
+    // interface to GPIO pin wrapped as optional
     #[cfg(target_os = "linux")]
     input_pin_opt: Option<InputPin>,
 }
@@ -107,6 +125,9 @@ impl GetResponseFromSimulatorTrait for TankLevelSwitch {}
 impl TankLevelSwitch {
     #[cfg(not(target_os = "linux"))]
     /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms
+    /// # Arguments
+    /// * `config` - configuration data for TankLevelSwitch
+    /// * `initial_position_stabilized` - assumed initial position of tank level before first measurement
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -135,7 +156,11 @@ impl TankLevelSwitch {
     }
 
     #[cfg(target_os = "linux")]
-    /// provides a struct of type TankLevelSwitchSignals.
+    /// provides a struct of type TankLevelSwitchSignals for Linux platform.
+    /// # Arguments
+    /// * `config` - configuration data for TankLevelSwitch
+    /// * `initial_position_stabilized` - assumed initial position of tank level before first measurement
+    /// * `input_pin_opt` - interface to GPIO pin wrapped as optional
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -169,11 +194,12 @@ impl TankLevelSwitch {
         }
     }
 
-    /// Executes the channel communication to update the tank level switch position signal
-    /// as well as the tank level switch invalid signal.
+    /// Executes either
+    /// - the measurement of GPIO pin position or
+    /// - the channel communication to update the tank level switch position signal.
     /// # Arguments
-    /// * `tx_to_gpio` - sender part of the channel for communication to GPIO handler
-    /// * `rx_from_gpio` - receiver part of the channel for communication from GPIO handler
+    /// * `tx_to_tcp_opt` - sender part of the channel for communication via TCP wrapped as optional
+    /// * `rx_from_tcp_opt` - receiver part of the channel for communication via TCP wrapped as optional
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -234,6 +260,18 @@ impl TankLevelSwitch {
         }
     }
 
+    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
+    /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
+    /// * `tx_to_refill` - Sender part of channel for communication to refill control
+    /// * `rx_from_refill` - Receiver part of channel for communication from refill control
+    /// * `tx_to_heating` - Sender part of channel for communication to heating control
+    /// * `rx_from_heating` - Receiver part of channel for communication from heating control
+    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,

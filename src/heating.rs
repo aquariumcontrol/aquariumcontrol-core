@@ -222,8 +222,12 @@ fn switch_off_heater(
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     heating[Heating control] --> gpio_handler[GPIO handler]
-///     gpio_handler --> heating
+///     heating[Heating control] --> atlas_scientific[AtlasScientific]
+///     atlas_scientific --> heating
+///     heating --> ambient[Ambient]
+///     ambient --> heating
+///     heating --> tank_level_switch[TankLevelSwitch]
+///     tank_level_switch --> heating
 ///     heating --> controllino[Controllino]
 ///     controllino --> heating
 ///     heating --> signal_handler[Signal handler]

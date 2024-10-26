@@ -99,10 +99,10 @@ mod signal {
 #[derive(Deserialize)]
 pub struct TcpConnectionConfig {
     /// host address (either IP address or DNS entry)
-    pub ip_address: String,
+    ip_address: String,
 
     /// numeric port number
-    pub port: u16,
+    port: u16,
 }
 
 /// Contains the error values for unsuccessful attempt of opening TCP channel.

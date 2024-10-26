@@ -30,46 +30,60 @@ use crate::channel_content::AquariumSignal;
 #[derive(Deserialize, Debug)]
 pub struct I2cInterfaceConfig {
     /// I2C address of Atlas Scientific pH sensor unit
-    pub address_atlas_scientific_ph: u16,
+    #[allow(unused)]    
+    address_atlas_scientific_ph: u16,
 
     /// I2C address of Atlas Scientific conductivity sensor unit
-    pub address_atlas_scientific_conductivity: u16,
+    #[allow(unused)]
+    address_atlas_scientific_conductivity: u16,
 
     /// I2C address of Atlas Scientific temperature sensor unit    
-    pub address_atlas_scientific_temperature: u16,
+    #[allow(unused)]    
+    address_atlas_scientific_temperature: u16,
 
     /// maximum number of read attempts
-    pub max_read_attempts: u16,
+    #[allow(unused)]
+    max_read_attempts: u16,
 
     /// timeout for transactions in milliseconds
-    pub timeout_transaction: u32,
+    #[allow(unused)]
+    timeout_transaction: u32,
 
     /// sleep time in milliseconds before after writing before reading from pH sensor unit
-    pub sleep_time_atlas_scientific_ph: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_ph: u64,
 
     /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
-    pub sleep_time_atlas_scientific_conductivity: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_conductivity: u64,
 
     /// sleep time in milliseconds before after writing before reading from temperature sensor unit
-    pub sleep_time_atlas_scientific_temperature: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_temperature: u64,
 
     /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_ph: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_ph: f32,
 
     /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_ph: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_ph: f32,
 
     /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_temperature: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_temperature: f32,
 
     /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_temperature: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_temperature: f32,
 
     /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub max_val_atlas_scientific_conductivity: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_conductivity: f32,
 
     /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub min_val_atlas_scientific_conductivity: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_conductivity: f32,
 }
 
 /// error codes for evaluation of sensor unit response

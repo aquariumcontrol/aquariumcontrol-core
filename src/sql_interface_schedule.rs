@@ -55,31 +55,32 @@ impl fmt::Display for ScheduleType {
 /// Contains one schedule data set as read from SQL database
 pub struct SqlScheduleEntry {
     /// Schedule type (either Balling, Refill, Ventilation or Heating)
-    pub schedule_type: String,
+    schedule_type: String,
 
     /// Time of day from which on the control shall be active
-    pub start_time: String,
+    start_time: String,
 
     /// Time of day from which on the controll shall not be active
-    pub stop_time: String,
+    stop_time: String,
 
     /// Flag describing if the schedule entry is active
-    pub is_active: u32,
+    is_active: u32,
 }
 
 /// Contains one schedule data set after post processing
 pub struct ScheduleEntry {
     /// Schedule type (either Balling, Refill, Ventilation or Heating)
-    pub schedule_type: ScheduleType,
+    schedule_type: ScheduleType,
 
     /// Time of day from which on the control shall be active
-    pub start_time: NaiveTime,
+    start_time: NaiveTime,
 
     /// Time of day from which on the controll shall not be active
-    pub stop_time: NaiveTime,
+    stop_time: NaiveTime,
 
     /// Flag describing if the schedule entry is active
-    pub is_active: bool,
+    #[allow(unused)]
+    is_active: bool,
 }
 
 impl ScheduleEntry {
@@ -142,10 +143,10 @@ impl ScheduleEntry {
 /// Contains the configuration and the implementation of the SQL interface for Schedule.
 pub struct SqlInterfaceSchedule {
     /// Connection to database
-    pub conn: PooledConn,
+    conn: PooledConn,
 
     /// Result of post-processed SQL query    
-    pub schedules: Vec<ScheduleEntry>,
+    schedules: Vec<ScheduleEntry>,
 }
 
 impl SqlInterfaceSchedule {

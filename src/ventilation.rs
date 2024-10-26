@@ -153,11 +153,11 @@ fn switch_off_ventilation(
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Holds the configuration and the implementation for the ventilation control.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ventilation[Heating control] --> gpio_handler[GPIO handler]
-///     gpio_handler --> ventilation
+///     ventilation[Heating control] --> atlas_scientific[AtlasScientific]
+///     atlas_scientific --> ventilation
 ///     ventilation --> controllino[Controllino]
 ///     controllino --> ventilation
 ///     ventilation --> signal_handler[Signal handler]

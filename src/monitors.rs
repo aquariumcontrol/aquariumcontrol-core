@@ -28,11 +28,9 @@ pub struct MonitorsConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     monitors[Monitors] --> gpio_handler[GPIO handler]
-///     gpio_handler --> monitors
 ///     monitors[Monitors] --> controllino[Controllino]
 ///     controllino --> monitors
 ///     monitors --> signal_handler[Signal handler]

@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::error;
 
-//#[cfg(target_os = "linux")]
-//use log::{info, warn};
 #[cfg(target_os = "linux")]
 use rppal::gpio::{Gpio, Level, Trigger};
 use serde_derive::Deserialize;
@@ -29,25 +27,32 @@ const LOG_TARGET_DHT: &str = "dht";
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
     /// duration to keep pin down during start signal in microseconds
-    pub sensor_init_pin_down_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_pin_down_duration_micros: u64,
 
     /// duration to keep pin up during start signal in microseconds
-    pub sensor_init_pin_up_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_pin_up_duration_micros: u64,
 
     /// duration for sensor to respond after sending start signal in microseconds
-    pub sensor_init_input_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_input_duration_micros: u64,
 
     /// maximum permissible duration for sensor to respond in microseconds
-    pub timeout_duration_micros: u64,
+    #[allow(unused)]
+    timeout_duration_micros: u64,
 
     // duration in milliseconds the sensor is switched off before requesting transmission
-    pub sensor_reset_duration_millis: u64,
+    #[allow(unused)]
+    sensor_reset_duration_millis: u64,
 
     // duration in milliseconds the sensor is given to initialize
-    pub sensor_startup_duration_millis: u64,
+    #[allow(unused)]
+    sensor_startup_duration_millis: u64,
 
     // duration in milliseconds the sensor is given to pause between transmissions
-    pub sensor_pause_duration_millis: u64,
+    #[allow(unused)]
+    sensor_pause_duration_millis: u64,
 }
 
 pub mod dht22_constants {

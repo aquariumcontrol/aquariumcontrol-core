@@ -271,13 +271,13 @@ pub enum SqlInterfaceError {
 /// Holds the configuration and the implementation of the SQL interface.
 pub struct SqlInterface {
     /// Configuration data read from the .toml file
-    pub config: SqlInterfaceConfig,
+    config: SqlInterfaceConfig,
 
     /// Connection pool
-    pub pool: Pool,
+    pool: Pool,
 
     /// Connection to database
-    pub conn: PooledConn,
+    conn: PooledConn,
 }
 
 impl SqlInterface {
