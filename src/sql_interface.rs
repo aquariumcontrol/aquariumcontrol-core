@@ -276,8 +276,8 @@ pub struct SqlInterface {
     /// Connection pool
     pool: Pool,
 
-    /// Connection to database
-    conn: PooledConn,
+    /// Connection to database (public because accessed from within test cases)
+    pub conn: PooledConn,
 }
 
 impl SqlInterface {

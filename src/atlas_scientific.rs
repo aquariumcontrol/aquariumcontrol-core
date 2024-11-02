@@ -245,7 +245,7 @@ impl AtlasScientific {
         self.water_temperature = self.config.replacement_value_water_temperature;
         self.pH = self.config.replacement_value_ph;
         self.conductivity = self.config.replacement_value_conductivity;
-        
+
         // initialize countdown
         let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 100;
 

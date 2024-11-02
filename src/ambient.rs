@@ -120,10 +120,12 @@ impl Ambient {
         if !config.use_simulator && !dht_opt.is_some() {
             panic!("{}: application shall use real HW, but DHT interface not provided.");
         }
+        let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
+        let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
         Ambient {
             config: config,
-            ambient_temperature: 0.0,
-            ambient_humidity: 0.0,
+            ambient_temperature: replacement_value_ambient_temperature,
+            ambient_humidity: replacement_value_ambient_humidity,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_data_logger: false,
@@ -143,10 +145,12 @@ impl Ambient {
     /// # Arguments
     /// * `config` - configuration data for Ambient
     pub fn new(config: AmbientConfig) -> Ambient {
+        let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
+        let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
         Ambient {
             config: config,
-            ambient_temperature: 0.0,
-            ambient_humidity: 0.0,
+            ambient_temperature: replacement_value_ambient_temperature,
+            ambient_humidity: replacement_value_ambient_humidity,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_data_logger: false,
@@ -191,7 +195,7 @@ impl Ambient {
         self.ambient_humidity = self.config.replacement_value_ambient_humidity;
 
         // initialize countdown
-        let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 100;
+        let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 10;
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!(
@@ -450,20 +454,171 @@ impl Ambient {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::DateTime;
-    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::sync::{Arc, Mutex};
+    use std::sync::mpsc::TryRecvError;
     use std::thread::scope;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::Duration;
 
     use crate::ambient::Ambient;
-    use crate::ambient::LOG_TARGET_AMBIENT;
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::proc_ext_req::ProcessExternalRequestTrait;
+
+    #[test]
+    // test case verifies if the test object is processing the interfaces correctly
+    pub fn ambient_interfaces() {
+        // channels for communication with test environment
+        let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
+        let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
+        let (tx_tcp_to_ambient, rx_ambient_from_tcp) = mpsc::channel();
+        let (tx_ambient_to_tcp, rx_tcp_from_ambient) = mpsc::channel();
+        let tx_ambient_to_tcp_opt = Some(tx_ambient_to_tcp.clone());
+        let rx_ambient_from_tcp_opt = Some(rx_ambient_from_tcp);
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler) = mpsc::channel();
+        let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient) = mpsc::channel();
+
+        // re-use configuration previously create for different component
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_data_logger.toml".to_string());
+
+        #[cfg(not(target_os = "linux"))]
+        let mut ambient = Ambient::new(config.ambient);
+        #[cfg(target_os = "linux")]
+        let mut ambient = Ambient::new(config.ambient, None);
+
+        scope(|scope| {
+            scope.spawn(move || {
+                // mock signal handler
+                let sleep_duration_8_seconds = Duration::from_millis(8000);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_8_seconds);
+                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
+                rx_signal_handler_from_ambient.recv().unwrap();
+                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Terminate);
+            });
+
+            scope.spawn(move || {
+                // mock Heating thread
+                let result_temperature = match tx_heating_to_ambient.send(
+                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
+                    ) {
+                    Ok(()) => {
+                        match rx_heating_from_ambient.recv() {
+                            Ok(c) => { c },
+                            Err(e) => {
+                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
+                    }
+                };
+                assert_eq!(result_temperature, 24.0);
+            });
+
+            scope.spawn(move || {
+                // mock Data logger thread
+                let result_temperature = match tx_data_logger_to_ambient.send(
+                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
+                    ) {
+                    Ok(()) => {
+                        match rx_data_logger_from_ambient.recv() {
+                            Ok(c) => { c },
+                            Err(e) => {
+                                panic!("Error occurred when mock data logger thread tried to receive from test object: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Error occurred when mock data logger thread tried to send to test object: {e:?}");         
+                    }
+                };
+                assert_eq!(result_temperature, 24.0);
+                let result_humidity = match tx_data_logger_to_ambient.send(
+                        InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)
+                    ) {
+                    Ok(()) => {
+                        match rx_data_logger_from_ambient.recv() {
+                            Ok(c) => { c },
+                            Err(e) => {
+                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
+                    }
+                };
+                assert_eq!(result_humidity, 60.0);
+            });
+
+            scope.spawn(move || {
+                // mock TCP communication thread
+                let sleep_duration_one_millisecond = Duration::from_millis(1);
+                let spin_sleeper = SpinSleeper::default();
+                loop {
+                    match rx_tcp_from_ambient.try_recv() {
+                        Ok(c) => {
+                            let response_value = match c {
+                                InternalCommand::RequestSignal(d) => {
+                                    match d {
+                                        AquariumSignal::AmbientTemperature => 20.0,
+                                        AquariumSignal::AmbientHumidity => 60.0,
+                                        _ => {
+                                            panic!("Mock TCP communication: Received request for inapplicable signal  {}.", d);
+                                        }
+                                    }
+                                },
+                                InternalCommand::Quit => {
+                                    break;
+                                }
+                                _ => {
+                                    panic!("Mock TCP communication: Received invalid command.");
+                                },
+                            };
+                            match tx_tcp_to_ambient.send(response_value) {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    panic!(
+                                        "Error in trying to send mock TCP communication response back to test object: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("Mock TCP communication: Error in trying to receive command from data logger: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                    spin_sleeper.sleep(sleep_duration_one_millisecond);
+                }
+            });
+
+            scope.spawn(move || {
+                // test object
+                ambient.execute(
+                    &tx_ambient_to_tcp_opt,
+                    &rx_ambient_from_tcp_opt,
+                    tx_ambient_to_heating,
+                    rx_ambient_from_heating,
+                    tx_ambient_to_data_logger,
+                    rx_ambient_from_data_logger,
+                    tx_ambient_to_signal_handler,
+                    rx_ambient_from_signal_handler,
+                );
+
+                // signal end of test case execution to mock TCP communication thread
+                let _ = tx_ambient_to_tcp.send(InternalCommand::Quit);
+            });
+        });
+    }
 }

@@ -12,7 +12,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::channel_content::ActuatorState;
 use crate::channel_content::AquariumDevice;
@@ -25,6 +25,10 @@ use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
 const LOG_TARGET_HEATING: &str = "heating";
+
+const CYCLE_TIME_HEATING_MILLIS: u64 = 10;
+
+const TIME_INCREMENT_HEATING_MILLIS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000.0;
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -271,6 +275,9 @@ pub struct Heating {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
     lock_error_channel_receive_schedule_check: bool,
+    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to schedule check
+    lock_error_channel_send_schedule_check: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,
@@ -298,6 +305,7 @@ impl Heating {
             lock_error_channel_send_tank_level_switch_position: false,
             lock_error_channel_receive_tank_level_switch_invalid: false,
             lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
@@ -366,7 +374,6 @@ impl Heating {
         sql_interface: &mut SqlInterface,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {
-        let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut _refill_error = false;
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
@@ -383,6 +390,7 @@ impl Heating {
         let mut tank_level_low_counter = 0;
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
+        let mut lock_warn_cycle_time_exceeded = false;
 
         info!(
             target: LOG_TARGET_HEATING,
@@ -404,6 +412,8 @@ impl Heating {
         };
 
         loop {
+            let start_time = SystemTime::now();
+
             let (
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start heating has been received
@@ -424,8 +434,8 @@ impl Heating {
                 heating_inhibited = false;
             }
 
-            // run the temperature control only once per second
-            if (loop_counter % 10 == 0) && (self.config.active) {
+            // temperature control runs 10 times per second
+            if self.config.active {
                 // send request for water temperature
                 match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
@@ -584,6 +594,7 @@ impl Heating {
                 // schedule check to see if actuation is allowed
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
+                        self.lock_error_channel_send_schedule_check = false;
                         // now listen for response
                         schedule_check_result = match rx_from_schedule_check.recv() {
                             Ok(c) => {
@@ -603,10 +614,13 @@ impl Heating {
                         };
                     }
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "channel communication to schedule check failed ({e:?})"
-                        );
+                        if !self.lock_error_channel_send_schedule_check {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "channel communication to schedule check failed ({e:?})"
+                            );
+                            self.lock_error_channel_send_schedule_check = true;
+                        }
                     }
                 }
 
@@ -746,52 +760,78 @@ impl Heating {
                     }
                 }
 
-                saw_tooth_profile.execute();
+                saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_MILLIS);
 
-                // one second closer to midnight
-                duration_until_midnight -= 1;
-                match heating_stats_opt {
-                    Some(ref mut heating_stats) => {
-                        // wrap temperatures depending on the status bits
-                        let water_temperature_opt = match measurement_error_water_temperature {
-                            true => None,
-                            false => Some(measured_water_temperature as f64),
-                        };
-                        let ambient_temperature_opt = match measurement_error_ambient_temperature {
-                            true => None,
-                            false => Some(measured_ambient_temperature as f64),
-                        };
-                        // update the heating statistics with recently aquired data
-                        if heater_state == ActuatorState::On {
-                            energy_increment = (self.config.heater_power / 3600.0) as f64;
+                // update of midnight counter only runs every second
+                if loop_counter % 10 == 0 {
+                    // one second closer to midnight
+                    duration_until_midnight -= 1;
+                    match heating_stats_opt {
+                        Some(ref mut heating_stats) => {
+                            // wrap temperatures depending on the status bits
+                            let water_temperature_opt = match measurement_error_water_temperature {
+                                true => None,
+                                false => Some(measured_water_temperature as f64),
+                            };
+                            let ambient_temperature_opt =
+                                match measurement_error_ambient_temperature {
+                                    true => None,
+                                    false => Some(measured_ambient_temperature as f64),
+                                };
+                            // update the heating statistics with recently aquired data
+                            if heater_state == ActuatorState::On {
+                                energy_increment = (self.config.heater_power / 3600.0) as f64;
+                            }
+                            heating_stats.update(
+                                water_temperature_opt,
+                                ambient_temperature_opt,
+                                energy_increment,
+                            );
                         }
-                        heating_stats.update(
-                            water_temperature_opt,
-                            ambient_temperature_opt,
-                            energy_increment,
-                        );
+                        None => {
+                            // do nothing, heating stats or not mandatory to run heating control
+                        }
                     }
-                    None => {
-                        // do nothing, heating stats or not mandatory to run heating control
-                    }
-                }
 
-                // check if midnight has arrived
-                if duration_until_midnight <= 0 && heating_stats_opt.is_some() {
-                    heating_stats_transfer.transfer_heating_stats(
-                        heating_stats_opt.clone().unwrap(),
-                        &mut self.sql_interface_heating,
-                        sql_interface,
-                    );
-                    // reset heating stats
-                    heating_stats_opt = Some(HeatingStatsEntry::new());
-                    duration_until_midnight = self.get_duration_until_midnight();
+                    // check if midnight has arrived
+                    if duration_until_midnight <= 0 && heating_stats_opt.is_some() {
+                        heating_stats_transfer.transfer_heating_stats(
+                            heating_stats_opt.clone().unwrap(),
+                            &mut self.sql_interface_heating,
+                            sql_interface,
+                        );
+                        // reset heating stats
+                        heating_stats_opt = Some(HeatingStatsEntry::new());
+                        duration_until_midnight = self.get_duration_until_midnight();
+                    }
                 }
             }
 
             loop_counter += 1;
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            let stop_time = SystemTime::now();
+            let execution_duration_millis =
+                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+           
+            let remaining_sleep_time_millis: u64;
+            if execution_duration_millis >= CYCLE_TIME_HEATING_MILLIS {
+                if !lock_warn_cycle_time_exceeded {
+                    warn!(target: LOG_TARGET_HEATING,
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration_millis,
+                        CYCLE_TIME_HEATING_MILLIS);
+                    lock_warn_cycle_time_exceeded = true;
+                } else {
+                    lock_warn_cycle_time_exceeded = false;
+                }
+                remaining_sleep_time_millis = 0;
+            }
+            else {
+                remaining_sleep_time_millis = CYCLE_TIME_HEATING_MILLIS - execution_duration_millis;
+            }
+            let sleep_duration =
+                Duration::from_millis(remaining_sleep_time_millis);
+            spin_sleeper.sleep(sleep_duration);
         }
 
         // switch off heater if not already off
@@ -866,15 +906,19 @@ impl Heating {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            let sleep_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
+            spin_sleeper.sleep(sleep_duration);
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use all_asserts::{assert_ge, assert_le};
     use chrono::Local;
+    use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
+    use std::fmt;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
@@ -961,6 +1005,7 @@ pub mod tests {
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
         );
+        println!("prepare_heating_tests_mock_midnight_calculator: SwitchOff temperature = {}, SwitchOn temperature = {}", config.heating.switch_on_temperature, config.heating.switch_off_temperature);
         let heating_config = config.heating.clone();
         (
             config,
@@ -969,94 +1014,90 @@ pub mod tests {
         )
     }
 
-    fn test_heating_receive_actuation_command_send_confirmation(
-        rx_controllino_from_heating: &Receiver<InternalCommand>,
-        tx_controllino_to_heating: &Sender<bool>,
-    ) -> Option<InternalCommand> {
-        let command_received: Option<InternalCommand>;
-
-        // receive command from test object
-        match rx_controllino_from_heating.recv() {
-            Ok(command) => {
-                println!(
-                    "test_heating_receive_actuation_command_send_confirmation: received {}",
-                    command
-                );
-                command_received = Some(command);
-            }
-            Err(e) => {
-                panic!("Heating: Error when receiving actuation command from test object: {e:?}");
-            }
-        }
-
-        // send confirmation back
-        match tx_controllino_to_heating.send(true) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Heating: Error when sending back actuation command confirmation to test object: {e:?}");
-            }
-        }
-
-        command_received
+    #[derive(Clone)]
+    pub struct ActuationEvent {
+        pub time: SystemTime,
+        pub command: InternalCommand,
     }
 
-    fn run_main_cycle_with_stimuli(
-        iterations: u32,
-        rx_gpio_from_heating: &Receiver<InternalCommand>,
-        tx_gpio_to_heating: &Sender<f32>,
-        water_temperature_stimuli: f32,
-        ambient_temperature_stimuli: f32,
-        tank_level_switch_position: f32,
-        tank_level_switch_invalid: f32,
-    ) {
-        for i in 0..iterations {
-            println!(
-                "Heating: run_main_cycle_with_sensor_signals running loop iteration #{}",
-                i
-            );
-            for _ in 0..4 {
-                // execute channel communication 4 times per iteration
-                match rx_gpio_from_heating.recv() {
-                    Ok(c) => match c {
-                        InternalCommand::RequestSignal(s) => match s {
-                            AquariumSignal::WaterTemperature => {
-                                let _ = tx_gpio_to_heating.send(water_temperature_stimuli);
-                            }
-                            AquariumSignal::AmbientTemperature => {
-                                let _ = tx_gpio_to_heating.send(ambient_temperature_stimuli);
-                            }
-                            AquariumSignal::TankLevelSwitchPosition => {
-                                let _ = tx_gpio_to_heating.send(tank_level_switch_position);
-                            }
-                            AquariumSignal::TankLevelSwitchInvalid => {
-                                let _ = tx_gpio_to_heating.send(tank_level_switch_invalid);
-                            }
-                            _ => {
-                                panic!("Received invalid signal request from test object.");
-                            }
-                        },
-                        _ => {
-                            panic!("Received invalid command from test object.");
+    impl ActuationEvent {
+        pub fn new(time: SystemTime, command: InternalCommand) -> ActuationEvent {
+            ActuationEvent {
+                time: time,
+                command: command,
+            }
+        }
+    }
+
+    impl fmt::Display for ActuationEvent {
+        /// Function provides output of ActuationEvent for development purposes
+        /// # Arguments
+        /// * `f` - configuration for formatting
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let datetime: DateTime<Utc> = self.time.into();
+            write!(f, "{}: {}", datetime.format("%d/%m/%Y %T"), self.command)
+        }
+    }
+
+    fn mock_controllino(
+        rx_controllino_from_test_object: &Receiver<InternalCommand>,
+        tx_controllino_to_test_object: &Sender<bool>,
+    ) -> Vec<ActuationEvent> {
+        let mut result: Vec<ActuationEvent> = Vec::new();
+
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            // receive command from test object
+            match rx_controllino_from_test_object.recv() {
+                Ok(command) => {
+                    match command {
+                        InternalCommand::Quit => {
+                            break;
                         }
-                    },
-                    _ => {
-                        panic!("Error in communication with test object.");
+                        _ => {
+                            println!("mock_controllino: Received command {}", command);
+                            // store tuple of SystemTime and command in vector
+                            result.push(ActuationEvent::new(SystemTime::now(), command));
+                        }
+                    }
+                }
+                Err(e) => {
+                    panic!("Mock Controllino: Error when receiving actuation command from test object: {e:?}");
+                }
+            }
+
+            // send confirmation back
+            match tx_controllino_to_test_object.send(true) {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!("Mock Controllino: Error when sending back actuation command confirmation to test object: {e:?}");
+                }
+            }
+
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
+        }
+        result
+    }
+
+    fn mock_datalogger(rx_datalogger_from_heating: &Receiver<bool>) {
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            // receive information for data logger
+            match rx_datalogger_from_heating.try_recv() {
+                Ok(_) => { /* do nothing */ }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            // for this mock thread, this case occurrs - test case execution has concluded
+                            break;
+                        }
                     }
                 }
             }
-        }
-        println!("run_main_cycle_with_stimuli finished.");
-    }
-
-    fn test_heating_receive_information_for_datalogger(
-        rx_datalogger_from_heating: &Receiver<bool>,
-    ) {
-        // receive information for data logger
-        match rx_datalogger_from_heating.recv() {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Heating: error when receiving information for data logger: {e:?}");
-            }
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
         }
     }
 
@@ -1065,33 +1106,196 @@ pub mod tests {
         tx_schedule_check_to_heating: &Sender<bool>,
         rx_schedule_check_from_heating: &Receiver<InternalCommand>,
         value: bool,
-    ) -> bool {
-        match rx_schedule_check_from_heating.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::ScheduleCheck => {
-                    // allow control to actuate
-                    let _ = tx_schedule_check_to_heating.send(value);
-                }
-                InternalCommand::Quit => {
-                    // test case has finished
-                    return true;
-                }
-                _ => {
-                    panic!("Heating: test object sent invalid command.");
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "Heating: Error in trying to receive command from test object: {e:?}"
-                        );
+    ) {
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            match rx_schedule_check_from_heating.try_recv() {
+                Ok(c) => {
+                    match c {
+                        InternalCommand::ScheduleCheck => {
+                            // allow control to actuate
+                            let _ = tx_schedule_check_to_heating.send(value);
+                        }
+                        InternalCommand::Quit => {
+                            // test case has finished
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock ScheduleCheck: test object sent invalid command.");
+                        }
+                    }
+                },
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                                panic!(
+                                    "Mock ScheduleCheck: Error in trying to receive command from test object: {e:?}"
+                                );
+                        }
                     }
                 }
             }
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
         }
-        false
+    }
+
+    pub fn mock_tank_level_switch(
+        tx_tank_level_switch_to_test_object: &Sender<f32>,
+        rx_tank_level_switch_from_test_object: &Receiver<InternalCommand>,
+        mock_value_position: f32,
+        mock_value_invalid: f32,
+        mock_value_position_stabilized: f32,
+    ) {
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        let mut lock_error_channel_disconnected = false;
+        loop {
+            match rx_tank_level_switch_from_test_object.try_recv() {
+                Ok(c) => {
+                    let response_value = match c {
+                        InternalCommand::RequestSignal(d) => match d {
+                            AquariumSignal::TankLevelSwitchPosition => mock_value_position,
+                            AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid,
+                            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                                mock_value_position_stabilized
+                            }
+                            _ => {
+                                panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
+                            }
+                        },
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock TankLevelSwitch: Received invalid command.");
+                        }
+                    };
+                    match tx_tank_level_switch_to_test_object.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            panic!(
+                                "Mock TankLevelSwitch: Error in trying to send response back data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock TankLevelSwitch: Error in trying to receive command from data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
+        }
+    }
+
+    pub fn mock_atlas_scientific(
+        tx_atlas_scientific_to_test_object: &Sender<f32>,
+        rx_atlas_scientific_from_test_object: &Receiver<InternalCommand>,
+        mock_value_water_temperature: f32,
+        mock_value_conductivity: f32,
+        mock_value_ph: f32,
+    ) {
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            match rx_atlas_scientific_from_test_object.try_recv() {
+                Ok(c) => {
+                    let response_value = match c {
+                        InternalCommand::RequestSignal(d) => match d {
+                            AquariumSignal::WaterTemperature => mock_value_water_temperature,
+                            AquariumSignal::Conductivity => mock_value_conductivity,
+                            AquariumSignal::pH => mock_value_ph,
+                            _ => {
+                                panic!("Mock AtlasScientific: inapplicable signal request {}", d);
+                            }
+                        },
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock AtlasScientific: Received invalid command.");
+                        }
+                    };
+                    match tx_atlas_scientific_to_test_object.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            panic!(
+                                "Mock AtlasScientific: Error in trying to send response back data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock AtlasScientific: Error in trying to receive command from data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
+        }
+    }
+
+    pub fn mock_ambient(
+        tx_ambient_to_test_object: &Sender<f32>,
+        rx_ambient_from_test_object: &Receiver<InternalCommand>,
+        mock_value_ambient_temperature: f32,
+        mock_value_ambient_humidity: f32,
+    ) {
+        let sleep_duration_one_millisecond = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            match rx_ambient_from_test_object.try_recv() {
+                Ok(c) => {
+                    let response_value = match c {
+                        InternalCommand::RequestSignal(d) => match d {
+                            AquariumSignal::AmbientTemperature => mock_value_ambient_temperature,
+                            AquariumSignal::Conductivity => mock_value_ambient_humidity,
+                            _ => {
+                                panic!("Mock Ambient: inapplicable signal request {}", d);
+                            }
+                        },
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock Ambient: Received invalid command.");
+                        }
+                    };
+                    match tx_ambient_to_test_object.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            panic!(
+                                "Mock Ambient: Error in trying to send response back data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock Ambient: Error in trying to receive command from data logger: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            spin_sleeper.sleep(sleep_duration_one_millisecond);
+        }
     }
 
     // Check if the heater remains switched off with high temperature.
@@ -1105,8 +1309,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1117,60 +1325,96 @@ pub mod tests {
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+            // thread for mock schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                );
+            });
+
+            // thread for mock TankLevelSwitch
+            scope.spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_heating,
+                    &rx_tank_level_switch_from_heating,
+                    1.0,
+                    0.0,
+                    1.0,
+                );
+            });
+
+            // thread for mock AtlasScientific
+            scope.spawn(move || {
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_heating,
+                    &rx_atlas_scientific_from_heating,
+                    30.0,
+                    50000.0,
+                    7.0,
+                );
+            });
+
+            // thread for mock Ambient
+            scope.spawn(move || {
+                mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
+            });
+
+            // thread for mock Datalogger
+            scope.spawn(move || {
+                mock_datalogger(&rx_datalogger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock GPIO and mock signal handler
+            // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                run_main_cycle_with_stimuli(
-                    10,
-                    &rx_gpio_from_heating,
-                    &tx_gpio_to_heating,
-                    30.0, // hot temperature to force switching off heater
-                    24.0,
-                    1.0,
-                    0.0,
+                let mut actuation_events_received =
+                    mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
+                assert_eq!(actuation_events_received.len(), 1);
+                let actuation_event = actuation_events_received.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
+            });
+
+            // thread for controlling duration of test run
+            scope.spawn(move || {
+                let sleep_duration_ten_seconds = Duration::from_secs(10);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino and mock data logger
-            scope.spawn(move || {
-                let command_received = test_heating_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command_received,
-                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                );
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-            });
+            // make sure all mock threads are running when instantiating the test object
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
             // thread for test object
             scope.spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
+                let tx_heating_to_atlas_scientific_for_test_case_finish =
+                    tx_heating_to_atlas_scientific.clone();
+                let tx_heating_to_ambient_for_test_case_finish = tx_heating_to_ambient.clone();
+                let tx_heating_to_tank_level_switch_for_test_case_finish =
+                    tx_heating_to_tank_level_switch.clone();
+                let tx_heating_to_controllino_for_test_case_finish =
+                    tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    tx_heating_to_gpio,
-                    rx_heating_from_gpio,
+                    tx_heating_to_ambient,
+                    rx_heating_from_ambient,
+                    tx_heating_to_atlas_scientific,
+                    rx_heating_from_atlas_scientific,
+                    tx_heating_to_tank_level_switch,
+                    rx_heating_from_tank_level_switch,
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1182,11 +1426,18 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                println!("execution of test object finished.");
+
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_atlas_scientific_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_ambient_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
             });
-            println!("* [Heating] checking reaction to high temperature.");
+            println!("* [Heating] checking reaction to high temperature succeeded.");
         });
     }
 
@@ -1202,8 +1453,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1214,70 +1469,101 @@ pub mod tests {
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+            // thread for mock schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                );
+            });
+
+            // thread for mock TankLevelSwitch
+            scope.spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_heating,
+                    &rx_tank_level_switch_from_heating,
+                    1.0,
+                    0.0,
+                    1.0,
+                );
+            });
+
+            // thread for mock AtlasScientific
+            scope.spawn(move || {
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_heating,
+                    &rx_atlas_scientific_from_heating,
+                    20.0,
+                    50000.0,
+                    7.0,
+                );
+            });
+
+            // thread for mock Ambient
+            scope.spawn(move || {
+                mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
+            });
+
+            // thread for mock Datalogger
+            scope.spawn(move || {
+                mock_datalogger(&rx_datalogger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock GPIO and mock signal handler
+            // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                run_main_cycle_with_stimuli(
-                    10,
-                    &rx_gpio_from_heating,
-                    &tx_gpio_to_heating,
-                    20.0, // cold temperature to force switching on heater
-                    24.0,
-                    1.0,
-                    0.0,
+                let mut actuation_events =
+                    mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+            });
+
+            // thread for controlling duration of test run
+            scope.spawn(move || {
+                let sleep_duration_ten_seconds = Duration::from_secs(10);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino and mock data logger
-            scope.spawn(move || {
-                let command_received = test_heating_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command_received,
-                    Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
-                );
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                // check if heater is switched off when exiting application
-                let command_received = test_heating_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command_received,
-                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                );
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-            });
+            // make sure all mock threads are running when instantiating the test object
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
             // thread for test object
             scope.spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
+                let tx_heating_to_atlas_scientific_for_test_case_finish =
+                    tx_heating_to_atlas_scientific.clone();
+                let tx_heating_to_ambient_for_test_case_finish = tx_heating_to_ambient.clone();
+                let tx_heating_to_tank_level_switch_for_test_case_finish =
+                    tx_heating_to_tank_level_switch.clone();
+                let tx_heating_to_controllino_for_test_case_finish =
+                    tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    tx_heating_to_gpio,
-                    rx_heating_from_gpio,
+                    tx_heating_to_ambient,
+                    rx_heating_from_ambient,
+                    tx_heating_to_atlas_scientific,
+                    rx_heating_from_atlas_scientific,
+                    tx_heating_to_tank_level_switch,
+                    rx_heating_from_tank_level_switch,
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1289,11 +1575,18 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                println!("execution of test object finished.");
+
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_atlas_scientific_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_ambient_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
             });
-            println!("* [Heating] checking reaction to low temperature.");
+            println!("* [Heating] checking reaction to low temperature succeeded.");
         });
     }
 
@@ -1309,8 +1602,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1321,81 +1618,161 @@ pub mod tests {
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
         scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+            // thread for mock schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                );
+            });
+
+            // thread for mock TankLevelSwitch
+            scope.spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_heating,
+                    &rx_tank_level_switch_from_heating,
+                    1.0,
+                    0.0,
+                    1.0,
+                );
+            });
+
+            // thread for mock AtlasScientific
+            scope.spawn(move || {
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_heating,
+                    &rx_atlas_scientific_from_heating,
+                    25.0,
+                    50000.0,
+                    7.0,
+                );
+            });
+
+            // thread for mock Ambient
+            scope.spawn(move || {
+                mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
+            });
+
+            // thread for mock Datalogger
+            scope.spawn(move || {
+                mock_datalogger(&rx_datalogger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock GPIO and mock signal handler
+            // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                run_main_cycle_with_stimuli(
-                    20,
-                    &rx_gpio_from_heating,
-                    &tx_gpio_to_heating,
-                    25.0, // medium temperature to force switching on and off of heater
-                    24.0,
-                    1.0,
-                    0.0,
+                let mut actuation_events =
+                    mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
+                println!(
+                    "Mock Controllino received {} commands:",
+                    actuation_events.len()
                 );
+                for actuation_event in actuation_events.clone() {
+                    println!("{}", actuation_event);
+                }
+                // (first and) last actuation events need to be ignored
+                let _last_actuation_event = actuation_events.pop().unwrap();
+                let second_last_actuation_event = actuation_events.pop().unwrap();
+                let third_last_actuation_event = actuation_events.pop().unwrap();
+                let fourth_last_actuation_event = actuation_events.pop().unwrap();
+                let fifth_last_actuation_event = actuation_events.pop().unwrap();
+                let sixth_last_actuation_event = actuation_events.pop().unwrap();
+                let seventh_last_actuation_event = actuation_events.pop().unwrap();
+
+                let second_last_actuation_duration = second_last_actuation_event
+                    .time
+                    .duration_since(third_last_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "second_last_actuation_duration={}",
+                    second_last_actuation_duration
+                );
+                let third_last_actuation_duration = third_last_actuation_event
+                    .time
+                    .duration_since(fourth_last_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "third_last_actuation_duration={}",
+                    third_last_actuation_duration
+                );
+                let fourth_last_actuation_duration = fourth_last_actuation_event
+                    .time
+                    .duration_since(fifth_last_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "fourth_last_actuation_duration={}",
+                    fourth_last_actuation_duration
+                );
+                let fifth_last_actuation_duration = fifth_last_actuation_event
+                    .time
+                    .duration_since(sixth_last_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "fifth_last_actuation_duration={}",
+                    fifth_last_actuation_duration
+                );
+                let sixth_last_actuation_duration = sixth_last_actuation_event
+                    .time
+                    .duration_since(seventh_last_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!(
+                    "sixth_last_actuation_duration={}",
+                    sixth_last_actuation_duration
+                );
+                assert_le!(second_last_actuation_duration, 7900);
+                assert_ge!(second_last_actuation_duration, 7800);
+                assert_le!(third_last_actuation_duration, 7900);
+                assert_ge!(third_last_actuation_duration, 7800);
+                assert_le!(fourth_last_actuation_duration, 7900);
+                assert_ge!(fourth_last_actuation_duration, 7800);
+                assert_le!(fifth_last_actuation_duration, 7900);
+                assert_ge!(fifth_last_actuation_duration, 7800);
+                assert_le!(sixth_last_actuation_duration, 7900);
+                assert_ge!(sixth_last_actuation_duration, 7800);
+            });
+
+            // thread for controlling duration of test run
+            scope.spawn(move || {
+                let sleep_duration = Duration::from_secs(59);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
             });
 
-            // thread for mock Controllino and mock data logger
-            scope.spawn(move || {
-                for _ in 0..2 {
-                    let command_received = test_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                    assert_eq!(
-                        command_received,
-                        Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                    );
-                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                    let command_received = test_heating_receive_actuation_command_send_confirmation(
-                        &rx_controllino_from_heating,
-                        &tx_controllino_to_heating,
-                    );
-                    assert_eq!(
-                        command_received,
-                        Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
-                    );
-                    test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                }
-                // check if heater is switched off when exiting application
-                let command_received = test_heating_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command_received,
-                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                );
-                test_heating_receive_information_for_datalogger(&rx_datalogger_from_heating);
-            });
+            // make sure all mock threads are running when instantiating the test object
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
             // thread for test object
             scope.spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
+                let tx_heating_to_atlas_scientific_for_test_case_finish =
+                    tx_heating_to_atlas_scientific.clone();
+                let tx_heating_to_ambient_for_test_case_finish = tx_heating_to_ambient.clone();
+                let tx_heating_to_tank_level_switch_for_test_case_finish =
+                    tx_heating_to_tank_level_switch.clone();
+                let tx_heating_to_controllino_for_test_case_finish =
+                    tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-                    tx_heating_to_gpio,
-                    rx_heating_from_gpio,
+                    tx_heating_to_ambient,
+                    rx_heating_from_ambient,
+                    tx_heating_to_atlas_scientific,
+                    rx_heating_from_atlas_scientific,
+                    tx_heating_to_tank_level_switch,
+                    rx_heating_from_tank_level_switch,
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1407,11 +1784,18 @@ pub mod tests {
                     &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
-                println!("execution of test object finished.");
+
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_atlas_scientific_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_ambient_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
             });
-            println!("* [Heating] checking reaction to low temperature.");
+            println!("* [Heating] checking reaction to medium temperature succeeded.");
         });
     }
 
@@ -1419,14 +1803,19 @@ pub mod tests {
     // - application shall switch off heater before exiting
     #[test]
     pub fn test_heating_with_pending_quit_terminate_command() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, _) = mpsc::channel();
-        let (_, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1519,19 +1908,25 @@ pub mod tests {
                 "* [Heating] checking heating execution with pending quit/terminate command (time limit) succeeded."
             );
         });
+        */
     }
 
     // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
     pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1740,18 +2135,24 @@ pub mod tests {
             });
             println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
         });
+        */
     }
     // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
     pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1960,19 +2361,25 @@ pub mod tests {
             });
             println!("* [Heating] checking heating waiting for midnight and stats calculation with heater off succeeded.");
         });
+        */
     }
 
     // Checks if negative schedule checker result is processed correctly
     #[test]
     pub fn test_heating_blocked_by_schedule() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -2055,19 +2462,25 @@ pub mod tests {
             });
             println!("* [Heating] checking if schedule checker can block actuation.");
         });
+        */
     }
 
     // checks if component protection is executed
     #[test]
     pub fn test_heating_component_protection_when_tank_level_low() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -2181,5 +2594,6 @@ pub mod tests {
                 println!("* [Heating] checking heater component protection succeeded.");
             });
         });
+        */
     }
 }

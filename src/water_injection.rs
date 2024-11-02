@@ -32,9 +32,7 @@ pub trait WaterInjectionTrait {
     /// * `tx_from_tank_level_switch` - Reference to receiver part of channel for communication from tank level switch calculation
     /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
-    /// * `tank_level_switch_signals` - Reference to struct of type TankLevelSwitchSignals which implements the logic for signal interpretation
     /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection            
-    /// * `config` - Reference to configuration of refill control   
     /// * `sql_interface_refill` - Reference to SQL database interface for refill control
     fn inject_water(
         &mut self,
@@ -333,7 +331,7 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::channel_content::InternalCommand;
+    use crate::channel_content::{AquariumSignal, InternalCommand};
     use crate::config::ConfigData;
     use crate::read_config_file;
     use crate::water_injection::WaterInjection;
@@ -401,27 +399,26 @@ pub mod tests {
 
     fn run_main_cycle_with_sensor_signals_and_abort(
         rx_runner_from_test_case: &Receiver<InternalCommand>,
-        rx_gpio_from_water_injection: &Receiver<InternalCommand>,
-        tx_gpio_to_water_injection: &Sender<f32>,
+        rx_tank_level_switch_from_water_injection: &Receiver<InternalCommand>,
+        tx_tank_level_switch_to_water_injection: &Sender<f32>,
         signal_position: bool,
         signal_invalid: bool,
     ) {
-        /*
         loop {
             match rx_tank_level_switch_from_water_injection.try_recv() {
                 Ok(_) => {
                     println!("run_main_cycle_with_sensor_signals_and_abort: Sending to water injection (1).");
-                    let _ = tx_gpio_to_water_injection.send(match signal_position {
+                    let _ = tx_tank_level_switch_to_water_injection.send(match signal_position {
                         true => 1.0,
                         false => 0.0,
                     });
                 }
                 Err(_) => { /* do nothing */ }
             }
-            match rx_gpio_from_water_injection.try_recv() {
+            match rx_tank_level_switch_from_water_injection.try_recv() {
                 Ok(_) => {
                     println!("water_injection: run_main_cycle_with_sensor_signals_and_abort: Sending to water injection (2).");
-                    let _ = tx_gpio_to_water_injection.send(match signal_invalid {
+                    let _ = tx_tank_level_switch_to_water_injection.send(match signal_invalid {
                         true => 1.0,
                         false => 0.0,
                     });
@@ -447,19 +444,18 @@ pub mod tests {
                     }
                 }
             }
-        }*/
+        }
     }
 
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high
     pub fn test_water_injection_immediate_switch_high() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -481,8 +477,8 @@ pub mod tests {
                 // indicate sensor signal high immediately
                 run_main_cycle_with_sensor_signals(
                     target_number_iterations,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     true,
                     false,
                 );
@@ -497,26 +493,20 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
                 assert_eq!(result, false);
             });
         });
-        */
     }
 
     #[test]
@@ -524,13 +514,12 @@ pub mod tests {
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
     pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -548,7 +537,7 @@ pub mod tests {
                 match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
                     Ok(_) => {},
                     Err(e) => {
-                        panic!("Refill: test_execute_refill_delayed_switch_high_with_invalid_true_and_quit_signal\
+                        panic!("WaterInjection: test_execute_refill_delayed_switch_high_with_invalid_true_and_quit_signal\
                             Error when sending Quit command to test object: {e:?}");
                     }
                 }
@@ -556,8 +545,8 @@ pub mod tests {
                 // leave switch high
                 run_main_cycle_with_sensor_signals(
                     1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     false,
                     false,
                 );
@@ -571,26 +560,20 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
                 assert_eq!(result, true);
             });
         });
-        */
     }
 
     #[test]
@@ -598,13 +581,12 @@ pub mod tests {
     // additionally the test case also sets the invalid bit.
     // Additionally, water injection shall be aborted.
     pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -622,8 +604,8 @@ pub mod tests {
                 // indicate sensor signal high immediately
                 run_main_cycle_with_sensor_signals(
                     target_number_iterations,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     true,
                     true,
                 );
@@ -638,38 +620,31 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
                 assert_eq!(result, false);
             });
         });
-        */
     }
 
     #[test]
     // this test case executes inject_water function and sets the sensor signal to high after defined number of iterations (happy case)
     pub fn test_water_injection_delayed_switch_high() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_tx_signal_handler_from_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -688,8 +663,8 @@ pub mod tests {
                 // leave switch at low for some time
                 run_main_cycle_with_sensor_signals(
                     target_number_iterations_main_fill,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     false,
                     false,
                 );
@@ -701,8 +676,8 @@ pub mod tests {
                         + 1;
                 run_main_cycle_with_sensor_signals(
                     target_number_iterations_additional_fill,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     true,
                     false,
                 );
@@ -717,104 +692,137 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
                 assert_eq!(result, false);
             });
         });
-        */
     }
 
     #[test]
     // this test case executes inject_water function with simulation of level switch stuck at low position
     pub fn test_water_injection_switch_stuck_low() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
-            // this scope is providing the test environment
+            // scope for mock Controllino
             scope.spawn(move || {
-                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                println!("Mock Controllino: waiting for first actuation command.");
                 test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
-
-                // Switch is stuck at low position. Check max limitation of refill
-                let target_number_iterations_additional_fill =
-                    (refill.config.max_refill_volume / refill.config.refill_pump_flow) as u32 * 10;
-                run_main_cycle_with_sensor_signals(
-                    target_number_iterations_additional_fill,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    false,
-                );
-
+                println!("Mock Controllino: executed first actuation command");
                 test_water_injection_receive_actuation_command_send_confirmation(
                     &rx_controllino_from_refill,
                     &tx_controllino_to_refill,
                 );
+                println!("Mock Controllino: executed second actuation command");
+            });
 
+            // scope for mock DataLogger
+            scope.spawn(move || {
+                println!("Mock DataLogger: waiting for first command.");
                 test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                println!("Mock DataLogger: waiting for second command.");
+                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
+                println!("Mock DataLogger: received second command.");
+            });
+
+            // scope for mock TankLevelSwitch
+            scope.spawn(move || {
+                loop {
+                    match rx_tank_level_switch_from_refill.try_recv() {
+                        Ok(c) => {
+                            let response_value = match c {
+                                InternalCommand::RequestSignal(d) => {
+                                    match d {
+                                        AquariumSignal::TankLevelSwitchPosition => 0.0,
+                                        AquariumSignal::TankLevelSwitchInvalid => 0.0,
+                                        AquariumSignal::TankLevelSwitchPositionStabilized => 0.0,
+                                        _ => {
+                                            panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
+                                        }
+                                    }
+                                },
+                                InternalCommand::Quit => {
+                                    break;
+                                }
+                                _ => {
+                                    panic!("Mock TankLevelSwitch: Received invalid command.");
+                                },
+                            };
+                            match tx_tank_level_switch_to_refill.send(response_value) {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    panic!(
+                                        "Error in trying to send mock TankLevelSwitch response back to refill: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("Mock TankLevelSwitch: Error in trying to receive command from refill: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                }
             });
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
+                // verify that quit command has not been received
                 assert_eq!(result, false);
+
+                // verify that refill error is detected
+                assert_eq!(refill.refill_errors.error_switch_stuck_low, true);
+
+                let _ = tx_refill_to_tank_level_switch.send(InternalCommand::Quit);
             });
         });
-        */
     }
 
     #[test]
     // this test case executes inject_water function and sends Quit signal after some time when water level is still low
     pub fn test_water_injection_quit_signal() {
-        /*
         let (_, mut refill, _) = prepare_refill_tests_tertiary();
-        let mut water_injection = WaterInjection;
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
         let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -831,8 +839,8 @@ pub mod tests {
 
                 run_main_cycle_with_sensor_signals_and_abort(
                     &rx_runner_from_test_case,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_refill,
                     false,
                     false,
                 );
@@ -879,85 +887,6 @@ pub mod tests {
 
             // this scope is executing the test object
             scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
-                let result = water_injection.inject_water(
-                    &tx_refill_to_controllino,
-                    &rx_refill_from_controllino,
-                    &tx_refill_to_gpio,
-                    &rx_refill_from_gpio,
-                    &rx_refill_from_signal_handler,
-                    &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
-                    &mut refill.refill_errors,
-                    &refill.config,
-                    &mut refill.sql_interface_refill,
-                );
-
-                assert_eq!(result, true);
-            });
-        });
-        */
-    }
-
-    #[test]
-    // Test case xecutes inject_water function and sets the sensor invalid signal to true after defined number of iterations
-    // Expectation is that water injection ceases immediately.
-    pub fn test_water_injection_delayed_switch_high_with_invalid_true() {
-        /*
-        let (_, mut refill, _) = prepare_refill_tests();
-        let mut water_injection = WaterInjection;
-
-        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-
-        scope(|scope| {
-            // this scope is providing the test environment
-            scope.spawn(move || {
-                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
-
-                let target_number_iterations_main_fill =
-                    (0.15 / refill.config.refill_pump_flow) as u32 * 10 + 1;
-                // leave switch at low for some time
-                run_main_cycle_with_sensor_signals(
-                    target_number_iterations_main_fill,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
-                    false,
-                    false,
-                );
-                // Now let's simulate invalid sensor signal while position signal stays low.
-                // Expected behavior: Refill operation shall abort immediately.
-                run_main_cycle_with_sensor_signals(
-                    1,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
-                    false,
-                    true,
-                );
-
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
-
-                test_water_injection_receive_information_for_datalogger(&rx_datalogger_from_refill);
-            });
-
-            // this scope is executing the test object
-            scope.spawn(move || {
-                let mut tank_level_switch_signals =
-                    TankLevelSwitchSignals::new(false, false, false, false);
-
                 let result = water_injection.inject_water(
                     &tx_refill_to_controllino,
                     &rx_refill_from_controllino,
@@ -965,15 +894,12 @@ pub mod tests {
                     &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                     &tx_refill_to_datalogger,
-                    &mut tank_level_switch_signals,
                     &mut refill.refill_errors,
-                    &refill.config,
                     &mut refill.sql_interface_refill,
                 );
 
-                assert_eq!(result, false);
+                assert_eq!(result, true);
             });
         });
-        */
     }
 }

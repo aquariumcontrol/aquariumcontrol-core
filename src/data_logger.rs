@@ -473,9 +473,6 @@ impl DataLogger {
                     break;
                 }
             }
-            if quit_command_received {
-                break;
-            }
 
             // get information if refill is in progress from refill thread
             if !refill_channel_disconnected {
@@ -914,8 +911,13 @@ impl DataLogger {
                 ambient_humidity: ambient_humidity,
                 heater_status: Some(heater_is_on),
             };
+
             //println!("DateFrame = {}", data_frame);
             data_injection.inject_data(data_frame, &mut sql_interface_data);
+
+            if quit_command_received {
+                break;
+            }
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -1023,11 +1025,20 @@ pub mod tests {
 
     #[test]
     pub fn test_data_log() {
-        /*
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_8_seconds = Duration::from_millis(8000);
-        let (tx_data_logger_to_gpio, rx_gpio_from_data_logger) = mpsc::channel();
-        let (tx_gpio_to_data_logger, rx_data_logger_from_gpio) = mpsc::channel();
+
+        // channels for communication with test environment
+        let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
+        let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
+        let (tx_data_logger_to_atlas_scientific, rx_atlas_scientific_from_data_logger) =
+            mpsc::channel();
+        let (tx_atlas_scientific_to_data_logger, rx_data_logger_from_atlas_scientific) =
+            mpsc::channel();
+        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
+            mpsc::channel();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
@@ -1081,20 +1092,15 @@ pub mod tests {
             });
 
             scope.spawn(move || {
-                // mock gpio
+                // mock TankLevelSwitch
                 let mut toggle_bit_position = true;
                 let mut toggle_bit_invalid = false;
                 loop {
-                    match rx_gpio_from_data_logger.try_recv() {
+                    match rx_tank_level_switch_from_data_logger.try_recv() {
                         Ok(c) => {
                             let response_value = match c {
                                 InternalCommand::RequestSignal(d) => {
                                     match d {
-                                        AquariumSignal::WaterTemperature => 10.0,
-                                        AquariumSignal::pH => 11.0,
-                                        AquariumSignal::Conductivity => 12.0,
-                                        AquariumSignal::AmbientTemperature => 13.0,
-                                        AquariumSignal::AmbientHumidity => 14.0,
                                         AquariumSignal::TankLevelSwitchPosition => {
                                             toggle_bit_position = !toggle_bit_position;
                                             match toggle_bit_position { true => 1.0, false => 0.0 }
@@ -1103,18 +1109,26 @@ pub mod tests {
                                             toggle_bit_invalid = !toggle_bit_invalid;
                                             match toggle_bit_invalid { true => 1.0, false => 0.0 }
                                         },
+                                        AquariumSignal::TankLevelSwitchPositionStabilized => {
+                                            match toggle_bit_position { true => 0.0, false => 1.0 }
+                                        },
+                                        _ => {
+                                            panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
+                                        }
                                     }
                                 },
                                 InternalCommand::Quit => {
                                     break;
                                 }
-                                _ => 19.0,
+                                _ => {
+                                    panic!("Mock TankLevelSwitch: Received invalid command.");
+                                },
                             };
-                            match tx_gpio_to_data_logger.send(response_value) {
+                            match tx_tank_level_switch_to_data_logger.send(response_value) {
                                 Ok(()) => {}
                                 Err(e) => {
-                                    println!(
-                                        "Error in trying to send mock response value back to data logger: {e:?}"
+                                    panic!(
+                                        "Error in trying to send mock TankLevelSwitch response back data logger: {e:?}"
                                     );
                                 }
                             }
@@ -1123,7 +1137,94 @@ pub mod tests {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
-                                    panic!("Mock GpioHandler: Error in trying to receive command from data logger: {e:?}");
+                                    panic!("Mock TankLevelSwitch: Error in trying to receive command from data logger: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            scope.spawn(move || {
+                // mock Atlas Scientific
+                loop {
+                    match rx_atlas_scientific_from_data_logger.try_recv() {
+                        Ok(c) => {
+                            let response_value = match c {
+                                InternalCommand::RequestSignal(d) => {
+                                    match d {
+                                        AquariumSignal::WaterTemperature => 10.0,
+                                        AquariumSignal::pH => 11.0,
+                                        AquariumSignal::Conductivity => 12.0,
+                                        _ => {
+                                            panic!("Mock AtlasScientific: inapplicable signal request {}", d);
+                                        }
+                                    }
+                                },
+                                InternalCommand::Quit => {
+                                    break;
+                                }
+                                _ => {
+                                    panic!("Mock AtlasScientific: Received invalid command.");
+                                },
+                            };
+                            match tx_atlas_scientific_to_data_logger.send(response_value) {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    panic!(
+                                        "Error in trying to send mock AtlasScientific response back data logger: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("Mock AtlasScientific: Error in trying to receive command from data logger: {e:?}");
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            scope.spawn(move || {
+                // mock Ambient
+                loop {
+                    match rx_ambient_from_data_logger.try_recv() {
+                        Ok(c) => {
+                            let response_value = match c {
+                                InternalCommand::RequestSignal(d) => {
+                                    match d {
+                                        AquariumSignal::AmbientTemperature => 13.0,
+                                        AquariumSignal::AmbientHumidity => 14.0,
+                                        _ => {
+                                            panic!("MockAmbient: Received request for inapplicable signal  {}.", d);
+                                        }
+                                    }
+                                },
+                                InternalCommand::Quit => {
+                                    break;
+                                }
+                                _ => {
+                                    panic!("Mock Ambient: Received invalid command.");
+                                },
+                            };
+                            match tx_ambient_to_data_logger.send(response_value) {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    panic!(
+                                        "Error in trying to send mock Ambient response back data logger: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!("Mock Ambient: Error in trying to receive command from data logger: {e:?}");
                                 }
                             }
                         }
@@ -1136,8 +1237,12 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    tx_data_logger_to_gpio.clone(),
-                    rx_data_logger_from_gpio,
+                    tx_data_logger_to_ambient.clone(),
+                    rx_data_logger_from_ambient,
+                    tx_data_logger_to_atlas_scientific.clone(),
+                    rx_data_logger_from_atlas_scientific,
+                    tx_data_logger_to_tank_level_switch.clone(),
+                    rx_data_logger_from_tank_level_switch,
                     rx_data_logger_from_refill,
                     rx_data_logger_from_heating,
                     rx_data_logger_from_ventilation,
@@ -1145,8 +1250,10 @@ pub mod tests {
                     rx_data_logger_from_signal_handler,
                 );
 
-                // signal end of test case execution to mock GPIO handler
-                let _ = tx_data_logger_to_gpio.send(InternalCommand::Quit);
+                // signal end of test case execution to mock threads
+                let _ = tx_data_logger_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_data_logger_to_atlas_scientific.send(InternalCommand::Quit);
+                let _ = tx_data_logger_to_ambient.send(InternalCommand::Quit);
 
                 println!("Printing recorded data:");
                 mock_data_injection.output();
@@ -1156,15 +1263,12 @@ pub mod tests {
                 assert_eq!(last_recorded_data_frame.water_temperature, Some(10.0));
                 assert_eq!(
                     last_recorded_data_frame.water_temperature_filtered,
-                    Some(9.921875)
+                    Some(5.0)
                 );
                 assert_eq!(last_recorded_data_frame.ph, Some(11.0));
-                assert_eq!(last_recorded_data_frame.ph_filtered, Some(10.9140625));
+                assert_eq!(last_recorded_data_frame.ph_filtered, Some(5.5));
                 assert_eq!(last_recorded_data_frame.conductivity, Some(12.0));
-                assert_eq!(
-                    last_recorded_data_frame.conductivity_filtered,
-                    Some(11.90625)
-                );
+                assert_eq!(last_recorded_data_frame.conductivity_filtered, Some(6.0));
                 assert_eq!(last_recorded_data_frame.refill_in_progress, Some(false));
                 assert_eq!(
                     last_recorded_data_frame.tank_level_switch_position,
@@ -1198,7 +1302,7 @@ pub mod tests {
                     .expect("Could not read back filtered water temperature from disk.")
                     .parse::<f32>()
                     .unwrap(),
-                    9.9,
+                    5.0,
                 );
                 assert_eq!(
                     fs::read_to_string(config2.data_logger.output_file_name_pH)
@@ -1212,7 +1316,7 @@ pub mod tests {
                         .expect("Could not read back filtered pH from disk.")
                         .parse::<f32>()
                         .unwrap(),
-                    10.9,
+                    5.5,
                 );
                 assert_eq!(
                     fs::read_to_string(config2.data_logger.output_file_name_conductivity)
@@ -1220,6 +1324,13 @@ pub mod tests {
                         .parse::<f32>()
                         .unwrap(),
                     12.0,
+                );
+                assert_eq!(
+                    fs::read_to_string(config2.data_logger.output_file_name_conductivity_filtered)
+                        .expect("Could not read back conductivity from disk.")
+                        .parse::<f32>()
+                        .unwrap(),
+                    6.0,
                 );
                 assert_eq!(
                     fs::read_to_string(config2.data_logger.output_file_name_ambient_temperature)
@@ -1270,6 +1381,5 @@ pub mod tests {
                 );
             });
         });
-        */
     }
 }

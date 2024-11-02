@@ -69,17 +69,19 @@ max_refill_volume = 2.0                                 # maximum allowed refill
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [tank_level_switch]
+use_simulator = false                                   # if true, then do not use real HW
 tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [heating]
 active = true
-switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
-switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
+use_simulator = false                                   # if true, then do not use real HW
+switch_on_temperature = 22.0                            # temperature, at which the heating shall be switched on 100% of the time
+switch_off_temperature = 28.0                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
 stop_on_refill_error_delay = 12                         # time in seconds after which the heating shall be switched off in case of refill error
 heater_power = 200                                      # electrical power consumption of heater in Watt
 # configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
-saw_tooth_profile_config = { phase1_length = 5, phase2_length = 1, phase3_length = 5, phase4_length = 1}
+saw_tooth_profile_config = { phase1_length = 6, phase2_length = 1, phase3_length = 6, phase4_length = 1}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
 
@@ -90,6 +92,7 @@ device_switch_delay_millis = 150                        # waiting time in millis
 
 [ventilation]
 active = true
+use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_when_terminating = true           		# behavior when terminating the application

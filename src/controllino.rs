@@ -194,13 +194,16 @@ pub struct Controllino {
     config: ControllinoConfig,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    spin_sleeper_opt: Option<SpinSleeper>,
+    /// Attribute is public becaused access from within test cases.
+    pub spin_sleeper_opt: Option<SpinSleeper>,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    controllino_processing_duration_opt: Option<Duration>,
+    /// Attribute is public becaused access from within test cases.
+    pub controllino_processing_duration_opt: Option<Duration>,
 
     /// Interface to serial port for communication via USB
-    serial_port_opt: Option<Box<dyn SerialPort>>,
+    /// Attribute is public becaused access from within test cases.
+    pub serial_port_opt: Option<Box<dyn SerialPort>>,
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump
     lock_error_actuate_refill: bool,

@@ -30,7 +30,7 @@ use crate::channel_content::AquariumSignal;
 #[derive(Deserialize, Debug)]
 pub struct I2cInterfaceConfig {
     /// I2C address of Atlas Scientific pH sensor unit
-    #[allow(unused)]    
+    #[allow(unused)]
     address_atlas_scientific_ph: u16,
 
     /// I2C address of Atlas Scientific conductivity sensor unit
@@ -38,7 +38,7 @@ pub struct I2cInterfaceConfig {
     address_atlas_scientific_conductivity: u16,
 
     /// I2C address of Atlas Scientific temperature sensor unit    
-    #[allow(unused)]    
+    #[allow(unused)]
     address_atlas_scientific_temperature: u16,
 
     /// maximum number of read attempts

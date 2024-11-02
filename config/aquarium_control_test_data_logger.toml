@@ -69,6 +69,7 @@ max_refill_volume = 2.0                                 # maximum allowed refill
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [tank_level_switch]
+use_simulator = false                                   # if true, then do not use real HW
 tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [feed]
@@ -78,6 +79,7 @@ device_switch_delay_millis = 150                        # waiting time in millis
 
 [ventilation]
 active = false
+use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_when_terminating = true           		# behavior when terminating the application
@@ -103,6 +105,7 @@ active = false
 
 [heating]
 active = false
+use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
@@ -123,7 +126,7 @@ sensor_init_input_duration_micros = 0			        # duration for sensor to respond
 timeout_duration_micros = 10000				            # maximum permissible duration for sensor to respond in microseconds
 
 [ambient]
-use_simulator = false                                   # if true, then do not use real HW
+use_simulator = true                                   # if true, then do not use real HW
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
 
