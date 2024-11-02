@@ -41,6 +41,7 @@ mod logger;
 #[cfg(target_os = "linux")]
 mod messaging;
 mod mineral_injection;
+mod mock;
 mod monitors;
 mod proc_ext_req;
 mod publish_pid;
