@@ -28,7 +28,7 @@ const LOG_TARGET_HEATING: &str = "heating";
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 10;
 
-const CYCLE_TIME_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
+const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
 const TIME_INCREMENT_HEATING_MILLIS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000.0;
 
@@ -251,28 +251,28 @@ pub struct Heating {
     /// SQL interface for heating control
     sql_interface_heating: SqlInterfaceHeating,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive water temperature via channel from GPIO handler
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive water temperature via channel from Atlas Scientific thread
     lock_error_channel_receive_water_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for water temperature via channel to GPIO handler    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for water temperature via channel to Atlas Scientific thread
     lock_error_channel_send_water_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive ambient temperature via channel from GPIO handler
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive ambient temperature via channel from Ambient thread
     lock_error_channel_receive_ambient_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for ambient temperature via channel to GPIO handler    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for ambient temperature via channel to Ambient thread
     lock_error_channel_send_ambient_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch position via channel from GPIO handler
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch position via channel from TankLevelSwitch thread
     lock_error_channel_receive_tank_level_switch_position: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch position via channel to GPIO handler    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch position via channel to TankLevelSwitch thread
     lock_error_channel_send_tank_level_switch_position: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch invalid via channel from GPIO handler
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive tank level switch invalid via channel from TankLevelSwitch thread
     lock_error_channel_receive_tank_level_switch_invalid: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch invalid via channel to GPIO handler    
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request for tank level switch invalid via channel to TankLevelSwitch thread
     lock_error_channel_send_tank_level_switch_invalid: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
@@ -345,8 +345,12 @@ impl Heating {
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_ambient` - Sender part of channel for communication to Ambient thread
+    /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient thread
+    /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific thread
+    /// * `rx_from_atlas_scientific` - Receiver part of channel for communication from Atlas Scientific thread
+    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to tank level switch thread
+    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from tank level switch thread
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
@@ -493,7 +497,7 @@ impl Heating {
                                 if !self.lock_error_channel_receive_ambient_temperature {
                                     error!(
                                         target: LOG_TARGET_HEATING,
-                                        "reading ambient temperature from GPIO handler failed ({e:?})"
+                                        "reading ambient temperature failed ({e:?})"
                                     );
                                     self.lock_error_channel_receive_ambient_temperature = true;
                                 }
@@ -507,7 +511,7 @@ impl Heating {
                         if !self.lock_error_channel_send_water_temperature {
                             error!(
                                 target: LOG_TARGET_HEATING,
-                                "channel communication to GPIO handler for reading ambient temperature failed ({e:?})"
+                                "channel communication to Ambient thread for reading ambient temperature failed ({e:?})"
                             );
                             self.lock_error_channel_send_water_temperature = true;
                         }
@@ -530,7 +534,7 @@ impl Heating {
                                 if !self.lock_error_channel_receive_tank_level_switch_position {
                                     error!(
                                         target: LOG_TARGET_HEATING,
-                                        "reading tank level switch position from GPIO handler failed ({e:?})"
+                                        "reading tank level switch position failed ({e:?})"
                                     );
                                     self.lock_error_channel_receive_tank_level_switch_position =
                                         true;
@@ -542,7 +546,7 @@ impl Heating {
                         if !self.lock_error_channel_send_tank_level_switch_position {
                             error!(
                                 target: LOG_TARGET_HEATING,
-                                "channel communication to GPIO handler for reading tank level switch position failed ({e:?})"
+                                "channel communication to tank level switch thread for reading tank level switch position failed ({e:?})"
                             );
                             self.lock_error_channel_send_tank_level_switch_position = true;
                         }
@@ -565,7 +569,7 @@ impl Heating {
                                 if !self.lock_error_channel_receive_tank_level_switch_invalid {
                                     error!(
                                         target: LOG_TARGET_HEATING,
-                                        "reading tank level switch invalid from GPIO handler failed ({e:?})"
+                                        "reading tank level switch invalid failed ({e:?})"
                                     );
                                     self.lock_error_channel_receive_tank_level_switch_invalid =
                                         true;
@@ -577,7 +581,7 @@ impl Heating {
                         if !self.lock_error_channel_send_tank_level_switch_invalid {
                             error!(
                                 target: LOG_TARGET_HEATING,
-                                "channel communication to GPIO handler for reading tank level switch invalid failed ({e:?})"
+                                "channel communication to tank level switch thread for reading tank level switch invalid failed ({e:?})"
                             );
                             self.lock_error_channel_send_tank_level_switch_invalid = true;
                         }
@@ -765,7 +769,7 @@ impl Heating {
                 saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_MILLIS);
 
                 // update of midnight counter only runs every second
-                if loop_counter % CYCLE_TIME_DIVISOR == 0 {
+                if loop_counter % CYCLE_TIME_HEATING_DIVISOR == 0 {
                     // one second closer to midnight
                     duration_until_midnight -= 1;
                     match heating_stats_opt {
@@ -870,7 +874,7 @@ impl Heating {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino, GpioHandler).
+        // this thread has channel connection to underlying threads (Controllino, AtlasScientific, TankLevelSwitch).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
         let mut termination_command_received = false;
@@ -916,9 +920,7 @@ impl Heating {
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use chrono::Local;
-    use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
-    use std::fmt;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
@@ -928,6 +930,7 @@ pub mod tests {
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
+    use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::heating::{Heating, HeatingStatsDataTransferTrait};
@@ -1096,10 +1099,10 @@ pub mod tests {
 
             // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                let mut actuation_events_received =
+                let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
-                assert_eq!(actuation_events_received.len(), 1);
-                let actuation_event = actuation_events_received.pop().unwrap();
+                assert_eq!(actuation_events.len(), 1);
+                let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
@@ -1316,21 +1319,6 @@ pub mod tests {
         });
     }
 
-    fn update_min_max_actuation_duration(
-        min_actuation_duration: u128,
-        max_actuation_duration: u128,
-        new_actuation_duration: u128) -> (u128, u128) {
-        let mut result_min_actuation_duration: u128 = min_actuation_duration;
-        let mut result_max_actuation_duration: u128 = max_actuation_duration;
-        if new_actuation_duration < min_actuation_duration {
-            result_min_actuation_duration = new_actuation_duration;
-        }
-        if new_actuation_duration > max_actuation_duration {
-            result_max_actuation_duration = new_actuation_duration;
-        }
-        (result_min_actuation_duration, result_max_actuation_duration)
-    }
-                
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
     // Duration of heater switched on shall equal duration of heater switched off (1% tolerance).
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
@@ -1430,78 +1418,83 @@ pub mod tests {
                     .duration_since(third_last_actuation_event.time)
                     .unwrap()
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) = update_min_max_actuation_duration(
-                    min_actuation_duration,
-                    max_actuation_duration,
-                    second_last_actuation_duration
-                );                
+                (min_actuation_duration, max_actuation_duration) =
+                    update_min_max_actuation_duration(
+                        min_actuation_duration,
+                        max_actuation_duration,
+                        second_last_actuation_duration,
+                    );
                 println!(
                     "second_last_actuation_duration={}",
                     second_last_actuation_duration
                 );
-                
+
                 let third_last_actuation_duration = third_last_actuation_event
                     .time
                     .duration_since(fourth_last_actuation_event.time)
                     .unwrap()
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) = update_min_max_actuation_duration(
-                    min_actuation_duration,
-                    max_actuation_duration,
-                    second_last_actuation_duration
-                );
+                (min_actuation_duration, max_actuation_duration) =
+                    update_min_max_actuation_duration(
+                        min_actuation_duration,
+                        max_actuation_duration,
+                        second_last_actuation_duration,
+                    );
                 println!(
                     "third_last_actuation_duration={}",
                     third_last_actuation_duration
                 );
-                
+
                 let fourth_last_actuation_duration = fourth_last_actuation_event
                     .time
                     .duration_since(fifth_last_actuation_event.time)
                     .unwrap()
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) = update_min_max_actuation_duration(
-                    min_actuation_duration,
-                    max_actuation_duration,
-                    second_last_actuation_duration
-                );
+                (min_actuation_duration, max_actuation_duration) =
+                    update_min_max_actuation_duration(
+                        min_actuation_duration,
+                        max_actuation_duration,
+                        second_last_actuation_duration,
+                    );
                 println!(
                     "fourth_last_actuation_duration={}",
                     fourth_last_actuation_duration
                 );
-                
+
                 let fifth_last_actuation_duration = fifth_last_actuation_event
                     .time
                     .duration_since(sixth_last_actuation_event.time)
                     .unwrap()
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) = update_min_max_actuation_duration(
-                    min_actuation_duration,
-                    max_actuation_duration,
-                    second_last_actuation_duration
-                );
+                (min_actuation_duration, max_actuation_duration) =
+                    update_min_max_actuation_duration(
+                        min_actuation_duration,
+                        max_actuation_duration,
+                        second_last_actuation_duration,
+                    );
                 println!(
                     "fifth_last_actuation_duration={}",
                     fifth_last_actuation_duration
                 );
-                
+
                 let sixth_last_actuation_duration = sixth_last_actuation_event
                     .time
                     .duration_since(seventh_last_actuation_event.time)
                     .unwrap()
                     .as_millis();
-                (min_actuation_duration, max_actuation_duration) = update_min_max_actuation_duration(
-                    min_actuation_duration,
-                    max_actuation_duration,
-                    second_last_actuation_duration
-                );
+                (min_actuation_duration, max_actuation_duration) =
+                    update_min_max_actuation_duration(
+                        min_actuation_duration,
+                        max_actuation_duration,
+                        second_last_actuation_duration,
+                    );
                 println!(
                     "sixth_last_actuation_duration={}",
                     sixth_last_actuation_duration
                 );
-                
+
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
-                
+
                 assert_le!(second_last_actuation_duration, 8080);
                 assert_ge!(second_last_actuation_duration, 7800);
                 assert_le!(third_last_actuation_duration, 8080);
@@ -2325,10 +2318,10 @@ pub mod tests {
 
             // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                let mut actuation_events_received =
+                let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
-                assert_eq!(actuation_events_received.len(), 1);
-                let actuation_event = actuation_events_received.pop().unwrap();
+                assert_eq!(actuation_events.len(), 1);
+                let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
@@ -2402,8 +2395,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3);
+        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2467,15 +2459,15 @@ pub mod tests {
 
             // thread for mock Controllino - includes assertions
             scope.spawn(move || {
-                let mut actuation_events_received =
+                let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
-                assert_eq!(actuation_events_received.len(), 2);
-                let actuation_event = actuation_events_received.pop().unwrap();
+                assert_eq!(actuation_events.len(), 2);
+                let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
-                let actuation_event = actuation_events_received.pop().unwrap();
+                let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Heater)

@@ -21,6 +21,7 @@ mod ambient;
 mod atlas_scientific;
 mod balling;
 mod channel_content;
+mod common;
 mod config;
 mod controllino;
 mod controllino_actuate_hardware;

@@ -97,12 +97,6 @@ impl SawToothProfile {
         }
     }
 
-    /// Calculates the current value of the saw tooth profile in fixed increments of 1.0
-    /// Function shall be called once a second.
-    pub fn execute(&mut self) {
-        self.execute_with(1.0);
-    }
-
     /// Calculates the current value of the saw tooth profile.
     /// Function receives increment as parameter
     /// It updates the counter and the normalized level of the saw tooth profile.
@@ -161,7 +155,7 @@ pub mod tests {
 
         // iterate to the middle of first interval
         for _ in 0..5 {
-            saw_tooth_profile.execute();
+            saw_tooth_profile.execute_with(1.0);
         }
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.6);
@@ -169,27 +163,27 @@ pub mod tests {
 
         // iterate to the end of first interval
         for _ in 0..5 {
-            saw_tooth_profile.execute();
+            saw_tooth_profile.execute_with(1.0);
         }
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 1.0);
         assert_eq!(saw_tooth_profile.counter, 11.0);
 
         // iterate to the middle of second interval
-        saw_tooth_profile.execute();
+        saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 1.0);
         assert_eq!(saw_tooth_profile.counter, 12.0);
 
         // iterate to the end of second interval
-        saw_tooth_profile.execute();
+        saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.9);
         assert_eq!(saw_tooth_profile.counter, 13.0);
 
         // iterate to the middle of third interval
         for _ in 0..5 {
-            saw_tooth_profile.execute();
+            saw_tooth_profile.execute_with(1.0);
         }
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.39999998);
@@ -197,26 +191,26 @@ pub mod tests {
 
         // iterate to the end of third interval
         for _ in 0..5 {
-            saw_tooth_profile.execute();
+            saw_tooth_profile.execute_with(1.0);
         }
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 23.0);
 
         // iterate to the middle of fourth interval
-        saw_tooth_profile.execute();
+        saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 0.0);
 
         // trigger start of new cycle
-        saw_tooth_profile.execute();
+        saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.1);
         assert_eq!(saw_tooth_profile.counter, 1.0);
 
         // check if new cycle continues as expected
-        saw_tooth_profile.execute();
+        saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.2);
         assert_eq!(saw_tooth_profile.counter, 2.0);
