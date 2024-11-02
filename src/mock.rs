@@ -132,12 +132,12 @@ pub mod tests {
                             panic!("Mock ScheduleCheck: test object sent invalid command.");
                         }
                     }
-                },
+                }
                 Err(e) => {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                                panic!(
+                            panic!(
                                     "Mock ScheduleCheck: Error in trying to receive command from test object: {e:?}"
                                 );
                         }

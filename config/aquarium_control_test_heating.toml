@@ -78,7 +78,7 @@ use_simulator = false                                   # if true, then do not u
 switch_on_temperature = 22.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 28.0                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
-stop_on_refill_error_delay = 12                         # time in seconds after which the heating shall be switched off in case of refill error
+stop_on_refill_error_delay = 2                          # time in seconds after which the heating shall be switched off in case of refill error
 heater_power = 200                                      # electrical power consumption of heater in Watt
 # configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
 saw_tooth_profile_config = { phase1_length = 6, phase2_length = 1, phase3_length = 6, phase4_length = 1}
