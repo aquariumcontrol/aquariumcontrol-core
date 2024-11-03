@@ -52,8 +52,8 @@ pub struct AmbientConfig {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ambient[Ambient] --> datalogger[DataLogger]
-///     datalogger --> ambient
+///     ambient[Ambient] --> data_logger[DataLogger]
+///     data_logger --> ambient
 ///     ambient --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> ambient
 ///     heating[Heating] --> ambient

@@ -430,7 +430,7 @@ pub mod tests {
     use crate::ventilation::tests::mock_schedule_check;
     use crate::ventilation::tests::run_main_cycle_with_stimuli;
     use crate::ventilation::tests::test_receive_actuation_command_send_confirmation;
-    use crate::ventilation::tests::test_receive_information_for_datalogger;
+    use crate::ventilation::tests::test_receive_information_for_data_logger;
     use crate::ventilation::Ventilation;
     use crate::water_injection::WaterInjectionTrait;
 
@@ -472,7 +472,7 @@ pub mod tests {
 
         let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
         let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -558,7 +558,7 @@ pub mod tests {
                     Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
                 );
                 let state1 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                    test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
                 assert_eq!(state1, true);
 
                 let command2 = test_receive_actuation_command_send_confirmation(
@@ -570,7 +570,7 @@ pub mod tests {
                     Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
                 );
                 let state2 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                    test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
                 assert_eq!(state2, false);
 
                 let command3 = test_receive_actuation_command_send_confirmation(
@@ -582,7 +582,7 @@ pub mod tests {
                     Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
                 );
                 let state3 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
+                    test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
                 assert_eq!(state3, true);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -610,7 +610,7 @@ pub mod tests {
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -845,7 +845,7 @@ pub mod tests {
 
         let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
         let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -913,7 +913,7 @@ pub mod tests {
                     command1,
                     Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
                 );
-                let state1 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                let state1 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
                 assert_eq!(state1, true);
 
                 let command2 = test_receive_actuation_command_send_confirmation(
@@ -924,7 +924,7 @@ pub mod tests {
                     command2,
                     Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
                 );
-                let state2 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                let state2 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
                 assert_eq!(state2, false);
 
                 let command3 = test_receive_actuation_command_send_confirmation(
@@ -935,7 +935,7 @@ pub mod tests {
                     command3,
                     Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
                 );
-                let state3 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
+                let state3 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
                 assert_eq!(state3, true);
             });
             spin_sleeper.sleep(sleep_duration_100_millisec);
@@ -963,7 +963,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -1271,7 +1271,7 @@ pub mod tests {
 
         let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
         let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_refill_to_datalogger, _rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_refill_to_data_logger, _rx_data_logger_from_refill) = mpsc::channel();
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -1454,7 +1454,7 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1479,7 +1479,7 @@ pub mod tests {
             _tx_to_gpio: &Sender<InternalCommand>,
             _rx_from_gpio: &Receiver<f32>,
             _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _tx_to_datalogger: &Sender<bool>,
+            _tx_to_data_logger: &Sender<bool>,
             _tank_level_switch_signals: &mut TankLevelSwitchSignals,
             refill_errors: &mut RefillErrors,
             _config: &RefillConfig,
@@ -1533,7 +1533,7 @@ pub mod tests {
 
         let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
         let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_refill_to_datalogger, _rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_refill_to_data_logger, _rx_data_logger_from_refill) = mpsc::channel();
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -1679,7 +1679,7 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );

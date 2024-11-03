@@ -47,7 +47,7 @@ pub mod tests {
     }
 
     pub fn mock_controllino(
-        rx_controllino_from_test_object: &Receiver<InternalCommand>,
+        rx_controllino_from_test_object_or_test_environment: &Receiver<InternalCommand>,
         tx_controllino_to_test_object: &Sender<bool>,
     ) -> Vec<ActuationEvent> {
         let mut result: Vec<ActuationEvent> = Vec::new();
@@ -56,14 +56,14 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         loop {
             // receive command from test object
-            match rx_controllino_from_test_object.recv() {
+            match rx_controllino_from_test_object_or_test_environment.recv() {
                 Ok(command) => {
                     match command {
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            println!("mock_controllino: Received command {}", command);
+                            // println!("mock_controllino: Received command {}", command);
                             // store tuple of SystemTime and command in vector
                             result.push(ActuationEvent::new(SystemTime::now(), command));
                         }
@@ -87,12 +87,74 @@ pub mod tests {
         result
     }
 
-    pub fn mock_datalogger(rx_datalogger_from_heating: &Receiver<bool>) {
+    pub fn mock_refill(
+        tx_refill_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_refill_from_tank_level_switch: &Receiver<bool>,
+        rx_refill_from_signal_handler: &Receiver<InternalCommand>,
+    ) -> Vec<bool> {
+        let mut result: Vec<bool> = Vec::new();
+
+        let sleep_duration = Duration::from_millis(1);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            spin_sleeper.sleep(sleep_duration);
+            match tx_refill_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPositionStabilized,
+            )) {
+                Ok(_) => {
+                    match rx_refill_from_tank_level_switch.try_recv() {
+                        Ok(d) => {
+                            result.push(d);
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!(
+                                        "Mock Refill: Error in trying to receive command from TankLevelSwitch: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    panic!("Mock Refill: Could not send signal request to TankLevelSwitch ({e:?})")
+                }
+            };
+            match rx_refill_from_signal_handler.try_recv() {
+                Ok(c) => {
+                    match c {
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock Refill: Received invalid command.");
+                        }
+                    };
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock Refill: Error in trying to receive command from signal handler: {e:?}"
+                            );
+                        }
+                    }
+                }
+            };
+            spin_sleeper.sleep(sleep_duration);
+        }
+        result
+    }
+
+    pub fn mock_data_logger(rx_data_logger_from_heating: &Receiver<bool>) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
             // receive information for data logger
-            match rx_datalogger_from_heating.try_recv() {
+            match rx_data_logger_from_heating.try_recv() {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
                     match e {
@@ -111,13 +173,13 @@ pub mod tests {
     // send via channel a value to the test object to indicate if actuation is permitted.
     pub fn mock_schedule_check(
         tx_schedule_check_to_heating: &Sender<bool>,
-        rx_schedule_check_from_heating: &Receiver<InternalCommand>,
+        rx_schedule_check_from_heating_or_test_environment: &Receiver<InternalCommand>,
         value: bool,
     ) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
-            match rx_schedule_check_from_heating.try_recv() {
+            match rx_schedule_check_from_heating_or_test_environment.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::ScheduleCheck => {
@@ -149,16 +211,16 @@ pub mod tests {
     }
 
     pub fn mock_tank_level_switch(
-        tx_tank_level_switch_to_test_object: &Sender<f32>,
-        rx_tank_level_switch_from_test_object: &Receiver<InternalCommand>,
-        mock_value_position: f32,
-        mock_value_invalid: f32,
-        mock_value_position_stabilized: f32,
+        tx_tank_level_switch_to_test_object: &Sender<bool>,
+        rx_tank_level_switch_from_test_object_or_test_environment: &Receiver<InternalCommand>,
+        mock_value_position: bool,
+        mock_value_invalid: bool,
+        mock_value_position_stabilized: bool,
     ) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
-            match rx_tank_level_switch_from_test_object.try_recv() {
+            match rx_tank_level_switch_from_test_object_or_test_environment.try_recv() {
                 Ok(c) => {
                     let response_value = match c {
                         InternalCommand::RequestSignal(d) => match d {
@@ -204,7 +266,7 @@ pub mod tests {
 
     pub fn mock_atlas_scientific(
         tx_atlas_scientific_to_test_object: &Sender<f32>,
-        rx_atlas_scientific_from_test_object: &Receiver<InternalCommand>,
+        rx_atlas_scientific_from_test_object_or_test_environment: &Receiver<InternalCommand>,
         mock_value_water_temperature: f32,
         mock_value_conductivity: f32,
         mock_value_ph: f32,
@@ -212,7 +274,7 @@ pub mod tests {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
-            match rx_atlas_scientific_from_test_object.try_recv() {
+            match rx_atlas_scientific_from_test_object_or_test_environment.try_recv() {
                 Ok(c) => {
                     let response_value = match c {
                         InternalCommand::RequestSignal(d) => match d {
@@ -256,14 +318,14 @@ pub mod tests {
 
     pub fn mock_ambient(
         tx_ambient_to_test_object: &Sender<f32>,
-        rx_ambient_from_test_object: &Receiver<InternalCommand>,
+        rx_ambient_from_test_object_or_test_environment: &Receiver<InternalCommand>,
         mock_value_ambient_temperature: f32,
         mock_value_ambient_humidity: f32,
     ) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
-            match rx_ambient_from_test_object.try_recv() {
+            match rx_ambient_from_test_object_or_test_environment.try_recv() {
                 Ok(c) => {
                     let response_value = match c {
                         InternalCommand::RequestSignal(d) => match d {
@@ -301,6 +363,113 @@ pub mod tests {
                 }
             }
             spin_sleeper.sleep(sleep_duration_one_millisecond);
+        }
+    }
+
+    pub fn mock_tcp(
+        tx_tcp_to_test_object: &Sender<f32>,
+        rx_tcp_from_test_object_or_test_environment: &Receiver<InternalCommand>,
+        mock_value_position: f32,
+        mock_value_invalid: f32,
+    ) {
+        let sleep_duration = Duration::from_millis(10);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            match rx_tcp_from_test_object_or_test_environment.try_recv() {
+                Ok(c) => {
+                    let response_value: f32 = match c {
+                        InternalCommand::RequestSignal(d) => match d {
+                            AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
+                            AquariumSignal::TankLevelSwitchInvalid => true.into(),
+                            _ => {
+                                panic!("unknown signal request to mock GPIO");
+                            }
+                        },
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("invalid command to mock TCP handler");
+                        }
+                    };
+                    match tx_tcp_to_test_object.send(response_value) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            panic!(
+                                "mock_tcp: sending mock data from TCP to test object failed ({e:?})",
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!("mock_tcp: receiving command from test object failed ({e:?})",);
+                        }
+                    }
+                }
+            };
+            spin_sleeper.sleep(sleep_duration);
+        }
+    }
+
+    pub fn mock_heating(
+        tx_heating_to_test_object: &Sender<InternalCommand>,
+        rx_heating_from_test_object: &Receiver<bool>,
+        rx_heating_from_signal_handler: &Receiver<InternalCommand>,
+    ) {
+        let sleep_duration = Duration::from_millis(10);
+        let spin_sleeper = SpinSleeper::default();
+        loop {
+            spin_sleeper.sleep(sleep_duration);
+            match tx_heating_to_test_object.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPosition,
+            )) {
+                Ok(c) => {
+                    match rx_heating_from_test_object.try_recv() {
+                        Ok(d) => {
+                            // do nothing
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!(
+                                "Mock Heating: Error in trying to receive signal from test object: {e:?}"
+                            );
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    panic!("Mock Heating: Could not send signal request to test object");
+                }
+            };
+            match rx_heating_from_signal_handler.try_recv() {
+                Ok(c) => {
+                    let response_value = match c {
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock Heating: Received invalid command.");
+                        }
+                    };
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock Heating: Error in trying to receive command from signal handler: {e:?}"
+                            );
+                        }
+                    }
+                }
+            };
+            spin_sleeper.sleep(sleep_duration);
         }
     }
 }

@@ -28,8 +28,8 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 /// * `rx_from_heating` - receiver part of channel for communication from heating control
 /// * `tx_to_controllino` - sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_datalogger` - sender part of channel for communication to data logger
-/// * `rx_from_datalogger` - receiver part of channel for communication from data logger
+/// * `tx_to_data_logger` - sender part of channel for communication to data logger
+/// * `rx_from_data_logger` - receiver part of channel for communication from data logger
 /// * `tx_to_balling` - sender part of channel for communication to Balling dosing control
 /// * `rx_from_balling` - receiver part of channel for communication from Balling dosing control
 /// * `tx_to_ventilation` - sender part of channel for communication to ventilation control
@@ -87,8 +87,8 @@ pub fn handle_signals(
     rx_from_atlas_scientific: Receiver<bool>,
     tx_to_ambient: Sender<InternalCommand>,
     rx_from_ambient: Receiver<bool>,
-    tx_to_datalogger: Sender<InternalCommand>,
-    rx_from_datalogger: Receiver<bool>,
+    tx_to_data_logger: Sender<InternalCommand>,
+    rx_from_data_logger: Receiver<bool>,
     tx_to_balling: Sender<InternalCommand>,
     rx_from_balling: Receiver<bool>,
     tx_to_ventilation: Sender<InternalCommand>,
@@ -352,9 +352,9 @@ pub fn handle_signals(
     }
 
     // next, let's shut down the data logging
-    match tx_to_datalogger.send(InternalCommand::Quit) {
+    match tx_to_data_logger.send(InternalCommand::Quit) {
         Ok(_) => {
-            match rx_from_datalogger.recv() {
+            match rx_from_data_logger.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     error!(
@@ -421,7 +421,7 @@ pub fn handle_signals(
     }
 
     // data logger thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_datalogger.send(InternalCommand::Terminate) {
+    match tx_to_data_logger.send(InternalCommand::Terminate) {
         Ok(_) => {}
         Err(e) => {
             error!(

@@ -431,7 +431,7 @@ impl DataLogger {
         tx_to_atlas_scientific: Sender<InternalCommand>,
         rx_from_atlas_scientific: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
-        rx_from_tank_level_switch: Receiver<f32>,
+        rx_from_tank_level_switch: Receiver<bool>,
         rx_from_refill: Receiver<bool>,
         rx_from_heating: Receiver<bool>,
         rx_from_ventilation: Receiver<bool>,
@@ -730,13 +730,13 @@ impl DataLogger {
                             Ok(c) => {
                                 self.lock_error_output_state_tank_level_switch_position = self
                                     .output_state(
-                                        c > 0.0,
+                                        c,
                                         "HIGH",
                                         "LOW",
                                         &self.config.output_file_name_tank_level_switch_position,
                                         self.lock_error_output_state_tank_level_switch_position,
                                     );
-                                Some(c > 0.0)
+                                Some(c)
                             }
                             Err(_) => {
                                 tank_level_switch_channel_disconnected = true;
@@ -763,13 +763,13 @@ impl DataLogger {
                             Ok(c) => {
                                 self.lock_error_output_state_tank_level_switch_invalid = self
                                     .output_state(
-                                        c > 0.0,
+                                        c,
                                         "INVALID",
                                         "VALID",
                                         &self.config.output_file_name_tank_level_switch_invalid,
                                         self.lock_error_output_state_tank_level_switch_invalid,
                                     );
-                                Some(c > 0.0)
+                                Some(c)
                             }
                             Err(_) => {
                                 tank_level_switch_channel_disconnected = true;
@@ -798,13 +798,13 @@ impl DataLogger {
                             Ok(c) => {
                                 self.lock_error_output_state_tank_level_switch_position_stabilized = self
                                     .output_state(
-                                        c > 0.0,
+                                        c,
                                         "INVALID",
                                         "VALID",
                                         &self.config.output_file_name_tank_level_switch_position_stabilized,
                                         self.lock_error_output_state_tank_level_switch_position_stabilized,
                                     );
-                                Some(c > 0.0)
+                                Some(c)
                             }
                             Err(_) => {
                                 tank_level_switch_channel_disconnected = true;
@@ -1103,14 +1103,14 @@ pub mod tests {
                                     match d {
                                         AquariumSignal::TankLevelSwitchPosition => {
                                             toggle_bit_position = !toggle_bit_position;
-                                            match toggle_bit_position { true => 1.0, false => 0.0 }
+                                            toggle_bit_position
                                         },
                                         AquariumSignal::TankLevelSwitchInvalid => {
                                             toggle_bit_invalid = !toggle_bit_invalid;
-                                            match toggle_bit_invalid { true => 1.0, false => 0.0 }
+                                            toggle_bit_position
                                         },
                                         AquariumSignal::TankLevelSwitchPositionStabilized => {
-                                            match toggle_bit_position { true => 0.0, false => 1.0 }
+                                            toggle_bit_position
                                         },
                                         _ => {
                                             panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);

@@ -63,12 +63,12 @@ pub struct VentilationConfig {
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
 /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-/// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+/// * `tx_to_data_logger` - Sender part of channel for communication to data logger
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_datalogger: &Sender<bool>,
+    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -93,7 +93,7 @@ fn switch_on_ventilation(
                 );
             }
         }
-        match tx_to_datalogger.send(true) {
+        match tx_to_data_logger.send(true) {
             Ok(_) => {}
             Err(e) => {
                 error!(
@@ -112,12 +112,12 @@ fn switch_on_ventilation(
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
 /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-/// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+/// * `tx_to_data_logger` - Sender part of channel for communication to data logger
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_datalogger: &Sender<bool>,
+    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -142,7 +142,7 @@ fn switch_off_ventilation(
                 );
             }
         }
-        match tx_to_datalogger.send(false) {
+        match tx_to_data_logger.send(false) {
             Ok(_) => {}
             Err(e) => {
                 error!(
@@ -235,7 +235,7 @@ impl Ventilation {
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker                   
     pub fn execute(
@@ -247,7 +247,7 @@ impl Ventilation {
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_datalogger: Sender<bool>,
+        tx_to_data_logger: Sender<bool>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         rx_from_messaging: Receiver<InternalCommand>,
@@ -261,10 +261,9 @@ impl Ventilation {
         let mut schedule_check_result: bool = false;
         let mut ventilation_inhibited = false; // state of ventilation control determined by if start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
+        let mut start_time = SystemTime::now();
 
         loop {
-            let start_time = SystemTime::now();
-
             let (quit_command_received, start_command_received, stop_command_received) =
                 self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
@@ -372,7 +371,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_datalogger,
+                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -383,7 +382,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_datalogger,
+                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -396,7 +395,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_datalogger,
+                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -408,7 +407,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_datalogger,
+                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -425,7 +424,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -437,7 +436,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -453,7 +452,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -465,7 +464,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -499,6 +498,8 @@ impl Ventilation {
             }
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
+
+            start_time = SystemTime::now(); // start time for next cycle
         }
 
         if self.config.switch_on_when_terminating {
@@ -508,7 +509,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &tx_to_datalogger,
+                    &tx_to_data_logger,
                 );
             }
         } else {
@@ -518,7 +519,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &tx_to_datalogger,
+                    &tx_to_data_logger,
                 );
             }
         }
@@ -594,7 +595,7 @@ pub mod tests {
     use crate::config::ConfigData;
     use crate::mock::tests::mock_atlas_scientific;
     use crate::mock::tests::mock_controllino;
-    use crate::mock::tests::mock_datalogger;
+    use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
     use crate::mock::tests::ActuationEvent;
     use crate::ventilation::Ventilation;
@@ -626,7 +627,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -662,7 +663,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_ventilation);
+                mock_data_logger(&rx_data_logger_from_ventilation);
             });
 
             let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
@@ -711,7 +712,7 @@ pub mod tests {
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -744,7 +745,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -780,7 +781,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_ventilation);
+                mock_data_logger(&rx_data_logger_from_ventilation);
             });
 
             let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
@@ -834,7 +835,7 @@ pub mod tests {
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -867,7 +868,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -903,7 +904,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_ventilation);
+                mock_data_logger(&rx_data_logger_from_ventilation);
             });
 
             let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
@@ -1066,7 +1067,7 @@ pub mod tests {
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -1097,7 +1098,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1133,7 +1134,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_ventilation);
+                mock_data_logger(&rx_data_logger_from_ventilation);
             });
 
             let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
@@ -1187,7 +1188,7 @@ pub mod tests {
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
+                    tx_ventilation_to_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,

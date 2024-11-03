@@ -63,8 +63,8 @@ pub struct AtlasScientificConfig {
 ///     atlas_scientific --> ventilation
 ///     atlas_scientific --> signal_handler[SignalHandler]
 ///     signal_handler --> atlas_scientific
-///     atlas_scientific --> datalogger[DataLogger]
-///     datalogger --> atlas_scientific
+///     atlas_scientific --> data_logger[DataLogger]
+///     data_logger --> atlas_scientific
 /// ```
 
 pub struct AtlasScientific {

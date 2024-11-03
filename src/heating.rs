@@ -131,12 +131,12 @@ pub struct HeatingConfig {
 /// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
 /// * `tx_to_controllino` - sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_datalogger` - sender part of channel for communication to data logger
+/// * `tx_to_data_logger` - sender part of channel for communication to data logger
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_datalogger: &Sender<bool>,
+    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -161,7 +161,7 @@ fn switch_on_heater(
                 );
             }
         }
-        match tx_to_datalogger.send(true) {
+        match tx_to_data_logger.send(true) {
             Ok(_) => {}
             Err(e) => {
                 error!(
@@ -180,12 +180,12 @@ fn switch_on_heater(
 /// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
 /// * `tx_to_controllino` - sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_datalogger` - sender part of channel for communication to data logger
+/// * `tx_to_data_logger` - sender part of channel for communication to data logger
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_datalogger: &Sender<bool>,
+    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -210,7 +210,7 @@ fn switch_off_heater(
                 );
             }
         }
-        match tx_to_datalogger.send(false) {
+        match tx_to_data_logger.send(false) {
             Ok(_) => {}
             Err(e) => {
                 error!(
@@ -355,7 +355,7 @@ impl Heating {
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `tx_to_datalogger` - Sender part of channel for communication to data logger
+    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     /// * `sql_interface` - Reference to generic SQL interface
@@ -368,12 +368,12 @@ impl Heating {
         tx_to_atlas_scientific: Sender<InternalCommand>,
         rx_from_atlas_scientific: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
-        rx_from_tank_level_switch: Receiver<f32>,
+        rx_from_tank_level_switch: Receiver<bool>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_datalogger: Sender<bool>,
+        tx_to_data_logger: Sender<bool>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         rx_from_messaging: Receiver<InternalCommand>,
@@ -387,8 +387,8 @@ impl Heating {
         let mut measurement_error_water_temperature: bool;
         let mut measured_ambient_temperature = 0.0;
         let mut measurement_error_ambient_temperature: bool;
-        let mut measured_tank_level_switch_position = 0.0;
-        let mut measured_tank_level_switch_invalid = 0.0;
+        let mut measured_tank_level_switch_position = true;
+        let mut measured_tank_level_switch_invalid = false;
         let mut loop_counter = 0;
         let mut heater_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
@@ -417,9 +417,8 @@ impl Heating {
             }
         };
 
+        let mut start_time = SystemTime::now();
         loop {
-            let start_time = SystemTime::now();
-
             let (
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start heating has been received
@@ -589,9 +588,7 @@ impl Heating {
                 }
 
                 // check if tank level switch hints to potentially low water level
-                if (measured_tank_level_switch_invalid > 0.0)
-                    || (measured_tank_level_switch_position < 0.5)
-                {
+                if (measured_tank_level_switch_invalid) || (!measured_tank_level_switch_position) {
                     tank_level_low_counter += 1;
                 } else {
                     tank_level_low_counter = 0;
@@ -640,7 +637,7 @@ impl Heating {
                             &mutex_device_scheduler_heating,
                             &tx_to_controllino,
                             &rx_from_controllino,
-                            &tx_to_datalogger,
+                            &tx_to_data_logger,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -663,7 +660,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -674,7 +671,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -687,7 +684,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -699,7 +696,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_datalogger,
+                                        &tx_to_data_logger,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -716,7 +713,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
-                                            &tx_to_datalogger,
+                                            &tx_to_data_logger,
                                         );
                                         heater_state = ActuatorState::On;
                                     }
@@ -728,7 +725,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
-                                            &tx_to_datalogger,
+                                            &tx_to_data_logger,
                                         );
                                         heater_state = ActuatorState::Off;
                                     }
@@ -744,7 +741,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
-                                            &tx_to_datalogger,
+                                            &tx_to_data_logger,
                                         );
                                         heater_state = ActuatorState::On;
                                     }
@@ -756,7 +753,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
-                                            &tx_to_datalogger,
+                                            &tx_to_data_logger,
                                         );
                                         heater_state = ActuatorState::Off;
                                     }
@@ -836,6 +833,8 @@ impl Heating {
             }
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
+
+            start_time = SystemTime::now(); // start time for next cycle
         }
 
         // switch off heater if not already off
@@ -844,7 +843,7 @@ impl Heating {
                 &mutex_device_scheduler_heating,
                 &tx_to_controllino,
                 &rx_from_controllino,
-                &tx_to_datalogger,
+                &tx_to_data_logger,
             );
         }
 
@@ -937,7 +936,7 @@ pub mod tests {
     use crate::mock::tests::mock_ambient;
     use crate::mock::tests::mock_atlas_scientific;
     use crate::mock::tests::mock_controllino;
-    use crate::mock::tests::mock_datalogger;
+    use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
     use crate::mock::tests::mock_tank_level_switch;
     use crate::mock::tests::ActuationEvent;
@@ -1044,7 +1043,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -1068,9 +1067,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -1092,7 +1091,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1148,7 +1147,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -1188,7 +1187,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -1212,9 +1211,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -1236,7 +1235,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1297,7 +1296,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -1337,7 +1336,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -1361,9 +1360,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -1385,7 +1384,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1547,7 +1546,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -1585,7 +1584,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -1612,9 +1611,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -1636,7 +1635,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1692,7 +1691,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -1738,7 +1737,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -1782,9 +1781,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -1806,7 +1805,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -1854,7 +1853,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -2000,7 +1999,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -2044,9 +2043,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -2068,7 +2067,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -2116,7 +2115,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -2263,7 +2262,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -2287,9 +2286,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    1.0,
-                    0.0,
-                    1.0,
+                    true,
+                    false,
+                    true,
                 );
             });
 
@@ -2311,7 +2310,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -2367,7 +2366,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
@@ -2404,7 +2403,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
@@ -2428,9 +2427,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    0.0,
-                    0.0,
-                    0.0,
+                    false,
+                    false,
+                    false,
                 );
             });
 
@@ -2452,7 +2451,7 @@ pub mod tests {
 
             // thread for mock Datalogger
             scope.spawn(move || {
-                mock_datalogger(&rx_datalogger_from_heating);
+                mock_data_logger(&rx_data_logger_from_heating);
             });
 
             let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
@@ -2513,7 +2512,7 @@ pub mod tests {
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
+                    tx_heating_to_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
