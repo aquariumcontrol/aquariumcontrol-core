@@ -633,6 +633,7 @@ pub mod tests {
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
+    use std::thread;
     use std::thread::scope;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -644,6 +645,8 @@ pub mod tests {
     use crate::mock::tests::mock_heating;
     use crate::mock::tests::mock_refill;
     use crate::mock::tests::mock_tcp;
+    use crate::mock::tests::MockSignal;
+    use crate::mock::tests::TestCommand;
     use crate::proc_ext_req::ProcessExternalRequestTrait;
     use crate::tank_level_switch::TankLevelSwitch;
     use crate::tank_level_switch::LOG_TARGET_TANK_LEVEL_SWITCH;
@@ -659,7 +662,7 @@ pub mod tests {
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
@@ -667,6 +670,7 @@ pub mod tests {
             mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (_tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
@@ -676,46 +680,60 @@ pub mod tests {
             + 1;
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
-        scope(|scope| {
-            // thread for mock tcp
-            scope.spawn(move || {
+        // thread for mock tcp
+        let join_handle_mock_tcp = thread::Builder::new()
+            .name("mock_tcp".to_string())
+            .spawn(move || {
                 mock_tcp(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
-                    1.0,
-                    0.0,
+                    true,
+                    false,
+                    &rx_tcp_from_test_environment,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_tank_level_switch);
-            });
+            })
+            .unwrap();
 
-            // thread for mock heating
-            scope.spawn(move || {
+        // thread for mock heating
+        let join_handle_mock_heating = thread::Builder::new()
+            .name("mock_heating".to_string())
+            .spawn(move || {
                 mock_heating(
                     &tx_heating_to_tank_level_switch,
                     &rx_heating_from_tank_level_switch,
                     &rx_heating_from_signal_handler,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock refill - includes assertions
-            scope.spawn(move || {
-                let result = mock_refill(
+        // thread for mock refill - includes assertions
+        let join_handle_mock_refill = thread::Builder::new()
+            .name("mock_refill".to_string())
+            .spawn(move || {
+                let results = mock_refill(
                     &tx_refill_to_tank_level_switch,
                     &rx_refill_from_tank_level_switch,
                     &rx_refill_from_signal_handler,
                 );
-                assert_ge!(result.len(), 50);
-                assert_le!(result.len(), 60);
+                assert_ge!(results.len(), 50);
+                assert_le!(results.len(), 60);
                 // check if value of all elements of result vector
-                assert_eq!(result.iter().all(|&item| item == true), true);
-            });
+                assert_eq!(results.iter().all(|&item| item == true), true);
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration = Duration::from_secs(duration_test_case_secs.into());
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
@@ -724,10 +742,13 @@ pub mod tests {
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 rx_signal_handler_from_tank_level_switch.recv().unwrap();
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_tank_level_switch_to_tcp_for_test_case_finish =
                     tx_tank_level_switch_to_tcp.clone();
@@ -750,45 +771,45 @@ pub mod tests {
                 // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_tank_level_switch_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
-            });
-
-            // thread for checking calculation result
-            /*
-            scope.spawn(move || {
-                let duration_check = Duration::from_millis(1);
-                let spin_sleeper = SpinSleeper::default();
-                for _ in 0..(duration_checks_millis) {
-                    match tx_refill_to_tank_level_switch
-                        .send(InternalCommand::RequestSignal(
-                            AquariumSignal::TankLevelSwitchPositionStabilized,
-                        )) {
-                        Ok(()) => {
-                            match rx_refill_from_tank_level_switch.try_recv() {
-                                Ok(result_tank_level_switch_position_stabilized) => {
-                                     assert_eq!(result_tank_level_switch_position_stabilized, 1.0);
-                                },
-                                Err(e) => {
-                                    match e {
-                                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                        TryRecvError::Disconnected => {
-                                            panic!(
-                                                "{}: receiving command from mock signal handler failed ({e:?})",
-                                                LOG_TARGET_TANK_LEVEL_SWITCH
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            panic!("Error when requesting tank level switch position via channel.");
-                        }
-                    };
-
-                    spin_sleeper.sleep(duration_check);
-                }
-            });*/
-        });
+            })
+            .unwrap();
+/*
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_tcp
+            .join()
+            .expect("Mock TCP thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock data logger thread did not finish.");
+        join_handle_mock_heating
+            .join()
+            .expect("Mock heating thread did not finish.");
+        join_handle_mock_refill
+            .join()
+            .expect("Mock refill thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");*/
+        join_handle_mock_heating
+            .join()
+            .expect("Mock heating thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_tcp
+            .join()
+            .expect("Mock TCP thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock data logger thread did not finish.");
+        join_handle_mock_refill
+            .join()
+            .expect("Mock refill thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
 
         println!("* [TankLevelSwitch] testing if stabilized tank level position is high when invalid bit is true succeeded.");
     }
@@ -796,163 +817,154 @@ pub mod tests {
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         // test if position signal is updating without delay when invalid signal is false
-        /*
-        let (tx_tank_level_switch_to_gpio, rx_gpio_from_tank_level_switch) = mpsc::channel();
-        let (tx_gpio_to_tank_level_switch, rx_tank_level_switch_from_gpio) = mpsc::channel();
+        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
+        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
         let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
             mpsc::channel();
-        let (tx_mock_signal_handler_to_mock_gpio, rx_mock_gpio_from_mock_signal_handler) =
-            mpsc::channel();
-        let mut mock_tank_level_switch_position = true;
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
-        let duration_stimuli_false_secs = 2;
-        let duration_test_case_secs = 5;
+        let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
+        let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
 
-        scope(|scope| {
-            // thread for mock gpio
-            scope.spawn(move || {
-                for i in 0..duration_test_case_secs * 10 {
-                    if i > duration_stimuli_false_secs * 10 {
-                        mock_tank_level_switch_position = true;
-                    } else {
-                        mock_tank_level_switch_position = false;
-                    }
-                    match rx_gpio_from_tank_level_switch.recv() {
-                        Ok(c) => {
-                            let response_value: f32 = match c {
-                                InternalCommand::RequestSignal(d) => match d {
-                                    AquariumSignal::TankLevelSwitchPosition => {
-                                        println!(
-                                            "i={} tx_gpio_to_tank_level_switch sending {}",
-                                            i, mock_tank_level_switch_position
-                                        );
-                                        mock_tank_level_switch_position.into()
-                                    }
-                                    AquariumSignal::TankLevelSwitchInvalid => false.into(),
-                                    _ => {
-                                        panic!("unknown signal request to mock GPIO");
-                                    }
-                                },
-                                _ => {
-                                    panic!("invalid signal request to mock gpio");
-                                }
-                            };
-                            match tx_gpio_to_tank_level_switch.send(response_value) {
-                                Ok(()) => { /* do nothing */ }
-                                Err(e) => {
-                                    panic!(
-                                        "{}: sending mock data to tank level switch failed ({e:?})",
-                                        LOG_TARGET_TANK_LEVEL_SWITCH
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => match e {
-                            RecvError => {
-                                panic!(
-                                    "{}: receiving command from tank level switch failed ({e:?})",
-                                    LOG_TARGET_TANK_LEVEL_SWITCH
-                                );
-                            }
-                        },
-                    };
-                    match rx_mock_gpio_from_mock_signal_handler.try_recv() {
-                        Ok(c) => {
-                            // this is the signal to finish the test case
-                            println!("finishing mock GPIO handler");
-                            break;
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
-                                    "{}: receiving command from mock signal handler failed ({e:?})",
-                                    LOG_TARGET_TANK_LEVEL_SWITCH
-                                );
-                                }
-                            }
-                        }
-                    };
-                }
-            });
+        // thread for mock tcp
+        let join_handle_mock_tcp = thread::Builder::new()
+            .name("mock_tcp".to_string())
+            .spawn(move || {
+                mock_tcp(
+                    &tx_tcp_to_tank_level_switch,
+                    &rx_tcp_from_tank_level_switch,
+                    false,
+                    false,
+                    &rx_tcp_from_test_environment,
+                );
+            })
+            .unwrap();
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(&rx_data_logger_from_tank_level_switch);
+            })
+            .unwrap();
+
+        // thread for mock heating
+        let join_handle_mock_heating = thread::Builder::new()
+            .name("mock_heating".to_string())
+            .spawn(move || {
+                mock_heating(
+                    &tx_heating_to_tank_level_switch,
+                    &rx_heating_from_tank_level_switch,
+                    &rx_heating_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        // thread for mock refill - includes assertions
+        let join_handle_mock_refill = thread::Builder::new()
+            .name("mock_refill".to_string())
+            .spawn(move || {
+                let results = mock_refill(
+                    &tx_refill_to_tank_level_switch,
+                    &rx_refill_from_tank_level_switch,
+                    &rx_refill_from_signal_handler,
+                );
+                assert_ge!(results.len(), 40);
+                assert_le!(results.len(), 50);
+                // check if value of all elements of result vector
+                for (idx, result) in results.iter().enumerate() {
+                    println!("Result at position {}: {:?}", idx, result);
+                    if idx <= 27 {
+                        assert_eq!(*result, false);                        
+                    }
+                    else {
+                        assert_eq!(*result, true);
+                    }
+                }
+            })
+            .unwrap();
+
+        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1.into());
+                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2.into());
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_part_1);
+                let _ = tx_test_environment_to_tcp.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPosition(true),
+                ));
+                spin_sleeper.sleep(sleep_duration_part_2);
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
+                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
+
                 tank_level_switch.execute(
-                    &tx_tank_level_switch_to_gpio,
-                    &rx_tank_level_switch_from_gpio,
+                    &tx_tank_level_switch_to_tcp_opt,
+                    &rx_tank_level_switch_from_tcp_opt,
                     &tx_tank_level_switch_to_data_logger,
                     &rx_tank_level_switch_from_data_logger,
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
+                    &tx_tank_level_switch_to_heating,
+                    &rx_tank_level_switch_from_heating,
                     &tx_tank_level_switch_to_signal_handler,
                     &rx_tank_level_switch_from_signal_handler,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for signal handler: let test object run for 10 seconds
-            scope.spawn(move || {
-                let spin_sleeper = SpinSleeper::default();
-                let sleep_duration = Duration::from_secs(duration_test_case_secs);
-                spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
-                let _ = tx_mock_signal_handler_to_mock_gpio.send(InternalCommand::Quit);
-            });
-
-            // thread for checking calculation result
-            scope.spawn(move || {
-                let duration_check = Duration::from_millis(100);
-                let spin_sleeper = SpinSleeper::default();
-                for i in 0..(duration_test_case_secs * 10) {
-                    match tx_refill_to_tank_level_switch
-                        .send(InternalCommand::RequestSignal(
-                            AquariumSignal::TankLevelSwitchPositionStabilized,
-                        )) {
-                        Ok(()) => {
-                            match rx_refill_from_tank_level_switch.recv() {
-                                Ok(result_tank_level_switch_position_stabilized) => {
-                                    let reference: f32 = (i > (duration_stimuli_false_secs * 10)).into();
-                                    println!("i={} reference={}", i, reference);
-                                    assert_eq!(result_tank_level_switch_position_stabilized, reference);
-                                },
-                                Err(e) => {
-                                    match e {
-                                        RecvError => {
-                                            panic!(
-                                                "{}: receiving command from mock signal handler failed ({e:?})",
-                                                LOG_TARGET_TANK_LEVEL_SWITCH
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            panic!("Error when requesting tank level switch position via channel.");
-                        }
-                    };
-
-                    spin_sleeper.sleep(duration_check);
-                }
-            });
-        });
+        join_handle_mock_heating
+            .join()
+            .expect("Mock heating thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_tcp
+            .join()
+            .expect("Mock TCP thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock data logger thread did not finish.");
+        join_handle_mock_refill
+            .join()
+            .expect("Mock refill thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
 
         println!("* [TankLevelSwitch] testing immediate change false -> true for stabilized tank level position when invalid bit is false succeeded");
-        */
     }
 
     #[test]

@@ -76,8 +76,8 @@ impl fmt::Display for AquariumDevice {
     }
 }
 
-/// Enum is used for internal thread messaging between data logger and GPIO handler
-/// The values indicate which information the GPIO handler thread shall return via channel.
+/// Enum is used for internal thread messaging between various threads
+/// The values indicate which information the a thread shall return.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AquariumSignal {
     /// water temperature in °C

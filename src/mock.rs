@@ -21,6 +21,51 @@ pub mod tests {
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
 
+    /// Enum is used for internal thread messaging between test environment and mock threads
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum MockSignal {
+        /// position of tank level switch
+        TankLevelSwitchPosition(bool),
+
+        #[allow(dead_code)]
+        /// status bit of tank level switch signal
+        TankLevelSwitchInvalid(bool),
+    }
+
+    impl fmt::Display for MockSignal {
+        /// Function provides output of the enum values for debugging purposes.
+        /// # Arguments
+        /// * `f` - configuration for formatting    
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                MockSignal::TankLevelSwitchPosition(d) => write!(
+                    f,
+                    "TankLevelSwitchPosition({})",
+                    match d {
+                        true => "high",
+                        false => "low",
+                    }
+                ),
+                MockSignal::TankLevelSwitchInvalid(d) => write!(
+                    f,
+                    "TankLevelSwitchInvalid({})",
+                    match d {
+                        true => "invalid",
+                        false => "valid",
+                    }
+                ),
+            }
+        }
+    }
+
+    /// Enum is used for internal thread messaging.
+    /// Note: Relay state and device state do not necessarily correlate.
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum TestCommand {
+        /// Request to update a signal in to be used by mock thread
+        UpdateSignal(MockSignal),
+    }
+
     #[derive(Clone)]
     pub struct ActuationEvent {
         pub time: SystemTime,
@@ -369,20 +414,23 @@ pub mod tests {
     pub fn mock_tcp(
         tx_tcp_to_test_object: &Sender<f32>,
         rx_tcp_from_test_object_or_test_environment: &Receiver<InternalCommand>,
-        mock_value_position: f32,
-        mock_value_invalid: f32,
+        initial_mock_value_position: bool,
+        initial_mock_value_invalid: bool,
+        rx_tcp_from_test_environment: &Receiver<TestCommand>,
     ) {
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
+        let mut mock_value_position = initial_mock_value_position;
+        let mut mock_value_invalid = initial_mock_value_invalid;
         loop {
             match rx_tcp_from_test_object_or_test_environment.try_recv() {
                 Ok(c) => {
                     let response_value: f32 = match c {
                         InternalCommand::RequestSignal(d) => match d {
                             AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
-                            AquariumSignal::TankLevelSwitchInvalid => true.into(),
+                            AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
                             _ => {
-                                panic!("unknown signal request to mock GPIO");
+                                panic!("unknown signal request to mock TCP");
                             }
                         },
                         InternalCommand::Quit => {
@@ -405,7 +453,36 @@ pub mod tests {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("mock_tcp: receiving command from test object failed ({e:?})",);
+                            panic!("mock_tcp: receiving command from test object/test environment failed ({e:?})",);
+                        }
+                    }
+                }
+            };
+            match rx_tcp_from_test_environment.try_recv() {
+                Ok(c) => {
+                    match c {
+                        TestCommand::UpdateSignal(d) => {
+                            println!("Mock TCP: received {}", d);
+                            match d {
+                                MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
+                                MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
+                                _ => {
+                                    panic!("unknown signal request to mock TCP");
+                                }
+                            }
+                        }
+                        _ => {
+                            panic!("invalid command to mock TCP handler from test environment");
+                        }
+                    };
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "mock_tcp: receiving command from test environment failed ({e:?})",
+                            );
                         }
                     }
                 }
@@ -426,9 +503,9 @@ pub mod tests {
             match tx_heating_to_test_object.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchPosition,
             )) {
-                Ok(c) => {
+                Ok(_) => {
                     match rx_heating_from_test_object.try_recv() {
-                        Ok(d) => {
+                        Ok(_) => {
                             // do nothing
                         }
                         Err(e) => {
@@ -444,12 +521,12 @@ pub mod tests {
                     }
                 }
                 Err(e) => {
-                    panic!("Mock Heating: Could not send signal request to test object");
+                    panic!("Mock Heating: Could not send signal request to test object: {e:?}");
                 }
             };
             match rx_heating_from_signal_handler.try_recv() {
                 Ok(c) => {
-                    let response_value = match c {
+                    match c {
                         InternalCommand::Quit => {
                             break;
                         }
