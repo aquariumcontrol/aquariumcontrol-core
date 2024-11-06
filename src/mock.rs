@@ -141,38 +141,48 @@ pub mod tests {
 
         let sleep_duration = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+        let mut sending_blocked: bool = false;
         loop {
-            spin_sleeper.sleep(sleep_duration);
-            match tx_refill_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                AquariumSignal::TankLevelSwitchPositionStabilized,
-            )) {
-                Ok(_) => {
-                    match rx_refill_from_tank_level_switch.try_recv() {
-                        Ok(d) => {
-                            result.push(d);
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
+            if !sending_blocked {
+                match tx_refill_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchPositionStabilized,
+                )) {
+                    Ok(_) => {
+                        match rx_refill_from_tank_level_switch.try_recv() {
+                            Ok(d) => {
+                                result.push(d);
+                            }
+                            Err(e) => {
+                                match e {
+                                    TryRecvError::Empty => { /* empty buffer - no action required */
+                                    }
+                                    TryRecvError::Disconnected => {
+                                        panic!(
                                         "Mock Refill: Error in trying to receive command from TankLevelSwitch: {e:?}"
                                     );
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    panic!("Mock Refill: Could not send signal request to TankLevelSwitch ({e:?})")
-                }
-            };
+                    Err(e) => {
+                        panic!(
+                            "Mock Refill: Could not send signal request to TankLevelSwitch ({e:?})"
+                        )
+                    }
+                };
+            }
+
             match rx_refill_from_signal_handler.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::Quit => {
+                            sending_blocked = true;
+                            println!("Mock refill: Received Quit signal - blocking sending");
+                        },
+                        InternalCommand::Terminate => {
                             break;
-                        }
+                        },
                         _ => {
                             panic!("Mock Refill: Received invalid command.");
                         }
@@ -498,36 +508,44 @@ pub mod tests {
     ) {
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
+        let mut sending_blocked: bool = false;
         loop {
             spin_sleeper.sleep(sleep_duration);
-            match tx_heating_to_test_object.send(InternalCommand::RequestSignal(
-                AquariumSignal::TankLevelSwitchPosition,
-            )) {
-                Ok(_) => {
-                    match rx_heating_from_test_object.try_recv() {
-                        Ok(_) => {
-                            // do nothing
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
-                                "Mock Heating: Error in trying to receive signal from test object: {e:?}"
-                            );
+            if !sending_blocked {
+                match tx_heating_to_test_object.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchPosition,
+                )) {
+                    Ok(_) => {
+                        match rx_heating_from_test_object.try_recv() {
+                            Ok(_) => {
+                                // do nothing
+                            }
+                            Err(e) => {
+                                match e {
+                                    TryRecvError::Empty => { /* empty buffer - no action required */
+                                    }
+                                    TryRecvError::Disconnected => {
+                                        panic!(
+                                    "Mock Heating: Error in trying to receive signal from test object: {e:?}"
+                                );
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    panic!("Mock Heating: Could not send signal request to test object: {e:?}");
-                }
-            };
+                    Err(e) => {
+                        panic!("Mock Heating: Could not send signal request to test object: {e:?}");
+                    }
+                };
+            }
             match rx_heating_from_signal_handler.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::Quit => {
+                            sending_blocked = true;
+                            println!("Mock Heating: Received Quit signal - blocking sending");
+                        }
+                        InternalCommand::Terminate => {
                             break;
                         }
                         _ => {
