@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::mock::tests::ActuationEvent;
-
     pub fn update_min_max_actuation_duration(
         min_actuation_duration: u128,
         max_actuation_duration: u128,

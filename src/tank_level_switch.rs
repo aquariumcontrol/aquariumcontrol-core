@@ -632,16 +632,11 @@ impl TankLevelSwitch {
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use chrono::DateTime;
-    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::thread::scope;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration};
 
-    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
@@ -651,9 +646,7 @@ pub mod tests {
     use crate::mock::tests::mock_tcp;
     use crate::mock::tests::MockSignal;
     use crate::mock::tests::TestCommand;
-    use crate::proc_ext_req::ProcessExternalRequestTrait;
     use crate::tank_level_switch::TankLevelSwitch;
-    use crate::tank_level_switch::LOG_TARGET_TANK_LEVEL_SWITCH;
 
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
@@ -1203,7 +1196,7 @@ pub mod tests {
                 let sleep_duration_part = Duration::from_secs(duration_test_case_part.into());
                 let sleep_duration_thread_processing = Duration::from_millis(50);
                 let spin_sleeper = SpinSleeper::default();
-                for i in 0..2 {
+                for _ in 0..2 {
                     spin_sleeper.sleep(sleep_duration_part);
                     let _ = tx_test_environment_to_tcp.send(TestCommand::UpdateSignal(
                         MockSignal::TankLevelSwitchPosition(false),

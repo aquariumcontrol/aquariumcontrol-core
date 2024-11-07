@@ -9,15 +9,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::Local;
     use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
-    use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::{Duration, SystemTime};
 
-    use crate::channel_content::AquariumDevice;
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
 
@@ -179,10 +176,10 @@ pub mod tests {
                         InternalCommand::Quit => {
                             sending_blocked = true;
                             println!("Mock refill: Received Quit signal - blocking sending");
-                        },
+                        }
                         InternalCommand::Terminate => {
                             break;
-                        },
+                        }
                         _ => {
                             panic!("Mock Refill: Received invalid command.");
                         }
@@ -476,13 +473,7 @@ pub mod tests {
                             match d {
                                 MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
                                 MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
-                                _ => {
-                                    panic!("unknown signal request to mock TCP");
-                                }
                             }
-                        }
-                        _ => {
-                            panic!("invalid command to mock TCP handler from test environment");
                         }
                     };
                 }

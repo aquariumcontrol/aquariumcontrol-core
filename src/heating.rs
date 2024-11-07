@@ -921,13 +921,11 @@ pub mod tests {
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
-    use std::thread::scope;
+    use std::thread;
     use std::time::{Duration, SystemTime};
 
     use crate::channel_content::AquariumDevice;
-    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::read_config_file;
@@ -939,7 +937,6 @@ pub mod tests {
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
     use crate::mock::tests::mock_tank_level_switch;
-    use crate::mock::tests::ActuationEvent;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
@@ -1052,18 +1049,22 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -1071,10 +1072,14 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -1082,22 +1087,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 assert_eq!(actuation_events.len(), 1);
@@ -1106,23 +1120,29 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // make sure all mock threads are running when instantiating the test object
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -1164,9 +1184,35 @@ pub mod tests {
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
-            });
-            println!("* [Heating] checking reaction to high temperature succeeded.");
-        });
+
+                println!("* [Heating] checking reaction to high temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // Check if the heater is switched on and is not switched off with low temperature.
@@ -1196,18 +1242,22 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -1215,10 +1265,13 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -1226,22 +1279,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 assert_eq!(actuation_events.len(), 2);
@@ -1255,23 +1317,29 @@ pub mod tests {
                     first_actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Heater)
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // make sure all mock threads are running when instantiating the test object
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -1313,9 +1381,35 @@ pub mod tests {
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
-            });
-            println!("* [Heating] checking reaction to low temperature succeeded.");
-        });
+
+                println!("* [Heating] checking reaction to low temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
@@ -1345,18 +1439,22 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -1364,10 +1462,14 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -1375,22 +1477,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 println!(
@@ -1505,23 +1616,29 @@ pub mod tests {
                 assert_le!(sixth_last_actuation_duration, 8080);
                 assert_ge!(sixth_last_actuation_duration, 7800);
                 assert_le!(delta_min_max_duration, 100);
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration = Duration::from_secs(59);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // make sure all mock threads are running when instantiating the test object
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -1563,9 +1680,35 @@ pub mod tests {
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
-            });
-            println!("* [Heating] checking reaction to medium temperature succeeded.");
-        });
+
+                println!("* [Heating] checking reaction to medium temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // checks if the Quit command is correctly processed
@@ -1593,21 +1736,24 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let start_time = SystemTime::now();
 
-            let start_time = SystemTime::now();
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -1615,10 +1761,13 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -1626,22 +1775,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 println!(
@@ -1654,19 +1812,25 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -1712,14 +1876,39 @@ pub mod tests {
                 // check if heater actuation has taken place
                 let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
                 assert_eq!(*mutex_data, 1);
-            });
             let finish_time = SystemTime::now();
             let execution_duration = finish_time.duration_since(start_time).unwrap();
             all_asserts::assert_le!(execution_duration.as_millis(), 500);
             println!(
                 "* [Heating] checking heating execution with pending quit/terminate command (time limit) succeeded."
             );
-        });
+        })
+        .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // checks if waiting for midnight and statistical calculations are computed correctly
@@ -1766,18 +1955,22 @@ pub mod tests {
             }
         };
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -1785,10 +1978,13 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -1796,39 +1992,54 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino
-            scope.spawn(move || {
+        // thread for mock Controllino
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let _ = mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration = Duration::from_secs(4);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -1980,8 +2191,33 @@ pub mod tests {
                     1
                 );
                 println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
-            });
-        });
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // checks if waiting for midnight and statistical calculations are computed correctly
@@ -2028,18 +2264,22 @@ pub mod tests {
             }
         };
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -2047,10 +2287,13 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -2058,39 +2301,54 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino
-            scope.spawn(move || {
+        // thread for mock Controllino
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let _ = mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration = Duration::from_secs(4);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -2242,8 +2500,33 @@ pub mod tests {
                     1
                 );
                 println!("* [Heating] checking heating waiting for midnight and stats calculation with heater on succeeded.");
-            });
-        });
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // Checks if negative schedule checker result is processed correctly
@@ -2271,18 +2554,22 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     false,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -2290,10 +2577,13 @@ pub mod tests {
                     false,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -2301,22 +2591,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 assert_eq!(actuation_events.len(), 1);
@@ -2325,23 +2624,29 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Heater)
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // make sure all mock threads are running when instantiating the test object
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -2383,9 +2688,34 @@ pub mod tests {
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
-            });
-            println!("* [Heating] checking if schedule checker can block actuation.");
-        });
+                println!("* [Heating] checking if schedule checker can block actuation.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     // checks if component protection is executed
@@ -2412,18 +2742,22 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
 
-        scope(|scope| {
-            // thread for mock schedule check
-            scope.spawn(move || {
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_schedule_check(
                     &tx_schedule_check_to_heating,
                     &rx_schedule_check_from_heating,
                     true,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock TankLevelSwitch
-            scope.spawn(move || {
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
@@ -2431,10 +2765,13 @@ pub mod tests {
                     false,
                     false,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock AtlasScientific
-            scope.spawn(move || {
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_heating,
                     &rx_atlas_scientific_from_heating,
@@ -2442,22 +2779,31 @@ pub mod tests {
                     50000.0,
                     7.0,
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for mock Ambient
-            scope.spawn(move || {
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(&tx_ambient_to_heating, &rx_ambient_from_heating, 24.0, 60.0);
-            });
+            })
+            .unwrap();
 
-            // thread for mock Datalogger
-            scope.spawn(move || {
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
                 mock_data_logger(&rx_data_logger_from_heating);
-            });
+            })
+            .unwrap();
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-            // thread for mock Controllino - includes assertions
-            scope.spawn(move || {
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
                 let mut actuation_events =
                     mock_controllino(&rx_controllino_from_heating, &tx_controllino_to_heating);
                 assert_eq!(actuation_events.len(), 2);
@@ -2471,23 +2817,29 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Heater)
                 );
-            });
+            })
+            .unwrap();
 
-            // thread for controlling duration of test run
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
                 let sleep_duration_ten_seconds = Duration::from_secs(10);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            // make sure all mock threads are running when instantiating the test object
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 // clone sender part of channels to mock threads so that we can terminate them after execution of test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
@@ -2529,8 +2881,34 @@ pub mod tests {
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
-            });
-            println!("* [Heating] checking if schedule checker can block actuation.");
-        });
+
+                println!("* [Heating] checking if schedule checker can block actuation.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 }
