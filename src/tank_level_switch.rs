@@ -631,11 +631,10 @@ impl TankLevelSwitch {
 #[cfg(test)]
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
-    use chrono::DateTime;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::thread;
-    use std::time::{Duration};
+    use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
@@ -668,6 +667,8 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (_tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
@@ -695,7 +696,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_tank_level_switch);
+                mock_data_logger(
+                    &rx_data_logger_from_tank_level_switch,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -817,6 +821,8 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
@@ -842,7 +848,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_tank_level_switch);
+                mock_data_logger(
+                    &rx_data_logger_from_tank_level_switch,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -974,6 +983,8 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
@@ -999,7 +1010,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_tank_level_switch);
+                mock_data_logger(
+                    &rx_data_logger_from_tank_level_switch,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1131,6 +1145,8 @@ pub mod tests {
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
@@ -1155,7 +1171,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_tank_level_switch);
+                mock_data_logger(
+                    &rx_data_logger_from_tank_level_switch,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 

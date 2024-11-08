@@ -87,6 +87,14 @@ impl RefillErrors {
         self.error_receive_tank_level_switch_position = false;
         self.error_sql_update_failed = false;
     }
+
+    #[cfg(test)]
+    pub fn has_error(&mut self) -> bool {
+        self.error_switch_stuck_high
+            || self.error_switch_stuck_low
+            || self.error_receive_tank_level_switch_position
+            || self.error_sql_update_failed
+    }
 }
 
 /// Contains the configuration and the implementation for the refill control.

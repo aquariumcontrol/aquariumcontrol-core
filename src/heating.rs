@@ -1048,6 +1048,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1068,6 +1072,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -1102,7 +1107,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1241,6 +1249,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1261,6 +1273,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -1294,7 +1307,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1438,6 +1454,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1458,6 +1478,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,                    
                     true,
                     false,
                     true,
@@ -1492,7 +1513,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1735,6 +1759,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         let start_time = SystemTime::now();
 
@@ -1757,6 +1785,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -1790,7 +1819,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1934,6 +1966,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
@@ -1974,6 +2010,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -2007,7 +2044,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -2243,6 +2283,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
@@ -2283,6 +2327,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -2316,7 +2361,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -2553,6 +2601,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2573,6 +2625,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,
@@ -2606,7 +2659,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -2741,6 +2797,10 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2761,6 +2821,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
+                    &rx_tank_level_switch_from_test_environment,
                     false,
                     false,
                     false,
@@ -2794,7 +2855,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_heating);
+                mock_data_logger(
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 

@@ -27,6 +27,9 @@ pub mod tests {
         #[allow(dead_code)]
         /// status bit of tank level switch signal
         TankLevelSwitchInvalid(bool),
+
+        /// position of tank level switch stabilized
+        TankLevelSwitchPositionStabilized(bool),
     }
 
     impl fmt::Display for MockSignal {
@@ -49,6 +52,14 @@ pub mod tests {
                     match d {
                         true => "invalid",
                         false => "valid",
+                    }
+                ),
+                MockSignal::TankLevelSwitchPositionStabilized(d) => write!(
+                    f,
+                    "TankLevelSwitchPositionStabilized({})",
+                    match d {
+                        true => "high",
+                        false => "low",
                     }
                 ),
             }
@@ -201,13 +212,38 @@ pub mod tests {
         result
     }
 
-    pub fn mock_data_logger(rx_data_logger_from_heating: &Receiver<bool>) {
+    pub fn mock_data_logger(
+        rx_data_logger_from_heating: &Receiver<bool>,
+        rx_data_logger_from_signal_handler: &Receiver<InternalCommand>,
+    ) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
             // receive information for data logger
             match rx_data_logger_from_heating.try_recv() {
                 Ok(_) => { /* do nothing */ }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            // for this mock thread, this case occurrs - test case execution has concluded
+                            break;
+                        }
+                    }
+                }
+            }
+            // receive quit signal
+            match rx_data_logger_from_signal_handler.try_recv() {
+                Ok(c) => {
+                    match c {
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            panic!("Mock DataLogger: Received invalid command.");
+                        }
+                    };
+                }
                 Err(e) => {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
@@ -265,10 +301,15 @@ pub mod tests {
     pub fn mock_tank_level_switch(
         tx_tank_level_switch_to_test_object: &Sender<bool>,
         rx_tank_level_switch_from_test_object_or_test_environment: &Receiver<InternalCommand>,
-        mock_value_position: bool,
-        mock_value_invalid: bool,
-        mock_value_position_stabilized: bool,
+        rx_tank_level_switch_from_test_environment: &Receiver<TestCommand>,
+        initial_value_position: bool,
+        initial_value_invalid: bool,
+        initial_value_position_stabilized: bool,
     ) {
+        let mut mock_value_position: bool = initial_value_position;
+        let mut mock_value_invalid: bool = initial_value_invalid;
+        let mut mock_value_position_stabilized: bool = initial_value_position_stabilized;
+
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
@@ -306,7 +347,33 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock TankLevelSwitch: Error in trying to receive command from data logger: {e:?}"
+                                "Mock TankLevelSwitch: Error in trying to receive command from test object or test environment: {e:?}"
+                            );
+                        }
+                    }
+                }
+            }
+            match rx_tank_level_switch_from_test_environment.try_recv() {
+                Ok(c) => {
+                    match c {
+                        TestCommand::UpdateSignal(d) => {
+                            println!("Mock TankLevelSwitch: received {}", d);
+                            match d {
+                                MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
+                                MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
+                                MockSignal::TankLevelSwitchPositionStabilized(c) => {
+                                    mock_value_position_stabilized = c
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock TankLevelSwitch: Error in trying to receive command from test environment: {e:?}"
                             );
                         }
                     }
@@ -473,6 +540,9 @@ pub mod tests {
                             match d {
                                 MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
                                 MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
+                                MockSignal::TankLevelSwitchPositionStabilized(_) => {
+                                    panic!("mock_tcp: received invalid test command {}", d);
+                                },
                             }
                         }
                     };

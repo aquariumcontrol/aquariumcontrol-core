@@ -325,57 +325,27 @@ impl WaterInjectionTrait for WaterInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::thread::scope;
+    use std::thread;
     use std::time::Duration;
 
-    use crate::channel_content::{AquariumSignal, InternalCommand};
+    use crate::channel_content::{AquariumDevice, InternalCommand};
     use crate::config::ConfigData;
+    use crate::mock::tests::mock_controllino;
+    use crate::mock::tests::mock_data_logger;
+    use crate::mock::tests::mock_tank_level_switch;
+    use crate::mock::tests::MockSignal;
+    use crate::mock::tests::TestCommand;
     use crate::read_config_file;
+    use crate::refill::tests::prepare_refill_tests;
     use crate::water_injection::WaterInjection;
     use crate::water_injection::WaterInjectionTrait;
     use crate::Refill;
     use crate::SqlInterface;
     use crate::SqlInterfaceRefill;
-
-    use crate::refill::tests::prepare_refill_tests;
-    use crate::refill::tests::run_main_cycle_with_sensor_signals;
-
-    fn test_water_injection_receive_actuation_command_send_confirmation(
-        rx_controllino_from_refill: &Receiver<InternalCommand>,
-        tx_controllino_to_refill: &Sender<bool>,
-    ) {
-        // receive command from test object
-        match rx_controllino_from_refill.recv() {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Refill: Error when receiving actuation command from test object: {e:?}");
-            }
-        }
-
-        // send confirmation back
-        match tx_controllino_to_refill.send(true) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Refill: Error when sending back actuation command confirmation to test object: {e:?}");
-            }
-        }
-    }
-
-    fn test_water_injection_receive_information_for_data_logger(
-        rx_data_logger_from_refill: &Receiver<bool>,
-    ) {
-        // receive information for data logger
-        match rx_data_logger_from_refill.recv() {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Refill: error when receiving information for data logger: {e:?}");
-            }
-        }
-    }
-
+    
     pub fn prepare_refill_tests_tertiary() -> (ConfigData, Refill, SqlInterface) {
         // prepare struct Refill for subsequent tests
         // parallel usage of database leads to conflicts
@@ -397,529 +367,873 @@ pub mod tests {
         )
     }
 
-    fn run_main_cycle_with_sensor_signals_and_abort(
-        rx_runner_from_test_case: &Receiver<InternalCommand>,
-        rx_tank_level_switch_from_water_injection: &Receiver<InternalCommand>,
-        tx_tank_level_switch_to_water_injection: &Sender<f32>,
-        signal_position: bool,
-        signal_invalid: bool,
-    ) {
-        loop {
-            match rx_tank_level_switch_from_water_injection.try_recv() {
-                Ok(_) => {
-                    println!("run_main_cycle_with_sensor_signals_and_abort: Sending to water injection (1).");
-                    let _ = tx_tank_level_switch_to_water_injection.send(match signal_position {
-                        true => 1.0,
-                        false => 0.0,
-                    });
-                }
-                Err(_) => { /* do nothing */ }
-            }
-            match rx_tank_level_switch_from_water_injection.try_recv() {
-                Ok(_) => {
-                    println!("water_injection: run_main_cycle_with_sensor_signals_and_abort: Sending to water injection (2).");
-                    let _ = tx_tank_level_switch_to_water_injection.send(match signal_invalid {
-                        true => 1.0,
-                        false => 0.0,
-                    });
-                }
-                Err(_) => { /* do nothing */ }
-            }
-            match rx_runner_from_test_case.try_recv() {
-                Ok(c) => match c {
-                    InternalCommand::Quit => {
-                        // test case has finished
-                        break;
-                    }
-                    _ => { /* Ignore */ }
-                },
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            println!(
-                                "water_injection: run_main_cycle_with_sensor_signals_and_abort: Error in trying to receive command from test case: {e:?}"
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high
-    pub fn test_water_injection_immediate_switch_high() { /*
-                                                          let (_, mut refill, _) = prepare_refill_tests();
-                                                          let mut water_injection = WaterInjection::new(&refill.config);
+    pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
 
-                                                          let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-                                                          let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-                                                          let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-                                                          let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-                                                          let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-                                                          let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-                                                          scope(|scope| {
-                                                              // this scope is providing the test environment
-                                                              scope.spawn(move || {
-                                                                  test_water_injection_receive_information_for_data_logger(
-                                                                      &rx_data_logger_from_refill,
-                                                                  );
-                                                                  test_water_injection_receive_actuation_command_send_confirmation(
-                                                                      &rx_controllino_from_refill,
-                                                                      &tx_controllino_to_refill,
-                                                                  );
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-                                                                  let target_number_iterations = (refill.config.additional_refill_volume
-                                                                      / refill.config.refill_pump_flow)
-                                                                      as u32
-                                                                      * 10
-                                                                      + 1;
-                                                                  // indicate sensor signal high immediately
-                                                                  run_main_cycle_with_sensor_signals(
-                                                                      target_number_iterations,
-                                                                      &rx_tank_level_switch_from_refill,
-                                                                      &tx_tank_level_switch_to_refill,
-                                                                      true,
-                                                                      false,
-                                                                  );
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-                                                                  test_water_injection_receive_actuation_command_send_confirmation(
-                                                                      &rx_controllino_from_refill,
-                                                                      &tx_controllino_to_refill,
-                                                                  );
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
+                    true,
+                    false,
+                    true,
+                );
+            })
+            .unwrap();
 
-                                                                  test_water_injection_receive_information_for_data_logger(
-                                                                      &rx_data_logger_from_refill,
-                                                                  );
-                                                              });
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
 
-                                                              // this scope is executing the test object
-                                                              scope.spawn(move || {
-                                                                  let result = water_injection.inject_water(
-                                                                      &tx_refill_to_controllino,
-                                                                      &rx_refill_from_controllino,
-                                                                      &tx_refill_to_tank_level_switch,
-                                                                      &rx_refill_from_tank_level_switch,
-                                                                      &rx_refill_from_signal_handler,
-                                                                      &tx_refill_to_data_logger,
-                                                                      &mut refill.refill_errors,
-                                                                      &mut refill.sql_interface_refill,
-                                                                  );
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 4000);
+                assert_le!(actuation_duration, 4400);
+            })
+            .unwrap();
 
-                                                                  assert_eq!(result, false);
-                                                              });
-                                                          });*/
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_six_seconds = Duration::from_secs(6);
+                let sleep_duration_two_seconds = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_six_seconds);
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let result = water_injection.inject_water(
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
+                    &mut refill.refill_errors,
+                    &mut refill.sql_interface_refill,
+                );
+                assert_eq!(result, false);
+                assert_eq!(refill.refill_errors.has_error(), false);
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
-    pub fn test_water_injection_immediate_switch_high_and_quit_signal() { /*
-                                                                          let (_, mut refill, _) = prepare_refill_tests();
-                                                                          let mut water_injection = WaterInjection::new(&refill.config);
+    pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
 
-                                                                          let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-                                                                          let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-                                                                          let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-                                                                          let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-                                                                          let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-                                                                          let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (_, mut refill, _) = prepare_refill_tests();
+        let mut water_injection = WaterInjection::new(&refill.config);
 
-                                                                          scope(|scope| {
-                                                                              // this scope is providing the test environment
-                                                                              scope.spawn(move || {
-                                                                                  test_water_injection_receive_information_for_data_logger(&rx_data_logger_from_refill);
-                                                                                  test_water_injection_receive_actuation_command_send_confirmation(
-                                                                                      &rx_controllino_from_refill,
-                                                                                      &tx_controllino_to_refill,
-                                                                                  );
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-                                                                                  // send Quit signal
-                                                                                  match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
-                                                                                      Ok(_) => {},
-                                                                                      Err(e) => {
-                                                                                          panic!("WaterInjection: test_execute_refill_delayed_switch_high_with_invalid_true_and_quit_signal\
-                                                                                              Error when sending Quit command to test object: {e:?}");
-                                                                                      }
-                                                                                  }
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-                                                                                  // leave switch high
-                                                                                  run_main_cycle_with_sensor_signals(
-                                                                                      1,
-                                                                                      &rx_tank_level_switch_from_refill,
-                                                                                      &tx_tank_level_switch_to_refill,
-                                                                                      false,
-                                                                                      false,
-                                                                                  );
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
+                    true,
+                    false,
+                    true,
+                );
+            })
+            .unwrap();
 
-                                                                                  test_water_injection_receive_actuation_command_send_confirmation(
-                                                                                      &rx_controllino_from_refill,
-                                                                                      &tx_controllino_to_refill,
-                                                                                  );
-                                                                                  test_water_injection_receive_information_for_data_logger(&rx_data_logger_from_refill);
-                                                                              });
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
 
-                                                                              // this scope is executing the test object
-                                                                              scope.spawn(move || {
-                                                                                  let result = water_injection.inject_water(
-                                                                                      &tx_refill_to_controllino,
-                                                                                      &rx_refill_from_controllino,
-                                                                                      &tx_refill_to_tank_level_switch,
-                                                                                      &rx_refill_from_tank_level_switch,
-                                                                                      &rx_refill_from_signal_handler,
-                                                                                      &tx_refill_to_data_logger,
-                                                                                      &mut refill.refill_errors,
-                                                                                      &mut refill.sql_interface_refill,
-                                                                                  );
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 0);
+                assert_le!(actuation_duration, 200);
+            })
+            .unwrap();
 
-                                                                                  assert_eq!(result, true);
-                                                                              });
-                                                                          });*/
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_seconds = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let result = water_injection.inject_water(
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
+                    &mut refill.refill_errors,
+                    &mut refill.sql_interface_refill,
+                );
+                assert_eq!(result, true);
+                assert_eq!(refill.refill_errors.has_error(), false);
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
-    // this test case executes inject_water function and immediately sets the sensor signal to high
-    // additionally the test case also sets the invalid bit.
-    // Additionally, water injection shall be aborted.
+    // this test case executes inject_water function and immediately
+    // - sets the sensor signal to high
+    // - sets the invalid bit.
+    // Water injection shall be aborted without adding further water
     pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
-        /*
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-        scope(|scope| {
-            // this scope is providing the test environment
-            scope.spawn(move || {
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
-                );
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-                let target_number_iterations = 1;
-                // indicate sensor signal high immediately
-                run_main_cycle_with_sensor_signals(
-                    target_number_iterations,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     true,
+                    true,
                 );
+            })
+            .unwrap();
 
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
                 );
+            })
+            .unwrap();
 
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
                 );
-            });
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 0);
+                assert_le!(actuation_duration, 200);
+            })
+            .unwrap();
 
-            // this scope is executing the test object
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_seconds = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_refill_to_controllino,
-                    &rx_refill_from_controllino,
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
-                    &rx_refill_from_signal_handler,
-                    &tx_refill_to_data_logger,
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
-
                 assert_eq!(result, false);
-            });
-        });*/
+                assert_eq!(refill.refill_errors.has_error(), false);
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
-    // this test case executes inject_water function and sets the sensor signal to high after defined number of iterations (happy case)
+    // this test case executes inject_water function and sets the sensor signal to high after some time has passed (happy case)
     pub fn test_water_injection_delayed_switch_high() {
-        /*
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (_tx_signal_handler_from_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-        scope(|scope| {
-            // this scope is providing the test environment
-            scope.spawn(move || {
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
-                );
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-                let target_number_iterations_main_fill =
-                    (0.15 / refill.config.refill_pump_flow) as u32 * 10 + 1;
-                // leave switch at low for some time
-                run_main_cycle_with_sensor_signals(
-                    target_number_iterations_main_fill,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
                     false,
                     false,
-                );
-                // tank is full. Indicate switch at high position
-                let target_number_iterations_additional_fill =
-                    (refill.config.additional_refill_volume / refill.config.refill_pump_flow)
-                        as u32
-                        * 10
-                        + 1;
-                run_main_cycle_with_sensor_signals(
-                    target_number_iterations_additional_fill,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
-                    true,
                     false,
                 );
+            })
+            .unwrap();
 
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
                 );
+            })
+            .unwrap();
 
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
                 );
-            });
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 6000);
+                assert_le!(actuation_duration, 6250);
+            })
+            .unwrap();
 
-            // this scope is executing the test object
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_ten_seconds = Duration::from_secs(10);
+                let sleep_duration_two_seconds = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                // run with tank level switch in low position
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+
+                // update tank level switch stabilized signal to high
+                let _ = tx_test_environment_to_tank_level_switch
+                    .send(TestCommand::UpdateSignal(MockSignal::TankLevelSwitchPosition(true)));
+                let _ = tx_test_environment_to_tank_level_switch
+                    .send(TestCommand::UpdateSignal(MockSignal::TankLevelSwitchPositionStabilized(true)));
+
+                // wait for refill operation to finish
+                spin_sleeper.sleep(sleep_duration_ten_seconds);
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
+
+                // wait for inject_water to terminate
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+
+                // request termination to mock threads
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_refill_to_controllino,
-                    &rx_refill_from_controllino,
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
-                    &rx_refill_from_signal_handler,
-                    &tx_refill_to_data_logger,
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
-
                 assert_eq!(result, false);
-            });
-        });*/
+                assert_eq!(refill.refill_errors.has_error(), false);
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
     // this test case executes inject_water function with simulation of level switch stuck at low position
     pub fn test_water_injection_switch_stuck_low() {
-        /*
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
         let (_, mut refill, _) = prepare_refill_tests();
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (_tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-        scope(|scope| {
-            // scope for mock Controllino
-            scope.spawn(move || {
-                println!("Mock Controllino: waiting for first actuation command.");
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
-                println!("Mock Controllino: executed first actuation command");
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
-                println!("Mock Controllino: executed second actuation command");
-            });
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-            // scope for mock DataLogger
-            scope.spawn(move || {
-                println!("Mock DataLogger: waiting for first command.");
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
+                    false,
+                    false,
+                    false,
                 );
-                println!("Mock DataLogger: waiting for second command.");
-                test_water_injection_receive_information_for_data_logger(
-                    &rx_data_logger_from_refill,
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
                 );
-                println!("Mock DataLogger: received second command.");
-            });
+            })
+            .unwrap();
 
-            // scope for mock TankLevelSwitch
-            scope.spawn(move || {
-                loop {
-                    match rx_tank_level_switch_from_refill.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::TankLevelSwitchPosition => 0.0,
-                                        AquariumSignal::TankLevelSwitchInvalid => 0.0,
-                                        AquariumSignal::TankLevelSwitchPositionStabilized => 0.0,
-                                        _ => {
-                                            panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock TankLevelSwitch: Received invalid command.");
-                                },
-                            };
-                            match tx_tank_level_switch_to_refill.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock TankLevelSwitch response back to refill: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock TankLevelSwitch: Error in trying to receive command from refill: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 41500);
+                assert_le!(actuation_duration, 42500);
+            })
+            .unwrap();
 
-            // this scope is executing the test object
-            scope.spawn(move || {
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_fourtyfive_seconds = Duration::from_secs(45);
+                let spin_sleeper = SpinSleeper::default();
+
+                // wait for refill operation to abort
+                spin_sleeper.sleep(sleep_duration_fourtyfive_seconds);
+
+                // request termination to mock threads
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_refill_to_controllino,
-                    &rx_refill_from_controllino,
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
-                    &rx_refill_from_signal_handler,
-                    &tx_refill_to_data_logger,
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
-
-                // verify that quit command has not been received
                 assert_eq!(result, false);
-
-                // verify that refill error is detected
+                assert_eq!(refill.refill_errors.has_error(), true);
                 assert_eq!(refill.refill_errors.error_switch_stuck_low, true);
+            })
+            .unwrap();
 
-                let _ = tx_refill_to_tank_level_switch.send(InternalCommand::Quit);
-            });
-        });*/
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
     // this test case executes inject_water function and sends Quit signal after some time when water level is still low
     pub fn test_water_injection_quit_signal() {
-        /*
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
         let (_, mut refill, _) = prepare_refill_tests_tertiary();
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) = mpsc::channel();
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) = mpsc::channel();
-        let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
-        let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_test_case_to_runner, rx_runner_from_test_case) = mpsc::channel();
+        let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
+            mpsc::channel();
+        let (tx_tank_level_switch_to_water_injection, rx_water_injection_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
+            mpsc::channel();
+        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+            mpsc::channel();
+        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+            mpsc::channel();
+        let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
 
-        scope(|scope| {
-            // this scope is providing the test environment
-            scope.spawn(move || {
-                test_water_injection_receive_information_for_data_logger(&rx_data_logger_from_refill);
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
-                );
+        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_tank_level_switch =
+            tx_water_injection_to_tank_level_switch.clone();
 
-                run_main_cycle_with_sensor_signals_and_abort(
-                    &rx_runner_from_test_case,
-                    &rx_tank_level_switch_from_refill,
-                    &tx_tank_level_switch_to_refill,
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_water_injection,
+                    &rx_tank_level_switch_from_water_injection,
+                    &rx_tank_level_switch_from_test_environment,
                     false,
                     false,
+                    false,
                 );
-                println!("Water injection test: test_water_injection_quit_signal: Test runner terminated.");
-                test_water_injection_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_refill,
-                    &tx_controllino_to_refill,
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &rx_data_logger_from_water_injection,
+                    &rx_data_logger_from_signal_handler,
                 );
+            })
+            .unwrap();
 
-                test_water_injection_receive_information_for_data_logger(&rx_data_logger_from_refill);
-                println!("Water injection test: test_water_injection_quit_signal: Test environment completed execution.");
-            });
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &rx_controllino_from_water_injection,
+                    &tx_controllino_to_water_injection,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 1900);
+                assert_le!(actuation_duration, 2100);
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                let target_duration = 0.15 / refill.config.refill_pump_flow;
-                let sleep_duration_refill = Duration::new(target_duration as u64 + 1, 0);
-                let sleep_duration_processing = Duration::new(1, 0);
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_seconds = Duration::from_secs(2);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_refill);
-                // send Quit signal
-                match tx_signal_handler_to_refill.send(InternalCommand::Quit) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("water_injection: test_water_injection_quit_signal\
-                            Error when sending Quit command to test object: {e:?}");
-                    }
-                }
-                println!("Water injection test: test_water_injection_quit_signal: sent Quit command to test object.");
+                // wait for refill operation to inject some water
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
 
-                // give control thread some time to process the Quit signal
-                spin_sleeper.sleep(sleep_duration_processing);
+                // wait for test object to terminate
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                
+                // request termination to mock threads
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap();
 
-                // now we can stop the thread simulating the GPIO response
-                match tx_test_case_to_runner.send(InternalCommand::Quit) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        panic!("water_injection: test_water_injection_quit_signal\
-                            Error when sending Quit command to test runner: {e:?}");
-                    }
-                }
-                println!("Water injection test: test_water_injection_quit_signal: sent Quit command to test runner.");
-            });
+        // make sure all mock threads are running when instantiating the test object
+        spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // this scope is executing the test object
-            scope.spawn(move || {
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_refill_to_controllino,
-                    &rx_refill_from_controllino,
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
-                    &rx_refill_from_signal_handler,
-                    &tx_refill_to_data_logger,
+                    &tx_water_injection_to_controllino,
+                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_tank_level_switch,
+                    &rx_water_injection_from_tank_level_switch,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
-
                 assert_eq!(result, true);
-            });
-        });*/
+                assert_eq!(refill.refill_errors.has_error(), false);
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
     }
 }

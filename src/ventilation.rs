@@ -637,6 +637,8 @@ pub mod tests {
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -668,7 +670,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_ventilation);
+                mock_data_logger(
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -790,6 +795,8 @@ pub mod tests {
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -821,7 +828,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_ventilation);
+                mock_data_logger(
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -948,6 +958,8 @@ pub mod tests {
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
         let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -979,7 +991,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_ventilation);
+                mock_data_logger(
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
@@ -1213,6 +1228,8 @@ pub mod tests {
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
         let (_tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1244,7 +1261,10 @@ pub mod tests {
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
             .spawn(move || {
-                mock_data_logger(&rx_data_logger_from_ventilation);
+                mock_data_logger(
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
             })
             .unwrap();
 
