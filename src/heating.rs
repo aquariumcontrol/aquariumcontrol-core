@@ -1478,7 +1478,7 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_heating,
                     &rx_tank_level_switch_from_heating,
-                    &rx_tank_level_switch_from_test_environment,                    
+                    &rx_tank_level_switch_from_test_environment,
                     true,
                     false,
                     true,

@@ -583,7 +583,7 @@ pub mod tests {
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::SqlInterfaceBalling;
 
-    use crate::refill::tests::mock_schedule_check;
+    use crate::mock::tests::mock_schedule_check;
     use crate::sql_interface_balling::BallingSetVal;
 
     pub struct MockMineralInjection {
@@ -806,9 +806,7 @@ pub mod tests {
         pump3_engagement_durations_reference: usize,
         pump4_engagement_durations_reference: usize,
     ) {
-        let sleep_duration_50_millisec = Duration::from_millis(50);
         let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
-        let spin_sleeper_schedule_check = SpinSleeper::default();
         let spin_sleeper_test_environment = SpinSleeper::default();
         let config: ConfigData = read_config_file(config_file_name.to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -840,15 +838,12 @@ pub mod tests {
 
         scope(|scope| {
             // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+            scope.spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_balling,
                     &rx_schedule_check_from_balling,
                     schedule_allows,
-                ) {
-                    break;
-                }
-                spin_sleeper_schedule_check.sleep(sleep_duration_50_millisec);
+                )
             });
 
             // thread for rest of test environment

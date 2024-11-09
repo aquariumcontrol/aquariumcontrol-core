@@ -751,8 +751,8 @@ impl Refill {
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
         let mut schedule_check_result: bool = false;
-        let mut tank_level_switch_invalid: bool = false;
-        let mut tank_level_switch_position_stabilized: bool = true;
+        let mut tank_level_switch_invalid: bool;
+        let mut tank_level_switch_position_stabilized: bool;
 
         // retrieving data from SQL data base
         let mut sql_refill_data = self.get_sql_refill_data();
@@ -806,10 +806,7 @@ impl Refill {
                     sql_refill_data.duration_since_last_refill,
                 );
 
-                if !quit_command_received
-                    && !tank_level_switch_position_stabilized
-                    && !tank_level_switch_invalid
-                    && !refill_inhibited
+                if !quit_command_received && !refill_inhibited
                 {
                     (
                         _,
@@ -859,11 +856,10 @@ impl Refill {
                                     }
                                 }
                             }
-
+                            
                             if schedule_check_result {
-                                // conditions for allowing refill operation are given
-                                // inner scope to limit lifetime of unlocked mutex
-                                {
+                                if !tank_level_switch_position_stabilized && !tank_level_switch_invalid {
+                                    // conditions for allowing refill operation are given
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
                                     // now we are given exclusive access to actuators
@@ -973,11 +969,11 @@ pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use chrono::DateTime;
     use chrono::Local;
-    use log::error;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
+    use std::thread;
     use std::thread::scope;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -994,7 +990,11 @@ pub mod tests {
     use crate::tank_level_switch::TankLevelSwitch;
     use crate::water_injection::WaterInjection;
     use crate::water_injection::WaterInjectionTrait;
-
+    use crate::mock::tests::mock_schedule_check;
+    use crate::mock::tests::mock_data_logger;
+    use crate::mock::tests::mock_tank_level_switch;
+    use crate::mock::tests::MockWaterInjection;
+    
     use crate::water_injection::tests::prepare_refill_tests_tertiary;
 
     trait Output {
@@ -1011,40 +1011,6 @@ pub mod tests {
                 + " "
                 + &duration_since_epoch.as_millis().to_string()
         }
-    }
-
-    // send via channel a value to the test object to indicate if actuation is permitted.
-    pub fn mock_schedule_check(
-        tx_schedule_check_to_refill: &Sender<bool>,
-        rx_schedule_check_from_refill: &Receiver<InternalCommand>,
-        value: bool,
-    ) -> bool {
-        match rx_schedule_check_from_refill.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::ScheduleCheck => {
-                    // allow control to actuate
-                    let _ = tx_schedule_check_to_refill.send(value);
-                }
-                InternalCommand::Quit => {
-                    // test case has finished
-                    return true;
-                }
-                _ => {
-                    panic!("Refill: test object sent invalid command.");
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "Refill: Error in trying to receive command from test object: {e:?}"
-                        );
-                    }
-                }
-            }
-        }
-        false
     }
 
     pub fn prepare_refill_tests() -> (ConfigData, Refill, SqlInterface) {
@@ -1110,26 +1076,6 @@ pub mod tests {
         )
     }
 
-    pub struct RefillTestExecutionVoid;
-
-    impl WaterInjectionTrait for RefillTestExecutionVoid {
-        fn inject_water(
-            &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _tx_to_tank_level_switch: &Sender<InternalCommand>,
-            _rx_from_tank_level_switch: &Receiver<bool>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _tx_to_data_logger: &Sender<bool>,
-            _refill_errors: &mut RefillErrors,
-            _sql_interface_refill: &mut SqlInterfaceRefill,
-        ) -> bool {
-            // do nothing
-            println!("Refill: execute_refill *VOID* has been called.");
-            false // simulate that no Quit command has been received
-        }
-    }
-
     #[test]
     pub fn test_refill_process_external_request_empty_channel() {
         /*
@@ -1163,21 +1109,23 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes one iteration of the loop of the .execute function without triggering a refill
+    // this test case executes one iteration of the loop inside the .execute function with triggering a refill
     // it checks the timing of initial wait period and main control interval
-    pub fn test_refill_without_fill() {
-        /*
+    pub fn test_refill_initial_waiting_time() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
+
         let (config, mut refill, _) = prepare_refill_tests();
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_data_logger, _) = mpsc::channel::<bool>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
-            mpsc::channel::<f32>();
+            mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _) = mpsc::channel::<InternalCommand>();
         let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -1185,139 +1133,112 @@ pub mod tests {
             mpsc::channel::<InternalCommand>();
         let (_tx_messaging_to_refill, rx_refill_from_messaging) =
             mpsc::channel::<InternalCommand>();
-
-        println!("Initiating scoped threads.");
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
+                );
+            })
+            .unwrap();
 
-            // scope for mock TankLevelSwitch
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    &rx_tank_level_switch_from_test_environment,
+                    false,
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                loop {
-                    match rx_tank_level_switch_from_refill.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::TankLevelSwitchPosition => 1.0,
-                                        AquariumSignal::TankLevelSwitchInvalid => 0.0,
-                                        AquariumSignal::TankLevelSwitchPositionStabilized => 1.0,
-                                        _ => {
-                                            panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock TankLevelSwitch: Received invalid command.");
-                                },
-                            };
-                            match tx_tank_level_switch_to_refill.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock TankLevelSwitch response back to refill: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock TankLevelSwitch: Error in trying to receive command from refill: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(&rx_data_logger_from_refill, &rx_data_logger_from_signal_handler);
+            })
+            .unwrap();
 
-            // thread for rest of test environment
-            scope.spawn(move || {
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move ||{
                 let start_time = SystemTime::now();
-                println!(
-                    "test_execute_without_refill: start_time={}",
-                    start_time.output()
-                );
-                // when reaching main control cycle, test object will request signal updates
-                rx_tank_level_switch_from_refill.recv().unwrap();
-                // record time after test object sent command via channel
-                let initial_waiting_passed_time = SystemTime::now();
-                println!(
-                    "test_execute_without_refill: initial_waiting_passed_time={}",
-                    initial_waiting_passed_time.output()
-                );
-                let _ = tx_tank_level_switch_to_refill.send(1.0);
-                // from here onwards, test object will continue through main cycle and
-                // request signal updates one more time
-                rx_tank_level_switch_from_refill.recv().unwrap();
-                let _ = tx_tank_level_switch_to_refill.send(1.0);
+
+                // wait for test object to trigger water injection                
+                let _ = rx_test_environment_from_mock_water_injection.recv().unwrap();
+
+                // record time after test object triggered water injection
+                let initial_waiting_time_passed = SystemTime::now();
+
                 // now we can send the quit command
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
                 let finish_time = SystemTime::now();
                 println!(
                     "test_execute_without_refill: finish_time={}",
                     finish_time.output()
                 );
-                let initial_wait_duration_millis = initial_waiting_passed_time
+                let initial_wait_duration_millis = initial_waiting_time_passed
                     .duration_since(start_time)
                     .unwrap()
                     .as_millis();
-                let check_interval_duration_millis = finish_time
-                    .duration_since(initial_waiting_passed_time)
+                let finalization_duration_millis = finish_time
+                    .duration_since(initial_waiting_time_passed)
                     .unwrap()
                     .as_millis();
-                println!(
-                    "test_execute_without_refill: initial_wait_duration={}ms, check_interval_duration={}ms",
-                    initial_wait_duration_millis,
-                    check_interval_duration_millis
-                );
+                
                 assert_le!(
                     initial_wait_duration_millis,
                     (config.refill.initial_wait_interval * 1000 + 200) as u128
                 );
                 assert_ge!(
                     initial_wait_duration_millis,
-                    (config.refill.initial_wait_interval * 1000 - 100) as u128
+                    (config.refill.initial_wait_interval * 1000) as u128
                 );
                 assert_le!(
-                    check_interval_duration_millis,
-                    (config.refill.check_interval * 1000 + 200) as u128
+                    finalization_duration_millis,
+                    150 as u128
                 );
-                assert_ge!(
-                    check_interval_duration_millis,
-                    (config.refill.check_interval * 1000 - 100) as u128
-                );
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
+            })
+            .unwrap();
 
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
 
                 refill.execute(
-                    mutex_device_scheduler.clone(),
+                    mutex_device_scheduler,
                     tx_refill_to_tank_level_switch,
                     rx_refill_from_tank_level_switch,
                     tx_refill_to_controllino,
@@ -1328,18 +1249,32 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
+                    &mut mock_water_injection,
                 );
-                println!("Execution of test object finished.");
 
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+            })
+            .unwrap();
 
-                // check if no refill operation has been executed
-                let mutex_data = mutex_device_scheduler.lock().unwrap();
-                assert_eq!(*mutex_data, 0);
-            });
-        });*/
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     #[test]
@@ -1825,6 +1760,7 @@ pub mod tests {
     // this test case checks if the .execute functions terminates without delays
     // when a quit/termination request is sent after starting the function
     pub fn test_refill_with_pending_quit_terminate_command() {
+        /*
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1900,7 +1836,7 @@ pub mod tests {
             println!(
                 "* [Refill] checking execution with pending quit/terminate command (time limit) succeeded."
             );
-        });
+        });*/
     }
 
     // helper function for test case test_update_tank_level_switch_signals

@@ -345,7 +345,7 @@ pub mod tests {
     use crate::Refill;
     use crate::SqlInterface;
     use crate::SqlInterfaceRefill;
-    
+
     pub fn prepare_refill_tests_tertiary() -> (ConfigData, Refill, SqlInterface) {
         // prepare struct Refill for subsequent tests
         // parallel usage of database leads to conflicts
@@ -890,10 +890,12 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_seconds);
 
                 // update tank level switch stabilized signal to high
-                let _ = tx_test_environment_to_tank_level_switch
-                    .send(TestCommand::UpdateSignal(MockSignal::TankLevelSwitchPosition(true)));
-                let _ = tx_test_environment_to_tank_level_switch
-                    .send(TestCommand::UpdateSignal(MockSignal::TankLevelSwitchPositionStabilized(true)));
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPosition(true),
+                ));
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPositionStabilized(true),
+                ));
 
                 // wait for refill operation to finish
                 spin_sleeper.sleep(sleep_duration_ten_seconds);
@@ -1190,7 +1192,7 @@ pub mod tests {
 
                 // wait for test object to terminate
                 spin_sleeper.sleep(sleep_duration_two_seconds);
-                
+
                 // request termination to mock threads
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);

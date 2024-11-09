@@ -17,7 +17,10 @@ pub mod tests {
 
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
-
+    use crate::sql_interface_refill::SqlInterfaceRefill;
+    use crate::refill::RefillErrors;
+    use crate::water_injection::WaterInjectionTrait;
+    
     /// Enum is used for internal thread messaging between test environment and mock threads
     #[derive(Clone, Debug, PartialEq)]
     pub enum MockSignal {
@@ -72,8 +75,30 @@ pub mod tests {
     pub enum TestCommand {
         /// Request to update a signal in to be used by mock thread
         UpdateSignal(MockSignal),
-    }
 
+        /// give feedback to test environment that water injection has been triggered
+        InformWaterInjectionEvent,
+    }
+    
+    impl fmt::Display for TestCommand {
+        /// Function provides output of the enum values for debugging purposes.
+        /// # Arguments
+        /// * `f` - configuration for formatting    
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self {
+                TestCommand::UpdateSignal(d) => write!(
+                    f,
+                    "TestCommand::UpdateSignal({})",
+                    d
+                ),
+                TestCommand::InformWaterInjectionEvent => write!(
+                    f,
+                    "TestCommand::InformWaterInjectionEvent",
+                ),
+            }
+        }
+    }
+    
     #[derive(Clone)]
     pub struct ActuationEvent {
         pub time: SystemTime,
@@ -96,6 +121,42 @@ pub mod tests {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             let datetime: DateTime<Utc> = self.time.into();
             write!(f, "{}: {}", datetime.format("%d/%m/%Y %T"), self.command)
+        }
+    }
+    
+    pub struct MockWaterInjection {
+        tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+    }
+
+    impl MockWaterInjection {
+        pub fn new(
+            tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+        ) -> MockWaterInjection {
+            MockWaterInjection {
+                tx_water_injection_to_test_environment_opt:
+                    tx_water_injection_to_test_environment_opt,
+            }
+        }
+    }
+
+    impl WaterInjectionTrait for MockWaterInjection {
+        fn inject_water(
+            &mut self,
+            _tx_to_controllino: &Sender<InternalCommand>,
+            _rx_from_controllino: &Receiver<bool>,
+            _tx_to_tank_level_switch: &Sender<InternalCommand>,
+            _rx_from_tank_level_switch: &Receiver<bool>,
+            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            _tx_to_data_logger: &Sender<bool>,
+            _refill_errors: &mut RefillErrors,
+            _sql_interface_refill: &mut SqlInterfaceRefill,
+        ) -> bool {
+            if self.tx_water_injection_to_test_environment_opt.is_some() {
+                let tx_water_injection_to_test_environment =
+                    self.tx_water_injection_to_test_environment_opt.clone().unwrap();
+                let _ = tx_water_injection_to_test_environment.send(TestCommand::InformWaterInjectionEvent);
+            }
+            false // simulate that no Quit command has been received
         }
     }
 
@@ -354,20 +415,21 @@ pub mod tests {
                 }
             }
             match rx_tank_level_switch_from_test_environment.try_recv() {
-                Ok(c) => {
-                    match c {
-                        TestCommand::UpdateSignal(d) => {
-                            println!("Mock TankLevelSwitch: received {}", d);
-                            match d {
-                                MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
-                                MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
-                                MockSignal::TankLevelSwitchPositionStabilized(c) => {
-                                    mock_value_position_stabilized = c
-                                }
+                Ok(c) => match c {
+                    TestCommand::UpdateSignal(d) => {
+                        println!("Mock TankLevelSwitch: received {}", d);
+                        match d {
+                            MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
+                            MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
+                            MockSignal::TankLevelSwitchPositionStabilized(c) => {
+                                mock_value_position_stabilized = c
                             }
                         }
+                    },
+                    _ => {
+                        panic!("Mock TankLevelSwitch: received invalid command {}", c);
                     }
-                }
+                },
                 Err(e) => {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
@@ -542,9 +604,12 @@ pub mod tests {
                                 MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
                                 MockSignal::TankLevelSwitchPositionStabilized(_) => {
                                     panic!("mock_tcp: received invalid test command {}", d);
-                                },
+                                }
                             }
-                        }
+                        },
+                        _ => {
+                            panic!("mock_tcp: received invalid command {}", c);
+                        }                        
                     };
                 }
                 Err(e) => {
