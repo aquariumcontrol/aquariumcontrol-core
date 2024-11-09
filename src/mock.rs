@@ -17,10 +17,10 @@ pub mod tests {
 
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
-    use crate::sql_interface_refill::SqlInterfaceRefill;
     use crate::refill::RefillErrors;
+    use crate::sql_interface_refill::SqlInterfaceRefill;
     use crate::water_injection::WaterInjectionTrait;
-    
+
     /// Enum is used for internal thread messaging between test environment and mock threads
     #[derive(Clone, Debug, PartialEq)]
     pub enum MockSignal {
@@ -79,26 +79,21 @@ pub mod tests {
         /// give feedback to test environment that water injection has been triggered
         InformWaterInjectionEvent,
     }
-    
+
     impl fmt::Display for TestCommand {
         /// Function provides output of the enum values for debugging purposes.
         /// # Arguments
         /// * `f` - configuration for formatting    
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match self {
-                TestCommand::UpdateSignal(d) => write!(
-                    f,
-                    "TestCommand::UpdateSignal({})",
-                    d
-                ),
-                TestCommand::InformWaterInjectionEvent => write!(
-                    f,
-                    "TestCommand::InformWaterInjectionEvent",
-                ),
+                TestCommand::UpdateSignal(d) => write!(f, "TestCommand::UpdateSignal({})", d),
+                TestCommand::InformWaterInjectionEvent => {
+                    write!(f, "TestCommand::InformWaterInjectionEvent",)
+                }
             }
         }
     }
-    
+
     #[derive(Clone)]
     pub struct ActuationEvent {
         pub time: SystemTime,
@@ -123,7 +118,7 @@ pub mod tests {
             write!(f, "{}: {}", datetime.format("%d/%m/%Y %T"), self.command)
         }
     }
-    
+
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
     }
@@ -152,9 +147,12 @@ pub mod tests {
             _sql_interface_refill: &mut SqlInterfaceRefill,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
-                let tx_water_injection_to_test_environment =
-                    self.tx_water_injection_to_test_environment_opt.clone().unwrap();
-                let _ = tx_water_injection_to_test_environment.send(TestCommand::InformWaterInjectionEvent);
+                let tx_water_injection_to_test_environment = self
+                    .tx_water_injection_to_test_environment_opt
+                    .clone()
+                    .unwrap();
+                let _ = tx_water_injection_to_test_environment
+                    .send(TestCommand::InformWaterInjectionEvent);
             }
             false // simulate that no Quit command has been received
         }
@@ -425,7 +423,7 @@ pub mod tests {
                                 mock_value_position_stabilized = c
                             }
                         }
-                    },
+                    }
                     _ => {
                         panic!("Mock TankLevelSwitch: received invalid command {}", c);
                     }
@@ -606,10 +604,10 @@ pub mod tests {
                                     panic!("mock_tcp: received invalid test command {}", d);
                                 }
                             }
-                        },
+                        }
                         _ => {
                             panic!("mock_tcp: received invalid command {}", c);
-                        }                        
+                        }
                     };
                 }
                 Err(e) => {
