@@ -121,6 +121,8 @@ pub mod tests {
 
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+
+        pub injection_recorder: Vec<SystemTime>,
     }
 
     impl MockWaterInjection {
@@ -130,6 +132,7 @@ pub mod tests {
             MockWaterInjection {
                 tx_water_injection_to_test_environment_opt:
                     tx_water_injection_to_test_environment_opt,
+                injection_recorder: Vec::new(),
             }
         }
     }
@@ -154,6 +157,7 @@ pub mod tests {
                 let _ = tx_water_injection_to_test_environment
                     .send(TestCommand::InformWaterInjectionEvent);
             }
+            self.injection_recorder.push(SystemTime::now());
             false // simulate that no Quit command has been received
         }
     }
