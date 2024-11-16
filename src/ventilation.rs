@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -68,7 +68,6 @@ fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -93,15 +92,6 @@ fn switch_on_ventilation(
                 );
             }
         }
-        match tx_to_data_logger.send(true) {
-            Ok(_) => {}
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_VENTILATION,
-                    "channel communication to data logger failed when switching on ventilation ({e:?})"
-                );
-            }
-        }
 
         *mutex_data += 1;
     }
@@ -117,7 +107,6 @@ fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-    tx_to_data_logger: &Sender<bool>,
 ) {
     {
         // avoid electrical overloads through parallel device actuation
@@ -142,15 +131,6 @@ fn switch_off_ventilation(
                 );
             }
         }
-        match tx_to_data_logger.send(false) {
-            Ok(_) => {}
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_VENTILATION,
-                    "channel communication to data logger when switching off ventilation failed ({e:?})"
-                );
-            }
-        }
         *mutex_data += 1;
     }
 }
@@ -167,6 +147,7 @@ fn switch_off_ventilation(
 ///     ventilation --> signal_handler[Signal handler]
 ///     signal_handler --> ventilation
 ///     ventilation --> data_logger[Data logger]
+///     data_logger --> ventilation
 ///     ventilation --> schedule_check[Schedule check]
 ///     schedule_check --> ventilation
 ///     messaging[Messaging] --> ventilation
@@ -192,6 +173,18 @@ pub struct Ventilation {
 
     /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from Atlas Scientific thread
     lock_error_channel_receive_water_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
+    lock_error_channel_receive_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via channel
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having recevied request for invalid signal from data logger
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failuire to send response to data logger
+    lock_error_send_to_data_logger: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -209,6 +202,10 @@ impl Ventilation {
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_send_water_temperature: false,
             lock_error_channel_receive_water_temperature: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -224,6 +221,84 @@ impl Ventilation {
         } else {
             0.0 // default value when target values are not properly set up.
         }
+    }
+
+    /// check if data logger sent command and respond
+    fn communicate_with_data_logger(
+        &mut self,
+        ventilation_state: &ActuatorState,
+        tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
+    ) {
+        match rx_from_data_logger.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_data_logger = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_data_logger = false;
+                        match d {
+                            AquariumSignal::VentilationControlStatus => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                let response_to_data_logger = match ventilation_state {
+                                    ActuatorState::On => true,
+                                    _ => false,
+                                };
+                                match tx_to_data_logger.send(response_to_data_logger) {
+                                    Ok(_) => {
+                                        self.lock_error_send_to_data_logger = false;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_send_to_data_logger {
+                                            error!(
+                                                target: LOG_TARGET_VENTILATION,
+                                                "channel communication to data logger failed ({e:?})"
+                                            );
+                                            self.lock_error_send_to_data_logger = true;
+                                        }
+                                    }
+                                };
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_data_logger {
+                                    error!(
+                                        target: LOG_TARGET_VENTILATION,
+                                        "internal error: received request for invalid signal {} from data logger",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_data_logger = true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_data_logger {
+                            warn!(
+                                target: LOG_TARGET_VENTILATION,
+                                "ignoring inapplicable command from data logger thread."
+                            );
+                            self.lock_warn_inapplicable_command_data_logger = true;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_data_logger = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_data_logger {
+                            error!(
+                                target: LOG_TARGET_VENTILATION,
+                                "receiving command from data logger thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_data_logger = true;
+                        }
+                    }
+                }
+            }
+        };
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
@@ -248,6 +323,7 @@ impl Ventilation {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_data_logger: Sender<bool>,
+        rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         rx_from_messaging: Receiver<InternalCommand>,
@@ -371,7 +447,6 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -382,7 +457,6 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -395,7 +469,6 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -407,7 +480,6 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &tx_to_data_logger,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -424,7 +496,6 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -436,7 +507,6 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -452,7 +522,6 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -464,7 +533,6 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_data_logger,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -473,6 +541,12 @@ impl Ventilation {
                     }
                 }
             }
+
+            self.communicate_with_data_logger(
+                &ventilation_state,
+                &tx_to_data_logger,
+                &rx_from_data_logger,
+            );
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_MILLIS);
 
@@ -509,7 +583,6 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &tx_to_data_logger,
                 );
             }
         } else {
@@ -519,7 +592,6 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &tx_to_data_logger,
                 );
             }
         }
@@ -626,6 +698,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -647,6 +720,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_ventilation,
                     &rx_schedule_check_from_ventilation,
+                    None,
                     true,
                 );
             })
@@ -659,6 +733,7 @@ pub mod tests {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_ventilation,
                     &rx_atlas_scientific_from_ventilation,
+                    None,
                     30.0,
                     50000.0,
                     7.0,
@@ -671,6 +746,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_ventilation,
                     &rx_data_logger_from_ventilation,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -684,8 +760,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
+                    &rx_controllino_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -732,6 +808,7 @@ pub mod tests {
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -784,6 +861,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -805,6 +883,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_ventilation,
                     &rx_schedule_check_from_ventilation,
+                    None,
                     true,
                 );
             })
@@ -817,6 +896,7 @@ pub mod tests {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_ventilation,
                     &rx_atlas_scientific_from_ventilation,
+                    None,
                     20.0,
                     50000.0,
                     7.0,
@@ -829,6 +909,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_ventilation,
                     &rx_data_logger_from_ventilation,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -842,8 +923,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
+                    &rx_controllino_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -895,6 +976,7 @@ pub mod tests {
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -947,6 +1029,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -968,6 +1051,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_ventilation,
                     &rx_schedule_check_from_ventilation,
+                    None,
                     true,
                 );
             })
@@ -980,6 +1064,7 @@ pub mod tests {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_ventilation,
                     &rx_atlas_scientific_from_ventilation,
+                    None,
                     25.0,
                     50000.0,
                     7.0,
@@ -992,6 +1077,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_ventilation,
                     &rx_data_logger_from_ventilation,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1005,8 +1091,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
+                    &rx_controllino_from_ventilation,
                 );
                 println!(
                     "Mock Controllino received {} commands:",
@@ -1167,6 +1253,7 @@ pub mod tests {
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,
@@ -1217,6 +1304,7 @@ pub mod tests {
         let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
             mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
         let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1238,6 +1326,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_ventilation,
                     &rx_schedule_check_from_ventilation,
+                    None,
                     false,
                 );
             })
@@ -1250,6 +1339,7 @@ pub mod tests {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_ventilation,
                     &rx_atlas_scientific_from_ventilation,
+                    None,
                     30.0,
                     50000.0,
                     7.0,
@@ -1262,6 +1352,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_ventilation,
                     &rx_data_logger_from_ventilation,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1275,8 +1366,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_ventilation,
                     &tx_controllino_to_ventilation,
+                    &rx_controllino_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -1328,6 +1419,7 @@ pub mod tests {
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging,

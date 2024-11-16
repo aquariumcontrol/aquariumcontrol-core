@@ -212,6 +212,89 @@ impl AtlasScientific {
         }
     }
 
+    /// check if data logger sent command and respond
+    fn communicate_with_data_logger(
+        &mut self,
+        tx_to_data_logger: &Sender<f32>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
+    ) {
+        match rx_from_data_logger.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_data_logger = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_data_logger = false;
+                        let response_to_data_logger = match d {
+                            AquariumSignal::WaterTemperature => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                self.water_temperature
+                            }
+                            AquariumSignal::Conductivity => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                self.conductivity
+                            }
+                            AquariumSignal::pH => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                self.pH
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_data_logger {
+                                    error!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "internal error: received request for invalid signal {} from data logger",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_data_logger = true;
+                                }
+                                0.0 // default response to unknown signal request instead of panicking
+                            }
+                        };
+                        _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
+                            Ok(()) => {
+                                self.lock_error_data_logger_response = false;
+                            }
+                            Err(e) => {
+                                if !self.lock_error_data_logger_response {
+                                    error!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "responding back to data logger thread failed ({e:?})"
+                                    );
+                                    self.lock_error_data_logger_response = true;
+                                }
+                            }
+                        };
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_data_logger {
+                            warn!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "ignoring inapplicable command from data logger thread."
+                            );
+                            self.lock_warn_inapplicable_command_data_logger = true;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_data_logger = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_data_logger {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "receiving command from data logger thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_data_logger = true;
+                        }
+                    }
+                }
+            }
+        };
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
@@ -483,84 +566,7 @@ impl AtlasScientific {
             };
 
             //*** communication to data logger thread ***
-            let response_to_data_logger = match rx_from_data_logger.try_recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_data_logger = false;
-                    match c {
-                        InternalCommand::RequestSignal(d) => {
-                            self.lock_warn_inapplicable_command_data_logger = false;
-                            match d {
-                                AquariumSignal::WaterTemperature => {
-                                    self.lock_error_invalid_signal_request_data_logger = false;
-                                    self.water_temperature
-                                }
-                                AquariumSignal::Conductivity => {
-                                    self.lock_error_invalid_signal_request_data_logger = false;
-                                    self.conductivity
-                                }
-                                AquariumSignal::pH => {
-                                    self.lock_error_invalid_signal_request_data_logger = false;
-                                    self.pH
-                                }
-                                _ => {
-                                    if !self.lock_error_invalid_signal_request_data_logger {
-                                        error!(
-                                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                            "internal error: received request for invalid signal {} from data logger",
-                                            d
-                                        );
-                                        self.lock_error_invalid_signal_request_data_logger = true;
-                                    }
-                                    0.0 // default response to unknown signal request instead of panicking
-                                }
-                            }
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command_data_logger {
-                                warn!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "ignoring inapplicable command from data logger thread."
-                                );
-                                self.lock_warn_inapplicable_command_data_logger = true;
-                            }
-                            0.0 // default response to unknown command instead of panicking
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_data_logger = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_data_logger {
-                                error!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "receiving command from data logger thread failed ({e:?})"
-                                );
-                                self.lock_error_channel_receive_data_logger = true;
-                            }
-                        }
-                    }
-                    0.0
-                }
-            };
-
-            _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
-                Ok(()) => {
-                    self.lock_error_data_logger_response = false;
-                }
-                Err(e) => {
-                    if !self.lock_error_data_logger_response {
-                        error!(
-                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                            "responding back to data logger thread failed ({e:?})"
-                        );
-                        self.lock_error_data_logger_response = true;
-                    }
-                }
-            };
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
             spin_sleeper.sleep(sleep_duration_hundred_millisec);
         }

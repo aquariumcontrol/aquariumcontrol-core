@@ -121,6 +121,7 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     ambient[Ambient] --> data_logger[DataLogger]
 ///     data_logger --> ambient
 ///     refill --> data_logger
+///     data_logger --> refill
 ///     signal_handler[SignalHandler] --> refill
 ///     refill --> signal_handler
 ///     signal_handler --> tank_level_switch
@@ -151,6 +152,7 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     atlas_scientific --> data_logger
 ///     data_logger --> atlas_scientific
 ///     heating --> data_logger
+///     data_logger --> heating
 ///     heating --> atlas_scientific[AtlasScientific]
 ///     atlas_scientific --> heating
 ///     heating --> controllino
@@ -162,6 +164,7 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     tank_level_switch --> data_logger
 ///     data_logger --> tank_level_switch
 ///     ventilation --> data_logger
+///     data_logger --> ventilation
 ///     signal_handler --> data_logger
 ///     data_logger --> signal_handler
 ///     ventilation --> controllino
@@ -479,17 +482,29 @@ fn main() {
     ) = mpsc::channel();
     // *****************************
 
-    // *** refill => data_logger ***
+    // *** refill <=> data_logger ***
+    let (tx_data_logger_to_refill, rx_refill_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
     let (tx_refill_to_data_logger, rx_data_logger_from_refill): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *****************************
 
-    // *** heating => data_logger ***
+    // *** heating <=> data_logger ***
+    let (tx_data_logger_to_heating, rx_heating_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
     let (tx_heating_to_data_logger, rx_data_logger_from_heating): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *****************************
 
-    // *** ventilation => data_logger ***
+    // *** ventilation <=> data_logger ***
+    let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
     let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation): (
         Sender<bool>,
         Receiver<bool>,
@@ -1063,8 +1078,11 @@ fn main() {
                 rx_data_logger_from_atlas_scientific,
                 tx_data_logger_to_tank_level_switch,
                 rx_data_logger_from_tank_level_switch,
+                tx_data_logger_to_refill,
                 rx_data_logger_from_refill,
+                tx_data_logger_to_heating,
                 rx_data_logger_from_heating,
+                tx_data_logger_to_ventilation,
                 rx_data_logger_from_ventilation,
                 tx_data_logger_to_signal_handler,
                 rx_data_logger_from_signal_handler,
@@ -1103,6 +1121,7 @@ fn main() {
                 tx_refill_to_schedule_check,
                 rx_refill_from_schedule_check,
                 tx_refill_to_data_logger,
+                rx_refill_from_data_logger,
                 rx_refill_from_messaging,
                 &mut water_injection,
             );
@@ -1128,6 +1147,7 @@ fn main() {
                 tx_heating_to_signal_handler,
                 rx_heating_from_signal_handler,
                 tx_heating_to_data_logger,
+                rx_heating_from_data_logger,
                 tx_heating_to_schedule_check,
                 rx_heating_from_schedule_check,
                 rx_heating_from_messaging,
@@ -1150,6 +1170,7 @@ fn main() {
                 tx_ventilation_to_signal_handler,
                 rx_ventilation_from_signal_handler,
                 tx_ventilation_to_data_logger,
+                rx_ventilation_from_data_logger,
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
                 rx_ventilation_from_messaging,

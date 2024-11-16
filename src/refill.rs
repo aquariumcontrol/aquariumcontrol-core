@@ -11,7 +11,7 @@ use log::{error, info, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -129,7 +129,8 @@ impl fmt::Display for RefillErrors {
 /// signal_handler --> water_injection
 /// refill --> schedule_check[Schedule check]
 /// schedule_check --> refill
-/// water_injection --> data_logger[Data logger]
+/// refill --> data_logger[Data logger]
+/// data_logger --> refill
 /// messaging[Messaging] --> refill
 /// ```
 /// Communication channel to and from Controllino is forwarded to implementation of WaterInjectionTrait.
@@ -230,6 +231,18 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position stabilized via channel
     lock_error_channel_receive_tank_level_switch_position_stabilized: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
+    lock_error_channel_receive_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via channel
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having recevied request for invalid signal from data logger
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failuire to send response to data logger
+    lock_error_send_to_data_logger: bool,
 }
 
 /// Contains the data retrieved from SQL database.
@@ -300,6 +313,10 @@ impl Refill {
             lock_error_channel_send_tank_level_switch_invalid: false,
             lock_error_channel_send_tank_level_switch_position: false,
             lock_error_channel_send_tank_level_switch_position_stabilized: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -341,6 +358,10 @@ impl Refill {
             lock_error_channel_send_tank_level_switch_invalid: false,
             lock_error_channel_send_tank_level_switch_position: false,
             lock_error_channel_send_tank_level_switch_position_stabilized: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -734,6 +755,79 @@ impl Refill {
         )
     }
 
+    /// check if data logger sent command and respond
+    fn communicate_with_data_logger(
+        &mut self,
+        tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
+    ) {
+        match rx_from_data_logger.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_data_logger = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_data_logger = false;
+                        match d {
+                            AquariumSignal::RefillPumpStatus => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                match tx_to_data_logger.send(false) {
+                                    Ok(_) => {
+                                        self.lock_error_send_to_data_logger = false;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_send_to_data_logger {
+                                            error!(
+                                                target: LOG_TARGET_REFILL,
+                                                "channel communication to data logger failed ({e:?})"
+                                            );
+                                            self.lock_error_send_to_data_logger = true;
+                                        }
+                                    }
+                                };
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_data_logger {
+                                    error!(
+                                        target: LOG_TARGET_REFILL,
+                                        "internal error: received request for invalid signal {} from data logger",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_data_logger = true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_data_logger {
+                            warn!(
+                                target: LOG_TARGET_REFILL,
+                                "ignoring inapplicable command from data logger thread."
+                            );
+                            self.lock_warn_inapplicable_command_data_logger = true;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_data_logger = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_data_logger {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving command from data logger thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_data_logger = true;
+                        }
+                    }
+                }
+            }
+        };
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
@@ -746,6 +840,7 @@ impl Refill {
     /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
     /// * `water_injection` - Struct implementing the WaterInjectionTrait    
     pub fn execute(
         &mut self,
@@ -759,6 +854,7 @@ impl Refill {
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         tx_to_data_logger: Sender<bool>,
+        rx_from_data_logger: Receiver<InternalCommand>,
         rx_from_messaging: Receiver<InternalCommand>,
         water_injection: &mut impl WaterInjectionTrait,
     ) {
@@ -809,6 +905,8 @@ impl Refill {
             if quit_command_received {
                 break; // exit outer loop
             }
+
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
             if self.config.active {
                 // frequent update required for calculation of error condition switch stuck high
@@ -886,6 +984,7 @@ impl Refill {
                                         &rx_from_tank_level_switch,
                                         &rx_from_signal_handler,
                                         &tx_to_data_logger,
+                                        &rx_from_data_logger,
                                         &mut self.refill_errors,
                                         &mut self.sql_interface_refill,
                                     );
@@ -987,7 +1086,7 @@ pub mod tests {
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{TryRecvError};
+    use std::sync::mpsc::TryRecvError;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -1128,6 +1227,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _rx_controllino_from_refill) =
@@ -1170,6 +1271,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
                 );
             })
@@ -1182,7 +1284,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1195,6 +1299,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1262,6 +1367,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1302,6 +1408,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _) = mpsc::channel::<InternalCommand>();
@@ -1343,6 +1451,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
                 );
             })
@@ -1355,7 +1464,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1368,6 +1479,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1437,6 +1549,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1481,6 +1594,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _rx_controllino_from_refill) =
@@ -1522,6 +1637,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
                 );
             })
@@ -1534,7 +1650,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1547,6 +1665,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1635,6 +1754,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1681,6 +1801,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _rx_controllino_from_refill) =
@@ -1723,6 +1845,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
                 );
             })
@@ -1735,7 +1858,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1748,6 +1873,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1809,6 +1935,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1862,6 +1989,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _rx_controllino_from_refill) =
@@ -1903,6 +2032,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
                 );
             })
@@ -1915,7 +2045,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     true,
                     false,
                     true,
@@ -1928,6 +2060,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1987,6 +2120,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -2034,6 +2168,8 @@ pub mod tests {
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
         let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
             mpsc::channel::<bool>();
         let (tx_refill_to_controllino, _rx_controllino_from_refill) =
@@ -2076,6 +2212,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     false,
                 );
             })
@@ -2088,7 +2225,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_refill,
                     &rx_tank_level_switch_from_refill,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -2101,6 +2240,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_refill,
                     &rx_data_logger_from_refill,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -2162,6 +2302,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );

@@ -658,7 +658,7 @@ pub mod tests {
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
@@ -685,9 +685,9 @@ pub mod tests {
                 mock_tcp(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
+                    Some(&rx_tcp_from_test_environment),
                     true,
                     false,
-                    &rx_tcp_from_test_environment,
                 );
             })
             .unwrap();
@@ -697,6 +697,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_tank_level_switch,
                     &rx_data_logger_from_tank_level_switch,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -708,9 +709,13 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 mock_heating(
-                    &tx_heating_to_tank_level_switch,
-                    &rx_heating_from_tank_level_switch,
+                    Some(&tx_heating_to_tank_level_switch),
+                    Some(&rx_heating_from_tank_level_switch),
                     &rx_heating_from_signal_handler,
+                    None,
+                    None,
+                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -720,9 +725,12 @@ pub mod tests {
             .name("mock_refill".to_string())
             .spawn(move || {
                 let results = mock_refill(
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
+                    Some(&tx_refill_to_tank_level_switch),
+                    Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
+                    None,
+                    false,
                 );
                 assert_ge!(results.len(), 50);
                 assert_le!(results.len(), 60);
@@ -812,7 +820,7 @@ pub mod tests {
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
@@ -837,9 +845,9 @@ pub mod tests {
                 mock_tcp(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
+                    Some(&rx_tcp_from_test_environment),
                     false,
                     false,
-                    &rx_tcp_from_test_environment,
                 );
             })
             .unwrap();
@@ -849,6 +857,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_tank_level_switch,
                     &rx_data_logger_from_tank_level_switch,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -860,9 +869,13 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 mock_heating(
-                    &tx_heating_to_tank_level_switch,
-                    &rx_heating_from_tank_level_switch,
+                    Some(&tx_heating_to_tank_level_switch),
+                    Some(&rx_heating_from_tank_level_switch),
                     &rx_heating_from_signal_handler,
+                    None,
+                    None,
+                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -872,9 +885,12 @@ pub mod tests {
             .name("mock_refill".to_string())
             .spawn(move || {
                 let results = mock_refill(
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
+                    Some(&tx_refill_to_tank_level_switch),
+                    Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
+                    None,
+                    false,
                 );
                 assert_ge!(results.len(), 40);
                 assert_le!(results.len(), 50);
@@ -974,7 +990,7 @@ pub mod tests {
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
@@ -999,9 +1015,9 @@ pub mod tests {
                 mock_tcp(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
+                    Some(&rx_tcp_from_test_environment),
                     true,
                     false,
-                    &rx_tcp_from_test_environment,
                 );
             })
             .unwrap();
@@ -1011,6 +1027,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_tank_level_switch,
                     &rx_data_logger_from_tank_level_switch,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1022,9 +1039,13 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 mock_heating(
-                    &tx_heating_to_tank_level_switch,
-                    &rx_heating_from_tank_level_switch,
+                    Some(&tx_heating_to_tank_level_switch),
+                    Some(&rx_heating_from_tank_level_switch),
                     &rx_heating_from_signal_handler,
+                    None,
+                    None,
+                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -1034,9 +1055,12 @@ pub mod tests {
             .name("mock_refill".to_string())
             .spawn(move || {
                 let results = mock_refill(
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
+                    Some(&tx_refill_to_tank_level_switch),
+                    Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
+                    None,
+                    false,
                 );
                 assert_ge!(results.len(), 95);
                 assert_le!(results.len(), 105);
@@ -1136,7 +1160,7 @@ pub mod tests {
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
-        let (_tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
+        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
@@ -1160,9 +1184,9 @@ pub mod tests {
                 mock_tcp(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
+                    Some(&rx_tcp_from_test_environment),
                     true,
                     false,
-                    &rx_tcp_from_test_environment,
                 );
             })
             .unwrap();
@@ -1172,6 +1196,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_tank_level_switch,
                     &rx_data_logger_from_tank_level_switch,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1183,9 +1208,13 @@ pub mod tests {
             .name("mock_heating".to_string())
             .spawn(move || {
                 mock_heating(
-                    &tx_heating_to_tank_level_switch,
-                    &rx_heating_from_tank_level_switch,
+                    Some(&tx_heating_to_tank_level_switch),
+                    Some(&rx_heating_from_tank_level_switch),
                     &rx_heating_from_signal_handler,
+                    None,
+                    None,
+                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -1195,9 +1224,12 @@ pub mod tests {
             .name("mock_refill".to_string())
             .spawn(move || {
                 let results = mock_refill(
-                    &tx_refill_to_tank_level_switch,
-                    &rx_refill_from_tank_level_switch,
+                    Some(&tx_refill_to_tank_level_switch),
+                    Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
+                    None,
+                    false,
                 );
                 assert_ge!(results.len(), 70);
                 assert_le!(results.len(), 76);

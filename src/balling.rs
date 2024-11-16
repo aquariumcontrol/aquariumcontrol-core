@@ -842,6 +842,7 @@ pub mod tests {
                 mock_schedule_check(
                     &tx_schedule_check_to_balling,
                     &rx_schedule_check_from_balling,
+                    None,
                     schedule_allows,
                 )
             });

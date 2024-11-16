@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::error;
+use log::{error, warn};
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
@@ -42,6 +42,7 @@ pub trait WaterInjectionTrait {
         rx_from_tank_level_switch: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut SqlInterfaceRefill,
     ) -> bool;
@@ -55,6 +56,8 @@ pub trait WaterInjectionTrait {
 /// graph LR
 ///     water_injection[Mineral injection] --> controllino[Controllino]
 ///     controllino --> water_injection
+///     water_injection --> data_logger[Data logger]
+///     data_logger --> water_injection
 ///     water_injection --> tank_level_switch[tank level switch calculation]
 ///     tank_level_switch --> water_injection
 ///     signal_handler[Signal handler] --> water_injection
@@ -70,6 +73,10 @@ pub struct WaterInjection {
     lock_error_channel_receive_tank_level_switch_position: bool,
     lock_error_channel_send_tank_level_switch_invalid: bool,
     lock_error_channel_receive_tank_level_switch_invalid: bool,
+    lock_error_channel_receive_data_logger: bool,
+    lock_warn_inapplicable_command_data_logger: bool,
+    lock_error_invalid_signal_request_data_logger: bool,
+    lock_error_send_to_data_logger: bool,
 }
 
 impl WaterInjection {
@@ -89,6 +96,10 @@ impl WaterInjection {
             lock_error_channel_receive_tank_level_switch_position: false,
             lock_error_channel_send_tank_level_switch_invalid: false,
             lock_error_channel_receive_tank_level_switch_invalid: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -178,6 +189,79 @@ impl WaterInjection {
 
         (tank_level_switch_position, tank_level_switch_invalid)
     }
+
+    /// check if data logger sent command and respond
+    fn communicate_with_data_logger(
+        &mut self,
+        tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
+    ) {
+        match rx_from_data_logger.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_data_logger = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_data_logger = false;
+                        match d {
+                            AquariumSignal::RefillPumpStatus => {
+                                self.lock_error_invalid_signal_request_data_logger = true;
+                                match tx_to_data_logger.send(false) {
+                                    Ok(_) => {
+                                        self.lock_error_send_to_data_logger = false;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_send_to_data_logger {
+                                            error!(
+                                                target: LOG_TARGET_WATER_INJECTION,
+                                                "channel communication to data logger failed ({e:?})"
+                                            );
+                                            self.lock_error_send_to_data_logger = true;
+                                        }
+                                    }
+                                };
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_data_logger {
+                                    error!(
+                                        target: LOG_TARGET_WATER_INJECTION,
+                                        "internal error: received request for invalid signal {} from data logger",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_data_logger = true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_data_logger {
+                            warn!(
+                                target: LOG_TARGET_WATER_INJECTION,
+                                "ignoring inapplicable command from data logger thread."
+                            );
+                            self.lock_warn_inapplicable_command_data_logger = true;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_data_logger = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_data_logger {
+                            error!(
+                                target: LOG_TARGET_WATER_INJECTION,
+                                "receiving command from data logger thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_data_logger = true;
+                        }
+                    }
+                }
+            }
+        };
+    }
 }
 
 impl WaterInjectionTrait for WaterInjection {
@@ -190,19 +274,10 @@ impl WaterInjectionTrait for WaterInjection {
         rx_from_tank_level_switch: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut SqlInterfaceRefill,
     ) -> bool {
-        // inform data logger that refill is in progress
-        match tx_to_data_logger.send(true) {
-            Ok(_) => { /* no listening to response */ }
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_WATER_INJECTION,
-                    "channel communication to data logger when starting refill failed ({e:?})"
-                );
-            }
-        }
         let mut quit_command_received = false;
 
         // command start of refill pump
@@ -234,6 +309,8 @@ impl WaterInjectionTrait for WaterInjection {
         let mut additional_refill_volume_executed = 0.0;
 
         loop {
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+
             self.spin_sleeper
                 .sleep(self.sleep_duration_hundred_milli_sec);
             refill_time_seconds += self.sleep_interval_seconds;
@@ -382,6 +459,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -404,7 +483,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     true,
                     false,
                     true,
@@ -417,6 +498,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -428,8 +510,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -483,6 +565,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
@@ -525,6 +608,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -547,7 +632,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     true,
                     false,
                     true,
@@ -560,6 +647,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -571,8 +659,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -624,6 +712,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
@@ -667,6 +756,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -689,7 +780,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     true,
                     true,
                     true,
@@ -702,6 +795,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -713,8 +807,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -767,6 +861,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
@@ -807,6 +902,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -829,7 +926,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -842,6 +941,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -853,8 +953,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -925,6 +1025,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
@@ -965,6 +1066,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -987,7 +1090,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1000,6 +1105,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1011,8 +1117,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -1067,6 +1173,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );
@@ -1108,6 +1215,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
+        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
+            mpsc::channel();
         let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
             mpsc::channel();
         let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
@@ -1130,7 +1239,9 @@ pub mod tests {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_water_injection,
                     &rx_tank_level_switch_from_water_injection,
-                    &rx_tank_level_switch_from_test_environment,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
                     false,
                     false,
@@ -1143,6 +1254,7 @@ pub mod tests {
             .name("mock_data_logger".to_string())
             .spawn(move || {
                 mock_data_logger(
+                    &tx_data_logger_to_water_injection,
                     &rx_data_logger_from_water_injection,
                     &rx_data_logger_from_signal_handler,
                 );
@@ -1154,8 +1266,8 @@ pub mod tests {
             .name("mock_controllino".to_string())
             .spawn(move || {
                 let mut actuation_events = mock_controllino(
-                    &rx_controllino_from_water_injection,
                     &tx_controllino_to_water_injection,
+                    &rx_controllino_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -1214,6 +1326,7 @@ pub mod tests {
                     &rx_water_injection_from_tank_level_switch,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                 );

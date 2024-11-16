@@ -160,15 +160,15 @@ impl fmt::Display for DataFrame {
         };
         write!(
             f,
-            "timestamp: {}, \
-            water_temperature: {}, water_temperature_filtered: {}, \
-            ph: {}, ph_filtered: {}, \
-            conductivity: {}, conductivity_filtered: {}, conductivity_compensated: {}, \
-            refill_in_progress: {}, \
-            tank_level_switch_position: {}, tank_level_switch_invalid: {}, tank_level_switch_position_stabilized: {}, \
-            surface_ventilation_status: {}, \
-            ambient_temperature: {}, ambient_humidity: {}, \
-            heater_status: {}",
+            "\ntimestamp: {}\
+            \nwater_temperature: {}, water_temperature_filtered: {}, \
+            \nph: {}, ph_filtered: {}, \
+            \nconductivity: {}, conductivity_filtered: {}, conductivity_compensated: {}, \
+            \nrefill_in_progress: {}, \
+            \ntank_level_switch_position: {}, tank_level_switch_invalid: {}, tank_level_switch_position_stabilized: {}, \
+            \nsurface_ventilation_status: {}, \
+            \nambient_temperature: {}, ambient_humidity: {}, \
+            \nheater_status: {}",
             self.timestamp,
             water_temperature_string,
             water_temperature_filtered_string,

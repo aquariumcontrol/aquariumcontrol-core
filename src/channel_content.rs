@@ -104,6 +104,15 @@ pub enum AquariumSignal {
 
     /// stabilized position of tank level switch
     TankLevelSwitchPositionStabilized,
+
+    /// heating control status
+    HeatingControlStatus,
+
+    /// ventilation control status
+    VentilationControlStatus,
+
+    /// refill pump status
+    RefillPumpStatus,
 }
 
 impl fmt::Display for AquariumSignal {
@@ -122,6 +131,9 @@ impl fmt::Display for AquariumSignal {
             AquariumSignal::TankLevelSwitchPositionStabilized => {
                 write!(f, "TankLevelSwitchPositionStabilized")
             }
+            AquariumSignal::HeatingControlStatus => write!(f, "HeatingControlStatus"),
+            AquariumSignal::VentilationControlStatus => write!(f, "VentilationControlStatus"),
+            AquariumSignal::RefillPumpStatus => write!(f, "RefillPumpStatus"),
         }
     }
 }

@@ -253,7 +253,7 @@ impl TcpCommunication {
             AquariumSignal::AmbientHumidity => category::DHT22,
             AquariumSignal::TankLevelSwitchPosition => category::TANKLEVELSWITCH,
             AquariumSignal::TankLevelSwitchInvalid => category::TANKLEVELSWITCH,
-            AquariumSignal::TankLevelSwitchPositionStabilized => {
+            _ => {
                 panic!(
                     "{}: Internal error - illegal signal request {} to simulator",
                     Self::LOG_TARGET_TCP_COMMUNICATION,
@@ -269,7 +269,7 @@ impl TcpCommunication {
             AquariumSignal::AmbientHumidity => signal::AMBIENTHUMIDITY,
             AquariumSignal::TankLevelSwitchPosition => signal::TANKLEVELSWITCHPOSITION,
             AquariumSignal::TankLevelSwitchInvalid => signal::TANKLEVELSWITCHINVALID,
-            AquariumSignal::TankLevelSwitchPositionStabilized => {
+            _ => {
                 panic!(
                     "{}: Internal error - illegal signal request {} to simulator",
                     Self::LOG_TARGET_TCP_COMMUNICATION,

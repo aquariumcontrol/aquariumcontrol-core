@@ -14,7 +14,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::AquariumSignal;
@@ -416,10 +416,18 @@ impl DataLogger {
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of channel for communication to Controllino
-    /// * `rx_from_gpio` - Receiver part of channel for communication from Controllino
-    /// * `rx_from_refill` - Receiver part of channel for communication from refill thread
-    /// * `rx_from_heating` - Receiver part of channel for communication from heating thread
+    /// * `tx_to_ambient` - Sender part of channel for communication to Ambient
+    /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient
+    /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific
+    /// * `rx_from_atlas_scientific` - Receiver part of channel for communication from Atlas Scientific
+    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to Tank Level Switch
+    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from Tank Level Switch
+    /// * `tx_to_refill` - Sender part of channel for communication to Refill
+    /// * `rx_from_refill` - Receiver part of channel for communication from Refill
+    /// * `rx_from_heating` - Sender part of channel for communication to Heating
+    /// * `rx_from_heating` - Receiver part of channel for communication from Heating
+    /// * `tx_to_ventilation` - Sender part of channel for communication to Ventilation
+    /// * `rx_from_ventilation` - Receiver part of channel for communication from Ventilation
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
@@ -432,8 +440,11 @@ impl DataLogger {
         rx_from_atlas_scientific: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
         rx_from_tank_level_switch: Receiver<bool>,
+        tx_to_refill: Sender<InternalCommand>,
         rx_from_refill: Receiver<bool>,
+        tx_to_heating: Sender<InternalCommand>,
         rx_from_heating: Receiver<bool>,
+        tx_to_ventilation: Sender<InternalCommand>,
         rx_from_ventilation: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
@@ -463,97 +474,115 @@ impl DataLogger {
         let mut ambient_channel_disconnected = false;
 
         loop {
-            i = 0;
-            while i < self.config.logging_interval * 1000 {
-                i = i + 1;
-                spin_sleeper.sleep(sleep_duration_one_millisec);
-                (quit_command_received, _, _) =
-                    self.process_external_request(&rx_from_signal_handler, None);
-                if quit_command_received {
-                    break;
-                }
-            }
-
             // get information if refill is in progress from refill thread
             if !refill_channel_disconnected {
-                match rx_from_refill.try_recv() {
-                    Ok(c) => {
-                        refill_in_progress = c;
-                        self.lock_error_output_state_refill_in_progress = self.output_state(
-                            c,
-                            "ON",
-                            "OFF",
-                            &self.config.output_file_name_refill_in_progress,
-                            self.lock_error_output_state_refill_in_progress,
-                        );
-                    }
-                    Err(e) => {
-                        match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                match tx_to_refill.send(InternalCommand::RequestSignal(
+                    AquariumSignal::RefillPumpStatus,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_refill.try_recv() {
+                            Ok(c) => {
+                                refill_in_progress = c;
+                                self.lock_error_output_state_refill_in_progress = self
+                                    .output_state(
+                                        c,
+                                        "ON",
+                                        "OFF",
+                                        &self.config.output_file_name_refill_in_progress,
+                                        self.lock_error_output_state_refill_in_progress,
+                                    );
+                            }
+                            Err(e) => {
                                 error!(
                                     target: Self::LOG_TARGET_DATA_LOGGER,
-                                    "receiving command from refill thread failed ({e:?})"
+                                    "receiving value from refill thread failed ({e:?})"
                                 );
                                 refill_channel_disconnected = true;
                             }
                         }
+                    }
+                    Err(e) => {
+                        error!(
+                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            "channel communication to Refill thread failed ({e:?})"
+                        );
+                        refill_channel_disconnected = true;
                     }
                 }
             }
 
             // get information if heater is on from heating thread
             if !heating_channel_disconnected {
-                match rx_from_heating.try_recv() {
-                    Ok(c) => {
-                        heater_is_on = c;
-                        self.lock_error_output_state_heating_is_on = self.output_state(
-                            c,
-                            "ON",
-                            "OFF",
-                            &self.config.output_file_name_heating_is_on,
-                            self.lock_error_output_state_heating_is_on,
-                        );
-                    }
-                    Err(e) => {
-                        match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                match tx_to_heating.send(InternalCommand::RequestSignal(
+                    AquariumSignal::HeatingControlStatus,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_heating.try_recv() {
+                            Ok(c) => {
+                                heater_is_on = c;
+                                self.lock_error_output_state_heating_is_on = self.output_state(
+                                    c,
+                                    "ON",
+                                    "OFF",
+                                    &self.config.output_file_name_heating_is_on,
+                                    self.lock_error_output_state_heating_is_on,
+                                );
+                            }
+                            Err(e) => {
                                 error!(
                                     target: Self::LOG_TARGET_DATA_LOGGER,
-                                    "receiving command from heating thread failed ({e:?})"
+                                    "receiving value from heating thread failed ({e:?})"
                                 );
                                 heating_channel_disconnected = true;
                             }
-                        }
+                        };
+                    }
+                    Err(e) => {
+                        error!(
+                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            "channel communication to Heating thread failed ({e:?})"
+                        );
+                        heating_channel_disconnected = true;
                     }
                 }
             }
 
             // get information if ventilation is on from ventilation thread
             if !ventilation_channel_disconnected {
-                match rx_from_ventilation.try_recv() {
-                    Ok(c) => {
-                        ventilation_is_on = c;
-                        self.lock_error_output_state_ventilation_is_on = self.output_state(
-                            c,
-                            "ON",
-                            "OFF",
-                            &self.config.output_file_name_ventilation_is_on,
-                            self.lock_error_output_state_ventilation_is_on,
-                        );
-                    }
-                    Err(e) => {
-                        match e {
-                            TryRecvError::Empty => { /* empty buffer - no action required */ }
-                            TryRecvError::Disconnected => {
+                // send request for water temperature
+                match tx_to_ventilation.send(InternalCommand::RequestSignal(
+                    AquariumSignal::VentilationControlStatus,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_ventilation.recv() {
+                            Ok(c) => {
+                                ventilation_is_on = c;
+                                self.lock_error_output_state_ventilation_is_on = self.output_state(
+                                    c,
+                                    "ON",
+                                    "OFF",
+                                    &self.config.output_file_name_ventilation_is_on,
+                                    self.lock_error_output_state_ventilation_is_on,
+                                );
+                            }
+                            Err(e) => {
                                 error!(
                                     target: Self::LOG_TARGET_DATA_LOGGER,
-                                    "receiving command from ventilation thread failed ({e:?})"
+                                    "receiving value from ventilation thread failed ({e:?})"
                                 );
                                 ventilation_channel_disconnected = true;
                             }
-                        }
+                        };
+                    }
+                    Err(e) => {
+                        error!(
+                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            "channel communication to Ventilation thread failed ({e:?})"
+                        );
+                        ventilation_channel_disconnected = true;
                     }
                 }
             }
@@ -576,7 +605,11 @@ impl DataLogger {
                                     );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Atlas Scientific thread for water temperature failed ({e:?})"
+                                );
                                 ambient_channel_disconnected = true;
                                 None
                             }
@@ -607,7 +640,11 @@ impl DataLogger {
                                 );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Atlas Scientific thread for pH failed ({e:?})"
+                                );
                                 atlas_scientific_channel_disconnected = true;
                                 None
                             }
@@ -638,8 +675,12 @@ impl DataLogger {
                                 );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
                                 atlas_scientific_channel_disconnected = true;
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Atlas Scientific thread for conductivity failed ({e:?})"
+                                );
                                 None
                             }
                         };
@@ -672,7 +713,11 @@ impl DataLogger {
                                     );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Ambient thread for temperature failed ({e:?})"
+                                );
                                 ambient_channel_disconnected = true;
                                 None
                             }
@@ -703,7 +748,11 @@ impl DataLogger {
                                 );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Ambient thread for humidity failed ({e:?})"
+                                );
                                 ambient_channel_disconnected = true;
                                 None
                             }
@@ -738,7 +787,11 @@ impl DataLogger {
                                     );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Tank Level Switch thread for position failed ({e:?})"
+                                );
                                 tank_level_switch_channel_disconnected = true;
                                 None
                             }
@@ -771,7 +824,11 @@ impl DataLogger {
                                     );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Tank Level Switch thread for validity failed ({e:?})"
+                                );
                                 tank_level_switch_channel_disconnected = true;
                                 None
                             }
@@ -786,7 +843,7 @@ impl DataLogger {
                     }
                 }
 
-                // send request for tank level switch invalid
+                // send request for tank level switch stabilized
                 match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchPositionStabilized,
                 )) {
@@ -799,14 +856,18 @@ impl DataLogger {
                                 self.lock_error_output_state_tank_level_switch_position_stabilized = self
                                     .output_state(
                                         c,
-                                        "INVALID",
-                                        "VALID",
+                                        "HIGH",
+                                        "LOW",
                                         &self.config.output_file_name_tank_level_switch_position_stabilized,
                                         self.lock_error_output_state_tank_level_switch_position_stabilized,
                                     );
                                 Some(c)
                             }
-                            Err(_) => {
+                            Err(e) => {
+                                error!(
+                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
+                                );
                                 tank_level_switch_channel_disconnected = true;
                                 None
                             }
@@ -915,6 +976,17 @@ impl DataLogger {
             //println!("DateFrame = {}", data_frame);
             data_injection.inject_data(data_frame, &mut sql_interface_data);
 
+            i = 0;
+            while i < self.config.logging_interval * 1000 {
+                i = i + 1;
+                spin_sleeper.sleep(sleep_duration_one_millisec);
+                (quit_command_received, _, _) =
+                    self.process_external_request(&rx_from_signal_handler, None);
+                if quit_command_received {
+                    break;
+                }
+                // @todo: poll control status every 100ms
+            }
             if quit_command_received {
                 break;
             }
@@ -976,57 +1048,30 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::fs;
     use std::sync::mpsc;
-    use std::sync::mpsc::TryRecvError;
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::data_logger::DataInjectionTrait;
     use crate::data_logger::DataLogger;
+    use crate::mock::tests::mock_ambient;
+    use crate::mock::tests::mock_atlas_scientific;
+    use crate::mock::tests::mock_heating;
+    use crate::mock::tests::mock_refill;
+    use crate::mock::tests::mock_tank_level_switch;
+    use crate::mock::tests::mock_ventilation;
+    use crate::mock::tests::MockDataInjection;
+    use crate::mock::tests::MockSignal;
+    use crate::mock::tests::MockSignal::VentilationControlStatus;
+    use crate::mock::tests::TestCommand;
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_data::DataFrame;
     use crate::sql_interface_data::SqlInterfaceData;
-
-    pub struct MockDataInjection {
-        pub data_frames: Vec<DataFrame>,
-    }
-
-    impl MockDataInjection {
-        pub fn new() -> MockDataInjection {
-            MockDataInjection {
-                data_frames: Vec::new(),
-            }
-        }
-
-        pub fn output(&self) {
-            if self.data_frames.is_empty() {
-                println!("MockDataInjection has not recorded any data frames.");
-            }
-            for (position, data_frame) in self.data_frames.iter().enumerate() {
-                println!("Dataframe #{}: {}", position, data_frame);
-            }
-        }
-    }
-
-    impl DataInjectionTrait for MockDataInjection {
-        fn inject_data(&mut self, data_frame: DataFrame, _: &mut SqlInterfaceData) {
-            println!(
-                "MockDataInjection.inject_data: recording data frame: {}",
-                data_frame
-            );
-
-            // add data frame to vector
-            self.data_frames.push(data_frame);
-        }
-    }
 
     #[test]
     pub fn test_data_log() {
         let spin_sleeper = SpinSleeper::default();
-        let sleep_duration_8_seconds = Duration::from_millis(8000);
+        let sleep_duration_1_second = Duration::from_millis(1000);
 
         // channels for communication with test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
@@ -1040,12 +1085,26 @@ pub mod tests {
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
             mpsc::channel();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) = mpsc::channel();
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
+        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
+            mpsc::channel();
+
+        let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
+        let tx_signal_handler_to_ambient = tx_data_logger_to_ambient.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1061,175 +1120,97 @@ pub mod tests {
         };
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
         let mut data_logger = DataLogger::new(config.data_logger);
+
         scope(|scope| {
             scope.spawn(move || {
-                // mock signal handler
-                spin_sleeper.sleep(sleep_duration_8_seconds);
+                // mock signal handler and test environment
+                spin_sleeper.sleep(sleep_duration_1_second);
+                let _ = tx_test_environment_to_ventilation.send(TestCommand::UpdateSignal(
+                    MockSignal::VentilationControlStatus(true),
+                ));
+                spin_sleeper.sleep(sleep_duration_1_second);
+                spin_sleeper.sleep(sleep_duration_1_second);
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_data_logger.recv().unwrap();
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
             });
 
             scope.spawn(move || {
                 // mock refill control
-                for i in 0..7 {
-                    let _ = tx_refill_to_data_logger.send(i % 2 > 0);
-                }
+                mock_refill(
+                    None,
+                    None,
+                    &rx_refill_from_signal_handler,
+                    Some(&tx_refill_to_data_logger),
+                    None,
+                    false,
+                );
             });
 
             scope.spawn(move || {
                 // mock heating
-                for i in 0..7 {
-                    let _ = tx_heating_to_data_logger.send(i % 2 > 0);
-                }
+                mock_heating(
+                    None,
+                    None,
+                    &rx_heating_from_signal_handler,
+                    Some(&tx_heating_to_data_logger),
+                    Some(&rx_heating_from_data_logger),
+                    None,
+                    false,
+                );
             });
 
             scope.spawn(move || {
                 // mock ventilation
-                for i in 0..7 {
-                    let _ = tx_ventilation_to_data_logger.send(i % 2 > 0);
-                }
+                mock_ventilation(
+                    &tx_ventilation_to_data_logger,
+                    &rx_ventilation_from_signal_handler,
+                    Some(&rx_ventilation_from_test_environment),
+                    true,
+                );
             });
 
             scope.spawn(move || {
                 // mock TankLevelSwitch
-                let mut toggle_bit_position = true;
-                let mut toggle_bit_invalid = false;
-                loop {
-                    match rx_tank_level_switch_from_data_logger.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::TankLevelSwitchPosition => {
-                                            toggle_bit_position = !toggle_bit_position;
-                                            toggle_bit_position
-                                        },
-                                        AquariumSignal::TankLevelSwitchInvalid => {
-                                            toggle_bit_invalid = !toggle_bit_invalid;
-                                            toggle_bit_position
-                                        },
-                                        AquariumSignal::TankLevelSwitchPositionStabilized => {
-                                            toggle_bit_position
-                                        },
-                                        _ => {
-                                            panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock TankLevelSwitch: Received invalid command.");
-                                },
-                            };
-                            match tx_tank_level_switch_to_data_logger.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock TankLevelSwitch response back data logger: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock TankLevelSwitch: Error in trying to receive command from data logger: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                }
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_data_logger,
+                    &rx_tank_level_switch_from_data_logger,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    true,
+                    false,
+                    true,
+                );
             });
 
             scope.spawn(move || {
                 // mock Atlas Scientific
-                loop {
-                    match rx_atlas_scientific_from_data_logger.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::WaterTemperature => 10.0,
-                                        AquariumSignal::pH => 11.0,
-                                        AquariumSignal::Conductivity => 12.0,
-                                        _ => {
-                                            panic!("Mock AtlasScientific: inapplicable signal request {}", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock AtlasScientific: Received invalid command.");
-                                },
-                            };
-                            match tx_atlas_scientific_to_data_logger.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock AtlasScientific response back data logger: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock AtlasScientific: Error in trying to receive command from data logger: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                }
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_data_logger,
+                    &rx_atlas_scientific_from_data_logger,
+                    None,
+                    10.0, // water
+                    12.0, // conductivity
+                    11.0, // pH
+                );
             });
 
             scope.spawn(move || {
                 // mock Ambient
-                loop {
-                    match rx_ambient_from_data_logger.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::AmbientTemperature => 13.0,
-                                        AquariumSignal::AmbientHumidity => 14.0,
-                                        _ => {
-                                            panic!("MockAmbient: Received request for inapplicable signal  {}.", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock Ambient: Received invalid command.");
-                                },
-                            };
-                            match tx_ambient_to_data_logger.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock Ambient response back data logger: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock Ambient: Error in trying to receive command from data logger: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                }
+                mock_ambient(
+                    &tx_ambient_to_data_logger,
+                    &rx_ambient_from_data_logger,
+                    None,
+                    13.0,
+                    14.0,
+                );
             });
 
             scope.spawn(move || {
@@ -1243,8 +1224,11 @@ pub mod tests {
                     rx_data_logger_from_atlas_scientific,
                     tx_data_logger_to_tank_level_switch.clone(),
                     rx_data_logger_from_tank_level_switch,
+                    tx_data_logger_to_refill,
                     rx_data_logger_from_refill,
+                    tx_data_logger_to_heating,
                     rx_data_logger_from_heating,
+                    tx_data_logger_to_ventilation,
                     rx_data_logger_from_ventilation,
                     tx_data_logger_to_signal_handler,
                     rx_data_logger_from_signal_handler,
@@ -1269,18 +1253,23 @@ pub mod tests {
                 assert_eq!(last_recorded_data_frame.ph_filtered, Some(5.5));
                 assert_eq!(last_recorded_data_frame.conductivity, Some(12.0));
                 assert_eq!(last_recorded_data_frame.conductivity_filtered, Some(6.0));
+                assert_eq!(last_recorded_data_frame.conductivity_compensated, None);
                 assert_eq!(last_recorded_data_frame.refill_in_progress, Some(false));
                 assert_eq!(
                     last_recorded_data_frame.tank_level_switch_position,
-                    Some(false)
+                    Some(true)
                 );
                 assert_eq!(
                     last_recorded_data_frame.tank_level_switch_invalid,
+                    Some(false)
+                );
+                assert_eq!(
+                    last_recorded_data_frame.tank_level_switch_position_stabilized,
                     Some(true)
                 );
                 assert_eq!(
                     last_recorded_data_frame.surface_ventilation_status,
-                    Some(false)
+                    Some(true)
                 );
                 assert_eq!(last_recorded_data_frame.ambient_temperature, Some(13.0));
                 assert_eq!(last_recorded_data_frame.ambient_humidity, Some(14.0));
@@ -1358,7 +1347,7 @@ pub mod tests {
                             .output_file_name_tank_level_switch_position
                     )
                     .expect("Could not read back tank_level_switch_position from disk."),
-                    "LOW".to_string(),
+                    "HIGH".to_string(),
                 );
                 assert_eq!(
                     fs::read_to_string(
@@ -1367,12 +1356,21 @@ pub mod tests {
                             .output_file_name_tank_level_switch_invalid
                     )
                     .expect("Could not read back tank level switch invalid from disk."),
-                    "INVALID".to_string(),
+                    "VALID".to_string(),
+                );
+                assert_eq!(
+                    fs::read_to_string(
+                        config2
+                            .data_logger
+                            .output_file_name_tank_level_switch_position_stabilized
+                    )
+                    .expect("Could not read back tank level switch stabilized from disk."),
+                    "HIGH".to_string(),
                 );
                 assert_eq!(
                     fs::read_to_string(config2.data_logger.output_file_name_ventilation_is_on)
                         .expect("Could not read back ventilation status from disk."),
-                    "OFF".to_string(),
+                    "ON".to_string(),
                 );
                 assert_eq!(
                     fs::read_to_string(config2.data_logger.output_file_name_heating_is_on)
