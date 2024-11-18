@@ -1241,6 +1241,8 @@ pub mod tests {
             mpsc::channel();
 
         let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
+        let tx_signal_handler_to_ambient = tx_data_logger_to_ambient.clone();
+        let tx_signal_handler_to_atlas_scientific = tx_data_logger_to_atlas_scientific.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1314,12 +1316,20 @@ pub mod tests {
                 ));
                 spin_sleeper.sleep(sleep_duration_1_second);
                 spin_sleeper.sleep(sleep_duration_1_second);
+                
+                // cease operation of test object
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+                rx_signal_handler_from_data_logger.recv().unwrap();
+                
+                // signal end of test case execution to mock threads
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_atlas_scientific.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                rx_signal_handler_from_data_logger.recv().unwrap();
+                
                 spin_sleeper.sleep(sleep_duration_1_second);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Terminate);
             })
@@ -1429,11 +1439,11 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    tx_data_logger_to_ambient.clone(),
+                    tx_data_logger_to_ambient,
                     rx_data_logger_from_ambient,
-                    tx_data_logger_to_atlas_scientific.clone(),
+                    tx_data_logger_to_atlas_scientific,
                     rx_data_logger_from_atlas_scientific,
-                    tx_data_logger_to_tank_level_switch.clone(),
+                    tx_data_logger_to_tank_level_switch,
                     rx_data_logger_from_tank_level_switch,
                     tx_data_logger_to_refill,
                     rx_data_logger_from_refill,
@@ -1444,11 +1454,6 @@ pub mod tests {
                     tx_data_logger_to_signal_handler,
                     rx_data_logger_from_signal_handler,
                 );
-
-                // signal end of test case execution to mock threads
-                let _ = tx_data_logger_to_tank_level_switch.send(InternalCommand::Quit);
-                let _ = tx_data_logger_to_atlas_scientific.send(InternalCommand::Quit);
-                let _ = tx_data_logger_to_ambient.send(InternalCommand::Quit);
 
                 println!("Printing recorded data:");
                 mock_data_injection.output();
