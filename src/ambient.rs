@@ -253,13 +253,13 @@ impl Ambient {
             }
 
             //*** communication to heating thread ****
-            let response_to_heating = match rx_from_heating.try_recv() {
+            match rx_from_heating.try_recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_heating = false;
                     match c {
                         InternalCommand::RequestSignal(d) => {
                             self.lock_warn_inapplicable_command_heating = false;
-                            match d {
+                            let response_to_heating = match d {
                                 AquariumSignal::AmbientTemperature => {
                                     self.lock_error_invalid_signal_request_heating = false;
                                     self.ambient_temperature
@@ -275,7 +275,22 @@ impl Ambient {
                                     }
                                     0.0 // default response to unknown signal request instead of panicking
                                 }
-                            }
+                            };
+                            // respond only after having received request:
+                            match tx_to_heating.send(response_to_heating.into()) {
+                                Ok(()) => {
+                                    self.lock_error_heating_response = false;
+                                }
+                                Err(e) => {
+                                    if !self.lock_error_heating_response {
+                                        error!(
+                                            target: LOG_TARGET_AMBIENT,
+                                            "responding back to heating thread failed ({e:?})"
+                                        );
+                                        self.lock_error_heating_response = true;
+                                    }
+                                }
+                            };
                         }
                         _ => {
                             if !self.lock_warn_inapplicable_command_heating {
@@ -285,7 +300,6 @@ impl Ambient {
                                 );
                                 self.lock_warn_inapplicable_command_heating = true;
                             }
-                            0.0 // default response to unknown request instead of panicking
                         }
                     }
                 }
@@ -304,22 +318,6 @@ impl Ambient {
                                 self.lock_error_channel_receive_heating = true;
                             }
                         }
-                    }
-                    0.0
-                }
-            };
-
-            _ = match tx_to_heating.send(response_to_heating.into()) {
-                Ok(()) => {
-                    self.lock_error_heating_response = false;
-                }
-                Err(e) => {
-                    if !self.lock_error_heating_response {
-                        error!(
-                            target: LOG_TARGET_AMBIENT,
-                            "responding back to heating thread failed ({e:?})"
-                        );
-                        self.lock_error_heating_response = true;
                     }
                 }
             };
