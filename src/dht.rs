@@ -19,7 +19,7 @@ use std::thread::sleep;
 #[cfg(target_os = "linux")]
 use std::time::Duration;
 
-#[cfg(not(test))]
+#[allow(unused)]
 const LOG_TARGET_DHT: &str = "dht";
 
 /// Holds the configuration data for the GPIO handler.
@@ -354,7 +354,7 @@ impl Dht {
         if (temp10 < dht22_constants::DHT22_MINVAL_TEMP10)
             || (temp10 > dht22_constants::DHT22_MAXVAL_TEMP10)
         {
-            #[cfg(not(test))]            
+            #[cfg(not(test))]
             error!(
                 "temperature is out of range (measured {}, limits are {}, {})",
                 (temp10 / 10),
@@ -368,7 +368,7 @@ impl Dht {
         if (hum10 < dht22_constants::DHT22_MINVAL_HUM10)
             || (hum10 > dht22_constants::DHT22_MAXVAL_HUM10)
         {
-            #[cfg(not(test))]            
+            #[cfg(not(test))]
             error!(
                 "humidity is out of range (measured {}, limits are {}, {})",
                 (hum10 / 10),
@@ -396,7 +396,7 @@ impl Dht {
         let mut dht_vcc_pin = match self.gpio.get(self.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
             Err(e) => {
-                #[cfg(not(test))]                
+                #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_DHT,
                     "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
@@ -591,7 +591,7 @@ impl Dht {
                     if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
                         retry_counter += 1;
                         if retry_counter > 3 {
-                            #[cfg(not(test))]                            
+                            #[cfg(not(test))]
                             error!(
                                 target: LOG_TARGET_DHT,
                                 "failed to read from DHT sensor (after {} retries, {e:?}",
@@ -600,7 +600,7 @@ impl Dht {
                             return Err(e);
                         }
                     } else {
-                        #[cfg(not(test))]                        
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_DHT,
                             "failed to read from DHT sensor ({e:?})",
