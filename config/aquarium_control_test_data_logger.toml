@@ -33,7 +33,7 @@ port = 35000                                            # port number for commun
 
 [data_logger]
 use_sql_timestamp = true                                                                        # switch for defining data source of timestamp
-logging_interval = 60                                                                           # log data every x seconds
+logging_interval = 1                                                                            # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5 }                             # filter configuration for the water temperature
 filter_coefficient_pH = { filter_coefficient = 0.5 }                                            # filter configuration for the pH value
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }                                  # filter configuration for the conductivity

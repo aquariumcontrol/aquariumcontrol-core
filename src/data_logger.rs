@@ -481,7 +481,7 @@ impl DataLogger {
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        match rx_from_refill.try_recv() {
+                        match rx_from_refill.recv() {
                             Ok(c) => {
                                 refill_in_progress = c;
                                 self.lock_error_output_state_refill_in_progress = self
@@ -519,7 +519,7 @@ impl DataLogger {
                 )) {
                     Ok(_) => {
                         // now listen for response
-                        match rx_from_heating.try_recv() {
+                        match rx_from_heating.recv() {
                             Ok(c) => {
                                 heater_is_on = c;
                                 self.lock_error_output_state_heating_is_on = self.output_state(
@@ -1048,13 +1048,14 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::fs;
     use std::sync::mpsc;
-    use std::thread::scope;
+    use std::thread;
     use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::data_logger::DataLogger;
+    use crate::data_logger::DataLoggerConfig;
     use crate::mock::tests::mock_ambient;
     use crate::mock::tests::mock_atlas_scientific;
     use crate::mock::tests::mock_heating;
@@ -1063,16 +1064,146 @@ pub mod tests {
     use crate::mock::tests::mock_ventilation;
     use crate::mock::tests::MockDataInjection;
     use crate::mock::tests::MockSignal;
-    use crate::mock::tests::MockSignal::VentilationControlStatus;
     use crate::mock::tests::TestCommand;
     use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_data::DataFrame;
     use crate::sql_interface_data::SqlInterfaceData;
+
+    fn assert_output_file_contents(
+        data_logger_config: &DataLoggerConfig,
+        target_water_temperature: f32,
+        target_water_temperature_filtered: f32,
+        target_water_ph: f32,
+        target_water_ph_filtered: f32,
+        target_water_conductivity: f32,
+        target_water_conductivity_filtered: f32,
+        _target_water_conductivity_compensated: f32,
+        target_refill_in_progress: bool,
+        target_tank_level_switch_position: bool,
+        target_tank_level_switch_invalid: bool,
+        target_tank_level_switch_position_stabilized: bool,
+        target_surface_ventilation_status: bool,
+        target_ambient_temperature: f32,
+        target_ambient_humidity: f32,
+        target_heater_status: bool,
+    ) {
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_water_temperature)
+                .expect("Could not read back water temperature from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_temperature,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_water_temperature_filtered)
+                .expect("Could not read back filtered water temperature from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_temperature_filtered,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_pH)
+                .expect("Could not read back pH from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_ph,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_pH_filtered)
+                .expect("Could not read back filtered pH from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_ph_filtered,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_conductivity)
+                .expect("Could not read back conductivity from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_conductivity,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_conductivity_filtered)
+                .expect("Could not read back filtered conductivity from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_conductivity_filtered,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_ambient_temperature)
+                .expect("Could not read back ambient temperature from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_ambient_temperature,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_humidity)
+                .expect("Could not read back ambient humidity from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_ambient_humidity,
+        );
+        let target_refill_in_progress_string = match target_refill_in_progress {
+            true => "ON".to_string(),
+            false => "OFF".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_refill_in_progress)
+                .expect("Could not read back refill in progress from disk."),
+            target_refill_in_progress_string,
+        );
+        let target_tank_level_switch_position_string = match target_tank_level_switch_position {
+            true => "HIGH".to_string(),
+            false => "LOW".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_position)
+                .expect("Could not read back tank_level_switch_position from disk."),
+            target_tank_level_switch_position_string,
+        );
+        let target_tank_level_switch_invalid_string = match target_tank_level_switch_invalid {
+            true => "INVALID".to_string(),
+            false => "VALID".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_invalid)
+                .expect("Could not read back tank level switch invalid from disk."),
+            target_tank_level_switch_invalid_string,
+        );
+        let target_tank_level_switch_position_stabilized_string =
+            match target_tank_level_switch_position_stabilized {
+                true => "HIGH".to_string(),
+                false => "LOW".to_string(),
+            };
+        assert_eq!(
+            fs::read_to_string(
+                &data_logger_config.output_file_name_tank_level_switch_position_stabilized
+            )
+            .expect("Could not read back tank level switch stabilized from disk."),
+            target_tank_level_switch_position_stabilized_string,
+        );
+        let target_surface_ventilation_status_string = match target_surface_ventilation_status {
+            true => "ON".to_string(),
+            false => "OFF".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_ventilation_is_on)
+                .expect("Could not read back ventilation status from disk."),
+            target_surface_ventilation_status_string,
+        );
+        let target_heater_status_string = match target_heater_status {
+            true => "ON".to_string(),
+            false => "OFF".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_heating_is_on)
+                .expect("Could not read back heater status from disk."),
+            target_heater_status_string,
+        );
+    }
 
     #[test]
     pub fn test_data_log() {
-        let spin_sleeper = SpinSleeper::default();
-        let sleep_duration_1_second = Duration::from_millis(1000);
-
         // channels for communication with test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
         let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
@@ -1102,9 +1233,14 @@ pub mod tests {
             mpsc::channel();
         let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
             mpsc::channel();
+        let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
+        let (tx_test_environment_to_refill, rx_refill_from_test_environment) = mpsc::channel();
+        let (tx_test_environment_to_atlas_scientific, rx_atlas_scientific_from_test_environment) =
+            mpsc::channel();
+        let (tx_test_environment_to_ambient, rx_ambient_from_test_environment) =
+            mpsc::channel();
 
         let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
-        let tx_signal_handler_to_ambient = tx_data_logger_to_ambient.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1121,100 +1257,175 @@ pub mod tests {
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
         let mut data_logger = DataLogger::new(config.data_logger);
 
-        scope(|scope| {
-            scope.spawn(move || {
-                // mock signal handler and test environment
+        // thread for test environment and mock signal handler
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let spin_sleeper = SpinSleeper::default();
+                let sleep_duration_1_second = Duration::from_millis(1000);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 spin_sleeper.sleep(sleep_duration_1_second);
+                spin_sleeper.sleep(sleep_duration_100_millis);
+
                 let _ = tx_test_environment_to_ventilation.send(TestCommand::UpdateSignal(
                     MockSignal::VentilationControlStatus(true),
                 ));
+                let _ = tx_test_environment_to_atlas_scientific.send(TestCommand::UpdateSignal(
+                    MockSignal::WaterTemperature(29.0),
+                ));
+
+                spin_sleeper.sleep(sleep_duration_1_second);
+
+                let _ = tx_test_environment_to_heating.send(TestCommand::UpdateSignal(
+                    MockSignal::HeatingControlStatus(true),
+                ));
+                let _ = tx_test_environment_to_atlas_scientific
+                    .send(TestCommand::UpdateSignal(MockSignal::pH(7.0)));
+
+                spin_sleeper.sleep(sleep_duration_1_second);
+
+                let _ = tx_test_environment_to_refill.send(TestCommand::UpdateSignal(
+                    MockSignal::RefillPumpStatus(true),
+                ));
+                let _ = tx_test_environment_to_atlas_scientific
+                    .send(TestCommand::UpdateSignal(MockSignal::Conductivity(50000.0)));
+
+                spin_sleeper.sleep(sleep_duration_1_second);
+
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPosition(false),
+                ));
+                let _ = tx_test_environment_to_ambient.send(TestCommand::UpdateSignal(
+                    MockSignal::AmbientTemperature(35.0),
+                ));
+
+                spin_sleeper.sleep(sleep_duration_1_second);
+
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchInvalid(true),
+                ));
+                let _ = tx_test_environment_to_ambient
+                    .send(TestCommand::UpdateSignal(MockSignal::AmbientHumidity(66.0)));
+
+                spin_sleeper.sleep(sleep_duration_1_second);
+
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPositionStabilized(false),
+                ));
                 spin_sleeper.sleep(sleep_duration_1_second);
                 spin_sleeper.sleep(sleep_duration_1_second);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_data_logger.recv().unwrap();
+                spin_sleeper.sleep(sleep_duration_1_second);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock refill control
+        // thread for mock refill control
+        let join_handle_mock_refill = thread::Builder::new()
+            .name("mock_refill".to_string())
+            .spawn(move || {
                 mock_refill(
                     None,
                     None,
                     &rx_refill_from_signal_handler,
                     Some(&tx_refill_to_data_logger),
-                    None,
-                    false,
+                    Some(&rx_refill_from_data_logger),
+                    Some(&rx_refill_from_test_environment),
+                    false, // initial refill pump status
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock heating
+        // thread for mock heating
+        let join_handle_mock_heating = thread::Builder::new()
+            .name("mock_heating".to_string())
+            .spawn(move || {
                 mock_heating(
                     None,
                     None,
                     &rx_heating_from_signal_handler,
                     Some(&tx_heating_to_data_logger),
                     Some(&rx_heating_from_data_logger),
-                    None,
-                    false,
+                    Some(&rx_heating_from_test_environment),
+                    false, // initial heating control status
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock ventilation
+        // thread for mock ventilation
+        let join_handle_mock_ventilation = thread::Builder::new()
+            .name("mock_ventilation".to_string())
+            .spawn(move || {
                 mock_ventilation(
                     &tx_ventilation_to_data_logger,
+                    &rx_ventilation_from_data_logger,
                     &rx_ventilation_from_signal_handler,
                     Some(&rx_ventilation_from_test_environment),
-                    true,
+                    false, // initial ventilation control status
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock TankLevelSwitch
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
                 mock_tank_level_switch(
                     &tx_tank_level_switch_to_data_logger,
                     &rx_tank_level_switch_from_data_logger,
                     Some(&rx_tank_level_switch_from_test_environment),
-                    None,
-                    None,
-                    true,
-                    false,
-                    true,
+                    Some(&tx_tank_level_switch_to_data_logger),
+                    Some(&rx_tank_level_switch_from_data_logger),
+                    true,  // initial tank level switch position
+                    false, // initial tank level switch invalid
+                    true,  // initial tank level switch position stabilized
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock Atlas Scientific
+        // thread for mock Atlas Scientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
                 mock_atlas_scientific(
                     &tx_atlas_scientific_to_data_logger,
                     &rx_atlas_scientific_from_data_logger,
-                    None,
-                    10.0, // water
-                    12.0, // conductivity
-                    11.0, // pH
+                    Some(&rx_atlas_scientific_from_test_environment),
+                    10.0, // initial water temperature
+                    12.0, // initial conductivity
+                    11.0, // initial pH
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // mock Ambient
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
                 mock_ambient(
                     &tx_ambient_to_data_logger,
                     &rx_ambient_from_data_logger,
-                    None,
-                    13.0,
-                    14.0,
+                    Some(&rx_ambient_from_test_environment),
+                    13.0, // initial ambient temperature
+                    14.0, // initial ambient humidity
                 );
-            });
+            })
+            .unwrap();
 
-            scope.spawn(move || {
-                // test object
+        // give mock threads some time to establish
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for test object and asserts
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
@@ -1242,142 +1453,219 @@ pub mod tests {
                 println!("Printing recorded data:");
                 mock_data_injection.output();
 
-                let last_recorded_data_frame = mock_data_injection.data_frames.pop().unwrap();
+                let mut data_frame: DataFrame = mock_data_injection.data_frames.pop().unwrap();
 
-                assert_eq!(last_recorded_data_frame.water_temperature, Some(10.0));
-                assert_eq!(
-                    last_recorded_data_frame.water_temperature_filtered,
-                    Some(5.0)
+                // Dataframe #7
+                println!("Asserting data frame #7");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(28.8125), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.0195313), // target_water_ph_filtered
+                    Some(50_000.0),      // target_water_conductivity
+                    Some(48437.83),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_invalid
+                    Some(false),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(35.0),      // target_ambient_temperature
+                    Some(66.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(last_recorded_data_frame.ph, Some(11.0));
-                assert_eq!(last_recorded_data_frame.ph_filtered, Some(5.5));
-                assert_eq!(last_recorded_data_frame.conductivity, Some(12.0));
-                assert_eq!(last_recorded_data_frame.conductivity_filtered, Some(6.0));
-                assert_eq!(last_recorded_data_frame.conductivity_compensated, None);
-                assert_eq!(last_recorded_data_frame.refill_in_progress, Some(false));
-                assert_eq!(
-                    last_recorded_data_frame.tank_level_switch_position,
-                    Some(true)
+                
+                // Dataframe #6
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #6");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(28.625), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.0390625), // target_water_ph_filtered
+                    Some(50_000.0),      // target_water_conductivity
+                    Some(46875.656),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_invalid
+                    Some(false),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(35.0),      // target_ambient_temperature
+                    Some(66.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(
-                    last_recorded_data_frame.tank_level_switch_invalid,
-                    Some(false)
-                );
-                assert_eq!(
-                    last_recorded_data_frame.tank_level_switch_position_stabilized,
-                    Some(true)
-                );
-                assert_eq!(
-                    last_recorded_data_frame.surface_ventilation_status,
-                    Some(true)
-                );
-                assert_eq!(last_recorded_data_frame.ambient_temperature, Some(13.0));
-                assert_eq!(last_recorded_data_frame.ambient_humidity, Some(14.0));
-                assert_eq!(last_recorded_data_frame.heater_status, Some(false));
 
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_water_temperature)
-                        .expect("Could not read back water temperature from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    10.0,
+                // Dataframe #5
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #5");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(28.25), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.078125), // target_water_ph_filtered
+                    Some(50_000.0),      // target_water_conductivity
+                    Some(43751.313),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(35.0),      // target_ambient_temperature
+                    Some(66.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(
-                        config2
-                            .data_logger
-                            .output_file_name_water_temperature_filtered
-                    )
-                    .expect("Could not read back filtered water temperature from disk.")
-                    .parse::<f32>()
-                    .unwrap(),
-                    5.0,
+
+                // Dataframe #4
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #4");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(27.5), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.15625), // target_water_ph_filtered
+                    Some(50_000.0),      // target_water_conductivity
+                    Some(37502.625),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_tank_level_switch_position
+                    Some(false),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(35.0),      // target_ambient_temperature
+                    Some(14.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_pH)
-                        .expect("Could not read back pH from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    11.0,
+
+                // Dataframe #3
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #3");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(26.0), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.3125), // target_water_ph_filtered
+                    Some(50_000.0),      // target_water_conductivity
+                    Some(25005.25),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(true),      // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(false),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(13.0),      // target_ambient_temperature
+                    Some(14.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_pH_filtered)
-                        .expect("Could not read back filtered pH from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    5.5,
+
+                // Dataframe #2
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #2");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(23.0), // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.625,), // target_water_ph_filtered
+                    Some(12.0),      // target_water_conductivity
+                    Some(10.5),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(false),      // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(false),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(13.0),      // target_ambient_temperature
+                    Some(14.0),      // target_ambient_humidity
+                    Some(true),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_conductivity)
-                        .expect("Could not read back conductivity from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    12.0,
+
+                // Dataframe #1
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #1");
+                data_frame.assert(
+                    Some(29.0),      // target_water_temperature
+                    Some(17.0), // target_water_temperature_filtered
+                    Some(11.0),      // target_water_ph
+                    Some(8.25,), // target_water_ph_filtered
+                    Some(12.0),      // target_water_conductivity
+                    Some(9.0),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(false),      // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(false),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(true),      // target_surface_ventilation_status
+                    Some(13.0),      // target_ambient_temperature
+                    Some(14.0),      // target_ambient_humidity
+                    Some(false),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_conductivity_filtered)
-                        .expect("Could not read back conductivity from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    6.0,
+
+                // Dataframe #0
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #0");
+                data_frame.assert(
+                    Some(10.0),      // target_water_temperature
+                    Some(5.0), // target_water_temperature_filtered
+                    Some(11.0),      // target_water_ph
+                    Some(5.5), // target_water_ph_filtered
+                    Some(12.0),      // target_water_conductivity
+                    Some(6.0),       // target_water_conductivity_filtered
+                    None,            // target_water_conductivity_compensated
+                    Some(false),      // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(false),      // target_tank_level_switch_invalid
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(false),      // target_surface_ventilation_status
+                    Some(13.0),      // target_ambient_temperature
+                    Some(14.0),      // target_ambient_humidity
+                    Some(false),      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_ambient_temperature)
-                        .expect("Could not read back ambient temperature from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    13.0,
+
+                assert_output_file_contents(
+                    &config2.data_logger, // data_logger_config,
+                    29.0,      // target_water_temperature
+                    28.8, // target_water_temperature_filtered
+                    7.0,      // target_water_ph
+                    7.0, // target_water_ph_filtered
+                    50_000.0,      // target_water_conductivity
+                    48438.0,       // target_water_conductivity_filtered
+                    0.0,            // target_water_conductivity_compensated
+                    true,      // target_refill_in_progress
+                    false,     // target_tank_level_switch_position
+                    true,      // target_tank_level_switch_invalid
+                    false,     // target_tank_level_switch_position_stabilized
+                    true,      // target_surface_ventilation_status
+                    35.0,      // target_ambient_temperature
+                    66.0,      // target_ambient_humidity
+                    true,      // target_heater_status
                 );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_humidity)
-                        .expect("Could not read back ambient humidity from disk.")
-                        .parse::<f32>()
-                        .unwrap(),
-                    14.0,
-                );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_refill_in_progress)
-                        .expect("Could not read back refill in progress from disk."),
-                    "OFF".to_string(),
-                );
-                assert_eq!(
-                    fs::read_to_string(
-                        config2
-                            .data_logger
-                            .output_file_name_tank_level_switch_position
-                    )
-                    .expect("Could not read back tank_level_switch_position from disk."),
-                    "HIGH".to_string(),
-                );
-                assert_eq!(
-                    fs::read_to_string(
-                        config2
-                            .data_logger
-                            .output_file_name_tank_level_switch_invalid
-                    )
-                    .expect("Could not read back tank level switch invalid from disk."),
-                    "VALID".to_string(),
-                );
-                assert_eq!(
-                    fs::read_to_string(
-                        config2
-                            .data_logger
-                            .output_file_name_tank_level_switch_position_stabilized
-                    )
-                    .expect("Could not read back tank level switch stabilized from disk."),
-                    "HIGH".to_string(),
-                );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_ventilation_is_on)
-                        .expect("Could not read back ventilation status from disk."),
-                    "ON".to_string(),
-                );
-                assert_eq!(
-                    fs::read_to_string(config2.data_logger.output_file_name_heating_is_on)
-                        .expect("Could not read back heater status from disk."),
-                    "OFF".to_string(),
-                );
-            });
-        });
+            })
+            .unwrap();
+
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch thread did not finish.");
+        join_handle_mock_ventilation
+            .join()
+            .expect("Mock ventilation thread did not finish.");
+        join_handle_mock_heating
+            .join()
+            .expect("Mock heating thread did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific thread did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient thread did not finish.");
+        join_handle_mock_refill
+            .join()
+            .expect("Mock refill thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Mock data logger thread did not finish.");
     }
 }

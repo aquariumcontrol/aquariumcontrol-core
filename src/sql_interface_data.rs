@@ -160,15 +160,15 @@ impl fmt::Display for DataFrame {
         };
         write!(
             f,
-            "\ntimestamp: {}\
-            \nwater_temperature: {}, water_temperature_filtered: {}, \
-            \nph: {}, ph_filtered: {}, \
-            \nconductivity: {}, conductivity_filtered: {}, conductivity_compensated: {}, \
+            "\n**************************************\ntimestamp: {}\
+            \nwater_temperature: {},\nwater_temperature_filtered: {}, \
+            \nph: {},\nph_filtered: {}, \
+            \nconductivity: {},\nconductivity_filtered: {},\nconductivity_compensated: {}, \
             \nrefill_in_progress: {}, \
-            \ntank_level_switch_position: {}, tank_level_switch_invalid: {}, tank_level_switch_position_stabilized: {}, \
-            \nsurface_ventilation_status: {}, \
-            \nambient_temperature: {}, ambient_humidity: {}, \
-            \nheater_status: {}",
+            \ntank_level_switch_position: {},\ntank_level_switch_invalid: {},\ntank_level_switch_position_stabilized: {}, \
+            \nsurface_ventilation_status: {},\
+            \nambient_temperature: {},\nambient_humidity: {}, \
+            \nheater_status: {}\n**************************************\n",
             self.timestamp,
             water_temperature_string,
             water_temperature_filtered_string,
@@ -186,6 +186,65 @@ impl fmt::Display for DataFrame {
             ambient_humidity_string,
             heater_status_string
         )
+    }
+}
+
+#[cfg(test)]
+impl DataFrame {
+    pub fn assert(
+        &self,
+        target_water_temperature: Option<f32>,
+        target_water_temperature_filtered: Option<f32>,
+        target_water_ph: Option<f32>,
+        target_water_ph_filtered: Option<f32>,
+        target_water_conductivity: Option<f32>,
+        target_water_conductivity_filtered: Option<f32>,
+        target_water_conductivity_compensated: Option<f32>,
+        target_refill_in_progress: Option<bool>,
+        target_tank_level_switch_position: Option<bool>,
+        target_tank_level_switch_invalid: Option<bool>,
+        target_tank_level_switch_position_stabilized: Option<bool>,
+        target_surface_ventilation_status: Option<bool>,
+        target_ambient_temperature: Option<f32>,
+        target_ambient_humidity: Option<f32>,
+        target_heater_status: Option<bool>,
+    ) {
+        assert_eq!(self.water_temperature, target_water_temperature);
+        assert_eq!(
+            self.water_temperature_filtered,
+            target_water_temperature_filtered,
+        );
+        assert_eq!(self.ph, target_water_ph);
+        assert_eq!(self.ph_filtered, target_water_ph_filtered);
+        assert_eq!(self.conductivity, target_water_conductivity);
+        assert_eq!(
+            self.conductivity_filtered,
+            target_water_conductivity_filtered
+        );
+        assert_eq!(
+            self.conductivity_compensated,
+            target_water_conductivity_compensated
+        );
+        assert_eq!(self.refill_in_progress, target_refill_in_progress);
+        assert_eq!(
+            self.tank_level_switch_position,
+            target_tank_level_switch_position
+        );
+        assert_eq!(
+            self.tank_level_switch_invalid,
+            target_tank_level_switch_invalid
+        );
+        assert_eq!(
+            self.tank_level_switch_position_stabilized,
+            target_tank_level_switch_position_stabilized
+        );
+        assert_eq!(
+            self.surface_ventilation_status,
+            target_surface_ventilation_status
+        );
+        assert_eq!(self.ambient_temperature, target_ambient_temperature);
+        assert_eq!(self.ambient_humidity, target_ambient_humidity);
+        assert_eq!(self.heater_status, target_heater_status);
     }
 }
 

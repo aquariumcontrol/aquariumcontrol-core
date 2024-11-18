@@ -310,6 +310,7 @@ pub mod tests {
         rx_refill_from_tank_level_switch_opt: Option<&Receiver<bool>>,
         rx_refill_from_signal_handler: &Receiver<InternalCommand>,
         tx_refill_to_data_logger_opt: Option<&Sender<bool>>,
+        rx_refill_from_data_logger_opt: Option<&Receiver<InternalCommand>>,
         rx_refill_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_stimuli: bool,
     ) -> Vec<bool> {
@@ -317,63 +318,56 @@ pub mod tests {
 
         let sleep_duration = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
-        let mut sending_blocked: bool = false;
-        let mut loop_counter = 0;
+
         let mut stimuli = initial_stimuli;
 
         loop {
-            if !sending_blocked {
-                match tx_refill_to_tank_level_switch_opt {
-                    Some(tx_refill_to_tank_level_switch) => {
-                        match tx_refill_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                            AquariumSignal::TankLevelSwitchPositionStabilized,
-                        )) {
-                            Ok(_) => {
-                                match rx_refill_from_tank_level_switch_opt {
-                                    Some(rx_refill_from_tank_level_switch) => {
-                                        match rx_refill_from_tank_level_switch.try_recv() {
-                                            Ok(d) => {
-                                                result.push(d);
-                                            }
-                                            Err(e) => {
-                                                match e {
-                                                    TryRecvError::Empty => { /* empty buffer - no action required */
-                                                    }
-                                                    TryRecvError::Disconnected => {
-                                                        panic!(
+            match tx_refill_to_tank_level_switch_opt {
+                Some(tx_refill_to_tank_level_switch) => {
+                    match tx_refill_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                        AquariumSignal::TankLevelSwitchPositionStabilized,
+                    )) {
+                        Ok(_) => {
+                            match rx_refill_from_tank_level_switch_opt {
+                                Some(rx_refill_from_tank_level_switch) => {
+                                    match rx_refill_from_tank_level_switch.try_recv() {
+                                        Ok(d) => {
+                                            result.push(d);
+                                        }
+                                        Err(e) => {
+                                            match e {
+                                                TryRecvError::Empty => { /* empty buffer - no action required */
+                                                }
+                                                TryRecvError::Disconnected => {
+                                                    panic!(
                                                             "Mock Refill: Error in trying to receive command from TankLevelSwitch: {e:?}"
                                                         );
-                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                    None => {
-                                        panic!(
+                                }
+                                None => {
+                                    panic!(
                                             "Mock Refill: invoked with valid sender but without valid receiver for channel communication with tank level switch"
                                         )
-                                    }
                                 }
                             }
-                            Err(e) => {
-                                panic!(
+                        }
+                        Err(e) => {
+                            panic!(
                                     "Mock Refill: Could not send signal request to TankLevelSwitch ({e:?})"
                                 )
-                            }
                         }
                     }
-                    None => { /* do nothing */ }
-                };
-            }
+                }
+                None => { /* do nothing */ }
+            };
 
             match rx_refill_from_signal_handler.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::Quit => {
-                            sending_blocked = true;
-                            println!("Mock refill: Received Quit signal - blocking sending");
-                        }
-                        InternalCommand::Terminate => {
                             break;
                         }
                         _ => {
@@ -392,6 +386,60 @@ pub mod tests {
                     }
                 }
             };
+
+            // communicate with data logger
+            match rx_refill_from_data_logger_opt {
+                Some(rx_refill_from_data_logger) => {
+                    match rx_refill_from_data_logger.try_recv() {
+                        Ok(data_logger_request) => {
+                            match data_logger_request {
+                                InternalCommand::RequestSignal(data_logger_signal_request) => {
+                                    match data_logger_signal_request {
+                                        AquariumSignal::RefillPumpStatus => {
+                                            match tx_refill_to_data_logger_opt {
+                                                Some(tx_refill_to_data_logger) => {
+                                                    match tx_refill_to_data_logger.send(stimuli) {
+                                                        Ok(_) => { /* do nothing */ }
+                                                        Err(e) => {
+                                                            panic!(
+                                                        "Mock Refill: Could not send signal request to DataLogger ({e:?})"
+                                                    );
+                                                        }
+                                                    };
+                                                }
+                                                None => {
+                                                    panic!("Mock Refill switch invoked without Sender for channel communication to data logger");
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            panic!("Mock Refill switch received request for invalid signal {}", data_logger_signal_request);
+                                        }
+                                    };
+                                }
+                                _ => {
+                                    panic!(
+                                        "Mock Refill: Received invalid command {} from DataLogger",
+                                        data_logger_request
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    panic!(
+                                        "Mock Refill: Error in trying to receive command from DataLogger: {e:?}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                None => { /* do nothing */ }
+            }
+
             match rx_refill_from_test_environment_opt {
                 Some(rx_refill_from_test_environment) => {
                     match rx_refill_from_test_environment.try_recv() {
@@ -429,26 +477,7 @@ pub mod tests {
                 }
                 None => { /* do nothing */ }
             };
-            if loop_counter % 1000 == 0 {
-                // send data to data logger only once a second
-                if !sending_blocked {
-                    match tx_refill_to_data_logger_opt {
-                        Some(tx_refill_to_data_logger) => {
-                            match tx_refill_to_data_logger.send(stimuli) {
-                                Ok(_) => { /* do nothing */ }
-                                Err(e) => {
-                                    panic!(
-                                        "Mock Refill: Could not send signal request to DataLogger ({e:?})"
-                                    )
-                                }
-                            };
-                        }
-                        None => { /* do nothing */ }
-                    };
-                }
-            }
             spin_sleeper.sleep(sleep_duration);
-            loop_counter += 1;
         }
         result
     }
@@ -460,6 +489,7 @@ pub mod tests {
     ) {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
         loop {
             // receive information for data logger
             match rx_data_logger_from_test_object.try_recv() {
@@ -511,6 +541,7 @@ pub mod tests {
 
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
         loop {
             match rx_schedule_check_from_test_object.try_recv() {
                 Ok(c) => {
@@ -582,7 +613,7 @@ pub mod tests {
 
     pub fn mock_tank_level_switch(
         tx_tank_level_switch_to_test_object: &Sender<bool>,
-        rx_tank_level_switch_from_test_object_or_test_environment: &Receiver<InternalCommand>,
+        rx_tank_level_switch_from_test_object_or_signal_handler: &Receiver<InternalCommand>,
         rx_tank_level_switch_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         tx_tank_level_switch_to_data_logger_opt: Option<&Sender<bool>>,
         rx_tank_level_switch_from_data_logger_opt: Option<&Receiver<InternalCommand>>,
@@ -596,8 +627,9 @@ pub mod tests {
 
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
         loop {
-            match rx_tank_level_switch_from_test_object_or_test_environment.try_recv() {
+            match rx_tank_level_switch_from_test_object_or_signal_handler.try_recv() {
                 Ok(c) => {
                     let response_value = match c {
                         InternalCommand::RequestSignal(d) => match d {
@@ -637,7 +669,7 @@ pub mod tests {
                     }
                 }
             }
-            
+
             // communicate with data logger
             match rx_tank_level_switch_from_data_logger_opt {
                 Some(rx_tank_level_switch_from_data_logger) => {
@@ -645,17 +677,26 @@ pub mod tests {
                         Ok(data_logger_request) => {
                             match data_logger_request {
                                 InternalCommand::RequestSignal(data_logger_signal_request) => {
-                                    let data_logger_signal_response = match data_logger_signal_request {
-                                        AquariumSignal::TankLevelSwitchPosition => stimuli_position,
-                                        AquariumSignal::TankLevelSwitchInvalid =>  stimuli_invalid,
-                                        AquariumSignal::TankLevelSwitchPositionStabilized => stimuli_position_stabilized,
-                                        _ => {
-                                            panic!("Mock Tank Level Switch: Invalid signal {} requested from DataLogger", data_logger_signal_request);
-                                        }
-                                    };
+                                    let data_logger_signal_response =
+                                        match data_logger_signal_request {
+                                            AquariumSignal::TankLevelSwitchPosition => {
+                                                stimuli_position
+                                            }
+                                            AquariumSignal::TankLevelSwitchInvalid => {
+                                                stimuli_invalid
+                                            }
+                                            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                                                stimuli_position_stabilized
+                                            }
+                                            _ => {
+                                                panic!("Mock Tank Level Switch: Invalid signal {} requested from DataLogger", data_logger_signal_request);
+                                            }
+                                        };
                                     match tx_tank_level_switch_to_data_logger_opt {
                                         Some(tx_tank_level_switch_to_data_logger) => {
-                                            match tx_tank_level_switch_to_data_logger.send(data_logger_signal_response) {
+                                            match tx_tank_level_switch_to_data_logger
+                                                .send(data_logger_signal_response)
+                                            {
                                                 Ok(_) => { /* do nothing */ }
                                                 Err(e) => {
                                                     panic!(
@@ -666,9 +707,9 @@ pub mod tests {
                                         }
                                         None => {
                                             panic!("Mock Tank Level switch invoked without Sender for channel communication to data logger");
-                                        }    
+                                        }
                                     };
-                                },
+                                }
                                 _ => {
                                     panic!("Mock Tank Level Switch: Received invalid command {} from DataLogger", data_logger_request);
                                 }
@@ -679,20 +720,16 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock Tank Level Switch: Error in trying to receive command from TankLevelSwitch: {e:?}"
+                                        "Mock Tank Level Switch: Error in trying to receive command from DataLogger: {e:?}"
                                     );
                                 }
                             }
                         }
                     }
                 }
-                None => {
-                    panic!(
-                        "Mock Tank Level Switch: invoked with valid sender but without valid receiver for channel communication with tank level switch"
-                    );
-                }
-            }            
-            
+                None => { /* do nothing */ }
+            }
+
             match rx_tank_level_switch_from_test_environment_opt {
                 Some(rx_tank_level_switch_from_test_environment) => {
                     match rx_tank_level_switch_from_test_environment.try_recv() {
@@ -700,9 +737,7 @@ pub mod tests {
                             TestCommand::UpdateSignal(d) => {
                                 println!("Mock TankLevelSwitch: received {}", d);
                                 match d {
-                                    MockSignal::TankLevelSwitchPosition(c) => {
-                                        stimuli_position = c
-                                    }
+                                    MockSignal::TankLevelSwitchPosition(c) => stimuli_position = c,
                                     MockSignal::TankLevelSwitchInvalid(c) => stimuli_invalid = c,
                                     MockSignal::TankLevelSwitchPositionStabilized(c) => {
                                         stimuli_position_stabilized = c
@@ -790,6 +825,7 @@ pub mod tests {
                     }
                 }
             }
+
             match rx_atlas_scientific_from_test_environment_opt {
                 Some(rx_atlas_scientific_from_test_environment) => {
                     match rx_atlas_scientific_from_test_environment.try_recv() {
@@ -847,6 +883,7 @@ pub mod tests {
 
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
         loop {
             match rx_ambient_from_test_object.try_recv() {
                 Ok(c) => {
@@ -1031,58 +1068,53 @@ pub mod tests {
     ) {
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
-        let mut sending_blocked: bool = false;
         let mut stimuli = initial_stimuli;
 
         loop {
-            spin_sleeper.sleep(sleep_duration);
-            if !sending_blocked {
-                match tx_heating_to_tank_level_switch_opt {
-                    Some(tx_heating_to_tank_level_switch) => {
-                        match tx_heating_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                            AquariumSignal::TankLevelSwitchPosition,
-                        )) {
-                            Ok(_) => {
-                                match rx_heating_from_tank_level_switch_opt {
-                                    Some(rx_heating_from_tank_level_switch) => {
-                                        match rx_heating_from_tank_level_switch.try_recv() {
-                                            Ok(_) => {
-                                                // do nothing
-                                            }
-                                            Err(e) => {
-                                                match e {
-                                                    TryRecvError::Empty => { /* empty buffer - no action required */
-                                                    }
-                                                    TryRecvError::Disconnected => {
-                                                        panic!(
+            match tx_heating_to_tank_level_switch_opt {
+                Some(tx_heating_to_tank_level_switch) => {
+                    match tx_heating_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                        AquariumSignal::TankLevelSwitchPosition,
+                    )) {
+                        Ok(_) => {
+                            match rx_heating_from_tank_level_switch_opt {
+                                Some(rx_heating_from_tank_level_switch) => {
+                                    match rx_heating_from_tank_level_switch.try_recv() {
+                                        Ok(_) => {
+                                            // do nothing
+                                        }
+                                        Err(e) => {
+                                            match e {
+                                                TryRecvError::Empty => { /* empty buffer - no action required */
+                                                }
+                                                TryRecvError::Disconnected => {
+                                                    panic!(
                                                             "Mock Heating: Error in trying to receive signal from test object: {e:?}"
                                                         );
-                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                    None => {
-                                        panic!("Mock Heating: invoked with valid sender but with empty receiver part for channel communication to tank level switch.");
-                                    }
+                                }
+                                None => {
+                                    panic!("Mock Heating: invoked with valid sender but with empty receiver part for channel communication to tank level switch.");
                                 }
                             }
-                            Err(e) => {
-                                panic!("Mock Heating: Could not send signal request to test object: {e:?}");
-                            }
+                        }
+                        Err(e) => {
+                            panic!(
+                                "Mock Heating: Could not send signal request to test object: {e:?}"
+                            );
                         }
                     }
-                    None => { /* do nothing */ }
-                };
-            }
+                }
+                None => { /* do nothing */ }
+            };
+
             match rx_heating_from_signal_handler.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::Quit => {
-                            sending_blocked = true;
-                            println!("Mock Heating: Received Quit signal - blocking sending");
-                        }
-                        InternalCommand::Terminate => {
                             break;
                         }
                         _ => {
@@ -1117,23 +1149,26 @@ pub mod tests {
                                                         Ok(_) => { /* do nothing */ }
                                                         Err(e) => {
                                                             panic!(
-                                                                "Mock Heating: Could not send signal request to DataLogger ({e:?})"
+                                                                "Mock Heating: Could not send signal request to data logger ({e:?})"
                                                             );
                                                         }
                                                     };
                                                 }
                                                 None => {
-                                                    panic!("Mock Heating invoked without Sender for channel communication to data logger");                                                    
+                                                    panic!("Mock Heating invoked without Sender for channel communication to data logger");
                                                 }
                                             };
                                         }
                                         _ => {
-                                            panic!("Mock Heating: Invalid signal {} requested from DataLogger", data_logger_signal_request);
+                                            panic!("Mock Heating: Invalid signal {} requested from data logger", data_logger_signal_request);
                                         }
                                     }
-                                },
+                                }
                                 _ => {
-                                    panic!("Mock Heating: Received invalid command {} from DataLogger", data_logger_request);
+                                    panic!(
+                                        "Mock Heating: Received invalid command {} from data logger",
+                                        data_logger_request
+                                    );
                                 }
                             }
                         }
@@ -1142,18 +1177,14 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock Heating: Error in trying to receive command from TankLevelSwitch: {e:?}"
+                                        "Mock Heating: Error in trying to receive command from data logger: {e:?}"
                                     );
                                 }
                             }
                         }
                     }
                 }
-                None => {
-                    panic!(
-                        "Mock Heating: invoked with valid sender but without valid receiver for channel communication with tank level switch"
-                    );
-                }
+                None => { /* do nothing */ }
             }
 
             match rx_heating_from_test_environment_opt {
@@ -1200,34 +1231,60 @@ pub mod tests {
 
     pub fn mock_ventilation(
         tx_ventilation_to_data_logger: &Sender<bool>,
+        rx_ventilation_from_data_logger: &Receiver<InternalCommand>,
         rx_ventilation_from_signal_handler: &Receiver<InternalCommand>,
         rx_ventilation_from_test_environment_opt: Option<&Receiver<TestCommand>>,
         initial_stimuli: bool,
     ) {
-        let sleep_duration = Duration::from_secs(1);
+        let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
-        let mut sending_blocked: bool = false;
         let mut stimuli = initial_stimuli;
 
         loop {
-            if !sending_blocked {
-                match tx_ventilation_to_data_logger.send(stimuli) {
-                    Ok(_) => { /* do nothing */ }
-                    Err(e) => {
-                        panic!(
-                            "Mock Ventilation: Could not send signal request to test object: {e:?}"
-                        );
+            match rx_ventilation_from_data_logger.try_recv() {
+                Ok(data_logger_request) => {
+                    match data_logger_request {
+                        InternalCommand::RequestSignal(data_logger_signal_request) => {
+                            match data_logger_signal_request {
+                                AquariumSignal::VentilationControlStatus => {
+                                    match tx_ventilation_to_data_logger.send(stimuli) {
+                                        Ok(_) => { /* do nothing */ }
+                                        Err(e) => {
+                                            panic!(
+                                                    "Mock Ventilation: Could not send signal request to test object: {e:?}"
+                                                );
+                                        }
+                                    };
+                                }
+                                _ => {
+                                    panic!("Mock Ventilation Received invalid signal request for {} from data logger", data_logger_signal_request);
+                                }
+                            };
+                        }
+                        _ => {
+                            panic!(
+                                "Mock Ventilation: Received invalid command {} from data logger.",
+                                data_logger_request
+                            );
+                        }
+                    };
+                }
+                Err(e) => {
+                    match e {
+                        TryRecvError::Empty => { /* empty buffer - no action required */ }
+                        TryRecvError::Disconnected => {
+                            panic!(
+                                "Mock Ventilation: Error in trying to receive command from data logger: {e:?}"
+                            );
+                        }
                     }
-                };
-            }
+                }
+            };
+
             match rx_ventilation_from_signal_handler.try_recv() {
                 Ok(c) => {
                     match c {
                         InternalCommand::Quit => {
-                            sending_blocked = true;
-                            println!("Mock Ventilation: Received Quit signal - blocking sending");
-                        }
-                        InternalCommand::Terminate => {
                             break;
                         }
                         _ => {
@@ -1275,8 +1332,8 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock ventilation: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "Mock ventilation: Error in trying to receive command from test environment: {e:?}"
+                                    );
                                 }
                             }
                         }

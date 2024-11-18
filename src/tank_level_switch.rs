@@ -730,6 +730,7 @@ pub mod tests {
                     &rx_refill_from_signal_handler,
                     None,
                     None,
+                    None,
                     false,
                 );
                 assert_ge!(results.len(), 50);
@@ -888,6 +889,7 @@ pub mod tests {
                     Some(&tx_refill_to_tank_level_switch),
                     Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
                     None,
                     None,
                     false,
@@ -1060,6 +1062,7 @@ pub mod tests {
                     &rx_refill_from_signal_handler,
                     None,
                     None,
+                    None,
                     false,
                 );
                 assert_ge!(results.len(), 95);
@@ -1227,6 +1230,7 @@ pub mod tests {
                     Some(&tx_refill_to_tank_level_switch),
                     Some(&rx_refill_from_tank_level_switch),
                     &rx_refill_from_signal_handler,
+                    None,
                     None,
                     None,
                     false,
