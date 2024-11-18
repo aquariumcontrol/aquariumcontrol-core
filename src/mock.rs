@@ -63,6 +63,7 @@ pub mod tests {
         RefillPumpStatus(bool),
 
         /// schedule alllows operation
+        #[allow(unused)]
         ScheduleAllows(bool),
     }
 
