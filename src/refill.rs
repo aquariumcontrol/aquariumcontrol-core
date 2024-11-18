@@ -909,10 +909,6 @@ impl Refill {
             self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
             if self.config.active {
-                // frequent update required for calculation of error condition switch stuck high
-                sql_refill_data.duration_since_last_refill =
-                    sql_refill_data.duration_since_last_refill + self.config.check_interval;
-
                 // check when the last refill operation has taken place
                 // if too much time has passed, issue an error condition - not impeding rest of operation
                 self.check_error_condition_switch_stuck_high(
@@ -1022,6 +1018,9 @@ impl Refill {
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
                 }
             }
+
+            sql_refill_data.duration_since_last_refill =
+                sql_refill_data.duration_since_last_refill + self.config.check_interval;
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -1086,7 +1085,7 @@ pub mod tests {
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::TryRecvError;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -1102,6 +1101,7 @@ pub mod tests {
     };
     use crate::mock::tests::MockWaterInjection;
     use crate::mock::tests::TestCommand;
+    use crate::proc_ext_req::ProcessExternalRequestTrait;
     use crate::refill::Refill;
     use crate::refill::RefillErrors;
     use crate::sql_interface::SqlInterface;
@@ -1123,32 +1123,12 @@ pub mod tests {
         }
     }
 
-    pub fn prepare_refill_tests() -> (ConfigData, Refill, SqlInterface) {
-        // prepare struct Refill for subsequent tests
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-        let refill_config = config.refill.clone();
-        (
-            config,
-            Refill::new(refill_config, sql_interface_refill),
-            sql_interface,
-        )
-    }
-
-    pub fn prepare_refill_tests_with_errors(
-        refill_errors: RefillErrors,
+    pub fn prepare_refill_tests(
+        config_file_name: &str,
+        refill_errors: Option<RefillErrors>,
     ) -> (ConfigData, Refill, SqlInterface) {
         // prepare struct Refill for subsequent tests
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        let config: ConfigData = read_config_file(config_file_name.to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1160,42 +1140,25 @@ pub mod tests {
         let refill_config = config.refill.clone();
         (
             config,
-            Refill::new_with_errors(refill_config, sql_interface_refill, refill_errors),
-            sql_interface,
-        )
-    }
-
-    fn prepare_refill_tests_secondary() -> (ConfigData, Refill, SqlInterface) {
-        // prepare struct Refill for subsequent tests
-        // parallel usage of database leads to conflicts
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill_secondary.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-        let refill_config = config.refill.clone();
-        (
-            config,
-            Refill::new(refill_config, sql_interface_refill),
+            match refill_errors.is_some() {
+                true => Refill::new_with_errors(
+                    refill_config, sql_interface_refill, refill_errors.unwrap()),
+                false => Refill::new(refill_config, sql_interface_refill),
+            },
             sql_interface,
         )
     }
 
     #[test]
     pub fn test_refill_process_external_request_empty_channel() {
-        /*
         let refill_errors = RefillErrors {
             error_switch_stuck_high: false,
             error_switch_stuck_low: false,
             error_receive_tank_level_switch_position: false,
             error_sql_update_failed: false,
         };
-        let (_, mut refill, _) = prepare_refill_tests_with_errors(refill_errors);
+        let (_, mut refill, _) =
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", Some(refill_errors));
 
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
@@ -1215,15 +1178,16 @@ pub mod tests {
         assert_eq!(stop_command_received, false);
 
         println!("* [Refill] checking false result of processing of external request when channel is empty succeeded.");
-        */
     }
+
     #[test]
     // this test case executes multiple iterations of the loop inside the .execute function with triggering a refill
     pub fn test_refill_trigger_water_injection() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
@@ -1404,7 +1368,9 @@ pub mod tests {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (config, mut refill, mut sql_interface) = prepare_refill_tests();
+        let (config, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_quinary.toml", None);
+
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
@@ -1586,7 +1552,8 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
 
         // set the error
         refill.refill_errors.error_switch_stuck_low = true;
@@ -1793,7 +1760,8 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
 
         // set the error
         refill.refill_errors.error_sql_update_failed = true;
@@ -1982,7 +1950,11 @@ pub mod tests {
             error_sql_update_failed: true,
         };
 
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_with_errors(refill_errors);
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            Some(refill_errors)
+        );
+
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
@@ -2163,7 +2135,8 @@ pub mod tests {
     pub fn test_refill_blocked_by_schedule() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
 
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();

@@ -409,40 +409,14 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::channel_content::{AquariumDevice, InternalCommand};
-    use crate::config::ConfigData;
     use crate::mock::tests::mock_controllino;
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_tank_level_switch;
     use crate::mock::tests::MockSignal;
     use crate::mock::tests::TestCommand;
-    use crate::read_config_file;
     use crate::refill::tests::prepare_refill_tests;
     use crate::water_injection::WaterInjection;
     use crate::water_injection::WaterInjectionTrait;
-    use crate::Refill;
-    use crate::SqlInterface;
-    use crate::SqlInterfaceRefill;
-
-    pub fn prepare_refill_tests_tertiary() -> (ConfigData, Refill, SqlInterface) {
-        // prepare struct Refill for subsequent tests
-        // parallel usage of database leads to conflicts
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill_tertiary.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-        let refill_config = config.refill.clone();
-        (
-            config,
-            Refill::new(refill_config, sql_interface_refill),
-            sql_interface,
-        )
-    }
 
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high
@@ -450,7 +424,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            None,
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -599,7 +576,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            None
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -747,7 +727,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            None
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -893,7 +876,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            None
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -1057,7 +1043,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            None,
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -1206,7 +1195,10 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests_tertiary();
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill_tertiary.toml",
+            None
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
