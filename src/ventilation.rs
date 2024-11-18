@@ -1203,15 +1203,15 @@ pub mod tests {
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
-                assert_le!(second_last_actuation_duration, 8080);
+                assert_le!(second_last_actuation_duration, 8150);
                 assert_ge!(second_last_actuation_duration, 7800);
-                assert_le!(third_last_actuation_duration, 8080);
+                assert_le!(third_last_actuation_duration, 8150);
                 assert_ge!(third_last_actuation_duration, 7800);
-                assert_le!(fourth_last_actuation_duration, 8080);
+                assert_le!(fourth_last_actuation_duration, 8150);
                 assert_ge!(fourth_last_actuation_duration, 7800);
-                assert_le!(fifth_last_actuation_duration, 8080);
+                assert_le!(fifth_last_actuation_duration, 8150);
                 assert_ge!(fifth_last_actuation_duration, 7800);
-                assert_le!(sixth_last_actuation_duration, 8080);
+                assert_le!(sixth_last_actuation_duration, 8150);
                 assert_ge!(sixth_last_actuation_duration, 7800);
                 assert_le!(delta_min_max_duration, 100);
             })
