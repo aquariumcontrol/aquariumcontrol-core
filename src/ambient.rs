@@ -323,13 +323,13 @@ impl Ambient {
             };
 
             //*** communication to data logger thread ***
-            let response_to_data_logger = match rx_from_data_logger.try_recv() {
+            match rx_from_data_logger.try_recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_data_logger = false;
                     match c {
                         InternalCommand::RequestSignal(d) => {
                             self.lock_warn_inapplicable_command_data_logger = false;
-                            match d {
+                            let response_to_data_logger = match d {
                                 AquariumSignal::AmbientTemperature => {
                                     self.lock_error_invalid_signal_request_data_logger = false;
                                     self.ambient_temperature
@@ -349,6 +349,20 @@ impl Ambient {
                                     }
                                     0.0 // default response to unknown signal request instead of panicking
                                 }
+                            };
+                            _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
+                                Ok(()) => {
+                                    self.lock_error_data_logger_response = false;
+                                }
+                                Err(e) => {
+                                    if !self.lock_error_data_logger_response {
+                                        error!(
+                                            target: LOG_TARGET_AMBIENT,
+                                            "responding back to data logger thread failed ({e:?})"
+                                        );
+                                        self.lock_error_data_logger_response = true;
+                                    }
+                                }
                             }
                         }
                         _ => {
@@ -359,7 +373,6 @@ impl Ambient {
                                 );
                                 self.lock_warn_inapplicable_command_data_logger = true;
                             }
-                            0.0 // default response to unknown command instead of panicking
                         }
                     }
                 }
@@ -378,22 +391,6 @@ impl Ambient {
                                 self.lock_error_channel_receive_data_logger = true;
                             }
                         }
-                    }
-                    0.0
-                }
-            };
-
-            _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
-                Ok(()) => {
-                    self.lock_error_data_logger_response = false;
-                }
-                Err(e) => {
-                    if !self.lock_error_data_logger_response {
-                        error!(
-                            target: LOG_TARGET_AMBIENT,
-                            "responding back to data logger thread failed ({e:?})"
-                        );
-                        self.lock_error_data_logger_response = true;
                     }
                 }
             };
@@ -520,42 +517,6 @@ pub mod tests {
             });
 
             scope.spawn(move || {
-                // mock Data logger thread
-                let result_temperature = match tx_data_logger_to_ambient.send(
-                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
-                    ) {
-                    Ok(()) => {
-                        match rx_data_logger_from_ambient.recv() {
-                            Ok(c) => { c },
-                            Err(e) => {
-                                panic!("Error occurred when mock data logger thread tried to receive from test object: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Error occurred when mock data logger thread tried to send to test object: {e:?}");         
-                    }
-                };
-                assert_eq!(result_temperature, 24.0);
-                let result_humidity = match tx_data_logger_to_ambient.send(
-                        InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)
-                    ) {
-                    Ok(()) => {
-                        match rx_data_logger_from_ambient.recv() {
-                            Ok(c) => { c },
-                            Err(e) => {
-                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
-                    }
-                };
-                assert_eq!(result_humidity, 60.0);
-            });
-
-            scope.spawn(move || {
                 // mock TCP communication thread
                 let sleep_duration_one_millisecond = Duration::from_millis(1);
                 let spin_sleeper = SpinSleeper::default();
@@ -599,6 +560,42 @@ pub mod tests {
                     }
                     spin_sleeper.sleep(sleep_duration_one_millisecond);
                 }
+            });
+
+            scope.spawn(move || {
+                // mock Data logger thread
+                let result_temperature = match tx_data_logger_to_ambient.send(
+                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
+                    ) {
+                    Ok(()) => {
+                        match rx_data_logger_from_ambient.recv() {
+                            Ok(c) => { c },
+                            Err(e) => {
+                                panic!("Error occurred when mock data logger thread tried to receive from test object: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Error occurred when mock data logger thread tried to send to test object: {e:?}");         
+                    }
+                };
+                assert_eq!(result_temperature, 24.0);
+                let result_humidity = match tx_data_logger_to_ambient.send(
+                        InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)
+                    ) {
+                    Ok(()) => {
+                        match rx_data_logger_from_ambient.recv() {
+                            Ok(c) => { c },
+                            Err(e) => {
+                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
+                    }
+                };
+                assert_eq!(result_humidity, 60.0);
             });
 
             scope.spawn(move || {
