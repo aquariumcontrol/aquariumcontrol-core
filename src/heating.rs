@@ -7,7 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+use log::{error, warn};
+
+#[cfg(not(test))]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -475,21 +479,24 @@ impl Heating {
         let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
 
-        info!(
-            target: LOG_TARGET_HEATING,
-            "duration until midnight is {} seconds.",
-            duration_until_midnight
+        #[cfg(test)]
+        println!(
+            "{}: duration until midnight is {} seconds.",
+            LOG_TARGET_HEATING, duration_until_midnight
         );
+
         let mut heating_stats_opt = match self
             .sql_interface_heating
             .get_single_heating_stats_from_database()
         {
             Ok(c) => Some(c),
             Err(e) => {
-                info!(
-                    target: LOG_TARGET_HEATING,
-                    "could not get existing heating stats entry for today from database ({e:?}) - creating new one for today"
+                #[cfg(test)]
+                println!(
+                    "{}: could not get existing heating stats entry for today from database ({e:?}) - creating new one for today",
+                    LOG_TARGET_HEATING
                 );
+
                 Some(HeatingStatsEntry::new())
             }
         };
@@ -505,14 +512,21 @@ impl Heating {
                 break;
             }
             if stop_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_HEATING,
                     "received Stop command. inhibiting heating."
                 );
+
                 heating_inhibited = true;
             }
             if start_command_received {
-                info!("received Start command. restarting heating.");
+                #[cfg(not(test))]
+                info!(
+                    target: LOG_TARGET_HEATING,
+                    "received Start command. restarting heating."
+                );
+
                 heating_inhibited = false;
             }
 
@@ -934,9 +948,11 @@ impl Heating {
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {
-                info!(
-                    target: LOG_TARGET_HEATING,
-                    "sent quit confirmation to signal handler.");
+                #[cfg(test)]
+                println!(
+                    "{}: sent quit confirmation to signal handler.",
+                    LOG_TARGET_HEATING
+                );
             }
             Err(e) => {
                 error!(

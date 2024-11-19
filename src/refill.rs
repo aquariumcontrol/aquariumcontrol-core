@@ -7,7 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+use log::{error, warn};
+
+#[cfg(not(test))]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fmt;
@@ -511,10 +515,12 @@ impl Refill {
 
         if stop_command_received {
             if !self.lock_info_stop_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "received Stop command. Inhibiting refill control."
                 );
+
                 self.lock_info_stop_command_received = true;
             }
             new_state = true;
@@ -525,10 +531,12 @@ impl Refill {
         // therefore it is evaluated after stop command
         if start_command_received {
             if !self.lock_info_start_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "received Start command. Restarting refill control."
                 );
+
                 self.lock_info_start_command_received = true;
             } else {
                 self.lock_info_start_command_received = true;
@@ -548,11 +556,13 @@ impl Refill {
 
         if refill_check_volume_last_24h {
             if !self.lock_info_refill_check_volume_last_24h {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill volume of last 24h exceeds permissible refill volume per 24h of {}",
                     self.config.max_refill_volume_24h
                 );
+
                 self.lock_info_refill_check_volume_last_24h = true;
             }
         } else {
@@ -563,11 +573,13 @@ impl Refill {
             sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
         if refill_check_count_last_24h {
             if !self.lock_info_refill_check_count_last_24h {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill count of last 24h exceeds permissible refill count per 24h of {}",
                     self.config.max_refill_count_24h
                 );
+
                 self.lock_info_refill_check_count_last_24h = true;
             }
         } else {
@@ -578,11 +590,13 @@ impl Refill {
             sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
         if refill_check_volume_last_hour {
             if !self.lock_info_refill_check_volume_last_hour {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill volume of last hour exceeds permissible refill volume per hour of {}",
                     self.config.max_refill_volume_hour
                 );
+
                 self.lock_info_refill_check_volume_last_hour = true;
             }
         } else {
@@ -593,11 +607,13 @@ impl Refill {
             sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
         if refill_check_count_last_hour {
             if !self.lock_info_refill_check_count_last_hour {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill count of last 24h exceeds permissible refill count per hour of {}",
                     self.config.max_refill_count_hour
                 );
+
                 self.lock_info_refill_check_count_last_hour = true;
             }
         } else {
@@ -608,11 +624,13 @@ impl Refill {
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_interval_last_refill {
             if !self.lock_info_refill_check_interval_last_refill {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "time interval since last refill {} is too small (limit={}).",
                     sql_refill_data.duration_since_last_refill, self.config.min_interval_last_refill
                 );
+
                 self.lock_info_refill_check_interval_last_refill = true;
             }
         } else {
@@ -1025,10 +1043,12 @@ impl Refill {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        info!(
-            target: LOG_TARGET_REFILL,
-            "sending Quit confirmation to signal handler."
+        #[cfg(test)]
+        println!(
+            "{}: sending Quit confirmation to signal handler.",
+            LOG_TARGET_REFILL
         );
+
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -1142,7 +1162,10 @@ pub mod tests {
             config,
             match refill_errors.is_some() {
                 true => Refill::new_with_errors(
-                    refill_config, sql_interface_refill, refill_errors.unwrap()),
+                    refill_config,
+                    sql_interface_refill,
+                    refill_errors.unwrap(),
+                ),
                 false => Refill::new(refill_config, sql_interface_refill),
             },
             sql_interface,
@@ -1157,8 +1180,10 @@ pub mod tests {
             error_receive_tank_level_switch_position: false,
             error_sql_update_failed: false,
         };
-        let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", Some(refill_errors));
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            Some(refill_errors),
+        );
 
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
@@ -1952,7 +1977,7 @@ pub mod tests {
 
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(
             "/config/aquarium_control_test_refill.toml",
-            Some(refill_errors)
+            Some(refill_errors),
         );
 
         let sleep_duration_50_millisec = Duration::from_millis(50);

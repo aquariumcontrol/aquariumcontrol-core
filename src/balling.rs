@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, info, warn};
+use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -208,9 +208,10 @@ impl Balling {
             }
         };
 
-        info!(
-            target: Self::LOG_TARGET_BALLING,
-            "Duration since last dosing for pump {} is {} seconds.",
+        #[cfg(test)]
+        println!(
+            "{}, Duration since last dosing for pump {} is {} seconds.",
+            Self::LOG_TARGET_BALLING,
             pump_id,
             duration_since_balling_dosing
         );
@@ -221,9 +222,10 @@ impl Balling {
             Some(diff) => diff,
         };
 
-        info!(
-            target: Self::LOG_TARGET_BALLING,
-            "Countdown for next dosing of pump {} is {} seconds.",
+        #[cfg(test)]
+        println!(
+            "{}: Countdown for next dosing of pump {} is {} seconds.",
+            Self::LOG_TARGET_BALLING,
             pump_id,
             countdown
         );
@@ -285,10 +287,15 @@ impl Balling {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
-                info!(target: Self::LOG_TARGET_BALLING,
-                    "Calculated target dosing duration of {} ms for pump #{}",
-                    dosing_duration_millis, pump_id
+
+                #[cfg(test)]
+                println!(
+                    "{}: Calculated target dosing duration of {} ms for pump #{}",
+                    Self::LOG_TARGET_BALLING,
+                    dosing_duration_millis,
+                    pump_id
                 );
+
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
@@ -500,15 +507,30 @@ impl Balling {
                 stop_command_received,
             ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Quit command. Exiting...");
+                #[cfg(test)]
+                println!(
+                    "{}: received Quit command. Exiting...",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 break;
             }
             if stop_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Stop command. Inhibiting dosing.");
+                #[cfg(test)]
+                println!(
+                    "{}: received Stop command. Inhibiting dosing.",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 dosing_inhibited = true;
             }
             if start_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Start command. (Re-)starting dosing.");
+                #[cfg(test)]
+                println!(
+                    "{}: received Start command. (Re-)starting dosing.",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 dosing_inhibited = false;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
