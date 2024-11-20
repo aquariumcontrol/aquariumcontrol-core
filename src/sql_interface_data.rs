@@ -55,9 +55,6 @@ pub struct DataFrame {
     /// tank level switch validity bit (true=invalid, false=valid)
     pub tank_level_switch_invalid: Option<bool>,
 
-    /// calculated tank level switch position stabilized (true=high, false=low)
-    pub tank_level_switch_position_stabilized: Option<bool>,
-
     /// status bit indicating that ventilation is switched on
     pub surface_ventilation_status: Option<bool>,
 
@@ -126,16 +123,6 @@ impl fmt::Display for DataFrame {
             },
             None => none_string.clone(),
         };
-        let tank_level_switch_position_stabilized_string =
-            match self.tank_level_switch_position_stabilized {
-                Some(tank_level_switch_position_stabilized) => {
-                    match tank_level_switch_position_stabilized {
-                        true => "high".to_string(),
-                        false => "low".to_string(),
-                    }
-                }
-                None => none_string.clone(),
-            };
         let surface_ventilation_status_string = match self.surface_ventilation_status {
             Some(surface_ventilation_status) => match surface_ventilation_status {
                 true => "on".to_string(),
@@ -165,7 +152,7 @@ impl fmt::Display for DataFrame {
             \nph: {},\nph_filtered: {}, \
             \nconductivity: {},\nconductivity_filtered: {},\nconductivity_compensated: {}, \
             \nrefill_in_progress: {}, \
-            \ntank_level_switch_position: {},\ntank_level_switch_invalid: {},\ntank_level_switch_position_stabilized: {}, \
+            \ntank_level_switch_position: {},\ntank_level_switch_invalid: {},\
             \nsurface_ventilation_status: {},\
             \nambient_temperature: {},\nambient_humidity: {}, \
             \nheater_status: {}\n**************************************\n",
@@ -180,7 +167,6 @@ impl fmt::Display for DataFrame {
             refill_in_progress_string,
             tank_level_switch_position_string,
             tank_level_switch_invalid_string,
-            tank_level_switch_position_stabilized_string,
             surface_ventilation_status_string,
             ambient_temperature_string,
             ambient_humidity_string,
@@ -203,7 +189,6 @@ impl DataFrame {
         target_refill_in_progress: Option<bool>,
         target_tank_level_switch_position: Option<bool>,
         target_tank_level_switch_invalid: Option<bool>,
-        target_tank_level_switch_position_stabilized: Option<bool>,
         target_surface_ventilation_status: Option<bool>,
         target_ambient_temperature: Option<f32>,
         target_ambient_humidity: Option<f32>,
@@ -233,10 +218,6 @@ impl DataFrame {
         assert_eq!(
             self.tank_level_switch_invalid,
             target_tank_level_switch_invalid
-        );
-        assert_eq!(
-            self.tank_level_switch_position_stabilized,
-            target_tank_level_switch_position_stabilized
         );
         assert_eq!(
             self.surface_ventilation_status,
@@ -428,7 +409,7 @@ impl SqlInterfaceData {
                 None => &null_string,
             },
         );
-
+        
         let surface_ventilation_string: String;
         let sql_query_surface_ventilation_status_replaced = str::replace(
             &sql_query_main_tank_level_switch_invalid_replaced,
@@ -540,7 +521,6 @@ pub mod tests {
         pub refill_in_progress: bool,
         pub tank_level_switch_position: bool,
         pub tank_level_switch_invalid: bool,
-        pub tank_level_switch_position_stabilized: bool,
         pub surface_ventilation_status: bool,
         pub ambient_temperature: f32,
         pub ambient_humidity: f32,
@@ -612,7 +592,6 @@ pub mod tests {
                 refill_in_progress,
                 tank_level_switch_position,
                 tank_level_switch_invalid,
-                tank_level_switch_position_stabilized,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
@@ -621,7 +600,6 @@ pub mod tests {
                 refill_in_progress,
                 tank_level_switch_position,
                 tank_level_switch_invalid,
-                tank_level_switch_position_stabilized,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
@@ -662,9 +640,6 @@ pub mod tests {
             refill_in_progress: Some(data_frame_2.refill_in_progress),
             tank_level_switch_position: Some(data_frame_2.tank_level_switch_position),
             tank_level_switch_invalid: Some(data_frame_2.tank_level_switch_invalid),
-            tank_level_switch_position_stabilized: Some(
-                data_frame_2.tank_level_switch_position_stabilized,
-            ),
             surface_ventilation_status: Some(data_frame_2.surface_ventilation_status),
             ambient_temperature: Some(data_frame_2.ambient_temperature),
             ambient_humidity: Some(data_frame_2.ambient_humidity),
@@ -734,7 +709,6 @@ pub mod tests {
             refill_in_progress: Some(false),
             tank_level_switch_position: Some(false),
             tank_level_switch_invalid: Some(false),
-            tank_level_switch_position_stabilized: Some(false),
             surface_ventilation_status: Some(true),
             ambient_temperature: Some(22.0),
             ambient_humidity: Some(60.0),
@@ -772,7 +746,6 @@ pub mod tests {
             refill_in_progress: Some(true),
             tank_level_switch_position: Some(true),
             tank_level_switch_invalid: Some(true),
-            tank_level_switch_position_stabilized: Some(true),
             surface_ventilation_status: Some(false),
             ambient_temperature: Some(23.0),
             ambient_humidity: Some(61.0),
@@ -820,7 +793,6 @@ pub mod tests {
             refill_in_progress: None,
             tank_level_switch_position: None,
             tank_level_switch_invalid: None,
-            tank_level_switch_position_stabilized: None,
             surface_ventilation_status: None,
             ambient_temperature: None,
             ambient_humidity: None,

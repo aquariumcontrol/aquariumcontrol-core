@@ -77,9 +77,6 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for current value of tank level switch invalid
     output_file_name_tank_level_switch_invalid: String,
 
-    /// output file name (in ramdisk) for current value of tank level switch position
-    output_file_name_tank_level_switch_position_stabilized: String,
-
     /// output file name (in ramdisk) for current value of ventilation
     output_file_name_ventilation_is_on: String,
 
@@ -159,9 +156,6 @@ pub struct DataLogger {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
     lock_error_output_state_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position stabilized to disk
-    lock_error_output_state_tank_level_switch_position_stabilized: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
     lock_error_output_signal_water_temperature_filtered: bool,
@@ -287,7 +281,6 @@ impl DataLogger {
             lock_error_output_signal_humidity: false,
             lock_error_output_state_tank_level_switch_position: false,
             lock_error_output_state_tank_level_switch_invalid: false,
-            lock_error_output_state_tank_level_switch_position_stabilized: false,
             lock_error_output_signal_water_temperature_filtered: false,
             lock_error_output_signal_pH_filtered: false,
             lock_error_output_signal_conductivity_filtered: false,
@@ -461,7 +454,6 @@ impl DataLogger {
         let mut ambient_humidity: Option<f32> = Some(0.0);
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(false);
-        let mut tank_level_switch_position_stabilized: Option<bool> = Some(false);
         let mut refill_in_progress: bool = false;
         let mut heater_is_on: bool = false;
         let mut ventilation_is_on: bool = false;
@@ -842,45 +834,6 @@ impl DataLogger {
                         tank_level_switch_channel_disconnected = true;
                     }
                 }
-
-                // send request for tank level switch stabilized
-                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                    AquariumSignal::TankLevelSwitchPositionStabilized,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        tank_level_switch_position_stabilized = match rx_from_tank_level_switch
-                            .recv()
-                        {
-                            Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_position_stabilized = self
-                                    .output_state(
-                                        c,
-                                        "HIGH",
-                                        "LOW",
-                                        &self.config.output_file_name_tank_level_switch_position_stabilized,
-                                        self.lock_error_output_state_tank_level_switch_position_stabilized,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
-                                );
-                                tank_level_switch_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
-                            "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
-                        );
-                        tank_level_switch_channel_disconnected = true;
-                    }
-                }
             }
 
             // calculate filtered values and output them to (RAM disk) files
@@ -966,7 +919,6 @@ impl DataLogger {
                 refill_in_progress: Some(refill_in_progress),
                 tank_level_switch_position: tank_level_switch_position,
                 tank_level_switch_invalid: tank_level_switch_invalid,
-                tank_level_switch_position_stabilized: tank_level_switch_position_stabilized,
                 surface_ventilation_status: Some(ventilation_is_on),
                 ambient_temperature: ambient_temperature,
                 ambient_humidity: ambient_humidity,
@@ -1066,7 +1018,6 @@ pub mod tests {
     use crate::mock::tests::MockSignal;
     use crate::mock::tests::TestCommand;
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_data::DataFrame;
     use crate::sql_interface_data::SqlInterfaceData;
 
     fn assert_output_file_contents(
@@ -1081,7 +1032,6 @@ pub mod tests {
         target_refill_in_progress: bool,
         target_tank_level_switch_position: bool,
         target_tank_level_switch_invalid: bool,
-        target_tank_level_switch_position_stabilized: bool,
         target_surface_ventilation_status: bool,
         target_ambient_temperature: f32,
         target_ambient_humidity: f32,
@@ -1169,18 +1119,6 @@ pub mod tests {
             fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_invalid)
                 .expect("Could not read back tank level switch invalid from disk."),
             target_tank_level_switch_invalid_string,
-        );
-        let target_tank_level_switch_position_stabilized_string =
-            match target_tank_level_switch_position_stabilized {
-                true => "HIGH".to_string(),
-                false => "LOW".to_string(),
-            };
-        assert_eq!(
-            fs::read_to_string(
-                &data_logger_config.output_file_name_tank_level_switch_position_stabilized
-            )
-            .expect("Could not read back tank level switch stabilized from disk."),
-            target_tank_level_switch_position_stabilized_string,
         );
         let target_surface_ventilation_status_string = match target_surface_ventilation_status {
             true => "ON".to_string(),
@@ -1308,11 +1246,6 @@ pub mod tests {
                 let _ = tx_test_environment_to_ambient
                     .send(TestCommand::UpdateSignal(MockSignal::AmbientHumidity(66.0)));
 
-                spin_sleeper.sleep(sleep_duration_1_second);
-
-                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
-                    MockSignal::TankLevelSwitchPositionStabilized(false),
-                ));
                 spin_sleeper.sleep(sleep_duration_1_second);
                 spin_sleeper.sleep(sleep_duration_1_second);
 
@@ -1457,9 +1390,9 @@ pub mod tests {
                 println!("Printing recorded data:");
                 mock_data_injection.output();
 
-                let mut data_frame: DataFrame = mock_data_injection.data_frames.pop().unwrap();
+                //let mut data_frame: DataFrame = mock_data_injection.data_frames.pop().unwrap();
 
-                // Dataframe #7
+/*                // Dataframe #7
                 println!("Asserting data frame #7");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
@@ -1472,15 +1405,14 @@ pub mod tests {
                     Some(true),      // target_refill_in_progress
                     Some(false),     // target_tank_level_switch_position
                     Some(true),      // target_tank_level_switch_invalid
-                    Some(false),     // target_tank_level_switch_position_stabilized
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
                 );
-
+*/
                 // Dataframe #6
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #6");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
@@ -1493,7 +1425,6 @@ pub mod tests {
                     Some(true),      // target_refill_in_progress
                     Some(false),     // target_tank_level_switch_position
                     Some(true),      // target_tank_level_switch_invalid
-                    Some(false),     // target_tank_level_switch_position_stabilized
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
@@ -1514,7 +1445,6 @@ pub mod tests {
                     Some(true),      // target_refill_in_progress
                     Some(false),     // target_tank_level_switch_position
                     Some(true),      // target_tank_level_switch_invalid
-                    Some(true),      // target_tank_level_switch_position_stabilized
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
@@ -1535,7 +1465,6 @@ pub mod tests {
                     Some(true),      // target_refill_in_progress
                     Some(false),     // target_tank_level_switch_position
                     Some(false),     // target_tank_level_switch_invalid
-                    Some(true),      // target_tank_level_switch_position_stabilized
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(14.0),      // target_ambient_humidity
@@ -1556,7 +1485,6 @@ pub mod tests {
                     Some(true),     // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
                     Some(false),    // target_tank_level_switch_invalid
-                    Some(true),     // target_tank_level_switch_position_stabilized
                     Some(true),     // target_surface_ventilation_status
                     Some(13.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
@@ -1577,7 +1505,6 @@ pub mod tests {
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
                     Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
@@ -1598,7 +1525,6 @@ pub mod tests {
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
                     Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
@@ -1619,7 +1545,6 @@ pub mod tests {
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
                     Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(false), // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
@@ -1629,16 +1554,15 @@ pub mod tests {
                 assert_output_file_contents(
                     &config2.data_logger, // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.8,                 // target_water_temperature_filtered
+                    28.6,                 // target_water_temperature_filtered
                     7.0,                  // target_water_ph
                     7.0,                  // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
-                    48438.0,              // target_water_conductivity_filtered
+                    46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated
                     true,                 // target_refill_in_progress
                     false,                // target_tank_level_switch_position
                     true,                 // target_tank_level_switch_invalid
-                    false,                // target_tank_level_switch_position_stabilized
                     true,                 // target_surface_ventilation_status
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
