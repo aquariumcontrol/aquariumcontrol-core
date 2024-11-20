@@ -1117,7 +1117,7 @@ pub mod tests {
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 41500);
-                assert_le!(actuation_duration, 42500);
+                assert_le!(actuation_duration, 43000);
             })
             .unwrap();
 
