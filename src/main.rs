@@ -79,6 +79,8 @@ use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::controllino_actuate_simulator::ControllinoActuateSimulator;
 use crate::data_injection::DataInjection;
 use crate::data_logger::DataLogger;
+#[cfg(target_os = "linux")]
+use crate::dht::DhtError;
 use crate::feed::Feed;
 use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
@@ -878,6 +880,25 @@ fn main() {
             false => None,
         };
 
+    // communication channels between Ambient and Dht
+    // platform specific channels for Linux wrapped in Option
+    #[cfg(target_os = "linux")]
+    let (tx_ambient_to_dht, rx_dht_from_ambient): (Sender<InternalCommand>, Receiver<InternalCommand>) =
+        mpsc::channel();
+    #[cfg(target_os = "linux")]
+    let (tx_dht_to_ambient, rx_ambient_from_dht): (Sender<Result<(f32, f32), DhtError>>, Receiver<Result<(f32, f32), DhtError>>) =
+        mpsc::channel();
+    #[cfg(target_os = "linux")]
+    let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> = Some(tx_ambient_to_dht);
+    #[cfg(target_os = "linux")]    
+    let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
+        Some(rx_ambient_from_dht);
+    // platform specific replacement value for non-Linux
+    #[cfg(not(target_os = "linux"))]
+    let tx_ambient_to_dht_opt = None;
+    #[cfg(not(target_os = "linux"))]
+    let rx_ambient_from_dht_opt = None;
+        
     let publish_pid = PublishPid::new(config.publish_pid);
 
     #[cfg(target_os = "linux")]
@@ -901,12 +922,7 @@ fn main() {
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific, i2c_interface);
     }
 
-    #[cfg(not(target_os = "linux"))]
     let mut ambient = Ambient::new(config.ambient);
-    #[cfg(target_os = "linux")]
-    {
-        let mut ambient = Ambient::new(config.ambient, dht);
-    }
 
     let mut controllino = Controllino::new(config.controllino.clone());
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
@@ -1054,6 +1070,16 @@ fn main() {
             trace!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
         });
 
+        #[cfg(target_os = "linux")]
+        scope.spawn(move || {
+            dht.execute(
+                tx_dht_to_ambient,
+                rx_dht_from_ambient,
+                tx_dht_to_signal_handler,
+            );
+            trace!(target: LOG_TARGET_MAIN, "Ambient terminated.");
+        });
+        
         scope.spawn(move || {
             ambient.execute(
                 &tx_ambient_to_tcp_opt,
@@ -1062,6 +1088,8 @@ fn main() {
                 rx_ambient_from_heating,
                 tx_ambient_to_data_logger,
                 rx_ambient_from_data_logger,
+                tx_ambient_to_dht_opt,
+                rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
             );

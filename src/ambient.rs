@@ -17,7 +17,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
-use crate::dht::Dht;
+use crate::dht::DhtError;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 #[cfg(target_os = "linux")]
 use crate::i2c_interface::I2cInterface;
@@ -100,10 +100,6 @@ pub struct Ambient {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
     lock_error_invalid_signal_request_heating: bool,
-
-    /// struct of type Dht wrapped as optional
-    #[allow(dead_code)]
-    dht_opt: Option<Dht>,
 }
 
 impl ProcessExternalRequestTrait for Ambient {}
@@ -111,37 +107,7 @@ impl ProcessExternalRequestTrait for Ambient {}
 impl GetResponseFromSimulatorTrait for Ambient {}
 
 impl Ambient {
-    #[cfg(target_os = "linux")]
-    /// provides a struct of type Ambient for Linux platform
-    /// # Arguments
-    /// * `config` - configuration data for Ambient
-    /// * `dht_opt` - struct of type Dht wrapped as optional          
-    pub fn new(config: AmbientConfig, dht_opt: Dht) -> Ambient {
-        if !config.use_simulator && !dht_opt.is_some() {
-            panic!("{}: application shall use real HW, but DHT interface not provided.");
-        }
-        let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
-        let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
-        Ambient {
-            config: config,
-            ambient_temperature: replacement_value_ambient_temperature,
-            ambient_humidity: replacement_value_ambient_humidity,
-            lock_error_channel_receive_termination: false,
-            lock_warn_inapplicable_command_signal_handler: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_error_data_logger_response: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_heating_response: false,
-            lock_warn_inapplicable_command_heating: false,
-            lock_error_invalid_signal_request_heating: false,
-            dht_opt: dht_opt,
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    /// provides a struct of type Ambient for non-Linux platforms
+    /// provides a struct of type Ambient
     /// # Arguments
     /// * `config` - configuration data for Ambient
     pub fn new(config: AmbientConfig) -> Ambient {
@@ -161,7 +127,6 @@ impl Ambient {
             lock_error_heating_response: false,
             lock_warn_inapplicable_command_heating: false,
             lock_error_invalid_signal_request_heating: false,
-            dht_opt: None,
         }
     }
 
@@ -173,6 +138,8 @@ impl Ambient {
     /// * `rx_from_heating` - Receiver part of channel for communication from heating control
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
+    /// * `tx_to_dht_opt` - Sender part of channel for communication to Dht
+    /// * `rx_from_dht_opt` - Receiver part of channel for communication from Dht
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
@@ -183,6 +150,8 @@ impl Ambient {
         rx_from_heating: Receiver<InternalCommand>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
+        tx_to_dht_opt: Option<Sender<InternalCommand>>,
+        rx_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -204,6 +173,12 @@ impl Ambient {
             );
         }
 
+        #[cfg(not(target_os = "linux"))]
+        if tx_to_dht_opt.is_some() || rx_from_dht_opt.is_some() {
+            warn!(target: LOG_TARGET_AMBIENT,
+                "Sender/Receiver to Dht are not 'None'");
+        }
+
         loop {
             let (
                 quit_command_received, // request to end the application has been received
@@ -220,6 +195,8 @@ impl Ambient {
                 if !self.config.use_simulator {
                     #[cfg(target_os = "linux")]
                     {
+                        // @todo: replace code with channel communication
+                        /*
                         // unwrap is safe, because tested in constructor
                         let dht = self.dht_opt.unwrap();
 
@@ -232,6 +209,7 @@ impl Ambient {
                                     (self.ambient_temperature, self.ambient_humidity)
                                 }
                             };
+                        */
                     }
                 } else {
                     // unwrap is safe, because tested above
@@ -607,6 +585,8 @@ pub mod tests {
                     rx_ambient_from_heating,
                     tx_ambient_to_data_logger,
                     rx_ambient_from_data_logger,
+                    None,
+                    None,
                     tx_ambient_to_signal_handler,
                     rx_ambient_from_signal_handler,
                 );

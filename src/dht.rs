@@ -7,18 +7,22 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(not(test))]
+use serde_derive::Deserialize;
+
+#[cfg(any(not(test), target_os = "linux"))]
 use log::error;
 
-#[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, Level, Trigger};
-use serde_derive::Deserialize;
-#[cfg(target_os = "linux")]
-use std::thread;
-#[cfg(target_os = "linux")]
-use std::thread::sleep;
-#[cfg(target_os = "linux")]
-use std::time::Duration;
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use rppal::gpio::{Gpio, Level, Trigger};
+        use std::thread;
+        use std::thread::sleep;
+        use std::time::Duration;
+        use crate::InternalCommand;
+        use std::sync::mpsc::{Sender, Receiver};
+        use crate::channel_content::AquariumSignal;
+    }
+}
 
 #[allow(unused)]
 const LOG_TARGET_DHT: &str = "dht";
@@ -569,22 +573,19 @@ impl Dht {
         Self::calc_signals(byte_vals)
     }
 
+    /// initiates reading and postprocesses data read from sensor
     #[cfg(target_os = "linux")]
     pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
+        
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
+        let result_tuple: (f32, f32) = (0.0, 0.0);
 
-        while !measurement_successful {
+        while !measurement_successful { //todo: limit number of retries
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
-                    /*info!(
-                        target: LOG_TARGET_DHT,
-                        "read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
-                        temperature,
-                        humidity,
-                    );*/
                     measurement_successful = true;
                     result_tuple = (temperature, humidity);
                 }
@@ -611,7 +612,63 @@ impl Dht {
                 }
             }
         }
+        
         Ok(result_tuple)
+    }
+
+    #[cfg(target_os = "linux")]
+    /// receives and response to requests via channel        
+    pub fn execute(
+        &mut self,
+        tx_to_ambient: Sender<Result<(f32, f32), DhtError>>,
+        rx_from_ambient_or_signal_handler: Receiver<InternalCommand>,
+        tx_to_signal_handler: Sender<bool>,
+    ) {
+        let mut lock_error_invalid_command: bool = false;
+        let mut lock_error_invalid_signal: bool = false;
+        let mut lock_error_receive: bool = false;
+
+        loop {
+            match rx_from_ambient_or_signal_handler.recv() {
+                Ok(c) => {
+                    lock_error_receive = false;
+                    match c {
+                        InternalCommand::RequestSignal(signal_request) => {
+                            lock_error_invalid_command = false;
+                            // Ambient requests either temperature or humidity
+                            match signal_request {
+                                AquariumSignal::AmbientHumidity | AquariumSignal::AmbientTemperature => {
+                                    let measurement = self.get_data();
+                                    _ = tx_to_ambient.send(measurement);
+                                },
+                                _ => {
+                                    if !lock_error_invalid_signal {
+                                        error!("Dht: Received request for invalid signal.");
+                                        lock_error_invalid_signal = true;
+                                    }
+                                }
+                            }
+                        },
+                        InternalCommand::Quit => {
+                            _ = tx_to_signal_handler.send(true);
+                            break;
+                        },
+                        _ => {
+                            if !lock_error_invalid_command {
+                                error!("Dht: Received invalid command.");
+                                lock_error_invalid_command = true;
+                            }
+                        }
+                    };
+                }
+                Err(e) => {
+                    if !lock_error_receive {
+                        error!(": Error in trying to receive command from Ambient or Signal handler: {e:?}");
+                        lock_error_receive = true;
+                    }
+                }
+            };            
+        }
     }
 }
 
