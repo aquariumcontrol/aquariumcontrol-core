@@ -490,10 +490,10 @@ impl Heating {
             .get_single_heating_stats_from_database()
         {
             Ok(c) => Some(c),
-            Err(e) => {
+            Err(_) => {
                 #[cfg(test)]
                 println!(
-                    "{}: could not get existing heating stats entry for today from database ({e:?}) - creating new one for today",
+                    "{}: could not get existing heating stats entry for today from database - creating new one for today",
                     LOG_TARGET_HEATING
                 );
 
