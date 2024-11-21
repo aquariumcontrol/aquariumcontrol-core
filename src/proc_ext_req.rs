@@ -57,6 +57,7 @@ pub trait ProcessExternalRequestTrait {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]                        
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -85,6 +86,7 @@ pub trait ProcessExternalRequestTrait {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
+                                #[cfg(not(test))]                                
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
                                     "receiving command from messaging failed ({e:?})"
@@ -133,6 +135,7 @@ impl ProcessExternalRequestTrait for Refill {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]                        
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -165,6 +168,7 @@ impl ProcessExternalRequestTrait for Refill {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
+                                #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
                                     "receiving command from messaging failed ({e:?})"
@@ -207,6 +211,7 @@ fn process_external_request_without_messaging(
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
+                    #[cfg(not(test))]                    
                     error!(
                         target: LOG_TARGET_PROC_EXT_REQ,
                         "receiving command from messaging failed ({e:?})"
@@ -368,6 +373,7 @@ impl ProcessExternalRequestTrait for Feed {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]                        
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -401,6 +407,7 @@ impl ProcessExternalRequestTrait for Feed {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
+                                    #[cfg(not(test))]
                                     error!(
                                         target: LOG_TARGET_PROC_EXT_REQ,
                                         "receiving command from messaging failed ({e:?})"
