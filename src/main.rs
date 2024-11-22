@@ -194,6 +194,10 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     ambient --> signal_handler
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific --> signal_handler
+///     atlas_scientific --> i2c_interface[I2C interface]
+///     i2c_interface --> atlas_scientific
+///     ambient --> dht[Dht]
+///     dht --> ambient
 ///	    messaging --> refill
 ///	    messaging --> ventilation
 ///	    messaging --> heating
@@ -882,23 +886,65 @@ fn main() {
 
     // communication channels between Ambient and Dht
     // platform specific channels for Linux wrapped in Option
-    #[cfg(target_os = "linux")]
-    let (tx_ambient_to_dht, rx_dht_from_ambient): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    #[cfg(target_os = "linux")]
-    let (tx_dht_to_ambient, rx_ambient_from_dht): (Sender<Result<(f32, f32), DhtError>>, Receiver<Result<(f32, f32), DhtError>>) =
-        mpsc::channel();
-    #[cfg(target_os = "linux")]
-    let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> = Some(tx_ambient_to_dht);
-    #[cfg(target_os = "linux")]    
-    let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
-        Some(rx_ambient_from_dht);
-    // platform specific replacement value for non-Linux
-    #[cfg(not(target_os = "linux"))]
-    let tx_ambient_to_dht_opt = None;
-    #[cfg(not(target_os = "linux"))]
-    let rx_ambient_from_dht_opt = None;
-        
+    cfg_if::cfg_if! {
+        if #[cfg(target_os = "linux")] {
+            // ambient <=> dht
+            let (tx_ambient_to_dht, rx_dht_from_ambient): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+            let (tx_dht_to_ambient, rx_ambient_from_dht): (
+                Sender<Result<(f32, f32), DhtError>>,
+                Receiver<Result<(f32, f32), DhtError>>,
+            ) = mpsc::channel();
+            let tx_signal_handler_to_dht = tx_ambient_to_dht.clone();
+            let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> =
+                Some(tx_ambient_to_dht);
+            let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
+                Some(rx_ambient_from_dht);
+            let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                Some(tx_atlas_scientific_to_i2c_interface);
+            let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
+                Some(rx_atlas_scientific_from_i2c_interface);
+            let tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>> =
+                Some(tx_signal_handler_to_dht);
+
+            // Atlas Scientific <=> i2c_interface
+            let (tx_atlas_scientific_to_dht, rx_i2c_interface_from_ambient): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+            let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_dht): (
+                Sender<Result<f32, I2cError>>,
+                Receiver<Result<f32, I2cError>>,
+            ) = mpsc::channel();
+            let tx_atlas_scientific_to_i2c = tx_
+            let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                Some(tx_atlas_scientific_to_i2c_interface);
+            let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<f32, I2cError>>> =
+                Some(rx_ambient_from_i2c_interface);
+            let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                Some(tx_atlas_scientific_to_i2c_interface);
+            let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<f32, DhtError>>> =
+                Some(rx_atlas_scientific_from_i2c_interface);
+            let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                Some(tx_signal_handler_to_i2c_interface);
+        }
+    }
+
+    cfg_if::cfg_if! {
+        if #[cfg(not(target_os = "linux"))] {
+            // ambient <=> dht and signal handler => dht
+            let tx_ambient_to_dht_opt = None;
+            let rx_ambient_from_dht_opt = None;
+            let tx_signal_handler_to_dht_opt = None;
+            // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
+            let tx_atlas_scientific_to_i2c_interface_opt = None;
+            let rx_atlas_scientific_from_i2c_interface_opt = None;
+            let tx_signal_handler_to_i2c_interface_opt = None;            
+        }
+    }
+
     let publish_pid = PublishPid::new(config.publish_pid);
 
     #[cfg(target_os = "linux")]
@@ -1034,6 +1080,8 @@ fn main() {
                 rx_signal_handler_from_schedule_check,
                 tx_signal_handler_to_tcp_opt,
                 rx_signal_handler_from_tcp_opt,
+                tx_signal_handler_to_dht_opt,
+                tx_signal_handler_to_i2c_interface_opt
             );
             trace!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
         });
@@ -1064,6 +1112,8 @@ fn main() {
                 rx_atlas_scientific_from_ventilation,
                 tx_atlas_scientific_to_data_logger,
                 rx_atlas_scientific_from_data_logger,
+                tx_atlas_scientific_to_i2c_interface_opt,
+                rx_atlas_scientific_from_i2c_interface_opt,
                 tx_atlas_scientific_to_signal_handler,
                 rx_atlas_scientific_from_signal_handler,
             );
@@ -1079,7 +1129,7 @@ fn main() {
             );
             trace!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
-        
+
         scope.spawn(move || {
             ambient.execute(
                 &tx_ambient_to_tcp_opt,

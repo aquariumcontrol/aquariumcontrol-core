@@ -24,10 +24,16 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 /// * `tx_to_messaging` - sender part of channel for communication to messaging
 /// * `tx_to_refill` - sender part of channel for communication to refill control
 /// * `rx_from_refill` - receiver part of channel for communication from refill control
+/// * `tx_to_tank_level_switch` - sender part of channel for communication to tank level switch
+/// * `rx_from_tank_level_switch` - receiver part of channel for communication from tank level switch
 /// * `tx_to_heating` - sender part of channel for communication to heating control
 /// * `rx_from_heating` - receiver part of channel for communication from heating control
 /// * `tx_to_controllino` - sender part of channel for communication to Controllino
 /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
+/// * `tx_to_atlas_scientific` - sender part of channel for communication to Atlas Scientific
+/// * `rx_from_atlas_scientific` - receiver part of channel for communication from Atlas Scientific
+/// * `tx_to_ambient` - sender part of channel for communication to Ambient
+/// * `rx_from_ambient` - receiver part of channel for communication from Ambient
 /// * `tx_to_data_logger` - sender part of channel for communication to data logger
 /// * `rx_from_data_logger` - receiver part of channel for communication from data logger
 /// * `tx_to_balling` - sender part of channel for communication to Balling dosing control
@@ -38,8 +44,13 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 /// * `rx_from_monitors` - receiver part of channel for communication from monitors
 /// * `tx_to_feed` - sender part of channel for communication to feed control
 /// * `rx_from_feed` - receiver part of channel for communication from feed control
-/// * `tx_to_feed` - sender part of channel for communication to TcpCommunication wrapped in Option
-/// * `rx_from_feed` - receiver part of channel for communication from TcpCommunication wrapped in Option
+/// * `tx_to_schedule_check` - sender part of channel for communication to schedule check
+/// * `rx_from_schedule_check` - receiver part of channel for communication schedule check
+/// * `tx_to_tcp_opt` - sender part of channel for communication to TCPCommunication wrapped in Option
+/// * `rx_from_tcp_opt` - receiver part of channel for communication to TCPCommunication wrapped in Option
+/// * `tx_to_dht_opt` - sender part of channel for communication to Dht wrapped in Option
+/// * `tx_to_i2c_interface_opt` - sender part of channel for communication to I2C interface wrapped in Option
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Thread communication is as follows:
 /// ```mermaid
@@ -47,10 +58,16 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 ///     signal_handler[Signal handler] --> messaging[Messaging]
 ///     signal_handler --> refill[Refill control]
 ///     refill --> signal_handler
+///     signal_handler --> tank_level_switch[Tank Level Switch]
+///     tank_level_switch --> signal_handler
 ///     signal_handler --> heating[Heating control]
 ///     heating --> signal_handler
 ///     signal_handler --> controllino[Controllino]
 ///     controllino --> signal_handler
+///     signal_handler --> atlas_scientific[Atlas Scientific]
+///     atlas_scientific --> signal_handler
+///     signal_handler --> ambient[Ambient]
+///     ambient --> signal_handler
 ///     signal_handler --> data_logger[Data logger]
 ///     data_logger --> signal_handler
 ///     signal_handler --> balling[Balling dosing control]
@@ -61,16 +78,12 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 ///     monitors --> signal_handler
 ///     signal_handler --> feed[Feed control]
 ///     feed --> signal_handler
-///     atlas_scientific[AtlasScientific] --> signal_handler
-///     signal_handler --> atlas_scientific
-///     ambient[Ambient] --> signal_handler
-///     signal_handler --> ambient
-///     tank_level_switch[TankLevelSwitch] --> signal_handler
-///     signal_handler --> tank_level_switch
 ///     schedule_check[ScheduleCheck] --> signal_handler
 ///     signal_handler --> schedule_check
 ///     signal_handler --> tcp_communication[TCP communication]
 ///     tcp_communication --> signal_handler
+///     signal_handler --> dht[Dht]
+///     signal_handler --> i2c_interface[I2C interface]
 /// ```
 
 pub fn handle_signals(
@@ -101,6 +114,8 @@ pub fn handle_signals(
     rx_from_schedule_check: Receiver<bool>,
     tx_to_tcp_opt: Option<Sender<InternalCommand>>,
     rx_from_tcp_opt: Option<Receiver<bool>>,
+    tx_to_dht_opt: Option<Sender<InternalCommand>>,
+    tx_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
 ) {
     if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
         panic!(
@@ -245,6 +260,19 @@ pub fn handle_signals(
             );
         }
     }
+    
+    match tx_to_i2c_interface_opt {
+        Some(tx_to_i2c_interface) => match tx_to_i2c_interface.send(InternalCommand::Quit) {
+            Ok(_) => { /* do nothing */ }
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    "channel communication to I2C interface failed when sending Quit command ({e:?})"
+                );
+            }
+        },
+        None => { /* do nothing */ }
+    }  
 
     // next, let's shut down the communication with DHT sensor
     match tx_to_ambient.send(InternalCommand::Quit) {
@@ -266,6 +294,19 @@ pub fn handle_signals(
             );
         }
     }
+    
+    match tx_to_dht_opt {
+        Some(tx_to_dht) => match tx_to_dht.send(InternalCommand::Quit) {
+            Ok(_) => { /* do nothing */ }
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    "channel communication to DHT failed when sending Quit command ({e:?})"
+                );
+            }
+        },
+        None => { /* do nothing */ }
+    }  
 
     // next, let's shut down the monitors
     match tx_to_monitors.send(InternalCommand::Quit) {
@@ -413,7 +454,7 @@ pub fn handle_signals(
             Err(e) => {
                 error!(
                     target: LOG_TARGET_SIGNAL_HANDLER,
-                    "channel communication to TcpCommunication when sending Quit command ({e:?})"
+                    "channel communication to TcpCommunication failed when sending Quit command ({e:?})"
                 );
             }
         },
