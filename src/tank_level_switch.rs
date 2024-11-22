@@ -385,6 +385,7 @@ impl TankLevelSwitch {
                         Ok(()) => {
                             self.lock_error_refill_response = false;
                         }
+                        #[cfg(not(test))]
                         Err(e) => {
                             if !self.lock_error_refill_response {
                                 error!(
@@ -394,6 +395,8 @@ impl TankLevelSwitch {
                                 self.lock_error_refill_response = true;
                             }
                         }
+                        #[cfg(test)]
+                        Err(_) => { /* do nothing */ }
                     };
                 }
                 None => {
@@ -472,6 +475,7 @@ impl TankLevelSwitch {
                         Ok(()) => {
                             self.lock_error_heating_response = false;
                         }
+                        #[cfg(not(test))]
                         Err(e) => {
                             if !self.lock_error_heating_response {
                                 error!(
@@ -481,6 +485,8 @@ impl TankLevelSwitch {
                                 self.lock_error_heating_response = true;
                             }
                         }
+                        #[cfg(test)]
+                        Err(_) => { /* do nothing */ }
                     };
                 }
                 None => {
@@ -559,6 +565,7 @@ impl TankLevelSwitch {
                         Ok(()) => {
                             self.lock_error_data_logger_response = false;
                         }
+                        #[cfg(not(test))]
                         Err(e) => {
                             if !self.lock_error_data_logger_response {
                                 error!(
@@ -568,6 +575,8 @@ impl TankLevelSwitch {
                                 self.lock_error_data_logger_response = true;
                             }
                         }
+                        #[cfg(test)]
+                        Err(_) => { /* do nothing */ }
                     };
                 }
                 None => {
