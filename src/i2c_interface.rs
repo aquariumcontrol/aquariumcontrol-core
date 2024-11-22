@@ -12,16 +12,15 @@ use spin_sleep::SpinSleeper;
 use std::str;
 use std::time::Duration;
 
-#[cfg(target_os = "linux")]
-use log::{error, warn};
-
-#[cfg(target_os = "linux")]
-use {
-    rppal::i2c::I2c, // required for communication with AtlasScientific sensors
-};
-
-#[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use log::{error, warn};
+        use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
+        use crate::channel_content::AquariumSignal;
+    }
+}
 
 /// Holds the configuration data for the I2C interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -106,26 +105,31 @@ pub enum AtlasScientificError {
     ConversionFailure,
 }
 
-#[cfg(target_os = "linux")]
 /// communication error codes
 #[derive(Debug, PartialEq)]
 pub enum I2cError {
     /// message could not be sent
+    #[allow(unused)]
     WriteFailure,
 
     /// command could not be sent completely to sensor unit
+    #[allow(unused)]
     InsufficientWrite,
 
     /// response from sensor unit could not be received completely
+    #[allow(unused)]
     InsufficientRead,
 
     /// wrapper for AtlasScientificError
+    #[allow(unused)]
     ResponseEvaluationFailure(AtlasScientificError),
 
     /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
+    #[allow(unused)]
     SetAddressError(u16),
 
     /// Signal requested cannot be provided by this crate
+    #[allow(unused)]
     InvalidSignalRequest(AquariumSignal),
 }
 
@@ -407,6 +411,104 @@ impl I2cInterface {
                 );
                 Err(I2cError::ResponseEvaluationFailure(e))
             }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    // measures all three signals sequentially
+    // In case one measurement yields an error, the function return this error.
+    // In case all measurements yield success, the function returns a tuple of
+    // all three signals wrapped in Ok.
+    fn get_all_data() -> Result<(f32, f32, f32), I2cError> {
+        let measured_water_temperature =
+            match self.get_response_from_i2c(AquariumSignal::WaterTemperature) {
+                Ok(c) => c,
+                Err(e) => {
+                    return e;
+                }
+            };
+        let measured_ph = match self.get_response_from_i2c(AquariumSignal::pH) {
+            Ok(c) => c,
+            Err(e) => {
+                return e;
+            }
+        };
+        let measured_conductivity = match self.get_response_from_i2c(AquariumSignal::Conductivity) {
+            Ok(c) => c,
+            Err(e) => {
+                return e;
+            }
+        };
+        Ok((
+            measured_water_temperature,
+            measured_ph,
+            measured_conductivity,
+        ))
+    }
+
+    #[cfg(target_os = "linux")]
+    /// receives and response to requests via channel        
+    pub fn execute(
+        &mut self,
+        tx_to_atlas_scientific: Sender<Result<(f32), I2cError>>,
+        rx_from_atlas_scientific_or_signal_handler: Receiver<InternalCommand>,
+        tx_to_signal_handler: Sender<bool>,
+    ) {
+        let mut lock_error_invalid_command: bool = false;
+        let mut lock_error_invalid_signal: bool = false;
+        let mut lock_error_receive: bool = false;
+
+        loop {
+            match rx_from_atlas_scientific_or_signal_handler.recv() {
+                Ok(c) => {
+                    lock_error_receive = false;
+                    match c {
+                        InternalCommand::RequestSignal(signal_request) => {
+                            lock_error_invalid_command = false;
+                            // Ambient requests either temperature or humidity
+                            match signal_request {
+                                AquariumSignal::WaterTemperature
+                                | AquariumSignal::pH
+                                | AquariumSignal::Conductivity => {
+                                    let measurement = self.get_all_data();
+                                    _ = tx_to_atlas_scientific.send(measurement);
+                                }
+                                _ => {
+                                    if !lock_error_invalid_signal {
+                                        error!(
+                                            target: LOG_TARGET_I2C_INTERFACE,
+                                            "Received request for invalid signal."
+                                        );
+                                        lock_error_invalid_signal = true;
+                                    }
+                                }
+                            }
+                        }
+                        InternalCommand::Quit => {
+                            _ = tx_to_signal_handler.send(true);
+                            break;
+                        }
+                        _ => {
+                            if !lock_error_invalid_command {
+                                error!(
+                                    target: LOG_TARGET_I2C_INTERFACE,
+                                    "Received invalid command."
+                                );
+                                lock_error_invalid_command = true;
+                            }
+                        }
+                    };
+                }
+                Err(e) => {
+                    if !lock_error_receive {
+                        error!(
+                            target: LOG_TARGET_I2C_INTERFACE,
+                            "Error in trying to receive command from Ambient or Signal handler: {e:?}"
+                        );
+                        lock_error_receive = true;
+                    }
+                }
+            };
         }
     }
 }

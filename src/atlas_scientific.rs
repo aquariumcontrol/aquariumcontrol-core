@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::i2c_interface::I2cError;
 #[cfg(target_os = "linux")]
 use crate::i2c_interface::I2cInterface;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
@@ -132,11 +133,23 @@ pub struct AtlasScientific {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to ventilation control thread via channel
     lock_error_ventilation_response: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from ventilation control thread        
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from ventilation control thread
     lock_warn_inapplicable_command_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from ventilation control thread    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from ventilation control thread
     lock_error_invalid_signal_request_ventilation: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about to send request via channel to I2cInterface thread
+    lock_error_channel_send_i2c_interface: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to received via channel from I2cInterface thread
+    lock_error_channel_receive_i2c_interface: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from Atlas Scientific sensors
+    lock_error_i2c_interface: bool,
 }
 
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -144,46 +157,7 @@ impl ProcessExternalRequestTrait for AtlasScientific {}
 impl GetResponseFromSimulatorTrait for AtlasScientific {}
 
 impl AtlasScientific {
-    #[cfg(target_os = "linux")]
-    /// provides a struct of type AtlasScientific for Linux platforms
-    /// # Arguments
-    /// * `config` - configuration data for AtlasScientific
-    /// * `i2c_interface_opt` - struct of type I2cInterface wrapped as optional          
-    pub fn new(
-        config: AtlasScientificConfig,
-        i2c_interface_opt: Option<I2cInterface>,
-    ) -> AtlasScientific {
-        if !config.use_simulator && !i2c_interface_opt.is_some() {
-            panic!("{}: application shall use real HW, but I2C interface not provided.");
-        }
-        AtlasScientific {
-            config: config,
-            water_temperature: 0.0,
-            water_temperature_invalid: true,
-            conductivity: 0.0,
-            conductivity_invalid: true,
-            pH: 0.0,
-            pH_invalid: true,
-            i2c_interface_opt: i2c_interface_opt,
-            lock_error_channel_receive_termination: false,
-            lock_warn_inapplicable_command_signal_handler: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_error_data_logger_response: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_heating_response: false,
-            lock_warn_inapplicable_command_heating: false,
-            lock_error_invalid_signal_request_heating: false,
-            lock_error_channel_receive_ventilation: false,
-            lock_error_ventilation_response: false,
-            lock_warn_inapplicable_command_ventilation: false,
-            lock_error_invalid_signal_request_ventilation: false,
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms
+    /// provides a struct of type TankLevelSwitchSignals
     /// # Arguments
     /// * `config` - configuration data for AtlasScientific
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
@@ -209,6 +183,12 @@ impl AtlasScientific {
             lock_error_ventilation_response: false,
             lock_warn_inapplicable_command_ventilation: false,
             lock_error_invalid_signal_request_ventilation: false,
+            #[cfg(target_os = "linux")]
+            lock_error_channel_send_i2c_interface: false,
+            #[cfg(target_os = "linux")]
+            lock_error_channel_receive_i2c_interface: false,
+            #[cfg(target_os = "linux")]
+            lock_error_i2c_interface: false,
         }
     }
 
@@ -317,12 +297,24 @@ impl AtlasScientific {
         rx_from_ventilation: Receiver<InternalCommand>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
+        tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
+        rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<f32, I2cError>>>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+        #[cfg(target_os = "linux")]
+        let mut request_sent_to_i2c_interface: bool = false;
+
+        #[cfg(not(target_os = "linux"))]
+        if tx_atlas_scientific_to_i2c_interface_opt.is_some()
+            || rx_atlas_scientific_from_i2c_interface_opt.is_some()
+        {
+            warn!(target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                "Sender/Receiver to I2cInterface are not 'None'");
+        }
 
         // initialize signals with replacement values
         self.water_temperature = self.config.replacement_value_water_temperature;
@@ -355,47 +347,80 @@ impl AtlasScientific {
                 if !self.config.use_simulator {
                     #[cfg(target_os = "linux")]
                     {
-                        // unwrapping is safe, because tested in constructur
-                        let i2c_interface = self.i2c_interface_opt.unwrap();
+                        if tx_to_i2c_interface_opt.is_some() && rx_from_i2c_interface_opt.is_some()
+                        {
+                            if !request_sent_to_i2c_interface {
+                                let tx_to_i2c_interface = tx_to_i2c_interface_opt.as_ref().unwrap();
 
-                        // scope for platform-specific code
-                        self.water_temperature = match self
-                            .i2c_interface
-                            .get_response_from_i2c(AquariumSignal::WaterTemperature)
-                        {
-                            Ok(c) => {
-                                self.water_temperature_invalid = false;
-                                c
+                                // respond only after having received request:
+                                match tx_to_i2c_interface.send(RequestSignal(WaterTemperature)) {
+                                    Ok(()) => {
+                                        self.lock_error_channel_send_i2c_interface = false;
+                                        request_sent_to_i2c_interface = true;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_channel_send_i2c_interface {
+                                            error!(
+                                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                                "sending request to I2cInterface thread failed. ({e:?})"
+                                            );
+                                            self.lock_error_channel_send_i2c_interface = true;
+                                        }
+                                    }
+                                };
+                            } else {
+                                // read from channel if measurement result is available from I2cInterface thread
+                                let rx_from_i2c_interface =
+                                    rx_from_i2c_interface_opt.as_ref().unwrap();
+
+                                match rx_from_i2c_interface.try_recv() {
+                                    Ok(response) => match response {
+                                        Ok((water_temperature, ph, conductivity)) => {
+                                            self.water_temperature = water_temperature;
+                                            self.ph = ph;
+                                            self.conductivity = conductivity;
+                                            self.water_temperature_invalid = false;
+                                            self.ph_invalid = false;
+                                            self.conductivity_invalid = false;
+                                            self.lock_error_i2c_interface = false;
+                                        }
+                                        I2cError(e) => {
+                                            self.water_temperature_invalid = true;
+                                            self.ph_invalid = true;
+                                            self.conductivity_invalid = true;
+                                            #[cfg(not(test))]
+                                            if !self.lock_error_i2c_interface {
+                                                error!(
+                                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                                    "failure occurred when reading from I2cInterface"
+                                                );
+                                                self.lock_error_i2c_interface = true;
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        match e {
+                                            TryRecvError::Empty => {
+                                                /* empty buffer - no action required */
+                                                self.lock_error_channel_receive_i2c_interface =
+                                                    false;
+                                            }
+                                            TryRecvError::Disconnected => {
+                                                if !self.lock_error_channel_receive_i2c_interface {
+                                                    error!(
+                                                        target: LOG_TARGET_AMBIENT,
+                                                        "error occured when trying to receive response from I2cInterface ({e:?})"
+                                                    );
+                                                    self.lock_error_channel_receive_i2c_interface =
+                                                        true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                request_sent_to_dht = false; // allow for next request to be sent
                             }
-                            Err(_) => {
-                                self.water_temperature_invalid = true;
-                                self.water_temperature // use previously measured value
-                            }
-                        };
-                        self.conductivity = match self
-                            .i2c_interface
-                            .get_response_from_i2c(AquariumSignal::Conductivity)
-                        {
-                            Ok(c) => {
-                                self.conductivity_invalid = false;
-                                c
-                            }
-                            Err(_) => {
-                                self.conductivity_invalid = true;
-                                self.conductivity // use previously measured value
-                            }
-                        };
-                        self.pH = match self.i2c_interface.get_response_from_i2c(AquariumSignal::pH)
-                        {
-                            Ok(c) => {
-                                self.pH_invalid = false;
-                                c
-                            }
-                            Err(_) => {
-                                self.pH_invalid = true;
-                                self.pH // use previously measured value
-                            }
-                        };
+                        }
                     }
                 } else {
                     // unwrap is safe, because tested above
