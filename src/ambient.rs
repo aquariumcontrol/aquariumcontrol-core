@@ -528,10 +528,7 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_data_logger.toml".to_string());
 
-        #[cfg(not(target_os = "linux"))]
         let mut ambient = Ambient::new(config.ambient);
-        #[cfg(target_os = "linux")]
-        let mut ambient = Ambient::new(config.ambient, None);
 
         scope(|scope| {
             scope.spawn(move || {
