@@ -825,13 +825,16 @@ impl SqlInterface {
             self.config.db_tables.clone(),
             existing_tables.clone(),
         ) {
-            let required_tables_string = &self.config.db_tables.join(",");
-            let existing_tables_string = &existing_tables.join(",");
-            error!(
-                target: Self::LOG_TARGET_SQL_INTERFACE,
-                "Required tables ({}) are not existing in database ({}).",
-                required_tables_string, existing_tables_string
-            );
+            #[cfg(not(test))]
+            {
+                let required_tables_string = &self.config.db_tables.join(",");
+                let existing_tables_string = &existing_tables.join(",");
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE,
+                    "Required tables ({}) are not existing in database ({}).",
+                    required_tables_string, existing_tables_string
+                );
+            }
             Err(SqlInterfaceError::RequiredTablesNotExisting)
         } else {
             Ok(())

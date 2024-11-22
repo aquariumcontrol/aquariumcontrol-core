@@ -409,7 +409,7 @@ impl SqlInterfaceData {
                 None => &null_string,
             },
         );
-        
+
         let surface_ventilation_string: String;
         let sql_query_surface_ventilation_status_replaced = str::replace(
             &sql_query_main_tank_level_switch_invalid_replaced,
