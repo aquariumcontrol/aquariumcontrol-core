@@ -100,6 +100,18 @@ pub struct Ambient {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
     lock_error_invalid_signal_request_heating: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request to Dht thread via channel
+    lock_error_channel_send_dht: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from Dht thread via channel
+    lock_error_channel_receive_dht: bool,
+
+    #[cfg(target_os = "linux")]
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from Dht sensor
+    lock_error_dht: bool,
 }
 
 impl ProcessExternalRequestTrait for Ambient {}
@@ -127,6 +139,14 @@ impl Ambient {
             lock_error_heating_response: false,
             lock_warn_inapplicable_command_heating: false,
             lock_error_invalid_signal_request_heating: false,
+            #[cfg(target_os = "linux")]
+            lock_error_channel_send_dht: false,
+
+            #[cfg(target_os = "linux")]
+            lock_error_channel_receive_dht: false,
+
+            #[cfg(target_os = "linux")]
+            lock_error_dht: false,
         }
     }
 
@@ -158,6 +178,9 @@ impl Ambient {
         let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
+        #[cfg(target_os = "linux")]
+        let mut request_sent_to_dht: bool = false;
 
         // initialize signals with replacement values
         self.ambient_temperature = self.config.replacement_value_ambient_temperature;
@@ -195,21 +218,68 @@ impl Ambient {
                 if !self.config.use_simulator {
                     #[cfg(target_os = "linux")]
                     {
-                        // @todo: replace code with channel communication
-                        /*
-                        // unwrap is safe, because tested in constructor
-                        let dht = self.dht_opt.unwrap();
+                        if tx_to_dht_opt.is_some() && rx_from_dht_opt.is_some() {
+                            if !request_sent_to_dht {
+                                let tx_to_dht = tx_to_dht_opt.as_ref().unwrap();
 
-                        // scope for platform-specific code
-                        (self.ambient_temperature, self.ambient_humidity) =
-                            match self.dht.get_data() {
-                                Ok(c) => c,
-                                Err(_) => {
-                                    // in case of error, stay with previous values
-                                    (self.ambient_temperature, self.ambient_humidity)
+                                // respond only after having received request:
+                                match tx_to_dht.send(RequestSignal(AmbientTemperature)) {
+                                    Ok(()) => {
+                                        self.lock_error_channel_send_dht = false;
+                                        request_sent_to_dht = true;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_channel_send_dht {
+                                            error!(
+                                                target: LOG_TARGET_AMBIENT,
+                                                "sending request to Dht thread failed. ({e:?})"
+                                            );
+                                            self.lock_error_channel_send_dht = true;
+                                        }
+                                    }
+                                };
+                            } else {
+                                // read from channel if measurement result is available from Dht thread
+                                let rx_from_dht = rx_from_dht_opt.as_ref().unwrap();
+
+                                match rx_from_dht.try_recv() {
+                                    Ok(response) => match response {
+                                        Ok((ambient_temperature, ambient_humidity)) => {
+                                            self.ambient_temperature = ambient_temperature;
+                                            self.ambient_humidity = ambient_humidity;
+                                            self.lock_error_dht = false;
+                                        }
+                                        Err(e) => {
+                                            if !self.lock_error_dht {
+                                                error!(
+                                                    target: LOG_TARGET_AMBIENT,
+                                                    "error when reading from DHT sensor ({e:?})"
+                                                );
+                                                self.lock_error_dht = true;
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        match e {
+                                            TryRecvError::Empty => {
+                                                /* empty buffer - no action required */
+                                                self.lock_error_channel_receive_dht = false;
+                                            }
+                                            TryRecvError::Disconnected => {
+                                                if !self.lock_error_channel_receive_dht {
+                                                    error!(
+                                                        target: LOG_TARGET_AMBIENT,
+                                                        "error occurred when trying to receive response from Dht ({e:?})"
+                                                    );
+                                                    self.lock_error_channel_receive_dht = true;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                            };
-                        */
+                                request_sent_to_dht = false; // allow for next request to be sent
+                            }
+                        }
                     }
                 } else {
                     // unwrap is safe, because tested above
@@ -227,7 +297,7 @@ impl Ambient {
                         InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
                     );
                 }
-                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 100;
+                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 1000;
             }
 
             //*** communication to heating thread ****

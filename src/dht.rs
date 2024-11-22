@@ -579,11 +579,12 @@ impl Dht {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
-        
+
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
         let result_tuple: (f32, f32) = (0.0, 0.0);
 
-        while !measurement_successful { //todo: limit number of retries
+        while !measurement_successful {
+            //todo: limit number of retries
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
@@ -612,7 +613,7 @@ impl Dht {
                 }
             }
         }
-        
+
         Ok(result_tuple)
     }
 
@@ -637,25 +638,32 @@ impl Dht {
                             lock_error_invalid_command = false;
                             // Ambient requests either temperature or humidity
                             match signal_request {
-                                AquariumSignal::AmbientHumidity | AquariumSignal::AmbientTemperature => {
+                                AquariumSignal::AmbientHumidity
+                                | AquariumSignal::AmbientTemperature => {
                                     let measurement = self.get_data();
                                     _ = tx_to_ambient.send(measurement);
-                                },
+                                }
                                 _ => {
                                     if !lock_error_invalid_signal {
-                                        error!("Dht: Received request for invalid signal.");
+                                        error!(
+                                            target: LOG_TARGET_DHT,
+                                            "Received request for invalid signal."
+                                        );
                                         lock_error_invalid_signal = true;
                                     }
                                 }
                             }
-                        },
+                        }
                         InternalCommand::Quit => {
                             _ = tx_to_signal_handler.send(true);
                             break;
-                        },
+                        }
                         _ => {
                             if !lock_error_invalid_command {
-                                error!("Dht: Received invalid command.");
+                                error!(
+                                    target: LOG_TARGET_DHT,
+                                    "Received invalid command."
+                                );
                                 lock_error_invalid_command = true;
                             }
                         }
@@ -663,11 +671,14 @@ impl Dht {
                 }
                 Err(e) => {
                     if !lock_error_receive {
-                        error!(": Error in trying to receive command from Ambient or Signal handler: {e:?}");
+                        error!(
+                            target: LOG_TARGET_DHT,
+                            "Error in trying to receive command from Ambient or Signal handler: {e:?}"
+                        );
                         lock_error_receive = true;
                     }
                 }
-            };            
+            };
         }
     }
 }
