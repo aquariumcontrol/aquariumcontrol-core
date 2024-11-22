@@ -581,7 +581,6 @@ impl Dht {
         let mut retry_counter = 0;
 
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
-        let result_tuple: (f32, f32) = (0.0, 0.0);
 
         while !measurement_successful {
             //todo: limit number of retries
@@ -613,7 +612,6 @@ impl Dht {
                 }
             }
         }
-
         Ok(result_tuple)
     }
 
@@ -623,7 +621,6 @@ impl Dht {
         &mut self,
         tx_to_ambient: Sender<Result<(f32, f32), DhtError>>,
         rx_from_ambient_or_signal_handler: Receiver<InternalCommand>,
-        tx_to_signal_handler: Sender<bool>,
     ) {
         let mut lock_error_invalid_command: bool = false;
         let mut lock_error_invalid_signal: bool = false;
@@ -655,7 +652,6 @@ impl Dht {
                             }
                         }
                         InternalCommand::Quit => {
-                            _ = tx_to_signal_handler.send(true);
                             break;
                         }
                         _ => {

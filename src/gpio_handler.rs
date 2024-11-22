@@ -7,26 +7,15 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::channel_content::InternalCommand;
 use log::error;
 use serde_derive::Deserialize;
 
-#[cfg(target_os = "linux")]
-use crate::channel_content::AquariumSignal;
-
-#[cfg(target_os = "linux")]
-use crate::i2c_interface::I2cInterface;
-
-#[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, InputPin};
-
-#[cfg(target_os = "linux")]
-use crate::dht::DhtConfig;
-
-#[cfg(target_os = "linux")]
-use crate::i2c_interface::I2cInterfaceConfig;
-
-#[cfg(target_os = "linux")]
+cfg_if::cfg_if! {
+        if #[cfg(target_os = "linux")] {
+        use rppal::gpio::{Gpio, InputPin};
+        use crate::dht::DhtConfig;
+    }
+}
 use crate::dht::Dht;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
@@ -43,31 +32,19 @@ pub struct GpioHandlerConfig {
     pub use_simulator: bool,
 
     /// GPIO pin number for tank level sensor
-    gpio_pin_number_tank_level: u8,
+    pub gpio_pin_number_tank_level: u8,
 
     /// GPIO pin number for communication with DHT22 sensor
-    gpio_pin_number_dht22_io: u8,
+    pub gpio_pin_number_dht22_io: u8,
 
     /// GPIO pin number for providing power to DHT22 sensor
-    gpio_pin_number_dht22_vcc: u8,
+    pub gpio_pin_number_dht22_vcc: u8,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
 
-pub struct GpioHandler {
-    /// I2C interface for communication with Atlas Scientific sensor units
-    #[cfg(target_os = "linux")]
-    i2c_interface: Option<I2cInterface>,
-
-    /// communication with DHT sensor
-    #[cfg(target_os = "linux")]
-    dht: Option<Dht>,
-
-    // buffering of humidity because communication with DHT22 provides both, temperature and humidity
-    #[cfg(target_os = "linux")]
-    buffered_humidity: f32,
-}
+pub struct GpioHandler {}
 
 impl GpioHandler {
     /// checks if the GPIO pin configuration valid:
@@ -154,10 +131,9 @@ impl GpioHandler {
             // clone the values before creating struct
             let gpio_pin_number_dht22_io = config.gpio_pin_number_dht22_io;
             let gpio_pin_number_dht22_vcc = config.gpio_pin_number_dht22_vcc;
-            let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
 
             (
-                GpioHandler { config: config },
+                GpioHandler {},
                 Some(tank_level_pin.into_input_pullup()),
                 Some(Dht::new(
                     dht_config,
@@ -167,7 +143,7 @@ impl GpioHandler {
                 )),
             )
         } else {
-            (GpioHandler { config: config }, None, None)
+            (GpioHandler {}, None, None)
         }
     }
 
@@ -223,7 +199,7 @@ pub mod tests {
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 
     #[test]
@@ -233,7 +209,7 @@ pub mod tests {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_gpio_handler_invalid_low.toml".to_string(),
         );
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 
     #[test]
@@ -243,6 +219,6 @@ pub mod tests {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_gpio_handler_invalid_high.toml".to_string(),
         );
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht, config.i2c_interface);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 }

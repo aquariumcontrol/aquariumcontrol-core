@@ -17,8 +17,10 @@ use crate::channel_content::AquariumSignal;
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
         use log::{error, warn};
+        use std::sync::mpsc::{Sender, Receiver};
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
-        use crate::channel_content::AquariumSignal;
+
+        use crate::channel_content::InternalCommand;
     }
 }
 
@@ -419,24 +421,24 @@ impl I2cInterface {
     // In case one measurement yields an error, the function return this error.
     // In case all measurements yield success, the function returns a tuple of
     // all three signals wrapped in Ok.
-    fn get_all_data() -> Result<(f32, f32, f32), I2cError> {
+    fn get_all_data(&mut self) -> Result<(f32, f32, f32), I2cError> {
         let measured_water_temperature =
             match self.get_response_from_i2c(AquariumSignal::WaterTemperature) {
                 Ok(c) => c,
                 Err(e) => {
-                    return e;
+                    return Err(e);
                 }
             };
         let measured_ph = match self.get_response_from_i2c(AquariumSignal::pH) {
             Ok(c) => c,
             Err(e) => {
-                return e;
+                return Err(e);
             }
         };
         let measured_conductivity = match self.get_response_from_i2c(AquariumSignal::Conductivity) {
             Ok(c) => c,
             Err(e) => {
-                return e;
+                return Err(e);
             }
         };
         Ok((
@@ -450,9 +452,8 @@ impl I2cInterface {
     /// receives and response to requests via channel        
     pub fn execute(
         &mut self,
-        tx_to_atlas_scientific: Sender<Result<(f32), I2cError>>,
+        tx_to_atlas_scientific: Sender<Result<(f32, f32, f32), I2cError>>,
         rx_from_atlas_scientific_or_signal_handler: Receiver<InternalCommand>,
-        tx_to_signal_handler: Sender<bool>,
     ) {
         let mut lock_error_invalid_command: bool = false;
         let mut lock_error_invalid_signal: bool = false;
@@ -476,7 +477,7 @@ impl I2cInterface {
                                 _ => {
                                     if !lock_error_invalid_signal {
                                         error!(
-                                            target: LOG_TARGET_I2C_INTERFACE,
+                                            target: Self::LOG_TARGET_I2C_INTERFACE,
                                             "Received request for invalid signal."
                                         );
                                         lock_error_invalid_signal = true;
@@ -485,13 +486,12 @@ impl I2cInterface {
                             }
                         }
                         InternalCommand::Quit => {
-                            _ = tx_to_signal_handler.send(true);
                             break;
                         }
                         _ => {
                             if !lock_error_invalid_command {
                                 error!(
-                                    target: LOG_TARGET_I2C_INTERFACE,
+                                    target: Self::LOG_TARGET_I2C_INTERFACE,
                                     "Received invalid command."
                                 );
                                 lock_error_invalid_command = true;
@@ -502,7 +502,7 @@ impl I2cInterface {
                 Err(e) => {
                     if !lock_error_receive {
                         error!(
-                            target: LOG_TARGET_I2C_INTERFACE,
+                            target: Self::LOG_TARGET_I2C_INTERFACE,
                             "Error in trying to receive command from Ambient or Signal handler: {e:?}"
                         );
                         lock_error_receive = true;

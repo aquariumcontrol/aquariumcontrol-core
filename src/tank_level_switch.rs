@@ -113,7 +113,11 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to data logger thread
     lock_error_data_logger_response: bool,
 
-    // interface to GPIO pin wrapped as optional
+    /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
+    #[cfg(target_os = "linux")]
+    lock_error_input_pin_none: bool,
+    
+   // interface to GPIO pin wrapped as optional
     #[cfg(target_os = "linux")]
     input_pin_opt: Option<InputPin>,
 }
@@ -167,7 +171,10 @@ impl TankLevelSwitch {
         input_pin_opt: Option<InputPin>,
     ) -> TankLevelSwitch {
         if !config.use_simulator && !input_pin_opt.is_some() {
-            panic!("{}: application shall use real HW, but GPIO pin interface not provided.");
+            panic!(
+                "{}: application shall use real HW, but GPIO pin interface not provided.",
+                LOG_TARGET_TANK_LEVEL_SWITCH
+            );
         }
 
         TankLevelSwitch {
@@ -190,6 +197,7 @@ impl TankLevelSwitch {
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_channel_receive_data_logger: false,
             lock_error_data_logger_response: false,
+            lock_error_input_pin_none: false,
             input_pin_opt: input_pin_opt,
         }
     }
@@ -217,9 +225,21 @@ impl TankLevelSwitch {
             #[cfg(target_os = "linux")]
             {
                 // unwrap is safe, because tested in constructor
-                let input_pin = self.input_pin_opt.unwrap();
-
-                self.tank_level_switch_position = input_pin.is_high();
+                match self.input_pin_opt.as_mut() {
+                    Some(pin) => {
+                        self.tank_level_switch_position = pin.is_high();
+                        self.lock_error_input_pin_none = false;
+                    }
+                    None => {
+                        if !self.lock_error_input_pin_none {
+                            error!(
+                                target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                "Input pin not provided"
+                            );
+                            self.lock_error_input_pin_none = true;
+                        }
+                    }
+                }
             }
         }
     }

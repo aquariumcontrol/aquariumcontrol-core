@@ -260,7 +260,7 @@ pub fn handle_signals(
             );
         }
     }
-    
+
     match tx_to_i2c_interface_opt {
         Some(tx_to_i2c_interface) => match tx_to_i2c_interface.send(InternalCommand::Quit) {
             Ok(_) => { /* do nothing */ }
@@ -272,7 +272,7 @@ pub fn handle_signals(
             }
         },
         None => { /* do nothing */ }
-    }  
+    }
 
     // next, let's shut down the communication with DHT sensor
     match tx_to_ambient.send(InternalCommand::Quit) {
@@ -294,7 +294,7 @@ pub fn handle_signals(
             );
         }
     }
-    
+
     match tx_to_dht_opt {
         Some(tx_to_dht) => match tx_to_dht.send(InternalCommand::Quit) {
             Ok(_) => { /* do nothing */ }
@@ -306,7 +306,7 @@ pub fn handle_signals(
             }
         },
         None => { /* do nothing */ }
-    }  
+    }
 
     // next, let's shut down the monitors
     match tx_to_monitors.send(InternalCommand::Quit) {

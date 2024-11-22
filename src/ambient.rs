@@ -19,8 +19,6 @@ use std::time::Duration;
 use crate::channel_content::InternalCommand;
 use crate::dht::DhtError;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
-#[cfg(target_os = "linux")]
-use crate::i2c_interface::I2cInterface;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 const LOG_TARGET_AMBIENT: &str = "ambient";
@@ -223,7 +221,9 @@ impl Ambient {
                                 let tx_to_dht = tx_to_dht_opt.as_ref().unwrap();
 
                                 // respond only after having received request:
-                                match tx_to_dht.send(RequestSignal(AmbientTemperature)) {
+                                match tx_to_dht.send(InternalCommand::RequestSignal(
+                                    AquariumSignal::AmbientTemperature,
+                                )) {
                                     Ok(()) => {
                                         self.lock_error_channel_send_dht = false;
                                         request_sent_to_dht = true;

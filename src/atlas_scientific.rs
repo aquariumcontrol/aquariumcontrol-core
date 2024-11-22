@@ -19,8 +19,6 @@ use std::time::Duration;
 use crate::channel_content::InternalCommand;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::i2c_interface::I2cError;
-#[cfg(target_os = "linux")]
-use crate::i2c_interface::I2cInterface;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 
 const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
@@ -40,7 +38,7 @@ pub struct AtlasScientificConfig {
     pub replacement_value_water_temperature: f32,
 
     /// replacement value for pH in case reading from I2C fails
-    pub replacement_value_ph: f32,
+    pub replacement_value_pH: f32,
 
     /// replacement value for conductivity in case reading from I2C fails
     pub replacement_value_conductivity: f32,
@@ -92,10 +90,6 @@ pub struct AtlasScientific {
     /// flag indicating that the pH value may be inaccurate
     #[allow(dead_code)]
     pH_invalid: bool,
-
-    // I2C interface
-    #[cfg(target_os = "linux")]
-    i2c_interface_opt: Option<I2cInterface>,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination: bool,
@@ -298,7 +292,9 @@ impl AtlasScientific {
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
-        rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<f32, I2cError>>>,
+        rx_atlas_scientific_from_i2c_interface_opt: Option<
+            Receiver<Result<(f32, f32, f32), I2cError>>,
+        >,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
@@ -318,7 +314,7 @@ impl AtlasScientific {
 
         // initialize signals with replacement values
         self.water_temperature = self.config.replacement_value_water_temperature;
-        self.pH = self.config.replacement_value_ph;
+        self.pH = self.config.replacement_value_pH;
         self.conductivity = self.config.replacement_value_conductivity;
 
         // initialize countdown
@@ -347,13 +343,17 @@ impl AtlasScientific {
                 if !self.config.use_simulator {
                     #[cfg(target_os = "linux")]
                     {
-                        if tx_to_i2c_interface_opt.is_some() && rx_from_i2c_interface_opt.is_some()
+                        if tx_atlas_scientific_to_i2c_interface_opt.is_some()
+                            && rx_atlas_scientific_from_i2c_interface_opt.is_some()
                         {
                             if !request_sent_to_i2c_interface {
-                                let tx_to_i2c_interface = tx_to_i2c_interface_opt.as_ref().unwrap();
+                                let tx_to_i2c_interface =
+                                    tx_atlas_scientific_to_i2c_interface_opt.as_ref().unwrap();
 
                                 // respond only after having received request:
-                                match tx_to_i2c_interface.send(RequestSignal(WaterTemperature)) {
+                                match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
+                                    AquariumSignal::WaterTemperature,
+                                )) {
                                     Ok(()) => {
                                         self.lock_error_channel_send_i2c_interface = false;
                                         request_sent_to_i2c_interface = true;
@@ -371,28 +371,28 @@ impl AtlasScientific {
                             } else {
                                 // read from channel if measurement result is available from I2cInterface thread
                                 let rx_from_i2c_interface =
-                                    rx_from_i2c_interface_opt.as_ref().unwrap();
+                                    rx_atlas_scientific_from_i2c_interface_opt.as_ref().unwrap();
 
                                 match rx_from_i2c_interface.try_recv() {
                                     Ok(response) => match response {
-                                        Ok((water_temperature, ph, conductivity)) => {
+                                        Ok((water_temperature, pH, conductivity)) => {
                                             self.water_temperature = water_temperature;
-                                            self.ph = ph;
+                                            self.pH = pH;
                                             self.conductivity = conductivity;
                                             self.water_temperature_invalid = false;
-                                            self.ph_invalid = false;
+                                            self.pH_invalid = false;
                                             self.conductivity_invalid = false;
                                             self.lock_error_i2c_interface = false;
                                         }
-                                        I2cError(e) => {
+                                        Err(e) => {
                                             self.water_temperature_invalid = true;
-                                            self.ph_invalid = true;
+                                            self.pH_invalid = true;
                                             self.conductivity_invalid = true;
                                             #[cfg(not(test))]
                                             if !self.lock_error_i2c_interface {
                                                 error!(
                                                     target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                                    "failure occurred when reading from I2cInterface"
+                                                    "failure occurred when reading from I2cInterface ({e:?})"
                                                 );
                                                 self.lock_error_i2c_interface = true;
                                             }
@@ -408,7 +408,7 @@ impl AtlasScientific {
                                             TryRecvError::Disconnected => {
                                                 if !self.lock_error_channel_receive_i2c_interface {
                                                     error!(
-                                                        target: LOG_TARGET_AMBIENT,
+                                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
                                                         "error occured when trying to receive response from I2cInterface ({e:?})"
                                                     );
                                                     self.lock_error_channel_receive_i2c_interface =
@@ -418,7 +418,7 @@ impl AtlasScientific {
                                         }
                                     }
                                 }
-                                request_sent_to_dht = false; // allow for next request to be sent
+                                request_sent_to_i2c_interface = false; // allow for next request to be sent
                             }
                         }
                     }
