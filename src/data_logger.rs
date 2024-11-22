@@ -1392,25 +1392,25 @@ pub mod tests {
 
                 //let mut data_frame: DataFrame = mock_data_injection.data_frames.pop().unwrap();
 
-/*                // Dataframe #7
-                println!("Asserting data frame #7");
-                data_frame.assert(
-                    Some(29.0),      // target_water_temperature
-                    Some(28.8125),   // target_water_temperature_filtered
-                    Some(7.0),       // target_water_ph
-                    Some(7.0195313), // target_water_ph_filtered
-                    Some(50_000.0),  // target_water_conductivity
-                    Some(48437.83),  // target_water_conductivity_filtered
-                    None,            // target_water_conductivity_compensated
-                    Some(true),      // target_refill_in_progress
-                    Some(false),     // target_tank_level_switch_position
-                    Some(true),      // target_tank_level_switch_invalid
-                    Some(true),      // target_surface_ventilation_status
-                    Some(35.0),      // target_ambient_temperature
-                    Some(66.0),      // target_ambient_humidity
-                    Some(true),      // target_heater_status
-                );
-*/
+                /*                // Dataframe #7
+                                println!("Asserting data frame #7");
+                                data_frame.assert(
+                                    Some(29.0),      // target_water_temperature
+                                    Some(28.8125),   // target_water_temperature_filtered
+                                    Some(7.0),       // target_water_ph
+                                    Some(7.0195313), // target_water_ph_filtered
+                                    Some(50_000.0),  // target_water_conductivity
+                                    Some(48437.83),  // target_water_conductivity_filtered
+                                    None,            // target_water_conductivity_compensated
+                                    Some(true),      // target_refill_in_progress
+                                    Some(false),     // target_tank_level_switch_position
+                                    Some(true),      // target_tank_level_switch_invalid
+                                    Some(true),      // target_surface_ventilation_status
+                                    Some(35.0),      // target_ambient_temperature
+                                    Some(66.0),      // target_ambient_humidity
+                                    Some(true),      // target_heater_status
+                                );
+                */
                 // Dataframe #6
                 let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #6");
