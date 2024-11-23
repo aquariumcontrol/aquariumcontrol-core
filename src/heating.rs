@@ -34,7 +34,7 @@ const CYCLE_TIME_HEATING_MILLIS: u64 = 10;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
-const TIME_INCREMENT_HEATING_MILLIS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000.0;
+const TIME_INCREMENT_HEATING_SECS: f32 = CYCLE_TIME_HEATING_MILLIS as f32 / 1000.0;
 
 /// Trait for the execution of data transfer to SQL database after midnight has arrived.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -845,7 +845,7 @@ impl Heating {
                     }
                 }
 
-                saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_MILLIS);
+                saw_tooth_profile.execute_with(TIME_INCREMENT_HEATING_SECS);
 
                 // update of midnight counter only runs every second
                 if loop_counter % CYCLE_TIME_HEATING_DIVISOR == 0 {
