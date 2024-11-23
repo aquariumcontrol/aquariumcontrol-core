@@ -102,7 +102,7 @@ impl SawToothProfile {
     /// It updates the counter and the normalized level of the saw tooth profile.
     pub fn execute_with(&mut self, increment: f32) {
         // if counter exceeds final limit, reset. Otherwise increment.
-        if self.counter >= (self.phase4_counter_limit - increment) {
+        if self.counter >= (self.phase4_counter_limit - 3.0 * increment) {
             self.counter = 0.0;
         } else {
             self.counter += increment;
