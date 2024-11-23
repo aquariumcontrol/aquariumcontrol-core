@@ -116,8 +116,8 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     #[cfg(target_os = "linux")]
     lock_error_input_pin_none: bool,
-    
-   // interface to GPIO pin wrapped as optional
+
+    // interface to GPIO pin wrapped as optional
     #[cfg(target_os = "linux")]
     input_pin_opt: Option<InputPin>,
 }

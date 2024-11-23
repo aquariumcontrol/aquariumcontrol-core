@@ -1127,7 +1127,7 @@ fn main() {
             scope.spawn(move || {
                 i2c_interface.execute(
                     tx_i2c_interface_to_atlas_scientific,
-                    rx_i2c_interface_from_atlas_scientific
+                    rx_i2c_interface_from_atlas_scientific,
                 );
                 trace!(target: LOG_TARGET_MAIN, "i2c_interface terminated.");
             });

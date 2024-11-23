@@ -38,7 +38,7 @@ pub struct AtlasScientificConfig {
     pub replacement_value_water_temperature: f32,
 
     /// replacement value for pH in case reading from I2C fails
-    pub replacement_value_pH: f32,
+    pub replacement_value_ph: f32,
 
     /// replacement value for conductivity in case reading from I2C fails
     pub replacement_value_conductivity: f32,
@@ -314,7 +314,7 @@ impl AtlasScientific {
 
         // initialize signals with replacement values
         self.water_temperature = self.config.replacement_value_water_temperature;
-        self.pH = self.config.replacement_value_pH;
+        self.pH = self.config.replacement_value_ph;
         self.conductivity = self.config.replacement_value_conductivity;
 
         // initialize countdown
@@ -384,6 +384,7 @@ impl AtlasScientific {
                                             self.conductivity_invalid = false;
                                             self.lock_error_i2c_interface = false;
                                         }
+                                        #[cfg(not(test))]
                                         Err(e) => {
                                             self.water_temperature_invalid = true;
                                             self.pH_invalid = true;
@@ -396,6 +397,12 @@ impl AtlasScientific {
                                                 );
                                                 self.lock_error_i2c_interface = true;
                                             }
+                                        }
+                                        #[cfg(test)]
+                                        Err(_) => {
+                                            self.water_temperature_invalid = true;
+                                            self.pH_invalid = true;
+                                            self.conductivity_invalid = true;
                                         }
                                     },
                                     Err(e) => {
