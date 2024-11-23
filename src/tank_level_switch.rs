@@ -705,7 +705,11 @@ pub mod tests {
             .tank_level_switch
             .tank_level_switch_position_high_stabilization_count
             + 1;
+
+        #[cfg(target_os="linux")]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
+        #[cfg(not(target_os="linux"))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
@@ -866,7 +870,10 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
+        #[cfg(target_os="linux")]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false, None);
+        #[cfg(not(target_os="linux"))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
 
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
@@ -1037,7 +1044,10 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
+        #[cfg(target_os="linux")]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
+        #[cfg(not(target_os="linux"))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
@@ -1207,8 +1217,12 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part: u64 = 2; // two seconds with level switch before toggling
+        
+        #[cfg(target_os="linux")]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-
+        #[cfg(not(target_os="linux"))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())

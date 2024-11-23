@@ -11,12 +11,12 @@ use log::error;
 use serde_derive::Deserialize;
 
 cfg_if::cfg_if! {
-        if #[cfg(target_os = "linux")] {
-        use rppal::gpio::{Gpio, InputPin};
-        use crate::dht::DhtConfig;
+    if #[cfg(target_os = "linux")] {
+            use rppal::gpio::{Gpio, InputPin};
+            use crate::dht::DhtConfig;
+            use crate::dht::Dht;
     }
 }
-use crate::dht::Dht;
 
 const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 
@@ -166,15 +166,6 @@ impl GpioHandler {
             );
         }
         GpioHandler {}
-    }
-
-    #[allow(unused)]
-    #[cfg(not(target_os = "linux"))]
-    fn get_response_from_hardware(&self, _internal_command: InternalCommand) -> f32 {
-        panic!(
-            "{}: Usage of hardware not supported on this platform.",
-            LOG_TARGET_GPIO_HANDLER
-        );
     }
 }
 

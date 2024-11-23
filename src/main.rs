@@ -84,7 +84,6 @@ use crate::food_injection::FoodInjection;
 use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
-use crate::i2c_interface::I2cInterface;
 use crate::logger::setup_logger;
 use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
@@ -111,6 +110,7 @@ cfg_if::cfg_if! {
         use crate::dht::DhtError;
         use crate::messaging::Messaging;
         use crate::i2c_interface::I2cError;
+        use crate::i2c_interface::I2cInterface;
     }
 }
 
