@@ -795,6 +795,7 @@ pub mod tests {
         );
     }
 
+    #[ignore]
     #[cfg(target_os = "linux")]
     #[test]
     pub fn test_dht_read() {

@@ -231,7 +231,7 @@ pub mod tests {
 
         // *** check timestamp of last Balling dosing - PASS ************************************
         let balling_timestamp =
-            NaiveDateTime::parse_from_str("2024-10-28 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+            NaiveDateTime::parse_from_str("2024-11-20 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_balling.insert_balling_event(balling_timestamp, pump_id, 0.5) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),

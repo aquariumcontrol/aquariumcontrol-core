@@ -7,7 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(not(test))]
 use log::error;
+
 use serde_derive::Deserialize;
 
 cfg_if::cfg_if! {
@@ -68,6 +70,7 @@ impl GpioHandler {
             {
                 true // valid GPIO pin number
             } else {
+                #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_GPIO_HANDLER,
                     "GPIO pins are not distinct."
@@ -75,6 +78,7 @@ impl GpioHandler {
                 false // invalid GPIO pin numbers because not distinct
             }
         } else {
+            #[cfg(not(test))]
             error!(
                 target: LOG_TARGET_GPIO_HANDLER,
                 "GPIO pins are not inside permissible range."
@@ -96,15 +100,15 @@ impl GpioHandler {
     ) -> (GpioHandler, Option<InputPin>, Option<Dht>) {
         let use_simulator = config.use_simulator; // create copy because struct is moved
 
-        if !use_simulator {
-            // check if GPIO pin configuration is valid
-            if !Self::check_valid_gpio_pin_config(&config) {
-                panic!(
-                    "{}: GPIO pin configuration is invalid",
-                    LOG_TARGET_GPIO_HANDLER,
-                );
-            }
+        // check if GPIO pin configuration is valid
+        if !Self::check_valid_gpio_pin_config(&config) {
+            panic!(
+                "{}: GPIO pin configuration is invalid",
+                LOG_TARGET_GPIO_HANDLER,
+            );
+        }
 
+        if !use_simulator {
             // open interface to GPIO library
             let gpio = match Gpio::new() {
                 Ok(c) => c,

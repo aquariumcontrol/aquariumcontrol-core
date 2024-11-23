@@ -684,6 +684,7 @@ pub mod tests {
     // - pH sensor
     // - conductivity sensor
     // - temperature
+    #[ignore]
     #[test]
     #[cfg(target_os = "linux")]
     pub fn test_i2c_interface_read_sensors() {

@@ -967,7 +967,7 @@ pub mod tests {
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
             true,  // schedule allows
             14,    // execution count
-            20000, // maximum time in milliseoncds for test execution
+            19000, // maximum time in milliseconds for test execution
             5,     // number of dosings for pump #1
             4,     // number of dosings for pump #2
             3,     // number of dosings for pump #3

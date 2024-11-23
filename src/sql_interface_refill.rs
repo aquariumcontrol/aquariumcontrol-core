@@ -245,7 +245,7 @@ pub mod tests {
 
         // *** check timestamp of last refill - PASS ********************************************
         let refill_timestamp =
-            NaiveDateTime::parse_from_str("2024-10-30 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+            NaiveDateTime::parse_from_str("2024-11-20 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert refill event into database: {e:?}"),
