@@ -176,7 +176,7 @@ impl GpioHandler {
 pub mod tests {
 
     cfg_if::cfg_if! {
-        if #[cfg(target_os = "linux")] {
+        if #[cfg(all(target_os = "linux", test))] {
             use crate::logger::setup_logger;
             use crate::config::read_config_file;
             use crate::config::ConfigData;
