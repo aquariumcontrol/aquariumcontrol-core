@@ -24,9 +24,9 @@ use crate::sawtooth_profile::SawToothProfileConfig;
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
-const CYCLE_TIME_VENTILATION_MILLIS: u64 = 10;
+const CYCLE_TIME_VENTILATION_MILLIS: u64 = 50;
 
-const TIME_INCREMENT_VENTILATION_MILLIS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f32 / 1000.0;
+const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f32 / 1000.0;
 
 /// Holds the configuration data for the ventilation control.
 /// The configuration is loaded from the .toml configuration file.
@@ -213,9 +213,9 @@ impl Ventilation {
     /// # Arguments
     /// * `measured_value` - measured temperature value    
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
-        let target_value_delta =
+        let target_value_delta: f32 =
             self.config.switch_on_temperature - self.config.switch_off_temperature;
-        let measured_value_delta = measured_value - self.config.switch_off_temperature;
+        let measured_value_delta: f32 = measured_value - self.config.switch_off_temperature;
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
         } else {
@@ -437,6 +437,7 @@ impl Ventilation {
                     if (measured_temperature >= self.config.switch_off_temperature)
                         && (measured_temperature <= self.config.switch_on_temperature)
                     {
+                        // temperature is within (dynamic) control window
                         if (self.calc_normalized_control_deviation(measured_temperature)
                             > saw_tooth_profile.level_normalized)
                             && !measurement_error
@@ -462,6 +463,7 @@ impl Ventilation {
                             }
                         }
                     } else {
+                        // temperature is above or below (dynamic) control window
                         if measured_temperature > self.config.switch_on_temperature {
                             // switch on ventilation if not already on
                             if ventilation_state != ActuatorState::On {
@@ -548,7 +550,7 @@ impl Ventilation {
                 &rx_from_data_logger,
             );
 
-            saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_MILLIS);
+            saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
@@ -1203,17 +1205,17 @@ pub mod tests {
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
-                assert_le!(second_last_actuation_duration, 8600);
-                assert_ge!(second_last_actuation_duration, 7800);
-                assert_le!(third_last_actuation_duration, 8600);
-                assert_ge!(third_last_actuation_duration, 7800);
-                assert_le!(fourth_last_actuation_duration, 8600);
-                assert_ge!(fourth_last_actuation_duration, 7800);
-                assert_le!(fifth_last_actuation_duration, 8600);
-                assert_ge!(fifth_last_actuation_duration, 7800);
-                assert_le!(sixth_last_actuation_duration, 8600);
-                assert_ge!(sixth_last_actuation_duration, 7800);
-                assert_le!(delta_min_max_duration, 100);
+                assert_le!(second_last_actuation_duration, 7100);
+                assert_ge!(second_last_actuation_duration, 6900);
+                assert_le!(third_last_actuation_duration, 7100);
+                assert_ge!(third_last_actuation_duration, 6900);
+                assert_le!(fourth_last_actuation_duration, 7100);
+                assert_ge!(fourth_last_actuation_duration, 6900);
+                assert_le!(fifth_last_actuation_duration, 7100);
+                assert_ge!(fifth_last_actuation_duration, 6900);
+                assert_le!(sixth_last_actuation_duration, 7100);
+                assert_ge!(sixth_last_actuation_duration, 6900);
+                assert_le!(delta_min_max_duration, 50);
             })
             .unwrap();
 
@@ -1221,7 +1223,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration = Duration::from_secs(59);
+                let sleep_duration = Duration::from_secs(58);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);

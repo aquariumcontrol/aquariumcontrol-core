@@ -30,7 +30,7 @@ use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
 const LOG_TARGET_HEATING: &str = "heating";
 
-const CYCLE_TIME_HEATING_MILLIS: u64 = 10;
+const CYCLE_TIME_HEATING_MILLIS: u64 = 50;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
@@ -319,9 +319,9 @@ impl Heating {
     /// # Arguments
     /// * `measured_value` - measured temperature value    
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
-        let target_value_delta =
+        let target_value_delta: f32 =
             self.config.switch_off_temperature - self.config.switch_on_temperature;
-        let measured_value_delta = measured_value - self.config.switch_on_temperature;
+        let measured_value_delta: f32 = measured_value - self.config.switch_on_temperature;
         if target_value_delta > 0.0 {
             measured_value_delta / target_value_delta
         } else {
@@ -740,6 +740,7 @@ impl Heating {
                         if (measured_water_temperature >= self.config.switch_on_temperature)
                             && (measured_water_temperature <= self.config.switch_off_temperature)
                         {
+                            // temperature is inside (dynamic) control window
                             if (self.calc_normalized_control_deviation(measured_water_temperature)
                                 < saw_tooth_profile.level_normalized)
                                 && !measurement_error_water_temperature
@@ -765,6 +766,7 @@ impl Heating {
                                 }
                             }
                         } else {
+                            // temperature is either above or below (dynamic) control window
                             if measured_water_temperature > self.config.switch_off_temperature {
                                 // switch off heater if not already off
                                 if heater_state != ActuatorState::Off {
@@ -1756,17 +1758,17 @@ pub mod tests {
 
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
-                assert_le!(second_last_actuation_duration, 8080);
-                assert_ge!(second_last_actuation_duration, 7800);
-                assert_le!(third_last_actuation_duration, 8080);
-                assert_ge!(third_last_actuation_duration, 7800);
-                assert_le!(fourth_last_actuation_duration, 8080);
-                assert_ge!(fourth_last_actuation_duration, 7800);
-                assert_le!(fifth_last_actuation_duration, 8080);
-                assert_ge!(fifth_last_actuation_duration, 7800);
-                assert_le!(sixth_last_actuation_duration, 8080);
-                assert_ge!(sixth_last_actuation_duration, 7800);
-                assert_le!(delta_min_max_duration, 100);
+                assert_le!(second_last_actuation_duration, 7100);
+                assert_ge!(second_last_actuation_duration, 6900);
+                assert_le!(third_last_actuation_duration, 7100);
+                assert_ge!(third_last_actuation_duration, 6900);
+                assert_le!(fourth_last_actuation_duration, 7100);
+                assert_ge!(fourth_last_actuation_duration, 6900);
+                assert_le!(fifth_last_actuation_duration, 7100);
+                assert_ge!(fifth_last_actuation_duration, 6900);
+                assert_le!(sixth_last_actuation_duration, 7100);
+                assert_ge!(sixth_last_actuation_duration, 6900);
+                assert_le!(delta_min_max_duration, 50);
             })
             .unwrap();
 
