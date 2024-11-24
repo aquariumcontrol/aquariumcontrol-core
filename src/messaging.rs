@@ -22,6 +22,8 @@ use std::time::Duration;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
 
+const LOG_TARGET_MESSAGING: &str = "messaging";
+
 #[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
 pub mod messaging_domains {
@@ -191,7 +193,6 @@ pub struct Messaging {
 }
 
 impl Messaging {
-    const LOG_TARGET_MESSAGING: &'static str = "messaging";
 
     /// Opens the message queue
     /// # Arguments
@@ -203,7 +204,7 @@ impl Messaging {
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue using {} ({e:?})",
-                    Self::LOG_TARGET_MESSAGING,
+                    LOG_TARGET_MESSAGING,
                     &config.mq_filename
                 );
             }
@@ -215,7 +216,7 @@ impl Messaging {
             Err(e) => {
                 panic!(
                     "{}: Failed to open attributes ({e:?})",
-                    Self::LOG_TARGET_MESSAGING,
+                    LOG_TARGET_MESSAGING,
                 );
             }
         };
@@ -250,7 +251,7 @@ impl Messaging {
                 Ok((_r1, _r2)) => {
                     //println!(
                     //    "{}: POSIX message received with r1={}, r2={}, length={}.",
-                    //    Self::LOG_TARGET_MESSAGING,
+                    //    LOG_TARGET_MESSAGING,
                     //    r1, r2, msgbuf.len()
                     //);
                     //let zero_char: u8 = 0;
@@ -289,7 +290,7 @@ impl Messaging {
                         msg.command_param2 = i32::from_le_bytes(command_param2_buf);
 
                         info!(
-                            target: Self::LOG_TARGET_MESSAGING,
+                            target: LOG_TARGET_MESSAGING,
                             "received message: domain={}, cmd={}, param1={}, param2={}",
                             msg.domain,
                             msg.command,
@@ -307,7 +308,7 @@ impl Messaging {
                             messaging_domains::MONITORS => MessagingDomain::Monitors,
                             _ => {
                                 warn!(
-                                    target: Self::LOG_TARGET_MESSAGING,
+                                    target: LOG_TARGET_MESSAGING,
                                     "ignoring message for unknown domain {}",
                                     msg.domain
                                 );
@@ -325,7 +326,7 @@ impl Messaging {
                             }
                             _ => {
                                 warn!(
-                                    target: Self::LOG_TARGET_MESSAGING,
+                                    target: LOG_TARGET_MESSAGING,
                                     "Messaging: ignoring message with unknown command {}",
                                     msg.command
                                 );
@@ -348,7 +349,7 @@ impl Messaging {
                             };
 
                             info!(
-                                target: Self::LOG_TARGET_MESSAGING,
+                                target: LOG_TARGET_MESSAGING,
                                 "forwarding message to domain {}",
                                 domain
                             );
@@ -357,7 +358,7 @@ impl Messaging {
                                 Ok(_) => { /* do nothing */ }
                                 Err(e) => {
                                     error!(
-                                        target: Self::LOG_TARGET_MESSAGING,
+                                        target: LOG_TARGET_MESSAGING,
                                         "channel communication to domain {} failed ({e:?})",
                                         domain
                                     );
@@ -366,7 +367,7 @@ impl Messaging {
                         }
                     } else {
                         error!(
-                            target: Self::LOG_TARGET_MESSAGING,
+                            target: LOG_TARGET_MESSAGING,
                             "message has incorrect length ({}). ignoring it.",
                             msgbuf.len()
                         );
@@ -377,7 +378,7 @@ impl Messaging {
                         ErrorKind::TimedOut => { /* do nothing */ }
                         _ => {
                             error!(
-                                target: Self::LOG_TARGET_MESSAGING,
+                                target: LOG_TARGET_MESSAGING,
                                 "timeout occurred when reading POSIX message ({e:?})"
                             );
                         }
@@ -428,6 +429,7 @@ pub mod tests {
     //    use crate::water_injection::WaterInjectionTrait;
     use std::thread;
     use crate::mock::tests::mock_message_command_receiver;
+    use crate::messaging::LOG_TARGET_MESSAGING;
 
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
@@ -437,12 +439,12 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => {
-                println!("Messaging: Could open message queue.");
                 c
             }
             Err(e) => {
                 panic!(
-                    "Messaging: failure to open message queue for test using {}, error={e:?}",
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING,
                     &config.messaging.mq_filename
                 );
             }
@@ -466,8 +468,10 @@ pub mod tests {
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
-        let _join_handle_mock_ventilation = thread::Builder::new()
-            .name("test_environment".to_string())
+        let tx_test_environment_to_ventilation = tx_messaging_to_ventilation.clone();
+        
+        let join_handle_mock_ventilation = thread::Builder::new()
+            .name("mock_ventilation".to_string())
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(rx_ventilation_from_messaging);
                 
@@ -501,6 +505,9 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_100_millisec);
 
+                // requesting mock ventilation to quit
+                let _ = tx_test_environment_to_ventilation.send(InternalCommand::Quit);
+
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
             })
@@ -522,6 +529,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_ventilation
+            .join()
+            .expect("Mock ventilation thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -529,6 +539,468 @@ pub mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
+
+    #[cfg(target_os = "linux")]
+    // Test case checks if messages for heating control are triggering the corresponding channel communication
+    #[test]
+    pub fn test_messaging_heating() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_heating.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING,
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::HEATING;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::HEATING;
+        msg_stop.command = messaging_commands::STOP;
+
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_test_environment_to_heating = tx_messaging_to_heating.clone();
+        
+        let join_handle_mock_heating = thread::Builder::new()
+            .name("mock_heating".to_string())
+            .spawn(move || {
+                let mut commands_received = mock_message_command_receiver(rx_heating_from_messaging);
+                
+                // assert number of commands sent/received are identical
+                assert_eq!(2, commands_received.len());
+                
+                // assert content of last message sent from test environment:
+                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
+                
+                // assert content of first message sent from test environment:
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of heating control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of heating control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // requesting mock heating to quit
+                let _ = tx_test_environment_to_heating.send(InternalCommand::Quit);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            })
+            .unwrap();
+
+        join_handle_mock_heating
+            .join()
+            .expect("Mock heating thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[cfg(target_os = "linux")]
+    // Test case checks if messages for refill control are triggering the corresponding channel communication
+    #[test]
+    pub fn test_messaging_refill() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING,
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut msg_reset = Message::new();
+        msg_reset.domain = messaging_domains::REFILL;
+        msg_reset.command = messaging_commands::RESET;
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::REFILL;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::REFILL;
+        msg_stop.command = messaging_commands::STOP;
+
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_test_environment_to_refill = tx_messaging_to_refill.clone();
+        
+        let join_handle_mock_refill = thread::Builder::new()
+            .name("mock_refill".to_string())
+            .spawn(move || {
+                let mut commands_received = mock_message_command_receiver(rx_refill_from_messaging);
+                
+                // assert number of commands sent/received are identical
+                assert_eq!(3, commands_received.len());
+                
+                // assert content of last message sent from test environment:
+                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
+                
+                // assert content of second message sent from test environment:
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+
+                // assert content of first message sent from test environment:
+                assert_eq!(InternalCommand::ResetAllErrors, commands_received.pop().unwrap());
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting reset of all errors
+                let _ = mq_stimuli.send(0, &msg_reset.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of refill control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of refill control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // requesting mock refill to quit
+                let _ = tx_test_environment_to_refill.send(InternalCommand::Quit);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            })
+            .unwrap();
+
+        join_handle_mock_refill
+            .join()
+            .expect("Mock refill thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[cfg(target_os = "linux")]
+    // Test case checks if messages for feed control are triggering the corresponding channel communication
+    #[test]
+    pub fn test_messaging_feed() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING,
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut msg_exec = Message::new();
+        msg_exec.domain = messaging_domains::FEED;
+        msg_exec.command = messaging_commands::EXEC;
+        msg_exec.command_param1 = 13;
+        
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::FEED;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::FEED;
+        msg_stop.command = messaging_commands::STOP;
+
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
+        
+        let join_handle_mock_feed = thread::Builder::new()
+            .name("mock_feed".to_string())
+            .spawn(move || {
+                let mut commands_received = mock_message_command_receiver(rx_feed_from_messaging);
+                
+                // assert number of commands sent/received are identical
+                assert_eq!(3, commands_received.len());
+                
+                // assert content of last message sent from test environment:
+                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
+                
+                // assert content of second message sent from test environment:
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+
+                // assert content of first message sent from test environment:
+                assert_eq!(InternalCommand::Execute(13), commands_received.pop().unwrap());
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting execution of feed profile
+                let _ = mq_stimuli.send(0, &msg_exec.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of feed control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of feed control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // requesting mock feed to quit
+                let _ = tx_test_environment_to_feed.send(InternalCommand::Quit);
+                
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            })
+            .unwrap();
+
+        join_handle_mock_feed
+            .join()
+            .expect("Mock feed thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[cfg(target_os = "linux")]
+    // Test case checks if messages for feed control are triggering the corresponding channel communication
+    #[test]
+    pub fn test_messaging_balling() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING,
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::BALLING;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::BALLING;
+        msg_stop.command = messaging_commands::STOP;
+
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let tx_test_environment_to_balling = tx_messaging_to_balling.clone();
+    
+        let join_handle_mock_balling = thread::Builder::new()
+            .name("mock_balling".to_string())
+            .spawn(move || {
+                let mut commands_received = mock_message_command_receiver(rx_balling_from_messaging);
+                
+                // assert number of commands sent/received are identical
+                assert_eq!(2, commands_received.len());
+                
+                // assert content of last message sent from test environment:
+                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
+                
+                // assert content of second message sent from test environment:
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());                
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of Balling dosing control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // sending IPC message requesting stop of Balling dosing control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // requesting mock Balling to quit
+                let _ = tx_test_environment_to_balling.send(InternalCommand::Quit);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            })
+            .unwrap();
+
+        join_handle_mock_balling
+            .join()
+            .expect("Mock Balling thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
     /* @todo: redo test case completely
         #[cfg(target_os = "linux")]
         // Test case runs ventilation control and triggers inhibition by sending stop message.
