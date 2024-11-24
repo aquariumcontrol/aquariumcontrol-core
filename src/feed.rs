@@ -644,7 +644,7 @@ pub mod tests {
                 );
             }
         };
-        
+
         // create test object
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 

@@ -1659,11 +1659,11 @@ pub mod tests {
                 }
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
-                
+
                 // requesting ventilation control to quit
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 rx_signal_handler_from_ventilation.recv().unwrap();
-                
+
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 5);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);

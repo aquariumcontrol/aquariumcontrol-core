@@ -22,6 +22,8 @@ use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_balling::BallingSetVal;
 use crate::sql_interface_balling::SqlInterfaceBalling;
 
+const LOG_TARGET_BALLING: &str = "balling";
+
 /// Holds the configuration data for the balling dosing control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -115,8 +117,6 @@ pub struct Balling {
 impl ProcessExternalRequestTrait for Balling {}
 
 impl Balling {
-    const LOG_TARGET_BALLING: &'static str = "balling";
-
     /// Provides a struct of type Balling.
     /// # Arguments
     /// * `config` - configuration data for Balling dosing control
@@ -125,7 +125,7 @@ impl Balling {
         if config.schedule_check_interval == 0 {
             panic!(
                 "{}: schedule check interval is zero - please assign a value > 0",
-                Self::LOG_TARGET_BALLING
+                LOG_TARGET_BALLING
             );
         }
 
@@ -172,16 +172,14 @@ impl Balling {
                 // Panic is happening at startup of system.
                 panic!(
                     "{}: countdown calculation encountered invalid pump id = {}",
-                    Self::LOG_TARGET_BALLING,
-                    pump_id
+                    LOG_TARGET_BALLING, pump_id
                 );
             }
         };
         if target_dosing_interval == 0 {
             panic!(
                 "{}: Invalid dosing interval for pump #{} in configuration.",
-                Self::LOG_TARGET_BALLING,
-                pump_id
+                LOG_TARGET_BALLING, pump_id
             );
         }
 
@@ -193,7 +191,7 @@ impl Balling {
                     Ok(c) => c,
                     Err(e) => {
                         error!("{}: Reading last dosing event duration for pump {} from database ({e:?})",
-                            Self::LOG_TARGET_BALLING,
+                            LOG_TARGET_BALLING,
                             pump_id);
                         0
                     }
@@ -203,7 +201,7 @@ impl Balling {
             Err(e) => {
                 panic!(
                     "{}: Could not get duration since last Balling dosing event: {e:?}",
-                    Self::LOG_TARGET_BALLING
+                    LOG_TARGET_BALLING
                 );
             }
         };
@@ -211,9 +209,7 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}, Duration since last dosing for pump {} is {} seconds.",
-            Self::LOG_TARGET_BALLING,
-            pump_id,
-            duration_since_balling_dosing
+            LOG_TARGET_BALLING, pump_id, duration_since_balling_dosing
         );
 
         // limit subtraction to 0
@@ -225,9 +221,7 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}: Countdown for next dosing of pump {} is {} seconds.",
-            Self::LOG_TARGET_BALLING,
-            pump_id,
-            countdown
+            LOG_TARGET_BALLING, pump_id, countdown
         );
 
         countdown
@@ -291,9 +285,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: Calculated target dosing duration of {} ms for pump #{}",
-                    Self::LOG_TARGET_BALLING,
-                    dosing_duration_millis,
-                    pump_id
+                    LOG_TARGET_BALLING, dosing_duration_millis, pump_id
                 );
 
                 if dosing_duration_millis > 0 {
@@ -318,7 +310,7 @@ impl Balling {
             }
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_BALLING,
+                    target: LOG_TARGET_BALLING,
                     "encountered error when reading set values of pump #{}: {e:?}",
                     pump_id
                 );
@@ -375,7 +367,7 @@ impl Balling {
                             }
                             Err(e) => {
                                 if !self.lock_error_channel_receive_schedule_check {
-                                    error!(target: Self::LOG_TARGET_BALLING,
+                                    error!(target: LOG_TARGET_BALLING,
                                         "Error when reading channel content for schedule check ({e:?})",
                                     );
                                     self.lock_error_channel_receive_schedule_check = true;
@@ -387,7 +379,7 @@ impl Balling {
                     }
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
-                            error!(target: Self::LOG_TARGET_BALLING,
+                            error!(target: LOG_TARGET_BALLING,
                                 "Error in channel communication to schedule check: {e:?}"
                             );
                             self.lock_error_channel_send_schedule_check = true;
@@ -414,8 +406,8 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
+                        self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
                     }
-                    self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
                 } else {
                     if self.countdown_dosing_pump1 > 0 {
                         self.countdown_dosing_pump1 -= 1;
@@ -440,8 +432,8 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
+                        self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                     }
-                    self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
                         self.countdown_dosing_pump2 -= 1;
@@ -466,8 +458,8 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
+                        self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
                     }
-                    self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
                 } else {
                     if self.countdown_dosing_pump3 > 0 {
                         self.countdown_dosing_pump3 -= 1;
@@ -492,8 +484,8 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
+                        self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
                     }
-                    self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
                 } else {
                     if self.countdown_dosing_pump4 > 0 {
                         self.countdown_dosing_pump4 -= 1;
@@ -508,10 +500,7 @@ impl Balling {
             ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
                 #[cfg(test)]
-                println!(
-                    "{}: received Quit command. Exiting...",
-                    Self::LOG_TARGET_BALLING
-                );
+                println!("{}: received Quit command. Exiting...", LOG_TARGET_BALLING);
 
                 break;
             }
@@ -519,7 +508,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: received Stop command. Inhibiting dosing.",
-                    Self::LOG_TARGET_BALLING
+                    LOG_TARGET_BALLING
                 );
 
                 dosing_inhibited = true;
@@ -528,7 +517,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: received Start command. (Re-)starting dosing.",
-                    Self::LOG_TARGET_BALLING
+                    LOG_TARGET_BALLING
                 );
 
                 dosing_inhibited = false;
@@ -543,7 +532,7 @@ impl Balling {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_BALLING,
+                    target: LOG_TARGET_BALLING,
                     "Error in trying to send quit confirmation back to signal handler: {e:?}"
                 );
             }
@@ -565,7 +554,7 @@ impl Balling {
                         _ => {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
-                                    target: Self::LOG_TARGET_BALLING,
+                                    target: LOG_TARGET_BALLING,
                                     "ignoring inapplicable command {} from signal handler.", c);
                                 self.lock_warn_inapplicable_command = true;
                             }
@@ -575,7 +564,7 @@ impl Balling {
                 }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
-                        error!(target: Self::LOG_TARGET_BALLING,
+                        error!(target: LOG_TARGET_BALLING,
                             "error when trying to receive termination signal. ({e:?})");
                         self.lock_error_channel_receive_termination_signal = true;
                     }
@@ -597,16 +586,17 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::balling::Balling;
+    use crate::balling::LOG_TARGET_BALLING;
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::mineral_injection::MineralInjectionTrait;
     use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_balling::BallingSetVal;
     use crate::sql_interface_balling::SqlInterfaceBalling;
 
     use crate::mock::tests::mock_schedule_check;
-    use crate::sql_interface_balling::BallingSetVal;
 
     pub struct MockMineralInjection {
         pump1_engagement_durations: Vec<u32>,
@@ -1105,5 +1095,181 @@ pub mod tests {
         };
 
         assert_eq!(Balling::calc_actual_dosing_volume(&balling_setval, 0), 0.0);
+    }
+
+    // Test case runs Balling dosing control and triggers inhibition by sending stop message.
+    // After verification that Balling dosing is stopped,
+    // test case sends start message and verifies if Balling dosing control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_balling_dosing() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_7_secs = Duration::from_secs(7);
+        let sleep_duration_2_secs = Duration::from_secs(2);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_balling_4.toml".to_string());
+
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        // empty the Balling dosing log table
+        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        // create test objects
+        let mut balling = Balling::new(config.balling, sql_interface_balling);
+
+        let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
+        let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+
+        let tx_balling_to_schedule_check_for_test_case_finish =
+            tx_balling_to_schedule_check.clone();
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_mineral_injection = MockMineralInjection::new();
+
+        scope(|scope| {
+            // thread for mock schedule check: runs until it receives Quit command
+            // thread for schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_balling,
+                    &rx_schedule_check_from_balling,
+                    None,
+                    true,
+                )
+            });
+
+            let mutex_device_scheduler_balling_test_environment = mutex_device_scheduler.clone();
+
+            // thread IPC messaging - this scope controls execution of the test case
+            scope.spawn(move || {
+                // wait for 1 second to make sure test object can receive message
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                let actuation_count_0 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
+                // check initial amount of actuations
+                assert_eq!(actuation_count_0, 1);
+
+                // sending message requesting stop of Balling dosing control
+                match tx_messaging_to_balling.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_BALLING
+                        );
+                    }
+                }
+
+                // wait for 7 seconds. If test object does not follow stop request,
+                // then dosings will happen in this period.
+                spin_sleeper.sleep(sleep_duration_7_secs);
+
+                let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
+                // check amount of actuations (after stop request)
+                assert_eq!(actuation_count_1, 1);
+
+                // sending message requesting restart of Balling dosing control
+                match tx_messaging_to_balling.send(InternalCommand::Start) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending start command to test object ({e:?})",
+                            LOG_TARGET_BALLING
+                        );
+                    }
+                }
+
+                // wait for 2 seconds. If test object follows start request,
+                // then dosings will happen in this period.
+                spin_sleeper.sleep(sleep_duration_2_secs);
+
+                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
+                // check amount of actuations (after start request)
+                assert_eq!(actuation_count_2, 2);
+
+                // requesting Balling dosing control to quit
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                rx_signal_handler_from_balling.recv().unwrap();
+
+                let actuation_count_3 = *mutex_device_scheduler_balling_test_environment
+                    .lock()
+                    .unwrap();
+                // check amount of actuations (after Quit command)
+                assert_eq!(actuation_count_3, 2);
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object and assertions
+            scope.spawn(move || {
+                balling.execute(
+                    mutex_device_scheduler,
+                    tx_balling_to_controllino,
+                    rx_balling_from_controllino,
+                    tx_balling_to_signal_handler,
+                    rx_balling_from_signal_handler,
+                    tx_balling_to_schedule_check,
+                    rx_balling_from_schedule_check,
+                    rx_balling_from_messaging,
+                    &mut mock_mineral_injection,
+                );
+                println!("MockMineralInjection:\n{}", mock_mineral_injection);
+
+                assert_eq!(mock_mineral_injection.pump1_engagement_durations.len(), 2);
+                assert_eq!(mock_mineral_injection.pump2_engagement_durations.len(), 0);
+                assert_eq!(mock_mineral_injection.pump3_engagement_durations.len(), 0);
+                assert_eq!(mock_mineral_injection.pump4_engagement_durations.len(), 0);
+
+                assert_eq!(
+                    mock_mineral_injection
+                        .pump1_engagement_durations
+                        .pop()
+                        .unwrap(),
+                    250
+                );
+                assert_eq!(
+                    mock_mineral_injection
+                        .pump1_engagement_durations
+                        .pop()
+                        .unwrap(),
+                    250
+                );
+
+                let _ =
+                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            });
+
+            println!(
+                "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
+            );
+        });
     }
 }
