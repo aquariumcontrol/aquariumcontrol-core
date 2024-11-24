@@ -7,10 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-const LOG_TARGET_MOCK: &str = "mock";
-
 #[cfg(test)]
 pub mod tests {
+    const LOG_TARGET_MOCK: &str = "mock";
+    
     use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
@@ -303,7 +303,7 @@ pub mod tests {
                 Ok(_) => {}
                 Err(e) => {
                     panic!(
-                        "{}: Error when sending back actuation command confirmation to test object: {e:?}"
+                        "{}: Error when sending back actuation command confirmation to test object: {e:?}",
                         LOG_TARGET_MOCK
                     );
                 }
@@ -1513,11 +1513,12 @@ pub mod tests {
         }
     }
     
+    #[cfg(target_os = "linux")]
     pub fn mock_message_command_receiver(
         rx_message_command: Receiver<InternalCommand>
-        ) -> Vector<InternalCommand> {
+        ) -> Vec<InternalCommand> {
         
-        let mut commands_received: Vector<InternalCommand> = Vector::new();
+        let mut commands_received: Vec<InternalCommand> = Vec::new();
 
         loop {
             match rx_message_command.recv() {
@@ -1534,7 +1535,7 @@ pub mod tests {
                 }
                 Err(e) => {
                     panic!(
-                        "{}: error occured when receiving message from message thread via channel.",
+                        "{}: error occured when receiving message from message thread via channel ({e:?}).",
                         LOG_TARGET_MOCK    
                     );
                 }

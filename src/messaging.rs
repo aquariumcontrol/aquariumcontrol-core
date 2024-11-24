@@ -487,17 +487,17 @@ pub mod tests {
                 let sleep_duration_100_millisec = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep();
+                spin_sleeper.sleep(sleep_duration_100_millisec);
 
                 // sending IPC message requesting stop of ventilation control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep();
+                spin_sleeper.sleep(sleep_duration_100_millisec);
 
                 // sending IPC message requesting stop of ventilation control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep();
+                spin_sleeper.sleep(sleep_duration_100_millisec);
 
                 // requesting ventilation control to quit
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
