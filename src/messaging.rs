@@ -193,7 +193,6 @@ pub struct Messaging {
 }
 
 impl Messaging {
-
     /// Opens the message queue
     /// # Arguments
     /// * `config` - configuration data for Messaging
@@ -204,8 +203,7 @@ impl Messaging {
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue using {} ({e:?})",
-                    LOG_TARGET_MESSAGING,
-                    &config.mq_filename
+                    LOG_TARGET_MESSAGING, &config.mq_filename
                 );
             }
         };
@@ -427,9 +425,9 @@ pub mod tests {
     use crate::sql_interface_feed::SqlInterfaceFeed;
     //    use crate::sql_interface_refill::SqlInterfaceRefill;
     //    use crate::water_injection::WaterInjectionTrait;
-    use std::thread;
-    use crate::mock::tests::mock_message_command_receiver;
     use crate::messaging::LOG_TARGET_MESSAGING;
+    use crate::mock::tests::mock_message_command_receiver;
+    use std::thread;
 
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
@@ -438,14 +436,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING,
-                    &config.messaging.mq_filename
+                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
                 );
             }
         };
@@ -469,18 +464,19 @@ pub mod tests {
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_ventilation = tx_messaging_to_ventilation.clone();
-        
+
         let join_handle_mock_ventilation = thread::Builder::new()
             .name("mock_ventilation".to_string())
             .spawn(move || {
-                let mut commands_received = mock_message_command_receiver(rx_ventilation_from_messaging);
-                
+                let mut commands_received =
+                    mock_message_command_receiver(rx_ventilation_from_messaging);
+
                 // assert number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
-                
+
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-                
+
                 // assert content of first message sent from test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
@@ -547,14 +543,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_heating.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING,
-                    &config.messaging.mq_filename
+                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
                 );
             }
         };
@@ -578,18 +571,19 @@ pub mod tests {
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_heating = tx_messaging_to_heating.clone();
-        
+
         let join_handle_mock_heating = thread::Builder::new()
             .name("mock_heating".to_string())
             .spawn(move || {
-                let mut commands_received = mock_message_command_receiver(rx_heating_from_messaging);
-                
+                let mut commands_received =
+                    mock_message_command_receiver(rx_heating_from_messaging);
+
                 // assert number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
-                
+
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-                
+
                 // assert content of first message sent from test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
@@ -656,14 +650,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING,
-                    &config.messaging.mq_filename
+                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
                 );
             }
         };
@@ -691,23 +682,26 @@ pub mod tests {
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_refill = tx_messaging_to_refill.clone();
-        
+
         let join_handle_mock_refill = thread::Builder::new()
             .name("mock_refill".to_string())
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(rx_refill_from_messaging);
-                
+
                 // assert number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
-                
+
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-                
+
                 // assert content of second message sent from test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
 
                 // assert content of first message sent from test environment:
-                assert_eq!(InternalCommand::ResetAllErrors, commands_received.pop().unwrap());
+                assert_eq!(
+                    InternalCommand::ResetAllErrors,
+                    commands_received.pop().unwrap()
+                );
             })
             .unwrap();
 
@@ -777,14 +771,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_feed.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING,
-                    &config.messaging.mq_filename
+                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
                 );
             }
         };
@@ -793,7 +784,7 @@ pub mod tests {
         msg_exec.domain = messaging_domains::FEED;
         msg_exec.command = messaging_commands::EXEC;
         msg_exec.command_param1 = 13;
-        
+
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::FEED;
         msg_start.command = messaging_commands::START;
@@ -813,23 +804,26 @@ pub mod tests {
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
-        
+
         let join_handle_mock_feed = thread::Builder::new()
             .name("mock_feed".to_string())
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(rx_feed_from_messaging);
-                
+
                 // assert number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
-                
+
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-                
+
                 // assert content of second message sent from test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
 
                 // assert content of first message sent from test environment:
-                assert_eq!(InternalCommand::Execute(13), commands_received.pop().unwrap());
+                assert_eq!(
+                    InternalCommand::Execute(13),
+                    commands_received.pop().unwrap()
+                );
             })
             .unwrap();
 
@@ -859,7 +853,7 @@ pub mod tests {
 
                 // requesting mock feed to quit
                 let _ = tx_test_environment_to_feed.send(InternalCommand::Quit);
-                
+
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
             })
@@ -899,14 +893,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_balling.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                c
-            }
+            Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING,
-                    &config.messaging.mq_filename
+                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
                 );
             }
         };
@@ -930,20 +921,21 @@ pub mod tests {
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_balling = tx_messaging_to_balling.clone();
-    
+
         let join_handle_mock_balling = thread::Builder::new()
             .name("mock_balling".to_string())
             .spawn(move || {
-                let mut commands_received = mock_message_command_receiver(rx_balling_from_messaging);
-                
+                let mut commands_received =
+                    mock_message_command_receiver(rx_balling_from_messaging);
+
                 // assert number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
-                
+
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-                
+
                 // assert content of second message sent from test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());                
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
 

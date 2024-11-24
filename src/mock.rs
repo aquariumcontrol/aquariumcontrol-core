@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     const LOG_TARGET_MOCK: &str = "mock";
-    
+
     use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
@@ -367,9 +367,9 @@ pub mod tests {
                         }
                         Err(e) => {
                             panic!(
-                                    "{}: Could not send signal request to TankLevelSwitch ({e:?})",
-                                    LOG_TARGET_MOCK
-                                );
+                                "{}: Could not send signal request to TankLevelSwitch ({e:?})",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     }
                 }
@@ -383,10 +383,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                 }
@@ -435,8 +432,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: switch received request for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                data_logger_signal_request
+                                                LOG_TARGET_MOCK, data_logger_signal_request
                                             );
                                         }
                                     };
@@ -444,8 +440,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: Received invalid command {} from DataLogger",
-                                        LOG_TARGET_MOCK,
-                                        data_logger_request
+                                        LOG_TARGET_MOCK, data_logger_request
                                     );
                                 }
                             }
@@ -479,8 +474,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -488,8 +482,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -544,10 +537,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                 }
@@ -590,10 +580,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: test object sent invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: test object sent invalid command.", LOG_TARGET_MOCK);
                         }
                     }
                 }
@@ -622,8 +609,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -631,8 +617,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -684,21 +669,14 @@ pub mod tests {
                                 stimuli_position_stabilized
                             }
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    LOG_TARGET_MOCK,
-                                    d
-                                );
+                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK, d);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                     match tx_tank_level_switch_to_test_object.send(response_value) {
@@ -775,8 +753,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: Received invalid command {} from DataLogger",
-                                        LOG_TARGET_MOCK,
-                                        data_logger_request
+                                        LOG_TARGET_MOCK, data_logger_request
                                     );
                                 }
                             }
@@ -812,18 +789,13 @@ pub mod tests {
                                     _ => {
                                         panic!(
                                             "{}: Invalid test command {} received.",
-                                            LOG_TARGET_MOCK,
-                                            d
+                                            LOG_TARGET_MOCK, d
                                         );
                                     }
                                 }
                             }
                             _ => {
-                                panic!(
-                                    "{}: received invalid command {}",
-                                    LOG_TARGET_MOCK,
-                                    c
-                                );
+                                panic!("{}: received invalid command {}", LOG_TARGET_MOCK, c);
                             }
                         },
                         Err(e) => {
@@ -868,21 +840,14 @@ pub mod tests {
                             AquariumSignal::Conductivity => stimuli_conductivity,
                             AquariumSignal::pH => stimuli_ph,
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    LOG_TARGET_MOCK,
-                                    d
-                                );
+                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK, d);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                     match tx_atlas_scientific_to_test_object.send(response_value) {
@@ -925,8 +890,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -934,8 +898,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -980,21 +943,14 @@ pub mod tests {
                             AquariumSignal::AmbientTemperature => stimuli_ambient_temperature,
                             AquariumSignal::AmbientHumidity => stimuli_ambient_humidity,
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    LOG_TARGET_MOCK,
-                                    d
-                                );
+                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK, d);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                     match tx_ambient_to_test_object.send(response_value) {
@@ -1037,8 +993,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -1046,8 +1001,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -1090,20 +1044,14 @@ pub mod tests {
                             AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
                             AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
                             _ => {
-                                panic!(
-                                    "{}: unknown signal request to mock TCP",
-                                    LOG_TARGET_MOCK
-                                );
+                                panic!("{}: unknown signal request to mock TCP", LOG_TARGET_MOCK);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: invalid command to mock TCP handler",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: invalid command to mock TCP handler", LOG_TARGET_MOCK);
                         }
                     };
                     match tx_tcp_to_test_object.send(response_value) {
@@ -1133,34 +1081,24 @@ pub mod tests {
                 {
                     Ok(c) => {
                         match c {
-                            TestCommand::UpdateSignal(d) => {
-                                match d {
-                                    MockSignal::TankLevelSwitchPosition(c) => {
-                                        mock_value_position = c
-                                    }
-                                    MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
-                                    MockSignal::TankLevelSwitchPositionStabilized(_) => {
-                                        panic!(
-                                            "{}: received invalid test command {}",
-                                            LOG_TARGET_MOCK,
-                                            d
-                                        );
-                                    }
-                                    _ => {
-                                        panic!(
-                                            "{}: Invalid test command {} received.",
-                                            LOG_TARGET_MOCK,
-                                            d
-                                        );
-                                    }
+                            TestCommand::UpdateSignal(d) => match d {
+                                MockSignal::TankLevelSwitchPosition(c) => mock_value_position = c,
+                                MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
+                                MockSignal::TankLevelSwitchPositionStabilized(_) => {
+                                    panic!(
+                                        "{}: received invalid test command {}",
+                                        LOG_TARGET_MOCK, d
+                                    );
                                 }
-                            }
+                                _ => {
+                                    panic!(
+                                        "{}: Invalid test command {} received.",
+                                        LOG_TARGET_MOCK, d
+                                    );
+                                }
+                            },
                             _ => {
-                                panic!(
-                                    "{}: received invalid command {}",
-                                    LOG_TARGET_MOCK,
-                                    c
-                                );
+                                panic!("{}: received invalid command {}", LOG_TARGET_MOCK, c);
                             }
                         };
                     }
@@ -1248,10 +1186,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                 }
@@ -1300,8 +1235,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: Invalid signal {} requested from data logger",
-                                                LOG_TARGET_MOCK,
-                                                data_logger_signal_request
+                                                LOG_TARGET_MOCK, data_logger_signal_request
                                             );
                                         }
                                     }
@@ -1309,8 +1243,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: Received invalid command {} from data logger",
-                                        LOG_TARGET_MOCK,
-                                        data_logger_request
+                                        LOG_TARGET_MOCK, data_logger_request
                                     );
                                 }
                             }
@@ -1344,8 +1277,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -1353,8 +1285,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -1419,8 +1350,7 @@ pub mod tests {
                         _ => {
                             panic!(
                                 "{}: Received invalid command {} from data logger.",
-                                LOG_TARGET_MOCK,
-                                data_logger_request
+                                LOG_TARGET_MOCK, data_logger_request
                             );
                         }
                     };
@@ -1445,10 +1375,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                LOG_TARGET_MOCK
-                            );
+                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK);
                         }
                     };
                 }
@@ -1478,8 +1405,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK,
-                                                test_signal
+                                                LOG_TARGET_MOCK, test_signal
                                             );
                                         }
                                     }
@@ -1487,8 +1413,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK,
-                                        test_command
+                                        LOG_TARGET_MOCK, test_command
                                     );
                                 }
                             }
@@ -1512,36 +1437,32 @@ pub mod tests {
             spin_sleeper.sleep(sleep_duration);
         }
     }
-    
+
     #[cfg(target_os = "linux")]
     pub fn mock_message_command_receiver(
-        rx_message_command: Receiver<InternalCommand>
-        ) -> Vec<InternalCommand> {
-        
+        rx_message_command: Receiver<InternalCommand>,
+    ) -> Vec<InternalCommand> {
         let mut commands_received: Vec<InternalCommand> = Vec::new();
 
         loop {
             match rx_message_command.recv() {
-                Ok(command) => {
-                    match command {                        
-                        InternalCommand::Quit => {
-                            break;
-                        },
-                        _ => {
-                            commands_received.push(command);
-                        }
+                Ok(command) => match command {
+                    InternalCommand::Quit => {
+                        break;
                     }
-                    
-                }
+                    _ => {
+                        commands_received.push(command);
+                    }
+                },
                 Err(e) => {
                     panic!(
                         "{}: error occured when receiving message from message thread via channel ({e:?}).",
-                        LOG_TARGET_MOCK    
+                        LOG_TARGET_MOCK
                     );
                 }
             }
         }
-        
+
         commands_received
     }
 }

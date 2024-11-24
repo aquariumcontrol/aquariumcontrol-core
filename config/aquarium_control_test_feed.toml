@@ -21,7 +21,7 @@ controllino_processing_millis = 20                      # time in milliseconds f
 
 [sql_interface]
 db_user = "aquarium"
-db_password = "$s3phnKgdw35nnG"
+db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium_test_feed"

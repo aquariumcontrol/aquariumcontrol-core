@@ -359,6 +359,7 @@ impl Ambient {
                         }
                         TryRecvError::Disconnected => {
                             if !self.lock_error_channel_receive_heating {
+                                #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_AMBIENT,
                                     "receiving command from heating thread failed ({e:?})"
@@ -432,6 +433,7 @@ impl Ambient {
                         }
                         TryRecvError::Disconnected => {
                             if !self.lock_error_channel_receive_data_logger {
+                                #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_AMBIENT,
                                     "receiving command from data logger thread failed ({e:?})"
