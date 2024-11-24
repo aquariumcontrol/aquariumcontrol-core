@@ -69,32 +69,29 @@ fn switch_on_ventilation(
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
 ) {
-    {
-        // avoid electrical overloads through parallel device actuation
-        let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-        match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
-            Ok(_) => {
-                // now listen for response
-                match rx_from_controllino.recv() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_VENTILATION,
-                            "receiving answer from Controllino when switching on ventilation failed ({e:?})"
-                        );
-                    }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_VENTILATION,
-                    "channel communication to Controllino when switching on ventilation ({e:?})"
-                );
-            }
+    // avoid electrical overloads through parallel device actuation
+    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
+    match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
+        Ok(_) => {
+            // now listen for response
+            match rx_from_controllino.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_VENTILATION,
+                        "receiving answer from Controllino when switching on ventilation failed ({e:?})"
+                    );
+                }
+            };
         }
-
-        *mutex_data += 1;
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_VENTILATION,
+                "channel communication to Controllino when switching on ventilation ({e:?})"
+            );
+        }
     }
+    *mutex_data += 1;
 }
 
 /// Communicates to Controllino thread via channel to switch off the ventilation
@@ -108,31 +105,29 @@ fn switch_off_ventilation(
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
 ) {
-    {
-        // avoid electrical overloads through parallel device actuation
-        let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-        match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
-            Ok(_) => {
-                // now listen for response
-                match rx_from_controllino.recv() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_VENTILATION,
-                            "receiving answer from Controllino when switching off ventilation failed ({e:?})"
-                        );
-                    }
-                };
-            }
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_VENTILATION,
-                    "channel communication to Controllino when switching off ventilation failed ({e:?})"
-                );
-            }
+    // avoid electrical overloads through parallel device actuation
+    let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
+    match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
+        Ok(_) => {
+            // now listen for response
+            match rx_from_controllino.recv() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_VENTILATION,
+                        "receiving answer from Controllino when switching off ventilation failed ({e:?})"
+                    );
+                }
+            };
         }
-        *mutex_data += 1;
+        Err(e) => {
+            error!(
+                target: LOG_TARGET_VENTILATION,
+                "channel communication to Controllino when switching off ventilation failed ({e:?})"
+            );
+        }
     }
+    *mutex_data += 1;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -671,6 +666,7 @@ pub mod tests {
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
     use crate::ventilation::Ventilation;
+    use crate::ventilation::LOG_TARGET_VENTILATION;
 
     fn prepare_ventilation_tests(short_ramp: bool) -> Ventilation {
         // prepare struct Ventilation for subsequent tests
@@ -1459,6 +1455,257 @@ pub mod tests {
                 assert_eq!(actuation_count, 2);
 
                 println!("* [Ventilation] checking if schedule checker can block actuation.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    // Test case runs ventilation control and triggers inhibition by sending stop message via channel.
+    // After verification that ventilation is stopped,
+    // test case sends start message via channel and verifies if ventilation control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_ventilation() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+        let mut ventilation = Ventilation::new(config.ventilation);
+
+        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
+            mpsc::channel();
+        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
+            mpsc::channel();
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
+        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_test_environment = mutex_device_scheduler_ventilation.clone();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_ventilation,
+                    &rx_atlas_scientific_from_ventilation,
+                    None,
+                    30.0,
+                    50000.0,
+                    7.0,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_ventilation,
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &tx_controllino_to_ventilation,
+                    &rx_controllino_from_ventilation,
+                );
+                println!("actuation_events:");
+                for actuation_event in &actuation_events {
+                    println!("{}", actuation_event);
+                }
+                assert_eq!(actuation_events.len(), 5);
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+            })
+            .unwrap();
+
+        // thread for test environment
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                // initial wait so that ventilation control can switch on
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check initial state of mutex: should be already switched on
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
+
+                // sending message requesting stop of ventilation control
+                match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_VENTILATION
+                        );
+                    }
+                }
+
+                // wait for 1 second: Ventilation control will switch off
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if ventilation is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
+
+                // sending message requesting restart of ventilation control
+                match tx_messaging_to_ventilation.send(InternalCommand::Start) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending start command to test object ({e:?})",
+                            LOG_TARGET_VENTILATION
+                        );
+                    }
+                }
+
+                // wait for 1 second. Ventilation controll will switch on
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if ventilation is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
+
+                // sending message requesting stop of ventilation control
+                match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_VENTILATION
+                        );
+                    }
+                }
+
+                // wait for 1 second: Ventilation control will switch off
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if ventilation is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+                
+                // requesting ventilation control to quit
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                
+                // check if ventilation is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 5);
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
+                    tx_ventilation_to_atlas_scientific.clone();
+                let tx_ventilation_to_controllino_for_test_case_finish =
+                    tx_ventilation_to_controllino.clone();
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    tx_ventilation_to_atlas_scientific,
+                    rx_ventilation_from_atlas_scientific,
+                    tx_ventilation_to_controllino,
+                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging,
+                );
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ =
+                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("* [Ventilation] checking if messaging can block and restart actuation.");
             })
             .unwrap();
 

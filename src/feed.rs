@@ -413,7 +413,7 @@ pub mod tests {
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-  
+
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,
     }
@@ -589,7 +589,7 @@ pub mod tests {
             });
         });
     }
-    
+
     // Test case runs feed control and triggers inhibition by sending stop message via channel.
     // After verification that feed is stopped,
     // test case sends start message via channel and verifies if feed control
@@ -658,7 +658,7 @@ pub mod tests {
 
         let mutex_device_scheduler_feed_test_object = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_feed_test_environment =
-                mutex_device_scheduler_feed_test_object.clone();
+            mutex_device_scheduler_feed_test_object.clone();
 
         // thread for test environment
         let join_handle_test_environment = thread::Builder::new()
@@ -667,15 +667,17 @@ pub mod tests {
                 // wait to make sure test object can receive message
                 spin_sleeper.sleep(sleep_duration_100_millisec);
 
+                // sending message requesting stop of feed control
                 match tx_messaging_to_feed.send(InternalCommand::Stop) {
-                    Ok(()) => { /* do nothing */ },
+                    Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
                             LOG_TARGET_FEED
                         );
-                    } 
+                    }
                 }
+
                 // wait for 10 seconds. If test object does not follow stop request,
                 // then food injection will happen in this period.
                 for _ in 0..100 {
@@ -688,15 +690,15 @@ pub mod tests {
                 // check amount of actuations (after stop request)
                 assert_eq!(actuation_count_1, 0);
 
-                // sending IPC message requesting restart of feed control
+                // sending message requesting restart of feed control
                 match tx_messaging_to_feed.send(InternalCommand::Start) {
-                    Ok(()) => { /* do nothing */ },
+                    Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
                             "{}: error when sending start command to test object ({e:?})",
                             LOG_TARGET_FEED
                         );
-                    } 
+                    }
                 }
 
                 // wait for 10 seconds. If test object follows start request,
@@ -712,15 +714,15 @@ pub mod tests {
                 // check amount of actuations (after start request)
                 assert_eq!(actuation_count_2, 1);
 
-                // sending IPC message requesting execution of feed profile
+                // sending message requesting execution of feed profile
                 match tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
-                    Ok(()) => { /* do nothing */ },
+                    Ok(()) => { /* do nothing */ }
                     Err(e) => {
                         panic!(
                             "{}: error when sending execution command to test object ({e:?})",
                             LOG_TARGET_FEED
                         );
-                    } 
+                    }
                 }
 
                 // wait for 2 seconds. If test object follows execute request,
