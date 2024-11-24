@@ -76,8 +76,8 @@ impl fmt::Display for AquariumDevice {
     }
 }
 
-/// Enum is used for internal thread messaging between data logger and GPIO handler
-/// The values indicate which information the GPIO handler thread shall return via channel.
+/// Enum is used for internal thread messaging between various threads
+/// The values indicate which information the a thread shall return.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AquariumSignal {
     /// water temperature in °C
@@ -101,6 +101,18 @@ pub enum AquariumSignal {
 
     /// status bit of tank level switch signal
     TankLevelSwitchInvalid,
+
+    /// stabilized position of tank level switch
+    TankLevelSwitchPositionStabilized,
+
+    /// heating control status
+    HeatingControlStatus,
+
+    /// ventilation control status
+    VentilationControlStatus,
+
+    /// refill pump status
+    RefillPumpStatus,
 }
 
 impl fmt::Display for AquariumSignal {
@@ -116,6 +128,12 @@ impl fmt::Display for AquariumSignal {
             AquariumSignal::AmbientHumidity => write!(f, "AmbientHumidity"),
             AquariumSignal::TankLevelSwitchPosition => write!(f, "TankLevelSwitchPosition"),
             AquariumSignal::TankLevelSwitchInvalid => write!(f, "TankLevelSwitchInvalid"),
+            AquariumSignal::TankLevelSwitchPositionStabilized => {
+                write!(f, "TankLevelSwitchPositionStabilized")
+            }
+            AquariumSignal::HeatingControlStatus => write!(f, "HeatingControlStatus"),
+            AquariumSignal::VentilationControlStatus => write!(f, "VentilationControlStatus"),
+            AquariumSignal::RefillPumpStatus => write!(f, "RefillPumpStatus"),
         }
     }
 }

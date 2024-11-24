@@ -437,7 +437,7 @@ impl FoodInjectionTrait for FoodInjection {
             tx_to_controllino,
             rx_from_controllino,
         );
-        
+
         quit_command_received
     }
 }

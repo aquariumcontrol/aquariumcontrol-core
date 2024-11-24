@@ -7,11 +7,15 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+use log::{error, warn};
+
+#[cfg(not(test))]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -54,10 +58,6 @@ pub struct RefillConfig {
     /// minimum time which has to pass after a refill operation before a subsequent refill operation is started
     min_interval_last_refill: i64,
 
-    /// number of tank level switch position measurements which need to indicate a low level before the refill control assumes that the water level is low
-    /// - Caution: Also consider the check_interval when calibrating this variable.
-    tank_level_switch_position_high_stabilization_count: u32,
-
     /// time interval in seconds which need to pass before the application recognizes a potential tank level switch fault
     max_duration_since_last_refill: i64,
 
@@ -73,158 +73,7 @@ pub struct RefillConfig {
     pub additional_refill_volume: f64,
 }
 
-/// Contains the communication between Refill thread and GpioHandler thread via channels.
-/// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
-pub struct TankLevelSwitchSignals {
-    /// flag indicating if the tank level switch is high (true) or low (false)
-    pub tank_level_switch_position: bool,
-
-    /// flag indicating that the tank level switch position could not be read
-    pub tank_level_switch_invalid: bool,
-
-    /// flag indicating that the tank level switch position could not be received via channel
-    pub error_receive_tank_level_switch_position: bool,
-
-    /// flag indicating that the tank level switch invalid signal could not be received via channel
-    pub error_receive_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
-    lock_error_channel_send_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
-    lock_error_channel_receive_tank_level_switch_position: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
-    lock_error_channel_send_tank_level_switch_invalid: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
-    lock_error_channel_receive_tank_level_switch_invalid: bool,
-}
-
 const LOG_TARGET_REFILL: &str = "refill";
-
-impl TankLevelSwitchSignals {
-    /// provides a struct of type TankLevelSwitchSignals.
-    /// # Arguments
-    /// * `tank_level_switch_position` - flag indicating if the tank level switch is high (true) or low (false)    
-    /// * `tank_level_switch_invalid` - flag indicating that the tank level switch position could not be read    
-    /// * `error_receive_tank_level_switch_position` - flag indicating that the tank level switch position could not be received via channel    
-    /// * `error_receive_tank_level_switch_invalid` -  flag indicating that the tank level switch invalid signal could not be received via channel   
-    pub fn new(
-        tank_level_switch_position: bool,
-        tank_level_switch_invalid: bool,
-        error_receive_tank_level_switch_position: bool,
-        error_receive_tank_level_switch_invalid: bool,
-    ) -> TankLevelSwitchSignals {
-        TankLevelSwitchSignals {
-            tank_level_switch_position: tank_level_switch_position,
-            tank_level_switch_invalid: tank_level_switch_invalid,
-            error_receive_tank_level_switch_position: error_receive_tank_level_switch_position,
-            error_receive_tank_level_switch_invalid: error_receive_tank_level_switch_invalid,
-            lock_error_channel_send_tank_level_switch_position: false,
-            lock_error_channel_receive_tank_level_switch_position: false,
-            lock_error_channel_send_tank_level_switch_invalid: false,
-            lock_error_channel_receive_tank_level_switch_invalid: false,
-        }
-    }
-
-    /// Executes the channel communication to update the tank level switch position signal
-    /// as well as the tank level switch invalid signal.
-    /// # Arguments
-    /// * `tx_to_gpio` - sender part of the channel for communication to GPIO handler
-    /// * `rx_from_gpio` - receiver part of the channel for communication from GPIO handler
-    pub fn update_tank_level_switch_signals(
-        &mut self,
-        tx_to_gpio: &Sender<InternalCommand>,
-        rx_from_gpio: &Receiver<f32>,
-    ) {
-        // send request for tank level switch position
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchPosition,
-        )) {
-            Ok(_) => {
-                // Sent request for tank level switch position.
-                // now listen for response
-                self.tank_level_switch_position = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.error_receive_tank_level_switch_position = false;
-                        self.lock_error_channel_receive_tank_level_switch_position = false;
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_position {
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "receiving tank level switch position from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_position = true;
-                        }
-                        self.error_receive_tank_level_switch_position = true; // information is used in subsequent signal
-                        false
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_position = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_position {
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "channel communication for GPIO handler for tank level switch position failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_position = true;
-                }
-            }
-        }
-
-        // send request for tank level switch invalid
-        match tx_to_gpio.send(InternalCommand::RequestSignal(
-            AquariumSignal::TankLevelSwitchInvalid,
-        )) {
-            Ok(_) => {
-                // now listen for response
-                self.tank_level_switch_invalid = match rx_from_gpio.recv() {
-                    Ok(c) => {
-                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
-                        c > 0.0
-                    }
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "receiving tank level switch invalid from GPIO handler failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
-                        }
-                        true
-                    }
-                };
-                self.lock_error_channel_send_tank_level_switch_invalid = false;
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_tank_level_switch_invalid {
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "channel communication for GPIO handler for tank level switch invalid failed ({e:?})"
-                    );
-                    self.lock_error_channel_send_tank_level_switch_invalid = true;
-                }
-            }
-        }
-
-        //println!(
-        //    "Refill: update_tank_level_switch_signals set struct variables \
-        //                tank_level_switch_position={} and tank_level_switch_invalid={}",
-        //    match self.tank_level_switch_position {
-        //        true => "high",
-        //        false => "low",
-        //    },
-        //    match self.tank_level_switch_invalid {
-        //        true => "invalid",
-        //        false => "valid",
-        //    }
-        //);
-    }
-}
 
 /// Contains the error flags for the refill component.
 pub struct RefillErrors {
@@ -242,18 +91,41 @@ impl RefillErrors {
         self.error_receive_tank_level_switch_position = false;
         self.error_sql_update_failed = false;
     }
+
+    #[cfg(test)]
+    pub fn has_error(&mut self) -> bool {
+        self.error_switch_stuck_high
+            || self.error_switch_stuck_low
+            || self.error_receive_tank_level_switch_position
+            || self.error_sql_update_failed
+    }
+}
+
+impl fmt::Display for RefillErrors {
+    /// Function provides output of RefillErrors for development purposes
+    /// # Arguments
+    /// * `f` - configuration for formatting
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}",
+            self.error_switch_stuck_high,
+            self.error_switch_stuck_low,
+            self.error_receive_tank_level_switch_position,
+            self.error_sql_update_failed,
+        )
+    }
 }
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Thread communication is as follows:
+/// Thread communication  of this component is as follows:
 /// ```mermaid
 /// graph LR
-/// refill[Refill control] --> gpio_handler[GPIO handler]
+/// refill[Refill control] --> tank_level_switch[TankLevelSwitchxx§]
 /// refill --> water_injection[Water injection]
-/// water_injection --> gpio_handler
-/// gpio_handler --> refill
-/// gpio_handler --> water_injection
+/// water_injection --> tank_level_switch
+/// tank_level_switch --> refill
+/// tank_level_switch --> water_injection
 /// water_injection --> controllino[Controllino]
 /// controllino --> water_injection
 /// refill --> signal_handler[Signal handler]
@@ -261,13 +133,14 @@ impl RefillErrors {
 /// signal_handler --> water_injection
 /// refill --> schedule_check[Schedule check]
 /// schedule_check --> refill
-/// water_injection --> data_logger[Data logger]
+/// refill --> data_logger[Data logger]
+/// data_logger --> refill
 /// messaging[Messaging] --> refill
 /// ```
 /// Communication channel to and from Controllino is forwarded to implementation of WaterInjectionTrait.
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
-/// GPIO handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
+/// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 
 /// Architecture of the component is as follows:
 /// ```mermaid
@@ -284,16 +157,12 @@ impl RefillErrors {
 /// ```
 pub struct Refill {
     /// configuration of refill control
+    /// Attribute is public becaused access from within test cases.
     pub config: RefillConfig,
 
     /// interface to SQL database
+    /// Attribute is public becaused access from within test cases.
     pub sql_interface_refill: SqlInterfaceRefill,
-
-    /// flag indicating that tank level switch has not altered its position for some time
-    tank_level_switch_position_stabilized: bool,
-
-    /// time counter to determine if positition is stabilized
-    tank_level_switch_position_high_stabilization_counter: u32,
 
     /// struct of type RefillErrors which includes flags for different kind of errors
     pub refill_errors: RefillErrors,
@@ -348,6 +217,36 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from signal handler via channel
     lock_error_channel_receive_termination_command: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position via channel
+    lock_error_channel_send_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position via channel
+    lock_error_channel_receive_tank_level_switch_position: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch invalid via channel
+    lock_error_channel_send_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch invalid via channel
+    lock_error_channel_receive_tank_level_switch_invalid: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of sending request for tank level switch position stabilized via channel
+    lock_error_channel_send_tank_level_switch_position_stabilized: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure of receiving tank level switch position stabilized via channel
+    lock_error_channel_receive_tank_level_switch_position_stabilized: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
+    lock_error_channel_receive_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via channel
+    lock_warn_inapplicable_command_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about having recevied request for invalid signal from data logger
+    lock_error_invalid_signal_request_data_logger: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failuire to send response to data logger
+    lock_error_send_to_data_logger: bool,
 }
 
 /// Contains the data retrieved from SQL database.
@@ -389,8 +288,6 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
-            tank_level_switch_position_stabilized: true,
-            tank_level_switch_position_high_stabilization_counter: 0,
             refill_errors: RefillErrors {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
@@ -414,6 +311,16 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
+            lock_error_channel_receive_tank_level_switch_invalid: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_position_stabilized: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_position_stabilized: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -431,8 +338,6 @@ impl Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
-            tank_level_switch_position_stabilized: true,
-            tank_level_switch_position_high_stabilization_counter: 0,
             refill_errors: refill_errors,
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
@@ -451,42 +356,16 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
-        }
-    }
-
-    /// Calculates a stabilized tank level switch position signal considering:
-    /// - if invalid bit of signal is true, then use the current value of the stabilized position signal.
-    /// - if the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
-    /// - if the the new signal is false (indicating low water level), then set increase the stabilization counter.
-    /// - if the stabiliyation counter exceeds the configured limit, then set the counter to zero and set the stabilized
-    /// signal to true indicating high water level.
-    /// # Arguments
-    /// * `tank_level_switch_signals` - struct containing the refill-relevant signal data
-    fn calc_tank_level_switch_position_stabilized(
-        &mut self,
-        tank_level_switch_signals: &TankLevelSwitchSignals,
-    ) {
-        if !tank_level_switch_signals.tank_level_switch_invalid {
-            // update stabilized signal only when new signal is not invalid
-            self.tank_level_switch_position_stabilized =
-                match tank_level_switch_signals.tank_level_switch_position {
-                    true => {
-                        self.tank_level_switch_position_high_stabilization_counter = 0;
-                        true // set stabilized to true without delay
-                    }
-                    false => {
-                        if self.tank_level_switch_position_high_stabilization_counter
-                            < self
-                                .config
-                                .tank_level_switch_position_high_stabilization_count
-                        {
-                            self.tank_level_switch_position_high_stabilization_counter += 1;
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                }
+            lock_error_channel_receive_tank_level_switch_invalid: false,
+            lock_error_channel_receive_tank_level_switch_position: false,
+            lock_error_channel_receive_tank_level_switch_position_stabilized: false,
+            lock_error_channel_send_tank_level_switch_invalid: false,
+            lock_error_channel_send_tank_level_switch_position: false,
+            lock_error_channel_send_tank_level_switch_position_stabilized: false,
+            lock_error_channel_receive_data_logger: false,
+            lock_warn_inapplicable_command_data_logger: false,
+            lock_error_invalid_signal_request_data_logger: false,
+            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -636,10 +515,12 @@ impl Refill {
 
         if stop_command_received {
             if !self.lock_info_stop_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "received Stop command. Inhibiting refill control."
                 );
+
                 self.lock_info_stop_command_received = true;
             }
             new_state = true;
@@ -650,10 +531,12 @@ impl Refill {
         // therefore it is evaluated after stop command
         if start_command_received {
             if !self.lock_info_start_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "received Start command. Restarting refill control."
                 );
+
                 self.lock_info_start_command_received = true;
             } else {
                 self.lock_info_start_command_received = true;
@@ -673,11 +556,13 @@ impl Refill {
 
         if refill_check_volume_last_24h {
             if !self.lock_info_refill_check_volume_last_24h {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill volume of last 24h exceeds permissible refill volume per 24h of {}",
                     self.config.max_refill_volume_24h
                 );
+
                 self.lock_info_refill_check_volume_last_24h = true;
             }
         } else {
@@ -688,11 +573,13 @@ impl Refill {
             sql_refill_data.refill_count_last_24h > self.config.max_refill_count_24h;
         if refill_check_count_last_24h {
             if !self.lock_info_refill_check_count_last_24h {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill count of last 24h exceeds permissible refill count per 24h of {}",
                     self.config.max_refill_count_24h
                 );
+
                 self.lock_info_refill_check_count_last_24h = true;
             }
         } else {
@@ -703,11 +590,13 @@ impl Refill {
             sql_refill_data.refill_volume_last_hour > self.config.max_refill_volume_hour;
         if refill_check_volume_last_hour {
             if !self.lock_info_refill_check_volume_last_hour {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill volume of last hour exceeds permissible refill volume per hour of {}",
                     self.config.max_refill_volume_hour
                 );
+
                 self.lock_info_refill_check_volume_last_hour = true;
             }
         } else {
@@ -718,11 +607,13 @@ impl Refill {
             sql_refill_data.refill_count_last_hour > self.config.max_refill_count_hour;
         if refill_check_count_last_hour {
             if !self.lock_info_refill_check_count_last_hour {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "refill count of last 24h exceeds permissible refill count per hour of {}",
                     self.config.max_refill_count_hour
                 );
+
                 self.lock_info_refill_check_count_last_hour = true;
             }
         } else {
@@ -733,11 +624,13 @@ impl Refill {
             sql_refill_data.duration_since_last_refill < self.config.min_interval_last_refill;
         if refill_check_interval_last_refill {
             if !self.lock_info_refill_check_interval_last_refill {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
                     "time interval since last refill {} is too small (limit={}).",
                     sql_refill_data.duration_since_last_refill, self.config.min_interval_last_refill
                 );
+
                 self.lock_info_refill_check_interval_last_refill = true;
             }
         } else {
@@ -750,11 +643,214 @@ impl Refill {
             | refill_check_interval_last_refill
     }
 
+    // Channel communication with tank level switch calculation
+    // The function returns a tuple of boolean variables.
+    /// # Arguments
+    /// * `tx_to_tank_level_switch` - reference to sender part of channel
+    /// * `rx_from_tank_level_switch` - reference to receiver part of channel
+    pub fn get_tank_level_switch_signals(
+        &mut self,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<bool>,
+    ) -> (bool, bool, bool) {
+        // send request for tank level switch position
+        let tank_level_switch_position = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_position = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_position = false;
+                        c
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_position {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_position = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_position {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch position failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_position = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        // send request for tank level switch invalid
+        let tank_level_switch_invalid = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_invalid = false;
+                // Sent request for tank level switch position.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_invalid = false;
+                        c
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_invalid {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch invalid failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_invalid = true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_invalid {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch invalid failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_invalid = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        // send request for tank level switch position stabilized
+        let tank_level_switch_position_stabilized = match tx_to_tank_level_switch.send(
+            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPositionStabilized),
+        ) {
+            Ok(_) => {
+                self.lock_error_channel_send_tank_level_switch_position_stabilized = false;
+                // Sent request for tank level switch position stabilized.
+                // now listen for response
+                match rx_from_tank_level_switch.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_tank_level_switch_position_stabilized =
+                            false;
+                        c
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_tank_level_switch_position_stabilized {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving tank level switch position failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_tank_level_switch_position_stabilized =
+                                true;
+                        }
+                        true // default value in case of error
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_tank_level_switch_position_stabilized {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication for tank level switch position stabilized failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_tank_level_switch_position_stabilized = true;
+                }
+                true // default value in case of error
+            }
+        };
+
+        (
+            tank_level_switch_position,
+            tank_level_switch_invalid,
+            tank_level_switch_position_stabilized,
+        )
+    }
+
+    /// check if data logger sent command and respond
+    fn communicate_with_data_logger(
+        &mut self,
+        tx_to_data_logger: &Sender<bool>,
+        rx_from_data_logger: &Receiver<InternalCommand>,
+    ) {
+        match rx_from_data_logger.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_data_logger = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_data_logger = false;
+                        match d {
+                            AquariumSignal::RefillPumpStatus => {
+                                self.lock_error_invalid_signal_request_data_logger = false;
+                                match tx_to_data_logger.send(false) {
+                                    Ok(_) => {
+                                        self.lock_error_send_to_data_logger = false;
+                                    }
+                                    Err(e) => {
+                                        if !self.lock_error_send_to_data_logger {
+                                            error!(
+                                                target: LOG_TARGET_REFILL,
+                                                "channel communication to data logger failed ({e:?})"
+                                            );
+                                            self.lock_error_send_to_data_logger = true;
+                                        }
+                                    }
+                                };
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_data_logger {
+                                    error!(
+                                        target: LOG_TARGET_REFILL,
+                                        "internal error: received request for invalid signal {} from data logger",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_data_logger = true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_data_logger {
+                            warn!(
+                                target: LOG_TARGET_REFILL,
+                                "ignoring inapplicable command from data logger thread."
+                            );
+                            self.lock_warn_inapplicable_command_data_logger = true;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_data_logger = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_data_logger {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "receiving command from data logger thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_data_logger = true;
+                        }
+                    }
+                }
+            }
+        };
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Receiver part of channel for communication from GPIO handler
+    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to tank level switch calculation
+    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from tank level switch calculation
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
@@ -762,27 +858,30 @@ impl Refill {
     /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
     /// * `water_injection` - Struct implementing the WaterInjectionTrait    
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
-        tx_to_gpio: Sender<InternalCommand>,
-        rx_from_gpio: Receiver<f32>,
+        tx_to_tank_level_switch: Sender<InternalCommand>,
+        rx_from_tank_level_switch: Receiver<bool>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
-        tx_to_datalogger: Sender<bool>,
+        tx_to_data_logger: Sender<bool>,
+        rx_from_data_logger: Receiver<InternalCommand>,
         rx_from_messaging: Receiver<InternalCommand>,
         water_injection: &mut impl WaterInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
-        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
         let mut schedule_check_result: bool = false;
+        let mut tank_level_switch_invalid: bool;
+        let mut tank_level_switch_position_stabilized: bool;
 
         // retrieving data from SQL data base
         let mut sql_refill_data = self.get_sql_refill_data();
@@ -825,29 +924,24 @@ impl Refill {
                 break; // exit outer loop
             }
 
-            if self.config.active {
-                // frequent update required for calculation of error condition switch stuck high
-                sql_refill_data.duration_since_last_refill =
-                    sql_refill_data.duration_since_last_refill + self.config.check_interval;
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
+            if self.config.active {
                 // check when the last refill operation has taken place
                 // if too much time has passed, issue an error condition - not impeding rest of operation
                 self.check_error_condition_switch_stuck_high(
                     sql_refill_data.duration_since_last_refill,
                 );
 
-                // either communicate with real HW or with simulator to get updated signal information
-                // this call will also update the stabilized tank level position.
-                tank_level_switch_signals
-                    .update_tank_level_switch_signals(&tx_to_gpio, &rx_from_gpio);
-
-                self.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-
-                if !quit_command_received
-                    && !self.tank_level_switch_position_stabilized
-                    && !tank_level_switch_signals.tank_level_switch_invalid
-                    && !refill_inhibited
-                {
+                if !quit_command_received && !refill_inhibited {
+                    (
+                        _,
+                        tank_level_switch_invalid,
+                        tank_level_switch_position_stabilized,
+                    ) = self.get_tank_level_switch_signals(
+                        &tx_to_tank_level_switch,
+                        &rx_from_tank_level_switch,
+                    );
                     sql_refill_data = self.get_sql_refill_data();
 
                     // execute checks before initiating refill
@@ -890,22 +984,22 @@ impl Refill {
                             }
 
                             if schedule_check_result {
-                                // conditions for allowing refill operation are given
-                                // inner scope to limit lifetime of unlocked mutex
+                                if !tank_level_switch_position_stabilized
+                                    && !tank_level_switch_invalid
                                 {
+                                    // conditions for allowing refill operation are given
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
                                     // now we are given exclusive access to actuators
                                     quit_command_received = water_injection.inject_water(
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &tx_to_gpio,
-                                        &rx_from_gpio,
+                                        &tx_to_tank_level_switch,
+                                        &rx_from_tank_level_switch,
                                         &rx_from_signal_handler,
-                                        &tx_to_datalogger,
-                                        &mut tank_level_switch_signals,
+                                        &tx_to_data_logger,
+                                        &rx_from_data_logger,
                                         &mut self.refill_errors,
-                                        &self.config,
                                         &mut self.sql_interface_refill,
                                     );
                                     *mutex_data += 1;
@@ -927,8 +1021,10 @@ impl Refill {
                         quit_command_received,
                         start_command_received,
                         stop_command_received,
-                    ) = self
-                    .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+                    ) = self.process_external_request(
+                        &rx_from_signal_handler,
+                        Some(&rx_from_messaging),
+                    );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,
                         start_command_received,
@@ -940,14 +1036,19 @@ impl Refill {
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
                 }
             }
+
+            sql_refill_data.duration_since_last_refill =
+                sql_refill_data.duration_since_last_refill + self.config.check_interval;
         }
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        info!(
-            target: LOG_TARGET_REFILL,
-            "sending Quit confirmation to signal handler."
+        #[cfg(test)]
+        println!(
+            "{}: sending Quit confirmation to signal handler.",
+            LOG_TARGET_REFILL
         );
+
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -955,7 +1056,7 @@ impl Refill {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino, GpioHandler).
+        // this thread has channel connection to underlying threads (Controllino, Tank level switch).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler crate.
         let mut termination_command_received = false;
@@ -999,30 +1100,32 @@ impl Refill {
 
 #[cfg(test)]
 pub mod tests {
+    use all_asserts::{assert_ge, assert_le};
     use chrono::DateTime;
     use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
-    use std::thread::scope;
+    use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
+    use crate::mock::tests::mock_data_logger;
+    use crate::mock::tests::mock_schedule_check;
+    use crate::mock::tests::mock_tank_level_switch;
+    use crate::mock::tests::MockSignal::{
+        TankLevelSwitchPosition, TankLevelSwitchPositionStabilized,
+    };
+    use crate::mock::tests::MockWaterInjection;
+    use crate::mock::tests::TestCommand;
     use crate::proc_ext_req::ProcessExternalRequestTrait;
     use crate::refill::Refill;
-    use crate::refill::RefillConfig;
     use crate::refill::RefillErrors;
-    use crate::refill::TankLevelSwitchSignals;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
-    use crate::water_injection::WaterInjection;
-    use crate::water_injection::WaterInjectionTrait;
-
-    use crate::water_injection::tests::prepare_refill_tests_tertiary;
 
     trait Output {
         fn output(&self) -> String;
@@ -1040,66 +1143,12 @@ pub mod tests {
         }
     }
 
-    // send via channel a value to the test object to indicate if actuation is permitted.
-    pub fn mock_schedule_check(
-        tx_schedule_check_to_refill: &Sender<bool>,
-        rx_schedule_check_from_refill: &Receiver<InternalCommand>,
-        value: bool,
-    ) -> bool {
-        match rx_schedule_check_from_refill.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::ScheduleCheck => {
-                    // allow control to actuate
-                    let _ = tx_schedule_check_to_refill.send(value);
-                }
-                InternalCommand::Quit => {
-                    // test case has finished
-                    return true;
-                }
-                _ => {
-                    panic!("Refill: test object sent invalid command.");
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        println!(
-                            "Refill: Error in trying to receive command from test object: {e:?}"
-                        );
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    pub fn prepare_refill_tests() -> (ConfigData, Refill, SqlInterface) {
-        // prepare struct Refill for subsequent tests
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-        let refill_config = config.refill.clone();
-        (
-            config,
-            Refill::new(refill_config, sql_interface_refill),
-            sql_interface,
-        )
-    }
-
-    pub fn prepare_refill_tests_with_errors(
-        refill_errors: RefillErrors,
+    pub fn prepare_refill_tests(
+        config_file_name: &str,
+        refill_errors: Option<RefillErrors>,
     ) -> (ConfigData, Refill, SqlInterface) {
         // prepare struct Refill for subsequent tests
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        let config: ConfigData = read_config_file(config_file_name.to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1111,138 +1160,16 @@ pub mod tests {
         let refill_config = config.refill.clone();
         (
             config,
-            Refill::new_with_errors(refill_config, sql_interface_refill, refill_errors),
+            match refill_errors.is_some() {
+                true => Refill::new_with_errors(
+                    refill_config,
+                    sql_interface_refill,
+                    refill_errors.unwrap(),
+                ),
+                false => Refill::new(refill_config, sql_interface_refill),
+            },
             sql_interface,
         )
-    }
-
-    fn prepare_refill_tests_secondary() -> (ConfigData, Refill, SqlInterface) {
-        // prepare struct Refill for subsequent tests
-        // parallel usage of database leads to conflicts
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill_secondary.toml".to_string());
-        println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-        let refill_config = config.refill.clone();
-        (
-            config,
-            Refill::new(refill_config, sql_interface_refill),
-            sql_interface,
-        )
-    }
-
-    pub struct RefillTestExecutionVoid;
-
-    impl WaterInjectionTrait for RefillTestExecutionVoid {
-        fn inject_water(
-            &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _tx_to_gpio: &Sender<InternalCommand>,
-            _rx_from_gpio: &Receiver<f32>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _tx_to_datalogger: &Sender<bool>,
-            _tank_level_switch_signals: &mut TankLevelSwitchSignals,
-            _refill_errors: &mut RefillErrors,
-            _config: &RefillConfig,
-            _sql_interface_refill: &mut SqlInterfaceRefill,
-        ) -> bool {
-            // do nothing
-            println!("Refill: execute_refill *VOID* has been called.");
-            false // simulate that no Quit command has been received
-        }
-    }
-
-    #[test]
-    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_false_true_when_invalid(
-    ) {
-        //*** test if position signal is not updating when invalid signal is true ***
-        let (_, mut refill, _) = prepare_refill_tests();
-        // check transition false -> true
-        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
-
-        refill.tank_level_switch_position_stabilized = false;
-        for _ in 0..10 {
-            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-            assert_eq!(refill.tank_level_switch_position_stabilized, false);
-        }
-        println!("* [Refill] checking inhibition of change false -> true for stabilized tank level position when invalid bit is true succeeded.");
-    }
-
-    #[test]
-    pub fn test_refill_calc_tank_level_switch_position_stabilized_inhibition_true_false_when_invalid(
-    ) {
-        //*** test if position signal is not updating when invalid signal is true ***
-        let (_, mut refill, _) = prepare_refill_tests();
-        // check transition true -> false
-        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, true, false, false);
-
-        refill.tank_level_switch_position_stabilized = true;
-        for _ in 0..10 {
-            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-            assert_eq!(refill.tank_level_switch_position_stabilized, true);
-        }
-        println!("* [Refill] checking inhibition of change true -> false for stabilized tank level position when invalid bit is true succeeded.");
-    }
-
-    #[test]
-    pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
-        //*** test if position signal is updating without delay when invalid signal is false ***
-        let (_, mut refill, _) = prepare_refill_tests();
-        // check transition true -> false
-        let tank_level_switch_signals = TankLevelSwitchSignals::new(true, false, false, false);
-
-        refill.tank_level_switch_position_stabilized = false;
-        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-        assert_eq!(refill.tank_level_switch_position_stabilized, true);
-        println!("* [Refill] checking immediate change false -> true for stabilized tank level position when invalid bit is false succeeded.");
-    }
-
-    #[test]
-    pub fn test_refill_calc_tank_level_switch_position_stabilized_true_false() {
-        //*** test if position signal is updating with delay when invalid signal is false ***
-        let (config, mut refill, _) = prepare_refill_tests();
-        // check transition true -> false
-        let tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
-
-        refill.tank_level_switch_position_stabilized = true;
-        for _ in 0..config
-            .refill
-            .tank_level_switch_position_high_stabilization_count
-        {
-            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-            assert_eq!(refill.tank_level_switch_position_stabilized, true);
-        }
-        refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-        assert_eq!(refill.tank_level_switch_position_stabilized, false);
-        println!("* [Refill] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
-    }
-
-    #[test]
-    pub fn test_refill_calc_tank_level_switch_position_stabilized_toggle_input() {
-        //*** test if position signal is updating with delay when invalid signal is false ***
-        let (config, mut refill, _) = prepare_refill_tests();
-        // check transition true -> false
-        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
-
-        refill.tank_level_switch_position_stabilized = true;
-        for i in 0..config
-            .refill
-            .tank_level_switch_position_high_stabilization_count
-            * 4
-        {
-            // toggle the input
-            tank_level_switch_signals.tank_level_switch_position = (i % 2) > 0;
-            refill.calc_tank_level_switch_position_stabilized(&tank_level_switch_signals);
-            assert_eq!(refill.tank_level_switch_position_stabilized, true);
-        }
-        println!("* [Refill] checking no change true -> false for stabilized tank level position when toggling input succeeded.");
     }
 
     #[test]
@@ -1253,7 +1180,10 @@ pub mod tests {
             error_receive_tank_level_switch_position: false,
             error_sql_update_failed: false,
         };
-        let (_, mut refill, _) = prepare_refill_tests_with_errors(refill_errors);
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            Some(refill_errors),
+        );
 
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
@@ -1276,160 +1206,39 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes one iteration of the loop of the .execute function without triggering a refill
-    // it checks the timing of initial wait period and main control interval
-    pub fn test_refill_without_fill() {
+    // this test case executes multiple iterations of the loop inside the .execute function with triggering a refill
+    pub fn test_refill_trigger_water_injection() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (config, mut refill, _) = prepare_refill_tests();
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
 
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_refill,
-                    &rx_schedule_check_from_refill,
-                    true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
-
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let start_time = SystemTime::now();
-                println!(
-                    "test_execute_without_refill: start_time={}",
-                    start_time.output()
-                );
-                // when reaching main control cycle, test object will request signal updates
-                rx_gpio_from_refill.recv().unwrap();
-                // record time after test object sent command via channel
-                let initial_waiting_passed_time = SystemTime::now();
-                println!(
-                    "test_execute_without_refill: initial_waiting_passed_time={}",
-                    initial_waiting_passed_time.output()
-                );
-                let _ = tx_gpio_to_refill.send(1.0);
-                rx_gpio_from_refill.recv().unwrap();
-                let _ = tx_gpio_to_refill.send(0.0);
-                // from here onwards, test object will continue through main cycle and
-                // request signal updates one more time
-                rx_gpio_from_refill.recv().unwrap();
-                let _ = tx_gpio_to_refill.send(1.0);
-                rx_gpio_from_refill.recv().unwrap();
-                let _ = tx_gpio_to_refill.send(0.0);
-                // now we can send the quit command                
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                rx_signal_handler_from_refill.recv().unwrap();
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-                let finish_time = SystemTime::now();
-                println!(
-                    "test_execute_without_refill: finish_time={}",
-                    finish_time.output()
-                );
-                let initial_wait_duration_millis = initial_waiting_passed_time
-                    .duration_since(start_time)
-                    .unwrap()
-                    .as_millis();
-                let check_interval_duration_millis = finish_time
-                    .duration_since(initial_waiting_passed_time)
-                    .unwrap()
-                    .as_millis();
-                println!(
-                    "test_execute_without_refill: initial_wait_duration={}ms, check_interval_duration={}ms",
-                    initial_wait_duration_millis,
-                    check_interval_duration_millis
-                );
-                all_asserts::assert_le!(
-                    initial_wait_duration_millis,
-                    (config.refill.initial_wait_interval * 1000 + 200) as u128
-                );
-                all_asserts::assert_ge!(
-                    initial_wait_duration_millis,
-                    (config.refill.initial_wait_interval * 1000 - 100) as u128
-                );
-                all_asserts::assert_le!(
-                    check_interval_duration_millis,
-                    (config.refill.check_interval * 1000 + 200) as u128
-                );
-                all_asserts::assert_ge!(
-                    check_interval_duration_millis,
-                    (config.refill.check_interval * 1000 - 100) as u128
-                );
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
-
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
-                let tx_refill_to_schedule_check_for_test_case_finish =
-                    tx_refill_to_schedule_check.clone();
-
-                refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
-                    tx_refill_to_signal_handler,
-                    rx_refill_from_signal_handler,
-                    tx_refill_to_schedule_check,
-                    rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
-                    rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
-                );
-
-                let _ =
-                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-
-                // check if no refill operation has been executed
-                let mutex_data = mutex_device_scheduler.lock().unwrap();
-                assert_eq!(*mutex_data, 0);
-            });
-        });
-    }
-
-    #[test]
-    // this test case executes multiple iterations of the loop of the .execute function manipulating the sensor signals only
-    // it checks if the test object correctly processes the conditions for refill execution
-    pub fn test_refill_conditions_sensor_signals() {
-        let sleep_duration_50_millisec = Duration::from_millis(50);
-        let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
-        // accelerate test case execution
-        refill
-            .config
-            .tank_level_switch_position_high_stabilization_count = 2;
-        refill.config.check_interval = 1;
-
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1439,401 +1248,441 @@ pub mod tests {
             }
         }
 
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
-
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let execution_count1: i32;
-                let execution_count2: i32;
-                let execution_count3: i32;
-
-                // when reaching main control cycle, test object will request signal updates
-                // test 1: answer with tank level switch high and valid
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count
-                        * 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    true,
-                    false,
                 );
-                {
-                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-                // test 2: answer with tank level switch low and invalid
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count
-                        * 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    true,
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
-                );
-                {
-                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-                // test 3: answer with tank level switch low and valid
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count
-                        * 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
                     false,
                     false,
                 );
-                {
-                    execution_count3 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
+            })
+            .unwrap();
 
-                // now we can send the quit command
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                // wait for test object to trigger water injection
+                let _ = rx_test_environment_from_mock_water_injection
+                    .recv()
+                    .unwrap();
+
+                // request update of tank level position signals to mock tank level switch
+                let _ = tx_test_environment_to_tank_level_switch
+                    .send(TestCommand::UpdateSignal(TankLevelSwitchPosition(true)));
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    TankLevelSwitchPositionStabilized(true),
+                ));
+
+                let start_time = SystemTime::now();
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let finish_time = SystemTime::now();
+                let finalization_duration_millis =
+                    finish_time.duration_since(start_time).unwrap().as_millis();
 
-                // test object thread will end. We can assert now.
-                assert_eq!(execution_count1, 0); // check if no refill operation has been executed
-                assert_eq!(execution_count2, 0); // check if no refill operation has been executed
-                assert_eq!(execution_count3, 1); // check if one refill operation has been executed
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
+                assert_ge!(finalization_duration_millis, 2000 as u128);
+                assert_le!(finalization_duration_millis, 2150 as u128);
 
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
 
                 refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
+                    &mut mock_water_injection,
                 );
 
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-        });
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // this test case executes one iteration of the loop inside the .execute function with triggering a refill
+    // it checks the timing of initial wait period and main control interval
+    pub fn test_refill_initial_waiting_time() {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (config, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_quinary.toml", None);
+
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _) = mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+
+        // empty the refill table
+        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let start_time = SystemTime::now();
+
+                // wait for test object to trigger water injection
+                let _ = rx_test_environment_from_mock_water_injection
+                    .recv()
+                    .unwrap();
+
+                // record time after test object triggered water injection
+                let initial_waiting_time_passed = SystemTime::now();
+
+                // now we can send the quit command
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let finish_time = SystemTime::now();
+                let initial_wait_duration_millis = initial_waiting_time_passed
+                    .duration_since(start_time)
+                    .unwrap()
+                    .as_millis();
+                let finalization_duration_millis = finish_time
+                    .duration_since(initial_waiting_time_passed)
+                    .unwrap()
+                    .as_millis();
+
+                assert_le!(
+                    initial_wait_duration_millis,
+                    (config.refill.initial_wait_interval * 1000 + 200) as u128
+                );
+                assert_ge!(
+                    initial_wait_duration_millis,
+                    (config.refill.initial_wait_interval * 1000) as u128
+                );
+                assert_le!(finalization_duration_millis, 150 as u128);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let tx_refill_to_schedule_check_for_test_case_finish =
+                    tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
+                    rx_refill_from_messaging,
+                    &mut mock_water_injection,
+                );
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_switch_stuck_low set
+    // during the execution of the test case, the error is reset.
+    // refill control shall resum operation upon having reset the error.
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
-        // accelerate test case execution
-        refill
-            .config
-            .tank_level_switch_position_high_stabilization_count = 2;
-        refill.config.check_interval = 1;
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
+
+        // set the error
         refill.refill_errors.error_switch_stuck_low = true;
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
-
-        // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Refill: test_execute_conditions_historic_data could not prepare test case: {e:?}")
-            }
-        }
-
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_refill,
-                    &rx_schedule_check_from_refill,
-                    true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
-
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let execution_count1: i32;
-                let execution_count2: i32;
-
-                // when reaching main control cycle, test object will request signal updates
-                // this test will run with error flag enabled
-                println!("Refill test_execute_conditions_historic_data_error_switch_stuck_low: running check #1");
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count + 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    false,
-                );
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-
-                // reset errors
-                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
-                    Ok(_) => { /* do nothing */ },
-                    Err(e) => {
-                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
-                        error when trying to reset refill errors from previous test runs: {e:?}");
-                    },
-                }
-
-                // no error conditions - trigger refill execution
-                println!("Refill test_execute_conditions_historic_data_error_switch_stuck_low: running check #2");
-                run_main_cycle_with_sensor_signals(
-                    1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    false,
-                );
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-
-                // now we can send the quit command
-                println!("test_execute_conditions_historic_data_error_switch_stuck_low: sending quit command to test object.");
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                rx_signal_handler_from_refill.recv().unwrap();
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-
-                // test object thread will end. We can assert now.
-                assert_eq!(execution_count1, 0); // check if no refill operation has been executed
-                assert_eq!(execution_count2, 1); // check if one refill operation has been executed
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
-
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
-                let tx_refill_to_schedule_check_for_test_case_finish =
-                    tx_refill_to_schedule_check.clone();
-
-                refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
-                    tx_refill_to_signal_handler,
-                    rx_refill_from_signal_handler,
-                    tx_refill_to_schedule_check,
-                    rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
-                    rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
-                );
-                println!("test_execute_conditions_historic_data_error_switch_stuck_low: test object finished execution.");
-
-                let _ = tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-        });
-    }
-
-    #[test]
-    // this test case executes multiple iterations of the loop of the .execute function with error flag error_sql_update_failed
-    pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
-        let sleep_duration_50_millisec = Duration::from_millis(50);
-        let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
-        // accelerate test case execution
-        refill
-            .config
-            .tank_level_switch_position_high_stabilization_count = 2;
-        refill.config.check_interval = 1;
-        refill.refill_errors.error_sql_update_failed = true;
-
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
+        let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
             Ok(_) => {}
             Err(e) => {
-                panic!("Refill: test_execute_conditions_historic_data could not prepare test case: {e:?}")
+                panic!("Could not prepare test case: {e:?}")
             }
         }
 
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
                     true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
+                );
+            })
+            .unwrap();
 
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let execution_count1: i32;
-                let execution_count2: i32;
-
-                // when reaching main control cycle, test object will request signal updates
-                // this test will run with error flag enabled
-                println!("Refill test_execute_conditions_historic_data_error_sql_update_failed: running check #1");
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count + 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    false,
                     false,
                     false,
                 );
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
+            })
+            .unwrap();
 
-                // reset previous errors
-                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
-                    Ok(_) => { /* do nothing */ },
-                    Err(e) => {
-                        panic!("test_refill_conditions_historic_data_error_sql_update_failed:\
-                        error when trying to reset refill errors from previous test runs: {e:?}");
-                    },
-                }
-
-                // no error conditions - trigger refill execution
-                println!("Refill test_execute_conditions_historic_data_error_sql_update_failed: running check #2");
-                run_main_cycle_with_sensor_signals(
-                    1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    false,
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
                 );
+            })
+            .unwrap();
 
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                for _ in 0..999 {
+                    assert_eq!(
+                        rx_test_environment_from_mock_water_injection.try_recv(),
+                        Err(TryRecvError::Empty)
+                    );
+                    spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
-                // now we can send the quit command
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                rx_signal_handler_from_refill.recv().unwrap();
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-
-                // test object thread will end. We can assert now.
-                assert_eq!(execution_count1, 0); // check if no refill operation has been executed
-                assert_eq!(execution_count2, 1); // check if one refill operation has been executed
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
-
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
-                let tx_refill_to_schedule_check_for_test_case_finish =
-                    tx_refill_to_schedule_check.clone();
-
-                refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
-                    tx_refill_to_signal_handler,
-                    rx_refill_from_signal_handler,
-                    tx_refill_to_schedule_check,
-                    rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
-                    rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
-                );
-
-                let _ =
-                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-        });
-    }
-
-    #[test]
-    // this test case checks the process_external_request implementation if it correctly processes the ResetAllErrors command
-    // the test case checks the struct attribute after having executed the function
-    pub fn test_refill_process_external_request_reset_all_errors_command() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
-
-        let (_tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-
-        let refill_errors = RefillErrors {
-            error_switch_stuck_high: true,
-            error_switch_stuck_low: true,
-            error_receive_tank_level_switch_position: true,
-            error_sql_update_failed: true,
-        };
-
-        let (_, mut refill, _) = prepare_refill_tests_with_errors(refill_errors);
-
-        scope(|scope| {
-            scope.spawn(move || {
                 // reset errors
+                println!("resetting errors...");
                 match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
@@ -1843,462 +1692,131 @@ pub mod tests {
                         );
                     }
                 }
-            });
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-            scope.spawn(move || {
-                let (quit_command_received, start_command_received, stop_command_received) = refill.process_external_request(
-                        &rx_refill_from_signal_handler,
-                       Some(&rx_refill_from_messaging));
 
-                assert_eq!(quit_command_received, false);
-                assert_eq!(start_command_received, false);
-                assert_eq!(stop_command_received, false);
-                println!("* checking true result of processing external request when channel contains Quit command succeeded.");
+                // wait for test object to trigger water injection
+                println!("waiting for water injection...");
+                let _ = rx_test_environment_from_mock_water_injection
+                    .recv()
+                    .unwrap();
 
-                assert_eq!(refill.refill_errors.error_switch_stuck_high, false);
-                assert_eq!(refill.refill_errors.error_switch_stuck_low, false);
-                assert_eq!(refill.refill_errors.error_receive_tank_level_switch_position, false);
-                assert_eq!(refill.refill_errors.error_sql_update_failed, false);
-                println!("* checking reset of all error flags succeeded.");
-            });
-        });
-    }
+                spin_sleeper.sleep(sleep_duration_two_secs);
 
-    #[test]
-    // this test case checks the process_external_request implementation if it correctly processes the Quit command
-    pub fn test_refill_process_external_request_quit_command() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
+                // request update of tank level position signals to mock tank level switch
+                println!("updating tank level switch...");
+                let _ = tx_test_environment_to_tank_level_switch
+                    .send(TestCommand::UpdateSignal(TankLevelSwitchPosition(true)));
+                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                    TankLevelSwitchPositionStabilized(true),
+                ));
 
-        let refill_errors = RefillErrors {
-            error_switch_stuck_high: true,
-            error_switch_stuck_low: true,
-            error_receive_tank_level_switch_position: true,
-            error_sql_update_failed: true,
-        };
+                spin_sleeper.sleep(sleep_duration_two_secs);
 
-        let (_, mut refill, _) = prepare_refill_tests_with_errors(refill_errors);
-
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (_, rx_refill_from_messaging) = mpsc::channel();
-
-        scope(|scope| {
-            scope.spawn(move || {
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-            });
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-            scope.spawn(move || {
-                let (quit_command_received, start_command_received, stop_command_received) = refill.process_external_request(
-                        &rx_refill_from_signal_handler,
-                        Some(&rx_refill_from_messaging),
-                    );
-                assert_eq!(quit_command_received, true);
-                assert_eq!(start_command_received, false);
-                assert_eq!(stop_command_received, false);
-                println!("* [Refill] checking true result of processing external request when channel contains Quit command succeeded.");
-            });
-        });
-    }
-
-    #[test]
-    // this test case checks if the .execute functions terminates without delays
-    // when a quit/termination request is sent after starting the function
-    pub fn test_refill_with_pending_quit_terminate_command() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
-
-        // channels for the test object. test environment only uses one of the channels
-        let (_, mut refill, _) = prepare_refill_tests();
-        let (tx_refill_to_gpio, _) = mpsc::channel();
-        let (_, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, _) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-
-        scope(|scope| {
-            let mutex_device_scheduler = Arc::new(Mutex::new(0));
-
-            let start_time = SystemTime::now();
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_refill,
-                    &rx_schedule_check_from_refill,
-                    true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_100_millisec);
-            });
-
-            // thread for rest of test environmane
-            scope.spawn(move || {
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                spin_sleeper.sleep(sleep_duration_100_millisec);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-            });
-
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object
-            scope.spawn(move || {
-                let mut water_injection = WaterInjection;
-                let tx_refill_to_schedule_check_for_test_case_finish =
-                    tx_refill_to_schedule_check.clone();
-
-                refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
-                    tx_refill_to_signal_handler,
-                    rx_refill_from_signal_handler,
-                    tx_refill_to_schedule_check,
-                    rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
-                    rx_refill_from_messaging,
-                    &mut water_injection,
-                );
-
-                let _ =
-                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-
-                // check if no refill operation has been executed
-                let mutex_data = mutex_device_scheduler.lock().unwrap();
-                assert_eq!(*mutex_data, 0);
-            });
-            let finish_time = SystemTime::now();
-            let execution_duration = finish_time.duration_since(start_time).unwrap();
-            all_asserts::assert_le!(execution_duration.as_millis(), 500);
-            println!(
-                "* [Refill] checking execution with pending quit/terminate command (time limit) succeeded."
-            );
-        });
-    }
-
-    // helper function for test case test_update_tank_level_switch_signals
-    // the test case uses different combination of stimuli in each iteration of the loop
-    // this function provides the stimuli depending on the index of the iteration
-    fn response_values_for_update_tank_level_switch_signals(index: i32) -> (bool, bool) {
-        match index {
-            0 => (false, false),
-            1 => (false, true),
-            2 => (true, false),
-            3 => (true, true),
-            _ => {
-                panic!("response_values_for_update_tank_level_switch_signals called with incorrect parameter.");
-            }
-        }
-    }
-
-    #[test]
-    // this test case checks the function update_tank_level_switch_signals
-    // the test case provides values via channel and checks if the test object sets the
-    // attributes correctly.
-    pub fn test_refill_update_tank_level_switch_signals() {
-        let sleep_duration_200_millisec = Duration::from_millis(200);
-        let spin_sleeper = SpinSleeper::default();
-        let mut tank_level_switch_signals = TankLevelSwitchSignals::new(false, false, false, false);
-
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        scope(|scope| {
-            // thread for test environment
-            scope.spawn(move || {
-                for i in 0..4 {
-                    let (target_response_switch_position, target_response_switch_invalid) =
-                        response_values_for_update_tank_level_switch_signals(i);
-                    for _ in 0..2 {
-                        let response_to_be_sent_back = match rx_gpio_from_refill.recv().unwrap() {
-                            InternalCommand::RequestSignal(s) => match s {
-                                AquariumSignal::TankLevelSwitchPosition => {
-                                    match target_response_switch_position {
-                                        false => 0.0,
-                                        true => 1.0,
-                                    }
-                                }
-                                AquariumSignal::TankLevelSwitchInvalid => {
-                                    match target_response_switch_invalid {
-                                        false => 0.0,
-                                        true => 1.0,
-                                    }
-                                }
-                                _ => panic!(
-                                    "update_tank_level_switch_signals requested incorrect signal."
-                                ),
-                            },
-                            _ => panic!("update_tank_level_switch_signals issued incorrect command."),
-                        };
-                        let _ = tx_gpio_to_refill.send(response_to_be_sent_back);
-                        println!(
-                            "Refill: test_update_tank_level_switch_signals - sending back {} to application.",
-                            response_to_be_sent_back);
-                    }
-                }
-            });
-            spin_sleeper.sleep(sleep_duration_200_millisec);
-
-            // thread for test object
-            scope.spawn(move || {
-                for i in 0..4 {
-                    tank_level_switch_signals
-                        .update_tank_level_switch_signals(&tx_refill_to_gpio, &rx_refill_from_gpio);
-                    let (target_response_switch_position, target_response_switch_invalid) =
-                        response_values_for_update_tank_level_switch_signals(i);
-                    println!(
-                        "... testing update_tank_level_switch_signals with expected values \
-                        target_response_switch_position={} and target_response_switch_invalid={}",
-                        match target_response_switch_position {
-                            true => "high",
-                            false => "low",
-                        },
-                        match target_response_switch_invalid {
-                            true => "invalid",
-                            false => "valid",
-                        }
-                    );
-                    assert_eq!(
-                        tank_level_switch_signals.tank_level_switch_position,
-                        target_response_switch_position
-                    );
-                    assert_eq!(
-                        tank_level_switch_signals.tank_level_switch_invalid,
-                        target_response_switch_invalid
-                    );
-                    spin_sleeper.sleep(sleep_duration_200_millisec);
-                }
-            });
-        });
-    }
-
-    pub fn run_main_cycle_with_sensor_signals(
-        iterations: u32,
-        rx_gpio_from_refill: &Receiver<InternalCommand>,
-        tx_gpio_to_refill: &Sender<f32>,
-        signal_position: bool,
-        signal_invalid: bool,
-    ) {
-        for i in 0..iterations {
-            println!(
-                "Refill: run_main_cycle_with_sensor_signals running loop iteration #{}",
-                i
-            );
-            println!("run_main_cycle_with_sensor_signals: Receiving from refill (1).");
-            rx_gpio_from_refill.recv().unwrap();
-            println!("run_main_cycle_with_sensor_signals: Sending to refill (1).");
-            let _ = tx_gpio_to_refill.send(match signal_position {
-                true => 1.0,
-                false => 0.0,
-            });
-            println!("run_main_cycle_with_sensor_signals: Receiving from refill (2).");
-            rx_gpio_from_refill.recv().unwrap();
-            println!("run_main_cycle_with_sensor_signals: Sending to refill (2).");
-            let _ = tx_gpio_to_refill.send(match signal_invalid {
-                true => 1.0,
-                false => 0.0,
-            });
-        }
-    }
-
-    #[test]
-    // this test case executes multiple iterations of the loop of the .execute function with error flag error_sql_update_failed
-    pub fn test_refill_conditions_historic_data_error_recent_refill_event() {
-        let sleep_duration_50_millisec = Duration::from_millis(50);
-        let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_tertiary();
-
-        // accelerate test case execution
-        refill
-            .config
-            .tank_level_switch_position_high_stabilization_count = 2;
-        refill.config.check_interval = 1;
-        refill.refill_errors.error_sql_update_failed = true;
-
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
-
-        // empty the refill table
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Refill: test_execute_conditions_historic_data_error_recent_refill_event could not prepare test case: {e:?}")
-            }
-        }
-
-        // insert a recent refill event into the refill table
-        let naive_datetime_some_time_ago = SqlInterface::get_naive_timestamp_from_past(
-            0,
-            refill.config.min_interval_last_refill - refill.config.check_interval * 2,
-        );
-        match refill.sql_interface_refill.insert_refill_event(
-            naive_datetime_some_time_ago,
-            5.0,
-            0.25,
-            -2,
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!(
-                    "Refill: test_execute_conditions_historic_data \
-                            Could not insert refill event in data base for test preparation: {e:?}"
-                );
-            }
-        }
-
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_refill,
-                    &rx_schedule_check_from_refill,
-                    true,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
-
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let execution_count1: i32;
-                let execution_count2: i32;
-
-                // when reaching main control cycle, test object will request signal updates
-                // this test will run with error flag enabled
-                println!("Refill test_execute_conditions_historic_data_error_recent_refill_event: running check #1");
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count + 1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    true,
-                );
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-
-                // reset previous errors
-                match tx_messaging_to_refill.send(InternalCommand::ResetAllErrors) {
-                    Ok(_) => { /* do nothing */ },
-                    Err(e) => {
-                        panic!("test_refill_conditions_historic_data_error_recent_refill_event:\
-                        error when trying to reset refill errors from previous test runs: {e:?}");
-                    },
-                }
-
-                // empty the refill table
-                match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        panic!("Refill: test_execute_conditions_historic_data could not prepare test case: {e:?}")
-                    }
-                }
-                // give SQL database some time to process the command
-
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                // no error conditions - trigger refill execution
-                println!("Refill test_execute_conditions_historic_data_error_recent_refill_event: running check #2");
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count + 1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    false,
-                    false,
-                );
-                // give test object some time to process the signals sent via channels
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-                {
-                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
-                }
-
-                // now we can send the quit command
+                println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
-                // test object thread will end. We can assert now.
-                assert_eq!(execution_count1, 0); // check if no refill operation has been executed
-                assert_eq!(execution_count2, 1); // check if one refill operation has been executed
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
 
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
 
                 refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
+                    &mut mock_water_injection,
                 );
 
+                // check if there was only one water injection
+                assert_eq!(mock_water_injection.injection_recorder.is_empty(), false);
+
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-        });
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 
     #[test]
-    // Executes loop of the .execute function manipulating the sensor signals only and not giving a negative schedule check.
-    // Checks if the test object correctly processes the negative schedule check result.
-    pub fn test_refill_blocked_by_schedule() {
+    // this test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
+    // the refill shall controll shall not initiate a refill operation
+    pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests_secondary();
-        // accelerate test case execution
-        refill
-            .config
-            .tank_level_switch_position_high_stabilization_count = 2;
-        refill.config.check_interval = 1;
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
 
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_refill_to_datalogger, _) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_refill_to_controllino, _) = mpsc::channel();
-        let (_, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
+        // set the error
+        refill.refill_errors.error_sql_update_failed = true;
 
-        let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -2308,73 +1826,512 @@ pub mod tests {
             }
         }
 
-        scope(|scope| {
-            // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_refill,
                     &rx_schedule_check_from_refill,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
                     false,
-                ) {
-                    break;
-                }
-                spin_sleeper.sleep(sleep_duration_50_millisec);
-            });
-
-            // thread for rest of test environment
-            scope.spawn(move || {
-                let execution_count: i32;
-
-                // test with tank level switch low and valid
-                run_main_cycle_with_sensor_signals(
-                    refill
-                        .config
-                        .tank_level_switch_position_high_stabilization_count
-                        * 2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
                     false,
                     false,
                 );
-                {
-                    execution_count = *mutex_device_scheduler_environment.lock().unwrap();
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                for _ in 0..999 {
+                    assert_eq!(
+                        rx_test_environment_from_mock_water_injection.try_recv(),
+                        Err(TryRecvError::Empty)
+                    );
+                    spin_sleeper.sleep(sleep_duration_two_millis);
                 }
 
-                // now we can send the quit command
+                println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
-                // test object thread will end. We can assert now.
-                assert_eq!(execution_count, 0); // check if no refill operation has been executed
-            });
-            // give the test environment a little time to trigger the receive call for signal update
-            spin_sleeper.sleep(sleep_duration_50_millisec);
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
 
-            // thread for test object
-            scope.spawn(move || {
-                let mut refill_test_execution_void = RefillTestExecutionVoid;
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
 
                 refill.execute(
-                    mutex_device_scheduler.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
                     rx_refill_from_messaging,
-                    &mut refill_test_execution_void,
+                    &mut mock_water_injection,
                 );
 
+                // check if there was only one water injection
+                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
+
+                // send Quit signal to mock threads because test object has terminated
                 let _ =
                     tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-        });
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+
+                spin_sleeper.sleep(sleep_duration_two_millis);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // this test case checks the process_external_request implementation if it correctly processes the ResetAllErrors command
+    // the test case checks the struct attribute after having executed the function
+    pub fn test_refill_process_external_request_reset_all_errors_command() {
+        // set the errors
+        let refill_errors = RefillErrors {
+            error_switch_stuck_high: true,
+            error_switch_stuck_low: true,
+            error_receive_tank_level_switch_position: true,
+            error_sql_update_failed: true,
+        };
+
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill.toml",
+            Some(refill_errors),
+        );
+
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            _rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+
+        // empty the refill table
+        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    true,
+                    false,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_two_secs);
+                assert_eq!(
+                    tx_messaging_to_refill.send(InternalCommand::ResetAllErrors),
+                    Ok(())
+                );
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                // check if errors have been set
+                assert_eq!(refill.refill_errors.has_error(), true);
+
+                let tx_refill_to_schedule_check_for_test_case_finish =
+                    tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
+                    rx_refill_from_messaging,
+                    &mut mock_water_injection,
+                );
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("{}", refill.refill_errors);
+
+                // check if errors have been reset
+                assert_eq!(refill.refill_errors.has_error(), false);
+
+                spin_sleeper.sleep(sleep_duration_two_millis);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // Executes loop of the .execute function manipulating the sensor signals only and not giving a negative schedule check.
+    // Checks if the test object correctly processes the negative schedule check result.
+    pub fn test_refill_blocked_by_schedule() {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests("/config/aquarium_control_test_refill_secondary.toml", None);
+
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+
+        // empty the refill table
+        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    None,
+                    false,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                for _ in 0..999 {
+                    assert_eq!(
+                        rx_test_environment_from_mock_water_injection.try_recv(),
+                        Err(TryRecvError::Empty)
+                    );
+                    spin_sleeper.sleep(sleep_duration_two_millis);
+                }
+
+                println!("sending quit signal to test object...");
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                let tx_refill_to_schedule_check_for_test_case_finish =
+                    tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
+                    rx_refill_from_messaging,
+                    &mut mock_water_injection,
+                );
+
+                // check if there was only one water injection
+                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+
+                spin_sleeper.sleep(sleep_duration_two_millis);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 }

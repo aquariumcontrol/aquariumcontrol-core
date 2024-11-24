@@ -12,16 +12,17 @@ use spin_sleep::SpinSleeper;
 use std::str;
 use std::time::Duration;
 
-#[cfg(target_os = "linux")]
-use log::{error, warn};
-
-#[cfg(target_os = "linux")]
-use {
-    rppal::i2c::I2c, // required for communication with AtlasScientific sensors
-};
-
-#[cfg(target_os = "linux")]
 use crate::channel_content::AquariumSignal;
+
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use log::{error, warn};
+        use std::sync::mpsc::{Sender, Receiver};
+        use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
+
+        use crate::channel_content::InternalCommand;
+    }
+}
 
 /// Holds the configuration data for the I2C interface.
 /// The configuration is loaded from the .toml configuration file.
@@ -30,46 +31,60 @@ use crate::channel_content::AquariumSignal;
 #[derive(Deserialize, Debug)]
 pub struct I2cInterfaceConfig {
     /// I2C address of Atlas Scientific pH sensor unit
-    pub address_atlas_scientific_ph: u16,
+    #[allow(unused)]
+    address_atlas_scientific_ph: u16,
 
     /// I2C address of Atlas Scientific conductivity sensor unit
-    pub address_atlas_scientific_conductivity: u16,
+    #[allow(unused)]
+    address_atlas_scientific_conductivity: u16,
 
     /// I2C address of Atlas Scientific temperature sensor unit    
-    pub address_atlas_scientific_temperature: u16,
+    #[allow(unused)]
+    address_atlas_scientific_temperature: u16,
 
     /// maximum number of read attempts
-    pub max_read_attempts: u16,
+    #[allow(unused)]
+    max_read_attempts: u16,
 
     /// timeout for transactions in milliseconds
-    pub timeout_transaction: u32,
+    #[allow(unused)]
+    timeout_transaction: u32,
 
     /// sleep time in milliseconds before after writing before reading from pH sensor unit
-    pub sleep_time_atlas_scientific_ph: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_ph: u64,
 
     /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
-    pub sleep_time_atlas_scientific_conductivity: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_conductivity: u64,
 
     /// sleep time in milliseconds before after writing before reading from temperature sensor unit
-    pub sleep_time_atlas_scientific_temperature: u64,
+    #[allow(unused)]
+    sleep_time_atlas_scientific_temperature: u64,
 
     /// maximum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_ph: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_ph: f32,
 
     /// minimum allowed value for pH used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_ph: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_ph: f32,
 
     /// maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub max_val_atlas_scientific_temperature: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_temperature: f32,
 
     /// minimum allowed value for temperature used to assess if the temperature sensor reading is valid
-    pub min_val_atlas_scientific_temperature: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_temperature: f32,
 
     /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub max_val_atlas_scientific_conductivity: f32,
+    #[allow(unused)]
+    max_val_atlas_scientific_conductivity: f32,
 
     /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-    pub min_val_atlas_scientific_conductivity: f32,
+    #[allow(unused)]
+    min_val_atlas_scientific_conductivity: f32,
 }
 
 /// error codes for evaluation of sensor unit response
@@ -92,26 +107,31 @@ pub enum AtlasScientificError {
     ConversionFailure,
 }
 
-#[cfg(target_os = "linux")]
 /// communication error codes
 #[derive(Debug, PartialEq)]
 pub enum I2cError {
     /// message could not be sent
+    #[allow(unused)]
     WriteFailure,
 
     /// command could not be sent completely to sensor unit
+    #[allow(unused)]
     InsufficientWrite,
 
     /// response from sensor unit could not be received completely
+    #[allow(unused)]
     InsufficientRead,
 
     /// wrapper for AtlasScientificError
+    #[allow(unused)]
     ResponseEvaluationFailure(AtlasScientificError),
 
     /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
+    #[allow(unused)]
     SetAddressError(u16),
 
     /// Signal requested cannot be provided by this crate
+    #[allow(unused)]
     InvalidSignalRequest(AquariumSignal),
 }
 
@@ -188,7 +208,6 @@ impl I2cInterface {
     #[cfg(target_os = "linux")]
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
-            #[cfg(target_os = "linux")]
             i2c: {
                 let i2c = match I2c::new() {
                     Ok(c) => c,
@@ -396,6 +415,102 @@ impl I2cInterface {
             }
         }
     }
+
+    #[cfg(target_os = "linux")]
+    // measures all three signals sequentially
+    // In case one measurement yields an error, the function return this error.
+    // In case all measurements yield success, the function returns a tuple of
+    // all three signals wrapped in Ok.
+    fn get_all_data(&mut self) -> Result<(f32, f32, f32), I2cError> {
+        let measured_water_temperature =
+            match self.get_response_from_i2c(AquariumSignal::WaterTemperature) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+        let measured_ph = match self.get_response_from_i2c(AquariumSignal::pH) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        let measured_conductivity = match self.get_response_from_i2c(AquariumSignal::Conductivity) {
+            Ok(c) => c,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        Ok((
+            measured_water_temperature,
+            measured_ph,
+            measured_conductivity,
+        ))
+    }
+
+    #[cfg(target_os = "linux")]
+    /// receives and response to requests via channel        
+    pub fn execute(
+        &mut self,
+        tx_to_atlas_scientific: Sender<Result<(f32, f32, f32), I2cError>>,
+        rx_from_atlas_scientific_or_signal_handler: Receiver<InternalCommand>,
+    ) {
+        let mut lock_error_invalid_command: bool = false;
+        let mut lock_error_invalid_signal: bool = false;
+        let mut lock_error_receive: bool = false;
+
+        loop {
+            match rx_from_atlas_scientific_or_signal_handler.recv() {
+                Ok(c) => {
+                    lock_error_receive = false;
+                    match c {
+                        InternalCommand::RequestSignal(signal_request) => {
+                            lock_error_invalid_command = false;
+                            // Ambient requests either temperature or humidity
+                            match signal_request {
+                                AquariumSignal::WaterTemperature
+                                | AquariumSignal::pH
+                                | AquariumSignal::Conductivity => {
+                                    let measurement = self.get_all_data();
+                                    _ = tx_to_atlas_scientific.send(measurement);
+                                }
+                                _ => {
+                                    if !lock_error_invalid_signal {
+                                        error!(
+                                            target: Self::LOG_TARGET_I2C_INTERFACE,
+                                            "Received request for invalid signal."
+                                        );
+                                        lock_error_invalid_signal = true;
+                                    }
+                                }
+                            }
+                        }
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            if !lock_error_invalid_command {
+                                error!(
+                                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                                    "Received invalid command."
+                                );
+                                lock_error_invalid_command = true;
+                            }
+                        }
+                    };
+                }
+                Err(e) => {
+                    if !lock_error_receive {
+                        error!(
+                            target: Self::LOG_TARGET_I2C_INTERFACE,
+                            "Error in trying to receive command from Ambient or Signal handler: {e:?}"
+                        );
+                        lock_error_receive = true;
+                    }
+                }
+            };
+        }
+    }
 }
 
 #[cfg(test)]
@@ -569,6 +684,7 @@ pub mod tests {
     // - pH sensor
     // - conductivity sensor
     // - temperature
+    #[ignore]
     #[test]
     #[cfg(target_os = "linux")]
     pub fn test_i2c_interface_read_sensors() {

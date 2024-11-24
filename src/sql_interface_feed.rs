@@ -239,6 +239,7 @@ impl SqlInterfaceFeed {
         let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
             Ok(c) => c,
             Err(e) => {
+                #[cfg(not(test))]
                 error!(
                     target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
                     "could not retrieve feed pattern from database ({e:?})"

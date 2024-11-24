@@ -7,20 +7,24 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use serde_derive::Deserialize;
+
+#[cfg(any(not(test), target_os = "linux"))]
 use log::error;
 
-//#[cfg(target_os = "linux")]
-//use log::{info, warn};
-#[cfg(target_os = "linux")]
-use rppal::gpio::{Gpio, Level, Trigger};
-use serde_derive::Deserialize;
-#[cfg(target_os = "linux")]
-use std::thread;
-#[cfg(target_os = "linux")]
-use std::thread::sleep;
-#[cfg(target_os = "linux")]
-use std::time::Duration;
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        use rppal::gpio::{Gpio, Level, Trigger};
+        use std::thread;
+        use std::thread::sleep;
+        use std::time::Duration;
+        use crate::InternalCommand;
+        use std::sync::mpsc::{Sender, Receiver};
+        use crate::channel_content::AquariumSignal;
+    }
+}
 
+#[allow(unused)]
 const LOG_TARGET_DHT: &str = "dht";
 
 /// Holds the configuration data for the GPIO handler.
@@ -29,25 +33,32 @@ const LOG_TARGET_DHT: &str = "dht";
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
     /// duration to keep pin down during start signal in microseconds
-    pub sensor_init_pin_down_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_pin_down_duration_micros: u64,
 
     /// duration to keep pin up during start signal in microseconds
-    pub sensor_init_pin_up_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_pin_up_duration_micros: u64,
 
     /// duration for sensor to respond after sending start signal in microseconds
-    pub sensor_init_input_duration_micros: u64,
+    #[allow(unused)]
+    sensor_init_input_duration_micros: u64,
 
     /// maximum permissible duration for sensor to respond in microseconds
-    pub timeout_duration_micros: u64,
+    #[allow(unused)]
+    timeout_duration_micros: u64,
 
     // duration in milliseconds the sensor is switched off before requesting transmission
-    pub sensor_reset_duration_millis: u64,
+    #[allow(unused)]
+    sensor_reset_duration_millis: u64,
 
     // duration in milliseconds the sensor is given to initialize
-    pub sensor_startup_duration_millis: u64,
+    #[allow(unused)]
+    sensor_startup_duration_millis: u64,
 
     // duration in milliseconds the sensor is given to pause between transmissions
-    pub sensor_pause_duration_millis: u64,
+    #[allow(unused)]
+    sensor_pause_duration_millis: u64,
 }
 
 pub mod dht22_constants {
@@ -314,6 +325,7 @@ impl Dht {
 
         let checksum_received: u8 = byte_vals[4].into();
         if checksum_calculated != checksum_received {
+            #[cfg(not(test))]
             error!(
                 target: LOG_TARGET_DHT,
                 "checksum error (calculated {}, received {})",
@@ -347,6 +359,7 @@ impl Dht {
         if (temp10 < dht22_constants::DHT22_MINVAL_TEMP10)
             || (temp10 > dht22_constants::DHT22_MAXVAL_TEMP10)
         {
+            #[cfg(not(test))]
             error!(
                 "temperature is out of range (measured {}, limits are {}, {})",
                 (temp10 / 10),
@@ -360,6 +373,7 @@ impl Dht {
         if (hum10 < dht22_constants::DHT22_MINVAL_HUM10)
             || (hum10 > dht22_constants::DHT22_MAXVAL_HUM10)
         {
+            #[cfg(not(test))]
             error!(
                 "humidity is out of range (measured {}, limits are {}, {})",
                 (hum10 / 10),
@@ -386,12 +400,17 @@ impl Dht {
         // get pin for providing supply voltage to DHT sensor
         let mut dht_vcc_pin = match self.gpio.get(self.gpio_pin_number_dht22_vcc) {
             Ok(c) => c.into_output(),
+            #[cfg(not(test))]
             Err(e) => {
                 error!(
                     target: LOG_TARGET_DHT,
                     "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
                     self.gpio_pin_number_dht22_vcc
                 );
+                return Err(DhtError::VccPinAcquisitionFailed);
+            }
+            #[cfg(test)]
+            Err(_) => {
                 return Err(DhtError::VccPinAcquisitionFailed);
             }
         };
@@ -401,12 +420,17 @@ impl Dht {
             // get pin for triggering DHT sensor
             let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {
                 Ok(c) => c.into_output(),
+                #[cfg(not(test))]
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_DHT,
                         "failed to aquire pin {} for triggering DHT sensor ({e:?})",
                         self.gpio_pin_number_dht22_io,
                     );
+                    return Err(DhtError::DataPinOutputAcquisitionFailed);
+                }
+                #[cfg(test)]
+                Err(_) => {
                     return Err(DhtError::DataPinOutputAcquisitionFailed);
                 }
             };
@@ -557,22 +581,19 @@ impl Dht {
         Self::calc_signals(byte_vals)
     }
 
+    /// initiates reading and postprocesses data read from sensor
     #[cfg(target_os = "linux")]
     pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
+
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
 
         while !measurement_successful {
+            //todo: limit number of retries
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
-                    /*info!(
-                        target: LOG_TARGET_DHT,
-                        "read from DHT sensor: temperature={:.1} deg C and humidity = {:.1}%",
-                        temperature,
-                        humidity,
-                    );*/
                     measurement_successful = true;
                     result_tuple = (temperature, humidity);
                 }
@@ -580,6 +601,7 @@ impl Dht {
                     if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
                         retry_counter += 1;
                         if retry_counter > 3 {
+                            #[cfg(not(test))]
                             error!(
                                 target: LOG_TARGET_DHT,
                                 "failed to read from DHT sensor (after {} retries, {e:?}",
@@ -588,6 +610,7 @@ impl Dht {
                             return Err(e);
                         }
                     } else {
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_DHT,
                             "failed to read from DHT sensor ({e:?})",
@@ -598,6 +621,69 @@ impl Dht {
             }
         }
         Ok(result_tuple)
+    }
+
+    #[cfg(target_os = "linux")]
+    /// receives and response to requests via channel        
+    pub fn execute(
+        &mut self,
+        tx_to_ambient: Sender<Result<(f32, f32), DhtError>>,
+        rx_from_ambient_or_signal_handler: Receiver<InternalCommand>,
+    ) {
+        let mut lock_error_invalid_command: bool = false;
+        let mut lock_error_invalid_signal: bool = false;
+        let mut lock_error_receive: bool = false;
+
+        loop {
+            match rx_from_ambient_or_signal_handler.recv() {
+                Ok(c) => {
+                    lock_error_receive = false;
+                    match c {
+                        InternalCommand::RequestSignal(signal_request) => {
+                            lock_error_invalid_command = false;
+                            // Ambient requests either temperature or humidity
+                            match signal_request {
+                                AquariumSignal::AmbientHumidity
+                                | AquariumSignal::AmbientTemperature => {
+                                    let measurement = self.get_data();
+                                    _ = tx_to_ambient.send(measurement);
+                                }
+                                _ => {
+                                    if !lock_error_invalid_signal {
+                                        error!(
+                                            target: LOG_TARGET_DHT,
+                                            "Received request for invalid signal."
+                                        );
+                                        lock_error_invalid_signal = true;
+                                    }
+                                }
+                            }
+                        }
+                        InternalCommand::Quit => {
+                            break;
+                        }
+                        _ => {
+                            if !lock_error_invalid_command {
+                                error!(
+                                    target: LOG_TARGET_DHT,
+                                    "Received invalid command."
+                                );
+                                lock_error_invalid_command = true;
+                            }
+                        }
+                    };
+                }
+                Err(e) => {
+                    if !lock_error_receive {
+                        error!(
+                            target: LOG_TARGET_DHT,
+                            "Error in trying to receive command from Ambient or Signal handler: {e:?}"
+                        );
+                        lock_error_receive = true;
+                    }
+                }
+            };
+        }
     }
 }
 
@@ -709,6 +795,7 @@ pub mod tests {
         );
     }
 
+    #[ignore]
     #[cfg(target_os = "linux")]
     #[test]
     pub fn test_dht_read() {

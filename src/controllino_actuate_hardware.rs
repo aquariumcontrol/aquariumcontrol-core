@@ -334,6 +334,7 @@ pub mod tests {
         "/config/aquarium_control_test_controllino_linux.toml".to_string()
     }
 
+    #[ignore]
     #[test]
     // Actuates on real hardware.
     // Execution of this test case requires serial port connection to Controllino device.

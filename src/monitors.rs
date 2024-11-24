@@ -28,11 +28,9 @@ pub struct MonitorsConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the monitors.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     monitors[Monitors] --> gpio_handler[GPIO handler]
-///     gpio_handler --> monitors
 ///     monitors[Monitors] --> controllino[Controllino]
 ///     controllino --> monitors
 ///     monitors --> signal_handler[Signal handler]
@@ -79,8 +77,6 @@ impl Monitors {
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        _tx_to_gpio: Sender<InternalCommand>,
-        _rx_from_gpio: Receiver<f32>,
         _tx_to_controllino: Sender<InternalCommand>,
         _rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,

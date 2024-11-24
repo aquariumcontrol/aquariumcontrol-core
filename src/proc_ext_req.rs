@@ -7,7 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use log::warn;
+
+#[cfg(not(test))]
+use log::error;
+
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use crate::channel_content::InternalCommand;
@@ -15,7 +19,6 @@ use crate::controllino::Controllino;
 use crate::data_logger::DataLogger;
 use crate::feed::Feed;
 use crate::food_injection::FoodInjection;
-use crate::gpio_handler::GpioHandler;
 
 #[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
@@ -58,6 +61,7 @@ pub trait ProcessExternalRequestTrait {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -86,6 +90,7 @@ pub trait ProcessExternalRequestTrait {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
+                                #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
                                     "receiving command from messaging failed ({e:?})"
@@ -134,6 +139,7 @@ impl ProcessExternalRequestTrait for Refill {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -166,6 +172,7 @@ impl ProcessExternalRequestTrait for Refill {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
+                                #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
                                     "receiving command from messaging failed ({e:?})"
@@ -208,6 +215,7 @@ fn process_external_request_without_messaging(
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
+                    #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_PROC_EXT_REQ,
                         "receiving command from messaging failed ({e:?})"
@@ -311,21 +319,6 @@ impl ProcessExternalRequestTrait for Controllino {
     }
 }
 
-impl ProcessExternalRequestTrait for GpioHandler {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for GpioHandler
-    /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `_` - ignored
-    fn process_external_request(
-        &mut self,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        _: Option<&Receiver<InternalCommand>>,
-    ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
-    }
-}
-
 #[cfg(target_os = "linux")]
 impl ProcessExternalRequestTrait for Messaging {
     /// Checks if there are new messages in the channel.
@@ -384,6 +377,7 @@ impl ProcessExternalRequestTrait for Feed {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"
@@ -417,6 +411,7 @@ impl ProcessExternalRequestTrait for Feed {
                             match e {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
+                                    #[cfg(not(test))]
                                     error!(
                                         target: LOG_TARGET_PROC_EXT_REQ,
                                         "receiving command from messaging failed ({e:?})"

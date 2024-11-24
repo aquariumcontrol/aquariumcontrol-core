@@ -19,12 +19,13 @@ use crate::sql_interface::SqlInterfaceError;
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
     /// Connection to database
-    pub conn: PooledConn,
+    conn: PooledConn,
 }
 
 /// Contains set value data for each pump.
 pub struct BallingSetVal {
     /// ID of the pump
+    /// Attribute is public becaused access from within test cases.
     pub pump_id: i32,
 
     /// flow rate of the pump in ml/sec
@@ -34,6 +35,7 @@ pub struct BallingSetVal {
     pub dosing_volume: f32,
 
     /// label which describes the fluid that the pump is delivering
+    /// Attribute is public becaused access from within test cases.
     pub label: String,
 }
 
@@ -229,7 +231,7 @@ pub mod tests {
 
         // *** check timestamp of last Balling dosing - PASS ************************************
         let balling_timestamp =
-            NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+            NaiveDateTime::parse_from_str("2024-11-20 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_balling.insert_balling_event(balling_timestamp, pump_id, 0.5) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),

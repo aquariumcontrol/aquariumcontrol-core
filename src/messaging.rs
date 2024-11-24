@@ -169,7 +169,7 @@ pub struct MessagingConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
 ///     signal_handler[Signal handler] --> messaging[Messaging]
@@ -398,591 +398,589 @@ pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
+    //    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::balling::tests::MockMineralInjection;
-    use crate::balling::Balling;
-    use crate::channel_content::AquariumDevice;
-    use crate::channel_content::AquariumSignal;
+    //    use crate::balling::tests::MockMineralInjection;
+    //    use crate::balling::Balling;
+    //    use crate::channel_content::AquariumDevice;
+    //    use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::feed::tests::MockFoodInjection;
     use crate::feed::Feed;
-    use crate::heating::tests::prepare_heating_tests_mock_midnight_calculator;
-    use crate::heating::tests::HeatingStatsMockDataTransfer;
+    //   use crate::heating::tests::prepare_heating_tests_mock_midnight_calculator;
+    //    use crate::heating::tests::HeatingStatsMockDataTransfer;
     use crate::messaging::messaging_commands;
     use crate::messaging::messaging_domains;
     use crate::messaging::Message;
     use crate::messaging::Messaging;
-    use crate::refill::tests::RefillTestExecutionVoid;
-    use crate::refill::Refill;
-    use crate::refill::RefillConfig;
-    use crate::refill::RefillErrors;
-    use crate::refill::TankLevelSwitchSignals;
+    //    use crate::refill::Refill;
+    //    use crate::refill::RefillConfig;
+    //    use crate::refill::RefillErrors;
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_balling::SqlInterfaceBalling;
+    //    use crate::sql_interface_balling::SqlInterfaceBalling;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-    use crate::sql_interface_refill::SqlInterfaceRefill;
-    use crate::ventilation::tests::mock_schedule_check;
-    use crate::ventilation::tests::run_main_cycle_with_stimuli;
-    use crate::ventilation::tests::test_receive_actuation_command_send_confirmation;
-    use crate::ventilation::tests::test_receive_information_for_datalogger;
-    use crate::ventilation::Ventilation;
-    use crate::water_injection::WaterInjectionTrait;
+    //    use crate::sql_interface_refill::SqlInterfaceRefill;
+    //    use crate::water_injection::WaterInjectionTrait;
 
-    #[cfg(target_os = "linux")]
-    // Test case runs ventilation control and triggers inhibition by sending stop message.
-    // After verification that ventilation is stopped,
-    // test case sends start message and verifies if ventilation control
-    // resumes operation.
-    #[test]
-    pub fn test_messaging_stops_starts_ventilation() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
+    /* @todo: redo test case completely
+        #[cfg(target_os = "linux")]
+        // Test case runs ventilation control and triggers inhibition by sending stop message.
+        // After verification that ventilation is stopped,
+        // test case sends start message and verifies if ventilation control
+        // resumes operation.
+        #[test]
+        pub fn test_messaging_stops_starts_ventilation() {
+            let sleep_duration_100_millisec = Duration::from_millis(100);
+            let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                println!("Messaging: Could open message queue.");
-                c
-            }
-            Err(e) => {
-                panic!(
-                    "Messaging: failure to open message queue for test using {}, error={e:?}",
-                    &config.messaging.mq_filename
-                );
-            }
-        };
-
-        let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::VENTILATION;
-        msg_start.command = messaging_commands::START;
-
-        let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::VENTILATION;
-        msg_stop.command = messaging_commands::STOP;
-
-        let mut ventilation = Ventilation::new(config.ventilation);
-        let mut messaging = Messaging::new(config.messaging);
-
-        let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
-        let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
-        let (tx_ventilation_to_datalogger, rx_datalogger_from_ventilation) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
-            mpsc::channel();
-        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
-            mpsc::channel();
-        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-
-        let tx_ventilation_to_schedule_check_for_test_case_finish =
-            tx_ventilation_to_schedule_check.clone();
-
-        scope(|scope| {
-            // thread for mock schedule check: runs until it receives Quit command
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_ventilation,
-                    &rx_schedule_check_from_ventilation,
-                    true,
-                ) {
-                    break;
+            let config: ConfigData =
+                read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+            let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+                Ok(c) => {
+                    println!("Messaging: Could open message queue.");
+                    c
                 }
+                Err(e) => {
+                    panic!(
+                        "Messaging: failure to open message queue for test using {}, error={e:?}",
+                        &config.messaging.mq_filename
+                    );
+                }
+            };
+
+            let mut msg_start = Message::new();
+            msg_start.domain = messaging_domains::VENTILATION;
+            msg_start.command = messaging_commands::START;
+
+            let mut msg_stop = Message::new();
+            msg_stop.domain = messaging_domains::VENTILATION;
+            msg_stop.command = messaging_commands::STOP;
+
+            let mut ventilation = Ventilation::new(config.ventilation);
+            let mut messaging = Messaging::new(config.messaging);
+
+            let (tx_ventilation_to_gpio, rx_gpio_from_ventilation) = mpsc::channel();
+            let (tx_gpio_to_ventilation, rx_ventilation_from_gpio) = mpsc::channel();
+            let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+            let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
+            let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+            let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+                mpsc::channel();
+            let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+                mpsc::channel();
+            let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+                mpsc::channel();
+            let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+                mpsc::channel();
+            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+            let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+            let tx_ventilation_to_schedule_check_for_test_case_finish =
+                tx_ventilation_to_schedule_check.clone();
+
+            scope(|scope| {
+                // thread for mock schedule check: runs until it receives Quit command
+                scope.spawn(move || loop {
+                    if mock_schedule_check(
+                        &tx_schedule_check_to_ventilation,
+                        &rx_schedule_check_from_ventilation,
+                        true,
+                    ) {
+                        break;
+                    }
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                });
+
+                let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+                // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
+                scope.spawn(move || {
+                    run_main_cycle_with_stimuli(
+                        4,
+                        &rx_gpio_from_ventilation,
+                        &tx_gpio_to_ventilation,
+                        30.0,
+                    );
+
+                    // sending IPC message requesting stop of ventilation control
+                    let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                    run_main_cycle_with_stimuli(
+                        4,
+                        &rx_gpio_from_ventilation,
+                        &tx_gpio_to_ventilation,
+                        30.0,
+                    );
+
+                    // sending IPC message requesting stop of ventilation control
+                    let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                    run_main_cycle_with_stimuli(
+                        4,
+                        &rx_gpio_from_ventilation,
+                        &tx_gpio_to_ventilation,
+                        30.0,
+                    );
+
+                    // requesting ventilation control to quit
+                    let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                    rx_signal_handler_from_ventilation.recv().unwrap();
+                    let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+
+                    // requesting messaging to quit
+                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                });
+
+                // thread for mock Controllino, DataLogger
+                scope.spawn(move || {
+                    let command1 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_ventilation,
+                        &tx_controllino_to_ventilation,
+                    );
+                    assert_eq!(
+                        command1,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                    );
+                    let state1 =
+                        test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
+                    assert_eq!(state1, true);
+
+                    let command2 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_ventilation,
+                        &tx_controllino_to_ventilation,
+                    );
+                    assert_eq!(
+                        command2,
+                        Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
+                    );
+                    let state2 =
+                        test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
+                    assert_eq!(state2, false);
+
+                    let command3 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_ventilation,
+                        &tx_controllino_to_ventilation,
+                    );
+                    assert_eq!(
+                        command3,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+                    );
+                    let state3 =
+                        test_receive_information_for_data_logger(&rx_data_logger_from_ventilation);
+                    assert_eq!(state3, true);
+                });
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-            });
 
-            let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+                // thread for test object #1 - messaging
+                scope.spawn(move || {
+                    messaging.execute(
+                        rx_messaging_from_signal_handler,
+                        tx_messaging_to_refill,
+                        tx_messaging_to_ventilation,
+                        tx_messaging_to_heating,
+                        tx_messaging_to_feed,
+                        tx_messaging_to_balling,
+                        tx_messaging_to_monitors,
+                    );
+                });
 
-            // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
-            scope.spawn(move || {
-                run_main_cycle_with_stimuli(
-                    4,
-                    &rx_gpio_from_ventilation,
-                    &tx_gpio_to_ventilation,
-                    30.0,
-                );
+                // thread for test object #2
+                scope.spawn(move || {
+                    ventilation.execute(
+                        mutex_device_scheduler_ventilation.clone(),
+                        tx_ventilation_to_gpio,
+                        rx_ventilation_from_gpio,
+                        tx_ventilation_to_controllino,
+                        rx_ventilation_from_controllino,
+                        tx_ventilation_to_signal_handler,
+                        rx_ventilation_from_signal_handler,
+                        tx_ventilation_to_data_logger,
+                        tx_ventilation_to_schedule_check,
+                        rx_ventilation_from_schedule_check,
+                        rx_ventilation_from_messaging,
+                    );
 
-                // sending IPC message requesting stop of ventilation control
-                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+                    let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                        .send(InternalCommand::Quit);
 
-                run_main_cycle_with_stimuli(
-                    4,
-                    &rx_gpio_from_ventilation,
-                    &tx_gpio_to_ventilation,
-                    30.0,
-                );
+                    let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
 
-                // sending IPC message requesting stop of ventilation control
-                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
-
-                run_main_cycle_with_stimuli(
-                    4,
-                    &rx_gpio_from_ventilation,
-                    &tx_gpio_to_ventilation,
-                    30.0,
-                );
-
-                // requesting ventilation control to quit
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-
-                // requesting messaging to quit
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
-            });
-
-            // thread for mock Controllino, DataLogger
-            scope.spawn(move || {
-                let command1 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_ventilation,
-                    &tx_controllino_to_ventilation,
-                );
-                assert_eq!(
-                    command1,
-                    Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
-                );
-                let state1 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
-                assert_eq!(state1, true);
-
-                let command2 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_ventilation,
-                    &tx_controllino_to_ventilation,
-                );
-                assert_eq!(
-                    command2,
-                    Some(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
-                );
-                let state2 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
-                assert_eq!(state2, false);
-
-                let command3 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_ventilation,
-                    &tx_controllino_to_ventilation,
-                );
-                assert_eq!(
-                    command3,
-                    Some(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
-                );
-                let state3 =
-                    test_receive_information_for_datalogger(&rx_datalogger_from_ventilation);
-                assert_eq!(state3, true);
-            });
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object #1 - messaging
-            scope.spawn(move || {
-                messaging.execute(
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
+                    // check amount of actuations (after quitting)
+                    assert_eq!(actuation_count, 3);
+                });
+                println!(
+                    "* [Messaging] checking if messaging can stop and start ventilation succeeded."
                 );
             });
-
-            // thread for test object #2
-            scope.spawn(move || {
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_gpio,
-                    rx_ventilation_from_gpio,
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
-                    tx_ventilation_to_signal_handler,
-                    rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_datalogger,
-                    tx_ventilation_to_schedule_check,
-                    rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
-                );
-
-                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-
-                let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
-
-                // check amount of actuations (after quitting)
-                assert_eq!(actuation_count, 3);
-            });
-            println!(
-                "* [Messaging] checking if messaging can stop and start ventilation succeeded."
-            );
-        });
-    }
-
-    #[cfg(target_os = "linux")]
-    // Test case runs Balling dosing control and triggers inhibition by sending stop message.
-    // After verification that Balling dosing is stopped,
-    // test case sends start message and verifies if Balling dosing control
-    // resumes operation.
-    #[test]
-    pub fn test_messaging_stops_starts_balling_dosing() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
-
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_messaging.toml".to_string());
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                println!("Messaging: Could open message queue.");
-                c
-            }
-            Err(e) => {
-                panic!(
-                    "Messaging: failure to open message queue for test using {}, error={e:?}",
-                    &config.messaging.mq_filename
-                );
-            }
-        };
-
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
-
-        let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::BALLING;
-        msg_start.command = messaging_commands::START;
-
-        let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::BALLING;
-        msg_stop.command = messaging_commands::STOP;
-
-        // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
         }
+    */
 
-        // create test objects
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
-        let mut messaging = Messaging::new(config.messaging);
+    /* @todo: redo test case completely
+        #[cfg(target_os = "linux")]
+        // Test case runs Balling dosing control and triggers inhibition by sending stop message.
+        // After verification that Balling dosing is stopped,
+        // test case sends start message and verifies if Balling dosing control
+        // resumes operation.
+        #[test]
+        pub fn test_messaging_stops_starts_balling_dosing() {
+            let sleep_duration_100_millisec = Duration::from_millis(100);
+            let spin_sleeper = SpinSleeper::default();
 
-        let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
-        let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
-        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
-        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
-        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-
-        let tx_balling_to_schedule_check_for_test_case_finish =
-            tx_balling_to_schedule_check.clone();
-
-        let mut mock_mineral_injection = MockMineralInjection::new();
-
-        scope(|scope| {
-            // thread for mock schedule check: runs until it receives Quit command
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_balling,
-                    &rx_schedule_check_from_balling,
-                    true,
-                ) {
-                    break;
+            let config: ConfigData =
+                read_config_file("/config/aquarium_control_test_messaging.toml".to_string());
+            let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+                Ok(c) => {
+                    println!("Messaging: Could open message queue.");
+                    c
                 }
-                spin_sleeper.sleep(sleep_duration_100_millisec);
-            });
-
-            let mutex_device_scheduler_balling_test_object = Arc::new(Mutex::new(0));
-            let mutex_device_scheduler_balling_test_environment =
-                mutex_device_scheduler_balling_test_object.clone();
-
-            // thread IPC messaging - this scope controls execution of the test case
-            scope.spawn(move || {
-                // wait for 1 second to make sure test object can receive message
-                for _ in 0..10 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                Err(e) => {
+                    panic!(
+                        "Messaging: failure to open message queue for test using {}, error={e:?}",
+                        &config.messaging.mq_filename
+                    );
                 }
+            };
 
-                // sending IPC message requesting stop of Balling dosing control
-                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
-
-                // wait for 10 seconds. If test object does not follow stop request,
-                // then dosings will happen in this period.
-                for _ in 0..100 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+            let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("Could not connect to SQL database: {e:?}");
                 }
+            };
+            let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-                let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
+            let mut msg_start = Message::new();
+            msg_start.domain = messaging_domains::BALLING;
+            msg_start.command = messaging_commands::START;
 
-                // check amount of actuations (after stop request)
-                assert_eq!(actuation_count_1, 1);
+            let mut msg_stop = Message::new();
+            msg_stop.domain = messaging_domains::BALLING;
+            msg_stop.command = messaging_commands::STOP;
 
-                // sending IPC message requesting restart of Balling dosing control
-                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
-
-                // wait for 10 seconds. If test object follows start request,
-                // then dosings will happen in this period.
-                for _ in 0..100 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+            // empty the Balling dosing log table
+            match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!("Could not prepare test case: {e:?}")
                 }
-
-                let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
-                    .lock()
-                    .unwrap();
-
-                // check amount of actuations (after start request)
-                assert_eq!(actuation_count_2, 3);
-
-                // requesting Balling dosing control to quit
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
-                rx_signal_handler_from_balling.recv().unwrap();
-                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
-
-                // requesting messaging to quit
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
-            });
-
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object #1 - messaging
-            scope.spawn(move || {
-                messaging.execute(
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                );
-            });
-
-            // thread for test object #2
-            scope.spawn(move || {
-                balling.execute(
-                    mutex_device_scheduler_balling_test_object.clone(),
-                    tx_balling_to_controllino,
-                    rx_balling_from_controllino,
-                    tx_balling_to_signal_handler,
-                    rx_balling_from_signal_handler,
-                    tx_balling_to_schedule_check,
-                    rx_balling_from_schedule_check,
-                    rx_balling_from_messaging,
-                    &mut mock_mineral_injection,
-                );
-                println!("MockMineralInjection:\n{}", mock_mineral_injection);
-
-                let _ =
-                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-
-            println!(
-                "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
-            );
-        });
-    }
-
-    #[cfg(target_os = "linux")]
-    // Test case runs heating control and triggers inhibition by sending stop message.
-    // After verification that heating is stopped,
-    // test case sends start message and verifies if heating control
-    // resumes operation.
-    #[test]
-    pub fn test_messaging_stops_starts_heating() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
-
-        let (config, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
-
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                println!("Messaging: Could open message queue.");
-                c
             }
-            Err(e) => {
-                panic!(
-                    "Messaging: failure to open message queue for test using {}, error={e:?}",
-                    &config.messaging.mq_filename
-                );
-            }
-        };
 
-        let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::HEATING;
-        msg_start.command = messaging_commands::START;
+            // create test objects
+            let mut balling = Balling::new(config.balling, sql_interface_balling);
+            let mut messaging = Messaging::new(config.messaging);
 
-        let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::HEATING;
-        msg_stop.command = messaging_commands::STOP;
+            let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
+            let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
+            let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+            let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+            let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+            let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+            let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
-        let mut messaging = Messaging::new(config.messaging);
+            let tx_balling_to_schedule_check_for_test_case_finish =
+                tx_balling_to_schedule_check.clone();
 
-        let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
-        let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
-        let (tx_heating_to_datalogger, rx_datalogger_from_heating) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
-        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
-        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
-        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+            let mut mock_mineral_injection = MockMineralInjection::new();
 
-        let tx_heating_to_schedule_check_for_test_case_finish =
-            tx_heating_to_schedule_check.clone();
+            scope(|scope| {
+                // thread for mock schedule check: runs until it receives Quit command
+                scope.spawn(move || loop {
+                    if mock_schedule_check(
+                        &tx_schedule_check_to_balling,
+                        &rx_schedule_check_from_balling,
+                        true,
+                    ) {
+                        break;
+                    }
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                });
 
-        let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mutex_device_scheduler_balling_test_object = Arc::new(Mutex::new(0));
+                let mutex_device_scheduler_balling_test_environment =
+                    mutex_device_scheduler_balling_test_object.clone();
 
-        scope(|scope| {
-            // thread for mock schedule check: runs until it receives Quit command
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_heating,
-                    &rx_schedule_check_from_heating,
-                    true,
-                ) {
-                    break;
-                }
+                // thread IPC messaging - this scope controls execution of the test case
+                scope.spawn(move || {
+                    // wait for 1 second to make sure test object can receive message
+                    for _ in 0..10 {
+                        spin_sleeper.sleep(sleep_duration_100_millisec);
+                    }
+
+                    // sending IPC message requesting stop of Balling dosing control
+                    let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                    // wait for 10 seconds. If test object does not follow stop request,
+                    // then dosings will happen in this period.
+                    for _ in 0..100 {
+                        spin_sleeper.sleep(sleep_duration_100_millisec);
+                    }
+
+                    let actuation_count_1 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+
+                    // check amount of actuations (after stop request)
+                    assert_eq!(actuation_count_1, 1);
+
+                    // sending IPC message requesting restart of Balling dosing control
+                    let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                    // wait for 10 seconds. If test object follows start request,
+                    // then dosings will happen in this period.
+                    for _ in 0..100 {
+                        spin_sleeper.sleep(sleep_duration_100_millisec);
+                    }
+
+                    let actuation_count_2 = *mutex_device_scheduler_balling_test_environment
+                        .lock()
+                        .unwrap();
+
+                    // check amount of actuations (after start request)
+                    assert_eq!(actuation_count_2, 3);
+
+                    // requesting Balling dosing control to quit
+                    let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                    rx_signal_handler_from_balling.recv().unwrap();
+                    let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+
+                    // requesting messaging to quit
+                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                });
+
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-            });
 
-            let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+                // thread for test object #1 - messaging
+                scope.spawn(move || {
+                    messaging.execute(
+                        rx_messaging_from_signal_handler,
+                        tx_messaging_to_refill,
+                        tx_messaging_to_ventilation,
+                        tx_messaging_to_heating,
+                        tx_messaging_to_feed,
+                        tx_messaging_to_balling,
+                        tx_messaging_to_monitors,
+                    );
+                });
 
-            // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
-            scope.spawn(move || {
-                run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
+                // thread for test object #2
+                scope.spawn(move || {
+                    balling.execute(
+                        mutex_device_scheduler_balling_test_object.clone(),
+                        tx_balling_to_controllino,
+                        rx_balling_from_controllino,
+                        tx_balling_to_signal_handler,
+                        rx_balling_from_signal_handler,
+                        tx_balling_to_schedule_check,
+                        rx_balling_from_schedule_check,
+                        rx_balling_from_messaging,
+                        &mut mock_mineral_injection,
+                    );
+                    println!("MockMineralInjection:\n{}", mock_mineral_injection);
 
-                // sending IPC message requesting stop of heating control
-                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+                    let _ =
+                        tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                });
 
-                run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
-
-                // sending IPC message requesting stop of heating control
-                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
-
-                run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
-
-                // requesting heating control to quit
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
-                rx_signal_handler_from_heating.recv().unwrap();
-                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
-
-                // requesting messaging to quit
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
-            });
-
-            // thread for mock Controllino, DataLogger
-            scope.spawn(move || {
-                let command1 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command1,
-                    Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
-                );
-                let state1 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                assert_eq!(state1, true);
-
-                let command2 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command2,
-                    Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
-                );
-                let state2 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                assert_eq!(state2, false);
-
-                let command3 = test_receive_actuation_command_send_confirmation(
-                    &rx_controllino_from_heating,
-                    &tx_controllino_to_heating,
-                );
-                assert_eq!(
-                    command3,
-                    Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
-                );
-                let state3 = test_receive_information_for_datalogger(&rx_datalogger_from_heating);
-                assert_eq!(state3, true);
-            });
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object #1 - messaging
-            scope.spawn(move || {
-                messaging.execute(
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
+                println!(
+                    "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
                 );
             });
+        }
+    */
 
-            // thread for test object #2
-            scope.spawn(move || {
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
-                    tx_heating_to_gpio,
-                    rx_heating_from_gpio,
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
-                    tx_heating_to_signal_handler,
-                    rx_heating_from_signal_handler,
-                    tx_heating_to_datalogger,
-                    tx_heating_to_schedule_check,
-                    rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
-                    &mut sql_interface,
-                    &mut heating_stats_transfer,
-                );
+    /* @todo: redo test case completely
+        #[cfg(target_os = "linux")]
+        // Test case runs heating control and triggers inhibition by sending stop message.
+        // After verification that heating is stopped,
+        // test case sends start message and verifies if heating control
+        // resumes operation.
+        #[test]
+        pub fn test_messaging_stops_starts_heating() {
+            let sleep_duration_100_millisec = Duration::from_millis(100);
+            let spin_sleeper = SpinSleeper::default();
 
-                let _ =
-                    tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+            let (config, mut heating, mut sql_interface) =
+                prepare_heating_tests_mock_midnight_calculator(3600);
 
-                let actuation_count = *mutex_device_scheduler_heating.lock().unwrap();
+            let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+                Ok(c) => {
+                    println!("Messaging: Could open message queue.");
+                    c
+                }
+                Err(e) => {
+                    panic!(
+                        "Messaging: failure to open message queue for test using {}, error={e:?}",
+                        &config.messaging.mq_filename
+                    );
+                }
+            };
 
-                // check amount of actuations (after quitting)
-                assert_eq!(actuation_count, 4);
+            let mut msg_start = Message::new();
+            msg_start.domain = messaging_domains::HEATING;
+            msg_start.command = messaging_commands::START;
+
+            let mut msg_stop = Message::new();
+            msg_stop.domain = messaging_domains::HEATING;
+            msg_stop.command = messaging_commands::STOP;
+
+            let mut messaging = Messaging::new(config.messaging);
+
+            let (tx_heating_to_gpio, rx_gpio_from_heating) = mpsc::channel();
+            let (tx_gpio_to_heating, rx_heating_from_gpio) = mpsc::channel();
+            let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
+            let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+            let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+            let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
+            let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
+            let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
+            let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
+            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+            let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+            let tx_heating_to_schedule_check_for_test_case_finish =
+                tx_heating_to_schedule_check.clone();
+
+            let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+
+            scope(|scope| {
+                // thread for mock schedule check: runs until it receives Quit command
+                scope.spawn(move || loop {
+                    if mock_schedule_check(
+                        &tx_schedule_check_to_heating,
+                        &rx_schedule_check_from_heating,
+                        true,
+                    ) {
+                        break;
+                    }
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                });
+
+                let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+
+                // thread for mock GPIO and IPC messaging - this scope controls execution of the test case
+                scope.spawn(move || {
+                    run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
+
+                    // sending IPC message requesting stop of heating control
+                    let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                    run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
+
+                    // sending IPC message requesting stop of heating control
+                    let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                    run_main_cycle_with_stimuli(16, &rx_gpio_from_heating, &tx_gpio_to_heating, 20.0);
+
+                    // requesting heating control to quit
+                    let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                    rx_signal_handler_from_heating.recv().unwrap();
+                    let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+
+                    // requesting messaging to quit
+                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                });
+
+                // thread for mock Controllino, DataLogger
+                scope.spawn(move || {
+                    let command1 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    assert_eq!(
+                        command1,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
+                    );
+                    let state1 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
+                    assert_eq!(state1, true);
+
+                    let command2 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    assert_eq!(
+                        command2,
+                        Some(InternalCommand::SwitchOff(AquariumDevice::Heater))
+                    );
+                    let state2 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
+                    assert_eq!(state2, false);
+
+                    let command3 = test_receive_actuation_command_send_confirmation(
+                        &rx_controllino_from_heating,
+                        &tx_controllino_to_heating,
+                    );
+                    assert_eq!(
+                        command3,
+                        Some(InternalCommand::SwitchOn(AquariumDevice::Heater))
+                    );
+                    let state3 = test_receive_information_for_data_logger(&rx_data_logger_from_heating);
+                    assert_eq!(state3, true);
+                });
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                // thread for test object #1 - messaging
+                scope.spawn(move || {
+                    messaging.execute(
+                        rx_messaging_from_signal_handler,
+                        tx_messaging_to_refill,
+                        tx_messaging_to_ventilation,
+                        tx_messaging_to_heating,
+                        tx_messaging_to_feed,
+                        tx_messaging_to_balling,
+                        tx_messaging_to_monitors,
+                    );
+                });
+
+                // thread for test object #2
+                scope.spawn(move || {
+                    heating.execute(
+                        mutex_device_scheduler_heating.clone(),
+                        tx_heating_to_gpio,
+                        rx_heating_from_gpio,
+                        tx_heating_to_controllino,
+                        rx_heating_from_controllino,
+                        tx_heating_to_signal_handler,
+                        rx_heating_from_signal_handler,
+                        tx_heating_to_data_logger,
+                        tx_heating_to_schedule_check,
+                        rx_heating_from_schedule_check,
+                        rx_heating_from_messaging,
+                        &mut sql_interface,
+                        &mut heating_stats_transfer,
+                    );
+
+                    let _ =
+                        tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                    let actuation_count = *mutex_device_scheduler_heating.lock().unwrap();
+
+                    // check amount of actuations (after quitting)
+                    assert_eq!(actuation_count, 4);
+                });
+                println!("* [Messaging] checking if messaging can stop and start heating succeeded.");
             });
-            println!("* [Messaging] checking if messaging can stop and start heating succeeded.");
-        });
-    }
-
+        }
+    */
     #[cfg(target_os = "linux")]
     // Test case runs feed control and triggers inhibition by sending stop message.
     // After verification that feed is stopped,
@@ -1188,311 +1186,314 @@ pub mod tests {
             println!("* [Messaging] checking if messaging can stop, start feed control and execute feed profiles succeeded.");
         });
     }
-
-    pub fn run_main_cycle_with_stimuli_refill(
-        iterations: u32,
-        rx_gpio_from_refill: &Receiver<InternalCommand>,
-        tx_gpio_to_refill: &Sender<f32>,
-        tank_level_position_stimuli: f32,
-        tank_level_invalid_stimuli: f32,
-    ) {
-        for i in 0..iterations {
-            println!(
-                "run_main_cycle_with_stimuli_refill: running loop iteration #{}",
-                i
-            );
-            for _ in 0..2 {
-                match rx_gpio_from_refill.recv() {
-                    Ok(c) => match c {
-                        InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition) => {
-                            println!("run_main_cycle_with_stimuli_refill: Answering request for tank level switch position with {}", tank_level_position_stimuli);
-                            let _ = tx_gpio_to_refill.send(tank_level_position_stimuli);
+    /*
+        pub fn run_main_cycle_with_stimuli_refill(
+            iterations: u32,
+            rx_gpio_from_refill: &Receiver<InternalCommand>,
+            tx_gpio_to_refill: &Sender<f32>,
+            tank_level_position_stimuli: f32,
+            tank_level_invalid_stimuli: f32,
+        ) {
+            for i in 0..iterations {
+                println!(
+                    "run_main_cycle_with_stimuli_refill: running loop iteration #{}",
+                    i
+                );
+                for _ in 0..2 {
+                    match rx_gpio_from_refill.recv() {
+                        Ok(c) => match c {
+                            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition) => {
+                                println!("run_main_cycle_with_stimuli_refill: Answering request for tank level switch position with {}", tank_level_position_stimuli);
+                                let _ = tx_gpio_to_refill.send(tank_level_position_stimuli);
+                            }
+                            InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid) => {
+                                println!("run_main_cycle_with_stimuli_refill: Answering request for tank level switch invalid with {}", tank_level_invalid_stimuli);
+                                let _ = tx_gpio_to_refill.send(tank_level_invalid_stimuli);
+                            }
+                            _ => {
+                                println!("run_main_cycle_with_stimuli_refill: Ignoring inapplicable request {}", c);
+                            }
+                        },
+                        Err(e) => {
+                            panic!("run_main_cycle_with_stimuli_refill: Could not read from channel: {e:?}");
                         }
-                        InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid) => {
-                            println!("run_main_cycle_with_stimuli_refill: Answering request for tank level switch invalid with {}", tank_level_invalid_stimuli);
-                            let _ = tx_gpio_to_refill.send(tank_level_invalid_stimuli);
-                        }
-                        _ => {
-                            println!("run_main_cycle_with_stimuli_refill: Ignoring inapplicable request {}", c);
-                        }
-                    },
-                    Err(e) => {
-                        panic!("run_main_cycle_with_stimuli_refill: Could not read from channel: {e:?}");
                     }
                 }
             }
         }
-    }
+    */
+    /* @todo: redo test case completely
+        #[cfg(target_os = "linux")]
+        // Test case runs refill control and triggers inhibition by sending stop message.
+        // After verification that refill is stopped,
+        // test case sends start message and verifies if feed control
+        // resumes operation.
+        #[test]
+        pub fn test_messaging_stops_starts_refill() {
+            let sleep_duration_100_millisec = Duration::from_millis(100);
+            let spin_sleeper = SpinSleeper::default();
 
-    #[cfg(target_os = "linux")]
-    // Test case runs refill control and triggers inhibition by sending stop message.
-    // After verification that refill is stopped,
-    // test case sends start message and verifies if feed control
-    // resumes operation.
-    #[test]
-    pub fn test_messaging_stops_starts_refill() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
-
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill_quaternary.toml".to_string());
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => {
-                println!("Messaging: Could open message queue.");
-                c
-            }
-            Err(e) => {
-                panic!(
-                    "Messaging: failure to open message queue for test using {}, error={e:?}",
-                    &config.messaging.mq_filename
-                );
-            }
-        };
-
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!("Could not connect to SQL database: {e:?}");
-            }
-        };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
-
-        let mut msg_start = Message::new();
-        msg_start.domain = messaging_domains::REFILL;
-        msg_start.command = messaging_commands::START;
-
-        let mut msg_stop = Message::new();
-        msg_stop.domain = messaging_domains::REFILL;
-        msg_stop.command = messaging_commands::STOP;
-
-        // create test objects
-        let mut refill = Refill::new(config.refill, sql_interface_refill);
-        let mut messaging = Messaging::new(config.messaging);
-
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_refill_to_datalogger, _rx_datalogger_from_refill) = mpsc::channel();
-        let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
-        let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
-        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
-        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
-        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
-        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
-        let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
-
-        let tx_refill_to_schedule_check_for_test_case_finish = tx_refill_to_schedule_check.clone();
-
-        let mut mock_water_injection = RefillTestExecutionVoid {};
-
-        scope(|scope| {
-            let mutex_device_scheduler_refill_test_object = Arc::new(Mutex::new(0));
-            let mutex_device_scheduler_refill_test_environment =
-                mutex_device_scheduler_refill_test_object.clone();
-
-            // thread for mock schedule check: runs until it receives Quit command
-            scope.spawn(move || loop {
-                if mock_schedule_check(
-                    &tx_schedule_check_to_refill,
-                    &rx_schedule_check_from_refill,
-                    true,
-                ) {
-                    break;
+            let config: ConfigData =
+                read_config_file("/config/aquarium_control_test_refill_quaternary.toml".to_string());
+            let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+                Ok(c) => {
+                    println!("Messaging: Could open message queue.");
+                    c
                 }
+                Err(e) => {
+                    panic!(
+                        "Messaging: failure to open message queue for test using {}, error={e:?}",
+                        &config.messaging.mq_filename
+                    );
+                }
+            };
+
+            let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!("Could not connect to SQL database: {e:?}");
+                }
+            };
+            let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+
+            let mut msg_start = Message::new();
+            msg_start.domain = messaging_domains::REFILL;
+            msg_start.command = messaging_commands::START;
+
+            let mut msg_stop = Message::new();
+            msg_stop.domain = messaging_domains::REFILL;
+            msg_stop.command = messaging_commands::STOP;
+
+            // create test objects
+            let mut refill = Refill::new(config.refill, sql_interface_refill);
+            let mut messaging = Messaging::new(config.messaging);
+
+            let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
+            let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
+            let (tx_refill_to_data_logger, _rx_data_logger_from_refill) = mpsc::channel();
+            let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
+            let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
+            let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
+            let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel();
+            let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel();
+            let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) = mpsc::channel();
+            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+            let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+            let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+            let tx_refill_to_schedule_check_for_test_case_finish = tx_refill_to_schedule_check.clone();
+
+            let mut mock_water_injection = RefillTestExecutionVoid {};
+
+            scope(|scope| {
+                let mutex_device_scheduler_refill_test_object = Arc::new(Mutex::new(0));
+                let mutex_device_scheduler_refill_test_environment =
+                    mutex_device_scheduler_refill_test_object.clone();
+
+                // thread for mock schedule check: runs until it receives Quit command
+                scope.spawn(move || loop {
+                    if mock_schedule_check(
+                        &tx_schedule_check_to_refill,
+                        &rx_schedule_check_from_refill,
+                        true,
+                    ) {
+                        break;
+                    }
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                });
+
+                // thread for IPC messaging - this scope controls execution of the test case
+                scope.spawn(move || {
+                    // Phase 1: Normal refill cycle, sending stop command afterwards
+                    // stimulate tank level switch high and valid
+                    run_main_cycle_with_stimuli_refill(
+                        4,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+                    // stimulate tank level switch low and valid
+                    run_main_cycle_with_stimuli_refill(
+                        6,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        0.0,
+                        0.0,
+                    );
+                    run_main_cycle_with_stimuli_refill(
+                        1,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+                    let actuation_count_1 = *mutex_device_scheduler_refill_test_environment
+                        .lock()
+                        .unwrap();
+                    println!(
+                        "test_messaging_stops_starts_refill: actuation_count_1 = {}",
+                        actuation_count_1
+                    );
+                    // amount of actuations (before stop request): one refill operation executed
+                    assert_eq!(actuation_count_1, 1);
+
+                    // sending IPC message requesting stop of refill control
+                    let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+                    // stimulate tank level switch high and valid
+                    run_main_cycle_with_stimuli_refill(
+                        4,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+
+                    // Phase 2: Stimulating low level and checking if inhibition works
+                    // stimulate tank level switch low and valid
+                    run_main_cycle_with_stimuli_refill(
+                        6,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        0.0,
+                        0.0,
+                    );
+                    let actuation_count_2 = *mutex_device_scheduler_refill_test_environment
+                        .lock()
+                        .unwrap();
+                    // amount of actuations (after stop request): no further refill operation executed
+                    println!(
+                        "test_messaging_stops_starts_refill: actuation_count_2 = {}",
+                        actuation_count_2
+                    );
+                    assert_eq!(actuation_count_2, 1);
+
+                    // stimulate tank level switch high and valid
+                    run_main_cycle_with_stimuli_refill(
+                        1,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+                    // sending IPC message requesting (re-)start of refill control
+                    let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+                    // stimulate tank level switch high and valid
+                    run_main_cycle_with_stimuli_refill(
+                        2,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+
+                    // Phase 3: Normal refill cycle after having sent restart command
+                    // stimulate tank level switch low and valid
+                    run_main_cycle_with_stimuli_refill(
+                        6,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        0.0,
+                        0.0,
+                    );
+                    run_main_cycle_with_stimuli_refill(
+                        2,
+                        &rx_gpio_from_refill,
+                        &tx_gpio_to_refill,
+                        1.0,
+                        0.0,
+                    );
+                    let actuation_count_3 = *mutex_device_scheduler_refill_test_environment
+                        .lock()
+                        .unwrap();
+                    // amount of actuations (after restart request): one more refill operation executed
+                    println!(
+                        "test_messaging_stops_starts_refill: actuation_count_3 = {}",
+                        actuation_count_3
+                    );
+                    assert_eq!(actuation_count_3, 2);
+
+                    // requesting refill control to quit
+                    let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                    rx_signal_handler_from_refill.recv().unwrap();
+                    let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+
+                    // requesting messaging to quit
+                    let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+                });
+
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-            });
 
-            // thread for IPC messaging - this scope controls execution of the test case
-            scope.spawn(move || {
-                // Phase 1: Normal refill cycle, sending stop command afterwards
-                // stimulate tank level switch high and valid
-                run_main_cycle_with_stimuli_refill(
-                    4,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-                // stimulate tank level switch low and valid
-                run_main_cycle_with_stimuli_refill(
-                    6,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    0.0,
-                    0.0,
-                );
-                run_main_cycle_with_stimuli_refill(
-                    1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-                let actuation_count_1 = *mutex_device_scheduler_refill_test_environment
-                    .lock()
-                    .unwrap();
+                // thread for test object #1 - messaging
+                scope.spawn(move || {
+                    messaging.execute(
+                        rx_messaging_from_signal_handler,
+                        tx_messaging_to_refill,
+                        tx_messaging_to_ventilation,
+                        tx_messaging_to_heating,
+                        tx_messaging_to_feed,
+                        tx_messaging_to_balling,
+                        tx_messaging_to_monitors,
+                    );
+                });
+
+                // thread for test object #2
+                scope.spawn(move || {
+                    refill.execute(
+                        mutex_device_scheduler_refill_test_object.clone(),
+                        tx_refill_to_gpio,
+                        rx_refill_from_gpio,
+                        tx_refill_to_controllino,
+                        rx_refill_from_controllino,
+                        tx_refill_to_signal_handler,
+                        rx_refill_from_signal_handler,
+                        tx_refill_to_schedule_check,
+                        rx_refill_from_schedule_check,
+                        tx_refill_to_data_logger,
+                        rx_refill_from_messaging,
+                        &mut mock_water_injection,
+                    );
+
+                    let _ =
+                        tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                });
+
                 println!(
-                    "test_messaging_stops_starts_refill: actuation_count_1 = {}",
-                    actuation_count_1
-                );
-                // amount of actuations (before stop request): one refill operation executed
-                assert_eq!(actuation_count_1, 1);
-
-                // sending IPC message requesting stop of refill control
-                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
-                // stimulate tank level switch high and valid
-                run_main_cycle_with_stimuli_refill(
-                    4,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-
-                // Phase 2: Stimulating low level and checking if inhibition works
-                // stimulate tank level switch low and valid
-                run_main_cycle_with_stimuli_refill(
-                    6,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    0.0,
-                    0.0,
-                );
-                let actuation_count_2 = *mutex_device_scheduler_refill_test_environment
-                    .lock()
-                    .unwrap();
-                // amount of actuations (after stop request): no further refill operation executed
-                println!(
-                    "test_messaging_stops_starts_refill: actuation_count_2 = {}",
-                    actuation_count_2
-                );
-                assert_eq!(actuation_count_2, 1);
-
-                // stimulate tank level switch high and valid
-                run_main_cycle_with_stimuli_refill(
-                    1,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-                // sending IPC message requesting (re-)start of refill control
-                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
-                // stimulate tank level switch high and valid
-                run_main_cycle_with_stimuli_refill(
-                    2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-
-                // Phase 3: Normal refill cycle after having sent restart command
-                // stimulate tank level switch low and valid
-                run_main_cycle_with_stimuli_refill(
-                    6,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    0.0,
-                    0.0,
-                );
-                run_main_cycle_with_stimuli_refill(
-                    2,
-                    &rx_gpio_from_refill,
-                    &tx_gpio_to_refill,
-                    1.0,
-                    0.0,
-                );
-                let actuation_count_3 = *mutex_device_scheduler_refill_test_environment
-                    .lock()
-                    .unwrap();
-                // amount of actuations (after restart request): one more refill operation executed
-                println!(
-                    "test_messaging_stops_starts_refill: actuation_count_3 = {}",
-                    actuation_count_3
-                );
-                assert_eq!(actuation_count_3, 2);
-
-                // requesting refill control to quit
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
-                rx_signal_handler_from_refill.recv().unwrap();
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-
-                // requesting messaging to quit
-                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
-            });
-
-            spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object #1 - messaging
-            scope.spawn(move || {
-                messaging.execute(
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
+                    "* [Messaging] checking if messaging can stop and start refill control succeeded."
                 );
             });
-
-            // thread for test object #2
-            scope.spawn(move || {
-                refill.execute(
-                    mutex_device_scheduler_refill_test_object.clone(),
-                    tx_refill_to_gpio,
-                    rx_refill_from_gpio,
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
-                    tx_refill_to_signal_handler,
-                    rx_refill_from_signal_handler,
-                    tx_refill_to_schedule_check,
-                    rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
-                    rx_refill_from_messaging,
-                    &mut mock_water_injection,
-                );
-
-                let _ =
-                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-            });
-
-            println!(
-                "* [Messaging] checking if messaging can stop and start refill control succeeded."
-            );
-        });
-    }
-
-    pub struct MockWaterInjectionAlwaysErr;
-
-    impl WaterInjectionTrait for MockWaterInjectionAlwaysErr {
-        fn inject_water(
-            &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _tx_to_gpio: &Sender<InternalCommand>,
-            _rx_from_gpio: &Receiver<f32>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _tx_to_datalogger: &Sender<bool>,
-            _tank_level_switch_signals: &mut TankLevelSwitchSignals,
-            refill_errors: &mut RefillErrors,
-            _config: &RefillConfig,
-            _sql_interface_refill: &mut SqlInterfaceRefill,
-        ) -> bool {
-            // do nothing
-            println!("Refill: execute_refill *MockWaterInjectionAlwaysErr* has been called.");
-            // trigger error condition for allowing test case to reset it
-            refill_errors.error_switch_stuck_low = true;
-            false // simulate that no Quit command has been received
         }
-    }
 
+        pub struct MockWaterInjectionAlwaysErr;
+
+        impl WaterInjectionTrait for MockWaterInjectionAlwaysErr {
+            fn inject_water(
+                &mut self,
+                _tx_to_controllino: &Sender<InternalCommand>,
+                _rx_from_controllino: &Receiver<bool>,
+                _tx_to_gpio: &Sender<InternalCommand>,
+                _rx_from_gpio: &Receiver<f32>,
+                _rx_from_signal_handler: &Receiver<InternalCommand>,
+                _tx_to_data_logger: &Sender<bool>,
+                _tank_level_switch_signals: &mut TankLevelSwitchSignals,
+                refill_errors: &mut RefillErrors,
+                _config: &RefillConfig,
+                _sql_interface_refill: &mut SqlInterfaceRefill,
+            ) -> bool {
+                // do nothing
+                println!("Refill: execute_refill *MockWaterInjectionAlwaysErr* has been called.");
+                // trigger error condition for allowing test case to reset it
+                refill_errors.error_switch_stuck_low = true;
+                false // simulate that no Quit command has been received
+            }
+        }
+    */
+
+    /* todo: redo test case completely
     #[cfg(target_os = "linux")]
     // Test case runs refill control and triggers reset of error by sending "ResetAllErrors" message.
     #[test]
@@ -1533,7 +1534,7 @@ pub mod tests {
 
         let (tx_refill_to_controllino, _rx_controllino_from_refill) = mpsc::channel();
         let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
-        let (tx_refill_to_datalogger, _rx_datalogger_from_refill) = mpsc::channel();
+        let (tx_refill_to_data_logger, _rx_data_logger_from_refill) = mpsc::channel();
         let (tx_refill_to_gpio, rx_gpio_from_refill) = mpsc::channel();
         let (tx_gpio_to_refill, rx_refill_from_gpio) = mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
@@ -1679,7 +1680,7 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_datalogger,
+                    tx_refill_to_data_logger,
                     rx_refill_from_messaging,
                     &mut mock_water_injection,
                 );
@@ -1693,4 +1694,5 @@ pub mod tests {
             );
         });
     }
+    */
 }

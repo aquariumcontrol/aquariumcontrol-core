@@ -62,7 +62,7 @@ impl SqlInterfaceRefill {
             }
         };
 
-        let delta_time = current_datetime - last_refill_datetime;
+        let delta_time = current_datetime.signed_duration_since(last_refill_datetime);
 
         Ok(delta_time.num_seconds())
     }
@@ -245,7 +245,7 @@ pub mod tests {
 
         // *** check timestamp of last refill - PASS ********************************************
         let refill_timestamp =
-            NaiveDateTime::parse_from_str("2022-04-11 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+            NaiveDateTime::parse_from_str("2024-11-20 07:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_refill.insert_refill_event(refill_timestamp, 3.6, 0.4, 0) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert refill event into database: {e:?}"),

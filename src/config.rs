@@ -7,11 +7,17 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info};
+use log::error;
+
+#[cfg(not(test))]
+use log::info;
+
 use serde_derive::Deserialize;
 use std::env;
 use std::fs;
 
+use crate::ambient::AmbientConfig;
+use crate::atlas_scientific::AtlasScientificConfig;
 use crate::balling::BallingConfig;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
@@ -20,6 +26,7 @@ use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::heating::HeatingConfig;
 use crate::i2c_interface::I2cInterfaceConfig;
+use crate::tank_level_switch::TankLevelSwitchConfig;
 
 #[cfg(target_os = "linux")]
 use crate::messaging::MessagingConfig;
@@ -44,6 +51,12 @@ pub struct ConfigData {
     /// configuration of the data logger
     pub data_logger: DataLoggerConfig,
 
+    /// configuration for AtlasScientific
+    pub atlas_scientific: AtlasScientificConfig,
+
+    /// configuration for Ambient
+    pub ambient: AmbientConfig,
+
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,
 
@@ -52,6 +65,9 @@ pub struct ConfigData {
 
     /// configuration of the fresh water refill control
     pub refill: RefillConfig,
+
+    /// configuration of the tank level switch calculation
+    pub tank_level_switch: TankLevelSwitchConfig,
 
     /// configuratino of the heating control
     pub heating: HeatingConfig,
@@ -104,7 +120,9 @@ pub fn read_config_file(relative_path: String) -> ConfigData {
 
     let filename = out_dir + &relative_path;
 
+    #[cfg(not(test))]
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
+
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block
     // to return the `data: Ok(c)` as a `String`

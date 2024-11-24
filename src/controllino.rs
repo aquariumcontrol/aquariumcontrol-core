@@ -104,7 +104,7 @@ impl fmt::Debug for ControllinoError {
 /// Holds the configuration data for the Controllino interface.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct ControllinoConfig {
     /// Switch for testing purposes
     pub active: bool,
@@ -157,21 +157,21 @@ pub struct ControllinoConfig {
     pub use_simulator: bool,
 
     /// Baud rate for communication via serial port
-    pub baud_rate: u32,
+    baud_rate: u32,
 
     /// Port name for communication via serial port
-    pub port_name: String,
+    port_name: String,
 
     /// timeout in milliseconds for serial port communication
-    pub timeout_millis: u64,
+    timeout_millis: u64,
 
     /// time in milliseconds to wait for response
-    pub controllino_processing_millis: u64,
+    controllino_processing_millis: u64,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation of the Controllino interface
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
 ///     controllino[Controllino] --> tcp_communication[TCP communication]
@@ -185,19 +185,24 @@ pub struct ControllinoConfig {
 ///     feed --> controllino
 ///     controllino --> signal_handler[Signal handler]
 ///     signal_handler --> controllino
+///     controllino --> ventilation[Ventilation control]
+///     ventilation --> controllino
 /// ```
 
 pub struct Controllino {
     /// configuration data for Controllino
-    pub config: ControllinoConfig,
+    config: ControllinoConfig,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
+    /// Attribute is public becaused access from within test cases.
     pub spin_sleeper_opt: Option<SpinSleeper>,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
+    /// Attribute is public becaused access from within test cases.
     pub controllino_processing_duration_opt: Option<Duration>,
 
     /// Interface to serial port for communication via USB
+    /// Attribute is public becaused access from within test cases.
     pub serial_port_opt: Option<Box<dyn SerialPort>>,
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump

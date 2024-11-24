@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, info, warn};
+use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -63,7 +63,7 @@ pub struct BallingConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
-/// Thread communication is as follows:
+/// Thread communication of this component is as follows:
 /// ```mermaid
 
 /// graph LR
@@ -88,16 +88,16 @@ pub struct Balling {
     sql_interface_balling: SqlInterfaceBalling,
 
     /// Count down in seconds until next Balling dosing for pump 1
-    pub countdown_dosing_pump1: u32,
+    countdown_dosing_pump1: u32,
 
     /// Count down in seconds until next Balling dosing for pump 2
-    pub countdown_dosing_pump2: u32,
+    countdown_dosing_pump2: u32,
 
     /// Count down in seconds until next Balling dosing for pump 3
-    pub countdown_dosing_pump3: u32,
+    countdown_dosing_pump3: u32,
 
     /// Count down in seconds until next Balling dosing for pump 4
-    pub countdown_dosing_pump4: u32,
+    countdown_dosing_pump4: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
     lock_error_channel_receive_termination_signal: bool,
@@ -208,9 +208,10 @@ impl Balling {
             }
         };
 
-        info!(
-            target: Self::LOG_TARGET_BALLING,
-            "Duration since last dosing for pump {} is {} seconds.",
+        #[cfg(test)]
+        println!(
+            "{}, Duration since last dosing for pump {} is {} seconds.",
+            Self::LOG_TARGET_BALLING,
             pump_id,
             duration_since_balling_dosing
         );
@@ -221,9 +222,10 @@ impl Balling {
             Some(diff) => diff,
         };
 
-        info!(
-            target: Self::LOG_TARGET_BALLING,
-            "Countdown for next dosing of pump {} is {} seconds.",
+        #[cfg(test)]
+        println!(
+            "{}: Countdown for next dosing of pump {} is {} seconds.",
+            Self::LOG_TARGET_BALLING,
             pump_id,
             countdown
         );
@@ -285,10 +287,15 @@ impl Balling {
             Ok(balling_setval) => {
                 let dosing_duration_millis =
                     Self::calc_target_dosing_duration_millis(&balling_setval);
-                info!(target: Self::LOG_TARGET_BALLING,
-                    "Calculated target dosing duration of {} ms for pump #{}",
-                    dosing_duration_millis, pump_id
+
+                #[cfg(test)]
+                println!(
+                    "{}: Calculated target dosing duration of {} ms for pump #{}",
+                    Self::LOG_TARGET_BALLING,
+                    dosing_duration_millis,
+                    pump_id
                 );
+
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
@@ -500,15 +507,30 @@ impl Balling {
                 stop_command_received,
             ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
             if quit_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Quit command. Exiting...");
+                #[cfg(test)]
+                println!(
+                    "{}: received Quit command. Exiting...",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 break;
             }
             if stop_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Stop command. Inhibiting dosing.");
+                #[cfg(test)]
+                println!(
+                    "{}: received Stop command. Inhibiting dosing.",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 dosing_inhibited = true;
             }
             if start_command_received {
-                info!(target: Self::LOG_TARGET_BALLING, "received Start command. (Re-)starting dosing.");
+                #[cfg(test)]
+                println!(
+                    "{}: received Start command. (Re-)starting dosing.",
+                    Self::LOG_TARGET_BALLING
+                );
+
                 dosing_inhibited = false;
             }
             spin_sleeper.sleep(sleep_duration_hundred_millis);
@@ -583,7 +605,7 @@ pub mod tests {
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::SqlInterfaceBalling;
 
-    use crate::refill::tests::mock_schedule_check;
+    use crate::mock::tests::mock_schedule_check;
     use crate::sql_interface_balling::BallingSetVal;
 
     pub struct MockMineralInjection {
@@ -806,9 +828,7 @@ pub mod tests {
         pump3_engagement_durations_reference: usize,
         pump4_engagement_durations_reference: usize,
     ) {
-        let sleep_duration_50_millisec = Duration::from_millis(50);
         let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
-        let spin_sleeper_schedule_check = SpinSleeper::default();
         let spin_sleeper_test_environment = SpinSleeper::default();
         let config: ConfigData = read_config_file(config_file_name.to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -840,15 +860,13 @@ pub mod tests {
 
         scope(|scope| {
             // thread for schedule check
-            scope.spawn(move || loop {
-                if mock_schedule_check(
+            scope.spawn(move || {
+                mock_schedule_check(
                     &tx_schedule_check_to_balling,
                     &rx_schedule_check_from_balling,
+                    None,
                     schedule_allows,
-                ) {
-                    break;
-                }
-                spin_sleeper_schedule_check.sleep(sleep_duration_50_millisec);
+                )
             });
 
             // thread for rest of test environment
@@ -949,7 +967,7 @@ pub mod tests {
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
             true,  // schedule allows
             14,    // execution count
-            20000, // maximum time in milliseoncds for test execution
+            19000, // maximum time in milliseconds for test execution
             5,     // number of dosings for pump #1
             4,     // number of dosings for pump #2
             3,     // number of dosings for pump #3
