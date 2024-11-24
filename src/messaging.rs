@@ -426,6 +426,8 @@ pub mod tests {
     use crate::sql_interface_feed::SqlInterfaceFeed;
     //    use crate::sql_interface_refill::SqlInterfaceRefill;
     //    use crate::water_injection::WaterInjectionTrait;
+    use std::thread;
+    use crate::mock::tests::mock_message_command_receiver;
 
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
@@ -464,19 +466,19 @@ pub mod tests {
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
 
-        let join_handle_mock_ventilation = thread::Builder::new()
+        let _join_handle_mock_ventilation = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let commands_received = mock_message_command_receiver();
+                let mut commands_received = mock_message_command_receiver(rx_ventilation_from_messaging);
                 
                 // assert number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
                 
                 // assert content of last message sent from test environment:
-                assert_eq!(InternalCommand::Start, commands_received.pop());
+                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
                 
                 // assert content of first message sent from test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop());
+                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
 
@@ -498,11 +500,6 @@ pub mod tests {
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
                 spin_sleeper.sleep(sleep_duration_100_millisec);
-
-                // requesting ventilation control to quit
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
