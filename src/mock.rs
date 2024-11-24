@@ -7,6 +7,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+const LOG_TARGET_MOCK: &str = "mock";
+
 #[cfg(test)]
 pub mod tests {
     use chrono::{DateTime, Utc};
@@ -289,7 +291,10 @@ pub mod tests {
                     }
                 }
                 Err(e) => {
-                    panic!("Mock Controllino: Error when receiving actuation command from test object: {e:?}");
+                    panic!(
+                        "{}: Error when receiving actuation command from test object: {e:?}",
+                        LOG_TARGET_MOCK
+                    );
                 }
             }
 
@@ -297,7 +302,10 @@ pub mod tests {
             match tx_controllino_to_test_object.send(true) {
                 Ok(_) => {}
                 Err(e) => {
-                    panic!("Mock Controllino: Error when sending back actuation command confirmation to test object: {e:?}");
+                    panic!(
+                        "{}: Error when sending back actuation command confirmation to test object: {e:?}"
+                        LOG_TARGET_MOCK
+                    );
                 }
             }
 
@@ -341,7 +349,8 @@ pub mod tests {
                                                 }
                                                 TryRecvError::Disconnected => {
                                                     panic!(
-                                                            "Mock Refill: Error in trying to receive command from TankLevelSwitch: {e:?}"
+                                                            "{}: Error in trying to receive command from TankLevelSwitch: {e:?}",
+                                                            LOG_TARGET_MOCK
                                                         );
                                                 }
                                             }
@@ -350,15 +359,17 @@ pub mod tests {
                                 }
                                 None => {
                                     panic!(
-                                            "Mock Refill: invoked with valid sender but without valid receiver for channel communication with tank level switch"
-                                        )
+                                            "{}: invoked with valid sender but without valid receiver for channel communication with tank level switch",
+                                            LOG_TARGET_MOCK
+                                        );
                                 }
                             }
                         }
                         Err(e) => {
                             panic!(
-                                    "Mock Refill: Could not send signal request to TankLevelSwitch ({e:?})"
-                                )
+                                    "{}: Could not send signal request to TankLevelSwitch ({e:?})",
+                                    LOG_TARGET_MOCK
+                                );
                         }
                     }
                 }
@@ -372,7 +383,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("Mock Refill: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                 }
@@ -381,7 +395,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock Refill: Error in trying to receive command from signal handler: {e:?}"
+                                "{}: Error in trying to receive command from signal handler: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -403,24 +418,33 @@ pub mod tests {
                                                         Ok(_) => { /* do nothing */ }
                                                         Err(e) => {
                                                             panic!(
-                                                        "Mock Refill: Could not send signal request to DataLogger ({e:?})"
-                                                    );
+                                                                "{}: Could not send signal request to DataLogger ({e:?})",
+                                                                LOG_TARGET_MOCK
+                                                            );
                                                         }
                                                     };
                                                 }
                                                 None => {
-                                                    panic!("Mock Refill switch invoked without Sender for channel communication to data logger");
+                                                    panic!(
+                                                        "{}: switch invoked without Sender for channel communication to data logger",
+                                                        LOG_TARGET_MOCK
+                                                    );
                                                 }
                                             }
                                         }
                                         _ => {
-                                            panic!("Mock Refill switch received request for invalid signal {}", data_logger_signal_request);
+                                            panic!(
+                                                "{}: switch received request for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                data_logger_signal_request
+                                            );
                                         }
                                     };
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Refill: Received invalid command {} from DataLogger",
+                                        "{}: Received invalid command {} from DataLogger",
+                                        LOG_TARGET_MOCK,
                                         data_logger_request
                                     );
                                 }
@@ -431,7 +455,8 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock Refill: Error in trying to receive command from DataLogger: {e:?}"
+                                        "{}: Error in trying to receive command from DataLogger: {e:?}",
+                                        LOG_TARGET_MOCK
                                     );
                                 }
                             }
@@ -452,13 +477,18 @@ pub mod tests {
                                     match d {
                                         MockSignal::RefillPumpStatus(c) => stimuli = c,
                                         _ => {
-                                            panic!("Mock Refill: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Refill: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -469,8 +499,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock Refill: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -513,7 +544,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("Mock DataLogger: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                 }
@@ -556,7 +590,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("Mock ScheduleCheck: test object sent invalid command.");
+                            panic!(
+                                "{}: test object sent invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     }
                 }
@@ -565,8 +602,9 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                    "Mock ScheduleCheck: Error in trying to receive command from test object: {e:?}"
-                                );
+                                "{}: Error in trying to receive command from test object: {e:?}",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     }
                 }
@@ -582,13 +620,18 @@ pub mod tests {
                                     match d {
                                         MockSignal::ScheduleAllows(c) => stimuli = c,
                                         _ => {
-                                            panic!("Mock Schedule Check: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Schedule Check: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -599,8 +642,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock Schedule Check: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -640,21 +684,29 @@ pub mod tests {
                                 stimuli_position_stabilized
                             }
                             _ => {
-                                panic!("Mock TankLevelSwitch: inapplicable signal request {}", d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK,
+                                    d
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("Mock TankLevelSwitch: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                     match tx_tank_level_switch_to_test_object.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
                             panic!(
-                                "Mock TankLevelSwitch: Error in trying to send response back data logger: {e:?}"
+                                "{}: Error in trying to send response back data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -664,7 +716,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock TankLevelSwitch: Error in trying to receive command from test object or test environment: {e:?}"
+                                "{}: Error in trying to receive command from test object or test environment: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -690,7 +743,11 @@ pub mod tests {
                                                 stimuli_position_stabilized
                                             }
                                             _ => {
-                                                panic!("Mock Tank Level Switch: Invalid signal {} requested from DataLogger", data_logger_signal_request);
+                                                panic!(
+                                                    "{}: Invalid signal {} requested from DataLogger",
+                                                    LOG_TARGET_MOCK,
+                                                    data_logger_signal_request
+                                                );
                                             }
                                         };
                                     match tx_tank_level_switch_to_data_logger_opt {
@@ -701,18 +758,26 @@ pub mod tests {
                                                 Ok(_) => { /* do nothing */ }
                                                 Err(e) => {
                                                     panic!(
-                                                        "Mock Tank Level Switch: Could not send signal request to DataLogger ({e:?})"
+                                                        "{}: Could not send signal request to DataLogger ({e:?})",
+                                                        LOG_TARGET_MOCK
                                                     );
                                                 }
                                             };
                                         }
                                         None => {
-                                            panic!("Mock Tank Level switch invoked without Sender for channel communication to data logger");
+                                            panic!(
+                                                "{}: invoked without Sender for channel communication to data logger",
+                                                LOG_TARGET_MOCK
+                                            );
                                         }
                                     };
                                 }
                                 _ => {
-                                    panic!("Mock Tank Level Switch: Received invalid command {} from DataLogger", data_logger_request);
+                                    panic!(
+                                        "{}: Received invalid command {} from DataLogger",
+                                        LOG_TARGET_MOCK,
+                                        data_logger_request
+                                    );
                                 }
                             }
                         }
@@ -721,7 +786,8 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock Tank Level Switch: Error in trying to receive command from DataLogger: {e:?}"
+                                        "{}: Error in trying to receive command from DataLogger: {e:?}",
+                                        LOG_TARGET_MOCK
                                     );
                                 }
                             }
@@ -745,14 +811,19 @@ pub mod tests {
                                     }
                                     _ => {
                                         panic!(
-                                    "Mock TankLevelSwitch: Invalid test command {} received.",
-                                    d
-                                );
+                                            "{}: Invalid test command {} received.",
+                                            LOG_TARGET_MOCK,
+                                            d
+                                        );
                                     }
                                 }
                             }
                             _ => {
-                                panic!("Mock TankLevelSwitch: received invalid command {}", c);
+                                panic!(
+                                    "{}: received invalid command {}",
+                                    LOG_TARGET_MOCK,
+                                    c
+                                );
                             }
                         },
                         Err(e) => {
@@ -760,8 +831,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock TankLevelSwitch: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -796,21 +868,29 @@ pub mod tests {
                             AquariumSignal::Conductivity => stimuli_conductivity,
                             AquariumSignal::pH => stimuli_ph,
                             _ => {
-                                panic!("Mock AtlasScientific: inapplicable signal request {}", d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK,
+                                    d
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("Mock AtlasScientific: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                     match tx_atlas_scientific_to_test_object.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
                             panic!(
-                                "Mock AtlasScientific: Error in trying to send response back data logger: {e:?}"
+                                "{}: Error in trying to send response back data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -820,7 +900,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock AtlasScientific: Error in trying to receive command from data logger: {e:?}"
+                                "{}: Error in trying to receive command from data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -842,13 +923,18 @@ pub mod tests {
                                         MockSignal::Conductivity(c) => stimuli_conductivity = c,
                                         MockSignal::pH(c) => stimuli_ph = c,
                                         _ => {
-                                            panic!("Mock Atlas Scientific: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Atlas Scientific: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -859,8 +945,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock Atlas Scientific: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -893,21 +980,29 @@ pub mod tests {
                             AquariumSignal::AmbientTemperature => stimuli_ambient_temperature,
                             AquariumSignal::AmbientHumidity => stimuli_ambient_humidity,
                             _ => {
-                                panic!("Mock Ambient: inapplicable signal request {}", d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK,
+                                    d
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("Mock Ambient: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                     match tx_ambient_to_test_object.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
                             panic!(
-                                "Mock Ambient: Error in trying to send response back data logger: {e:?}"
+                                "{}: Error in trying to send response back data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -917,7 +1012,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock Ambient: Error in trying to receive command from data logger: {e:?}"
+                                "{}: Error in trying to receive command from data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -939,13 +1035,18 @@ pub mod tests {
                                             stimuli_ambient_humidity = c
                                         }
                                         _ => {
-                                            panic!("Mock ambient: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Ambient: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -956,8 +1057,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock Ambient: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -988,21 +1090,28 @@ pub mod tests {
                             AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
                             AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
                             _ => {
-                                panic!("unknown signal request to mock TCP");
+                                panic!(
+                                    "{}: unknown signal request to mock TCP",
+                                    LOG_TARGET_MOCK
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("invalid command to mock TCP handler");
+                            panic!(
+                                "{}: invalid command to mock TCP handler",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                     match tx_tcp_to_test_object.send(response_value) {
                         Ok(()) => {}
                         Err(e) => {
                             panic!(
-                                "mock_tcp: sending mock data from TCP to test object failed ({e:?})",
+                                "{}: sending mock data from TCP to test object failed ({e:?})",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -1011,7 +1120,10 @@ pub mod tests {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            panic!("mock_tcp: receiving command from test object/test environment failed ({e:?})",);
+                            panic!(
+                                "{}: receiving command from test object/test environment failed ({e:?})",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     }
                 }
@@ -1022,22 +1134,33 @@ pub mod tests {
                     Ok(c) => {
                         match c {
                             TestCommand::UpdateSignal(d) => {
-                                println!("Mock TCP: received {}", d);
                                 match d {
                                     MockSignal::TankLevelSwitchPosition(c) => {
                                         mock_value_position = c
                                     }
                                     MockSignal::TankLevelSwitchInvalid(c) => mock_value_invalid = c,
                                     MockSignal::TankLevelSwitchPositionStabilized(_) => {
-                                        panic!("mock_tcp: received invalid test command {}", d);
+                                        panic!(
+                                            "{}: received invalid test command {}",
+                                            LOG_TARGET_MOCK,
+                                            d
+                                        );
                                     }
                                     _ => {
-                                        panic!("mock_tcp: Invalid test command {} received.", d);
+                                        panic!(
+                                            "{}: Invalid test command {} received.",
+                                            LOG_TARGET_MOCK,
+                                            d
+                                        );
                                     }
                                 }
                             }
                             _ => {
-                                panic!("mock_tcp: received invalid command {}", c);
+                                panic!(
+                                    "{}: received invalid command {}",
+                                    LOG_TARGET_MOCK,
+                                    c
+                                );
                             }
                         };
                     }
@@ -1046,8 +1169,9 @@ pub mod tests {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 panic!(
-                                "mock_tcp: receiving command from test environment failed ({e:?})",
-                            );
+                                    "{}: receiving command from test environment failed ({e:?})",
+                                    LOG_TARGET_MOCK
+                                );
                             }
                         }
                     }
@@ -1090,21 +1214,26 @@ pub mod tests {
                                                 }
                                                 TryRecvError::Disconnected => {
                                                     panic!(
-                                                            "Mock Heating: Error in trying to receive signal from test object: {e:?}"
-                                                        );
+                                                        "{}: Error in trying to receive signal from test object: {e:?}",
+                                                        LOG_TARGET_MOCK
+                                                    );
                                                 }
                                             }
                                         }
                                     }
                                 }
                                 None => {
-                                    panic!("Mock Heating: invoked with valid sender but with empty receiver part for channel communication to tank level switch.");
+                                    panic!(
+                                        "{}: invoked with valid sender but with empty receiver part for channel communication to tank level switch.",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
                             panic!(
-                                "Mock Heating: Could not send signal request to test object: {e:?}"
+                                "{}: Could not send signal request to test object: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -1119,7 +1248,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("Mock Heating: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                 }
@@ -1128,7 +1260,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock Heating: Error in trying to receive command from signal handler: {e:?}"
+                                "{}: Error in trying to receive command from signal handler: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -1150,24 +1283,33 @@ pub mod tests {
                                                         Ok(_) => { /* do nothing */ }
                                                         Err(e) => {
                                                             panic!(
-                                                                "Mock Heating: Could not send signal request to data logger ({e:?})"
+                                                                "{}: Could not send signal request to data logger ({e:?})",
+                                                                LOG_TARGET_MOCK
                                                             );
                                                         }
                                                     };
                                                 }
                                                 None => {
-                                                    panic!("Mock Heating invoked without Sender for channel communication to data logger");
+                                                    panic!(
+                                                        "{}: invoked without Sender for channel communication to data logger",
+                                                        LOG_TARGET_MOCK
+                                                    );
                                                 }
                                             };
                                         }
                                         _ => {
-                                            panic!("Mock Heating: Invalid signal {} requested from data logger", data_logger_signal_request);
+                                            panic!(
+                                                "{}: Invalid signal {} requested from data logger",
+                                                LOG_TARGET_MOCK,
+                                                data_logger_signal_request
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Heating: Received invalid command {} from data logger",
+                                        "{}: Received invalid command {} from data logger",
+                                        LOG_TARGET_MOCK,
                                         data_logger_request
                                     );
                                 }
@@ -1178,7 +1320,8 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock Heating: Error in trying to receive command from data logger: {e:?}"
+                                        "{}: Error in trying to receive command from data logger: {e:?}",
+                                        LOG_TARGET_MOCK
                                     );
                                 }
                             }
@@ -1199,13 +1342,18 @@ pub mod tests {
                                     match d {
                                         MockSignal::HeatingControlStatus(c) => stimuli = c,
                                         _ => {
-                                            panic!("Mock heating: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock Heating: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -1216,8 +1364,9 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                "Mock Heating: Error in trying to receive command from test environment: {e:?}"
-                            );
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
+                                    );
                                 }
                             }
                         }
@@ -1252,19 +1401,25 @@ pub mod tests {
                                         Ok(_) => { /* do nothing */ }
                                         Err(e) => {
                                             panic!(
-                                                    "Mock Ventilation: Could not send signal request to test object: {e:?}"
-                                                );
+                                                "{}: Could not send signal request to test object: {e:?}",
+                                                LOG_TARGET_MOCK
+                                            );
                                         }
                                     };
                                 }
                                 _ => {
-                                    panic!("Mock Ventilation Received invalid signal request for {} from data logger", data_logger_signal_request);
+                                    panic!(
+                                        "{}: Received invalid signal request for {} from data logger",
+                                        LOG_TARGET_MOCK,
+                                        data_logger_signal_request
+                                    );
                                 }
                             };
                         }
                         _ => {
                             panic!(
-                                "Mock Ventilation: Received invalid command {} from data logger.",
+                                "{}: Received invalid command {} from data logger.",
+                                LOG_TARGET_MOCK,
                                 data_logger_request
                             );
                         }
@@ -1275,7 +1430,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock Ventilation: Error in trying to receive command from data logger: {e:?}"
+                                "{}: Error in trying to receive command from data logger: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -1289,7 +1445,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("Mock Ventilation: Received invalid command.");
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK
+                            );
                         }
                     };
                 }
@@ -1298,7 +1457,8 @@ pub mod tests {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             panic!(
-                                "Mock Ventilation: Error in trying to receive command from signal handler: {e:?}"
+                                "{}: Error in trying to receive command from signal handler: {e:?}",
+                                LOG_TARGET_MOCK
                             );
                         }
                     }
@@ -1316,13 +1476,18 @@ pub mod tests {
                                     match d {
                                         MockSignal::VentilationControlStatus(c) => stimuli = c,
                                         _ => {
-                                            panic!("Mock ventilation: received test command for invalid signal {}", test_signal);
+                                            panic!(
+                                                "{}: received test command for invalid signal {}",
+                                                LOG_TARGET_MOCK,
+                                                test_signal
+                                            );
                                         }
                                     }
                                 }
                                 _ => {
                                     panic!(
-                                        "Mock ventilation: received invalid command {}.",
+                                        "{}: received invalid command {}.",
+                                        LOG_TARGET_MOCK,
                                         test_command
                                     );
                                 }
@@ -1333,7 +1498,8 @@ pub mod tests {
                                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                                 TryRecvError::Disconnected => {
                                     panic!(
-                                        "Mock ventilation: Error in trying to receive command from test environment: {e:?}"
+                                        "{}: Error in trying to receive command from test environment: {e:?}",
+                                        LOG_TARGET_MOCK
                                     );
                                 }
                             }
@@ -1345,5 +1511,36 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration);
         }
+    }
+    
+    pub fn mock_message_command_receiver(
+        rx_message_command: Receiver<InternalCommand>
+        ) -> Vector<InternalCommand> {
+        
+        let mut commands_received: Vector<InternalCommand> = Vector::new();
+
+        loop {
+            match rx_message_command.recv() {
+                Ok(command) => {
+                    match command {                        
+                        InternalCommand::Quit => {
+                            break;
+                        },
+                        _ => {
+                            commands_received.push(command);
+                        }
+                    }
+                    
+                }
+                Err(e) => {
+                    panic!(
+                        "{}: error occured when receiving message from message thread via channel.",
+                        LOG_TARGET_MOCK    
+                    );
+                }
+            }
+        }
+        
+        commands_received
     }
 }

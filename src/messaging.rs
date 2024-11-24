@@ -427,6 +427,111 @@ pub mod tests {
     //    use crate::sql_interface_refill::SqlInterfaceRefill;
     //    use crate::water_injection::WaterInjectionTrait;
 
+    #[cfg(target_os = "linux")]
+    // Test case checks if messages for ventilation control are triggering the corresponding channel communication
+    #[test]
+    pub fn test_messaging_ventilation() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
+            Ok(c) => {
+                println!("Messaging: Could open message queue.");
+                c
+            }
+            Err(e) => {
+                panic!(
+                    "Messaging: failure to open message queue for test using {}, error={e:?}",
+                    &config.messaging.mq_filename
+                );
+            }
+        };
+
+        let mut msg_start = Message::new();
+        msg_start.domain = messaging_domains::VENTILATION;
+        msg_start.command = messaging_commands::START;
+
+        let mut msg_stop = Message::new();
+        msg_stop.domain = messaging_domains::VENTILATION;
+        msg_stop.command = messaging_commands::STOP;
+
+        let mut messaging = Messaging::new(config.messaging);
+
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
+        let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+
+        let join_handle_mock_ventilation = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let commands_received = mock_message_command_receiver();
+                
+                // assert number of commands sent/received are identical
+                assert_eq!(2, commands_received.len());
+                
+                // assert content of last message sent from test environment:
+                assert_eq!(InternalCommand::Start, commands_received.pop());
+                
+                // assert content of first message sent from test environment:
+                assert_eq!(InternalCommand::Stop, commands_received.pop());
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep();
+
+                // sending IPC message requesting stop of ventilation control
+                let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
+
+                spin_sleeper.sleep();
+
+                // sending IPC message requesting stop of ventilation control
+                let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
+
+                spin_sleeper.sleep();
+
+                // requesting ventilation control to quit
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                );
+            })
+            .unwrap();
+
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
     /* @todo: redo test case completely
         #[cfg(target_os = "linux")]
         // Test case runs ventilation control and triggers inhibition by sending stop message.

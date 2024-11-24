@@ -1176,7 +1176,6 @@ pub mod tests {
             .unwrap();
 
         // thread for mock AtlasScientific
-        // thread for mock AtlasScientific
         let join_handle_mock_atlas_scientific = thread::Builder::new()
             .name("mock_atlas_scientific".to_string())
             .spawn(move || {
