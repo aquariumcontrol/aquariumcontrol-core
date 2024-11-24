@@ -20,6 +20,8 @@ use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 
+const LOG_TARGET_FEED: &str = "feed";
+
 /// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -74,8 +76,6 @@ pub struct Feed {
 }
 
 impl Feed {
-    const LOG_TARGET_FEED: &'static str = "feed";
-
     /// Provides a struct of type Feed
     /// # Arguments
     /// * `config` - configuration data for feed control
@@ -127,7 +127,7 @@ impl Feed {
                         Ok(c) => c,
                         Err(e) => {
                             error!(
-                                target: Self::LOG_TARGET_FEED,
+                                target: LOG_TARGET_FEED,
                                 "could not get current timestamp from database ({e:?})"
                             );
                             return (Err(()), quit_command_received);
@@ -144,7 +144,7 @@ impl Feed {
                     Ok(_) => Ok(()),
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_FEED,
+                            target: LOG_TARGET_FEED,
                             "could not insert feed event into database ({e:?})"
                         );
                         Err(())
@@ -153,7 +153,7 @@ impl Feed {
             }
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_FEED,
+                    target: LOG_TARGET_FEED,
                     "Error when reading feed pattern from database: {e:?}"
                 );
                 Err(())
@@ -249,7 +249,7 @@ impl Feed {
                                         }
                                         Err(e) => {
                                             error!(
-                                                target: Self::LOG_TARGET_FEED,
+                                                target: LOG_TARGET_FEED,
                                                 "updating feed schedule entry failed ({e:?})"
                                             );
                                             execution_blocked = true;
@@ -266,7 +266,7 @@ impl Feed {
                     Err(e) => {
                         if !self.lock_error_get_feedschedule_entry {
                             error!(
-                                target: Self::LOG_TARGET_FEED,
+                                target: LOG_TARGET_FEED,
                                 "could not retrieve feed schedule information from database ({e:?})"
                             );
                             self.lock_error_get_feedschedule_entry = true;
@@ -290,14 +290,14 @@ impl Feed {
             }
             if stop_command_received {
                 info!(
-                    target: Self::LOG_TARGET_FEED,
+                    target: LOG_TARGET_FEED,
                     "received Stop command. Inhibiting feed."
                 );
                 feed_inhibited = true;
             }
             if start_command_received {
                 info!(
-                    target: Self::LOG_TARGET_FEED,
+                    target: LOG_TARGET_FEED,
                     "received Start command. Restarting feed."
                 );
                 feed_inhibited = false;
@@ -338,14 +338,14 @@ impl Feed {
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         trace!(
-            target: Self::LOG_TARGET_FEED,
+            target: LOG_TARGET_FEED,
             "Sending Quit confirmation to signal handler."
         );
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_FEED,
+                    target: LOG_TARGET_FEED,
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -367,7 +367,7 @@ impl Feed {
                         _ => {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
-                                    target: Self::LOG_TARGET_FEED,
+                                    target: LOG_TARGET_FEED,
                                     "ignoring inapplicable command from signal handler ({})",
                                     c
                                 );
@@ -380,7 +380,7 @@ impl Feed {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
                         error!(
-                            target: Self::LOG_TARGET_FEED,
+                            target: LOG_TARGET_FEED,
                             "receiving termination signal failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination_signal = true;
@@ -400,6 +400,7 @@ pub mod tests {
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
+    use std::thread;
     use std::thread::scope;
     use std::time::Duration;
 
@@ -407,11 +408,12 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::feed::Feed;
+    use crate::feed::LOG_TARGET_FEED;
     use crate::feedpattern::Feedpattern;
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-
+  
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,
     }
@@ -586,5 +588,190 @@ pub mod tests {
                 println!("* [Feed] checking feed schedule execution succeeded.");
             });
         });
+    }
+    
+    // Test case runs feed control and triggers inhibition by sending stop message via channel.
+    // After verification that feed is stopped,
+    // test case sends start message via channel and verifies if feed control
+    // resumes operation. Afterwards test case triggers execution of a specific feed profile
+    // by sending "execute" message via channel.
+    #[test]
+    pub fn test_messaging_stops_starts_execute_feed() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+
+        // empty the feed schedule
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let time_stamp_feed_schedule_entry =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, 4) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        // manipulation of database: inserting feed schedule entries with future timestamp
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry,
+            1,
+            "testOneTime".to_string(),
+            false,
+            false,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        // create test object
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
+
+        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+
+        let mut mock_food_injection = MockFoodInjection::new();
+
+        let mutex_device_scheduler_feed_test_object = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_feed_test_environment =
+                mutex_device_scheduler_feed_test_object.clone();
+
+        // thread for test environment
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                // wait to make sure test object can receive message
+                spin_sleeper.sleep(sleep_duration_100_millisec);
+
+                match tx_messaging_to_feed.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_FEED
+                        );
+                    } 
+                }
+                // wait for 10 seconds. If test object does not follow stop request,
+                // then food injection will happen in this period.
+                for _ in 0..100 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                let actuation_count_1 =
+                    *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+
+                // check amount of actuations (after stop request)
+                assert_eq!(actuation_count_1, 0);
+
+                // sending IPC message requesting restart of feed control
+                match tx_messaging_to_feed.send(InternalCommand::Start) {
+                    Ok(()) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending start command to test object ({e:?})",
+                            LOG_TARGET_FEED
+                        );
+                    } 
+                }
+
+                // wait for 10 seconds. If test object follows start request,
+                // then food injections will happen in this period.
+                for _ in 0..100 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                // get count of feed profiles executed
+                let actuation_count_2 =
+                    *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+
+                // check amount of actuations (after start request)
+                assert_eq!(actuation_count_2, 1);
+
+                // sending IPC message requesting execution of feed profile
+                match tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
+                    Ok(()) => { /* do nothing */ },
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending execution command to test object ({e:?})",
+                            LOG_TARGET_FEED
+                        );
+                    } 
+                }
+
+                // wait for 2 seconds. If test object follows execute request,
+                // then food injection will happen in this period.
+                for _ in 0..20 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+
+                // get count of feed profiles executed
+                let actuation_count_3 =
+                    *mutex_device_scheduler_feed_test_environment.lock().unwrap();
+
+                // check amount of actuations (after execute request)
+                assert_eq!(actuation_count_3, 2);
+
+                // requesting feed control to quit
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                rx_signal_handler_from_feed.recv().unwrap();
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        spin_sleeper.sleep(sleep_duration_100_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed_test_object.clone(),
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    tx_feed_to_signal_handler,
+                    rx_feed_from_signal_handler,
+                    rx_feed_from_messaging,
+                    &mut mock_food_injection,
+                );
+                println!("MockFoodInjection:\n{}", mock_food_injection);
+
+                // check if the right feed profiles have been executed
+                assert_eq!(mock_food_injection.profile_ids_executed.len(), 2);
+                assert_eq!(mock_food_injection.profile_ids_executed[0], 1);
+                assert_eq!(mock_food_injection.profile_ids_executed[1], 1);
+            })
+            .unwrap();
+
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
     }
 }
