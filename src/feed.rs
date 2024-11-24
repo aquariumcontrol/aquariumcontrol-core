@@ -601,7 +601,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_feed_secondary.toml".to_string());
 
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -644,7 +644,7 @@ pub mod tests {
                 );
             }
         };
-
+        
         // create test object
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
