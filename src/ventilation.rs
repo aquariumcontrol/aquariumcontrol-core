@@ -1635,7 +1635,7 @@ pub mod tests {
                     }
                 }
 
-                // wait for 1 second. Ventilation controll will switch on
+                // wait for 1 second. Ventilation control will switch on
                 for _ in 0..10 {
                     spin_sleeper.sleep(sleep_duration_100_millisec);
                 }

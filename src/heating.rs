@@ -1032,7 +1032,8 @@ pub mod tests {
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
-
+    use crate::heating::LOG_TARGET_HEATING;
+    
     pub struct HeatingStatsMockDataTransfer {
         heating_stats_entry_previous: HeatingStatsEntry,
         heating_stats_entry: HeatingStatsEntry,
@@ -3187,4 +3188,305 @@ pub mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
+    
+    // Test case runs heating control and triggers inhibition by sending stop message via channel.
+    // After verification that heating is stopped,
+    // test case sends start message via channel and verifies if heating control
+    // resumes operation.
+    #[test]
+    pub fn test_messaging_stops_starts_heating() {
+        let (_, mut heating, mut sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600);
+            
+        let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) =
+            mpsc::channel();
+        let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) =
+            mpsc::channel();
+        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
+        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
+        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) =
+            mpsc::channel();
+        let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) =
+            mpsc::channel();
+        let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) =
+            mpsc::channel();
+        let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) =
+            mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
+        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
+        let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
+        let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch) = mpsc::channel();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+
+        let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_test_environment = mutex_device_scheduler_heating.clone();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_heating,
+                    &rx_schedule_check_from_heating,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock AtlasScientific
+        let join_handle_mock_atlas_scientific = thread::Builder::new()
+            .name("mock_atlas_scientific".to_string())
+            .spawn(move || {
+                mock_atlas_scientific(
+                    &tx_atlas_scientific_to_heating,
+                    &rx_atlas_scientific_from_heating,
+                    None,
+                    20.0,
+                    50000.0,
+                    7.0,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Ambient
+        let join_handle_mock_ambient = thread::Builder::new()
+            .name("mock_ambient".to_string())
+            .spawn(move || {
+                mock_ambient(
+                    &tx_ambient_to_heating,
+                    &rx_ambient_from_heating,
+                    None,
+                    24.0,
+                    60.0,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_heating,
+                    &rx_data_logger_from_heating,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_heating,
+                    &rx_tank_level_switch_from_heating,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    true,
+                    false,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Controllino - includes assertions
+        let join_handle_mock_controllino = thread::Builder::new()
+            .name("mock_controllino".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_controllino(
+                    &tx_controllino_to_heating,
+                    &rx_controllino_from_heating,
+                );
+                println!("actuation_events:");
+                for actuation_event in &actuation_events {
+                    println!("{}", actuation_event);
+                }
+                assert_eq!(actuation_events.len(), 4);
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Heater)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Heater)
+                );
+            })
+            .unwrap();
+
+        // thread for test environment
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                // initial wait so that heating control can switch on
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check initial state of mutex: should be already switched on
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
+
+                // sending message requesting stop of heating control
+                match tx_messaging_to_heating.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_HEATING
+                        );
+                    }
+                }
+
+                // wait for 1 second: heating control will switch off
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if heating is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
+
+                // sending message requesting restart of heating control
+                match tx_messaging_to_heating.send(InternalCommand::Start) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending start command to test object ({e:?})",
+                            LOG_TARGET_HEATING
+                        );
+                    }
+                }
+
+                // wait for 1 second. Heating control will switch on
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if heating is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
+
+                // sending message requesting stop of heating control
+                match tx_messaging_to_heating.send(InternalCommand::Stop) {
+                    Ok(()) => { /* do nothing */ }
+                    Err(e) => {
+                        panic!(
+                            "{}: error when sending stop command to test object ({e:?})",
+                            LOG_TARGET_HEATING
+                        );
+                    }
+                }
+
+                // wait for 1 second: Heating control will switch off
+                for _ in 0..10 {
+                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                }
+                // check if heating is actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+                
+                // requesting heating control to quit
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                rx_signal_handler_from_heating.recv().unwrap();
+                
+                // check if heating is not actuated
+                assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                let tx_heating_to_schedule_check_for_test_case_finish =
+                    tx_heating_to_schedule_check.clone();
+                let tx_heating_to_atlas_scientific_for_test_case_finish =
+                    tx_heating_to_atlas_scientific.clone();
+                let tx_heating_to_controllino_for_test_case_finish =
+                    tx_heating_to_controllino.clone();
+                let tx_heating_to_ambient_for_test_case_finish = tx_heating_to_ambient.clone();
+                let tx_heating_to_tank_level_switch_for_test_case_finish =
+                    tx_heating_to_tank_level_switch.clone();
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    tx_heating_to_ambient,
+                    rx_heating_from_ambient,
+                    tx_heating_to_atlas_scientific,
+                    rx_heating_from_atlas_scientific,
+                    tx_heating_to_tank_level_switch,
+                    rx_heating_from_tank_level_switch,
+                    tx_heating_to_controllino,
+                    rx_heating_from_controllino,
+                    tx_heating_to_signal_handler,
+                    rx_heating_from_signal_handler,
+                    tx_heating_to_data_logger,
+                    rx_heating_from_data_logger,
+                    tx_heating_to_schedule_check,
+                    rx_heating_from_schedule_check,
+                    rx_heating_from_messaging,
+                    &mut sql_interface,
+                    &mut heating_stats_transfer,
+                );
+                // send Quit signal to mock threads because test object has terminated
+                let _ = tx_heating_to_ambient_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_tank_level_switch_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_heating_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_heating_to_atlas_scientific_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("* [Heating] checking if messaging can block and restart actuation.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_atlas_scientific
+            .join()
+            .expect("Mock Atlas Scientific did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_ambient
+            .join()
+            .expect("Mock Ambient did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_controllino
+            .join()
+            .expect("Mock Controllino thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }    
 }
