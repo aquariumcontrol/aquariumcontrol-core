@@ -15,7 +15,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
@@ -464,8 +464,10 @@ impl DataLogger {
         let mut tank_level_switch_channel_disconnected = false;
         let mut atlas_scientific_channel_disconnected = false;
         let mut ambient_channel_disconnected = false;
+        let mut start_time = SystemTime::now();
+        let mut lock_warn_cycle_time_exceeded = false;
 
-        loop {
+        loop {            
             // get information if refill is in progress from refill thread
             if !refill_channel_disconnected {
                 match tx_to_refill.send(InternalCommand::RequestSignal(
@@ -925,23 +927,46 @@ impl DataLogger {
                 heater_status: Some(heater_is_on),
             };
 
-            //println!("DateFrame = {}", data_frame);
             data_injection.inject_data(data_frame, &mut sql_interface_data);
 
+            let stop_time = SystemTime::now();
+            let execution_duration_millis =
+                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+
+            // deduct the execution time of the thread from the target cycle time
+            let remaining_sleep_time_millis: u64;
+            if execution_duration_millis >= self.config.logging_interval * 1000 {
+                if !lock_warn_cycle_time_exceeded {
+                    warn!(target: Self::LOG_TARGET_DATA_LOGGER,
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration_millis,
+                        self.config.logging_interval * 1000);
+                    lock_warn_cycle_time_exceeded = true;
+                } else {
+                    lock_warn_cycle_time_exceeded = false;
+                }
+                remaining_sleep_time_millis = 0;
+            } else {
+                remaining_sleep_time_millis =
+                    self.config.logging_interval * 1000 - execution_duration_millis;
+            }
+            
+            // wait the remaining time period to complete the target cycle time
             i = 0;
-            while i < self.config.logging_interval * 1000 {
-                i = i + 1;
+            while i < remaining_sleep_time_millis {
+                i += 1;
                 spin_sleeper.sleep(sleep_duration_one_millisec);
                 (quit_command_received, _, _) =
                     self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
                     break;
                 }
-                // @todo: poll control status every 100ms
             }
             if quit_command_received {
                 break;
             }
+            
+            start_time = SystemTime::now(); // start time for next cycle
         }
 
         // application received request to terminate, that is why the loop was left.
