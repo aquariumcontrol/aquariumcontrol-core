@@ -7,7 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+use log::{error, warn};
+
+#[cfg(not(test))]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -341,6 +345,7 @@ impl Ventilation {
                 break;
             }
             if stop_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_VENTILATION,
                     "received Stop command. Inhibiting ventilation."
@@ -348,6 +353,7 @@ impl Ventilation {
                 ventilation_inhibited = true;
             }
             if start_command_received {
+                #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_VENTILATION,
                     "received Start command. Restarting ventilation."
@@ -661,12 +667,13 @@ pub mod tests {
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
+    use crate::ventilation::LOG_TARGET_VENTILATION;
+    use crate::ventilation::Ventilation;
+
     use crate::mock::tests::mock_atlas_scientific;
     use crate::mock::tests::mock_controllino;
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
-    use crate::ventilation::Ventilation;
-    use crate::ventilation::LOG_TARGET_VENTILATION;
 
     fn prepare_ventilation_tests(short_ramp: bool) -> Ventilation {
         // prepare struct Ventilation for subsequent tests
@@ -1215,7 +1222,7 @@ pub mod tests {
                         assert_ge!(fifth_last_actuation_duration, 6900);
                         assert_le!(sixth_last_actuation_duration, 7100);
                         assert_ge!(sixth_last_actuation_duration, 6900);
-                }
+                    }
                     else {
                         assert_le!(second_last_actuation_duration, 7400);
                         assert_ge!(second_last_actuation_duration, 7100);
