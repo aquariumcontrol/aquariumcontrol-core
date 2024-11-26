@@ -977,7 +977,7 @@ fn main() {
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
-    let mut feed = Feed::new(config.feed, sql_interface_feed);
+    let mut feed = Feed::new(config.feed);
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
@@ -1286,6 +1286,7 @@ fn main() {
                 rx_feed_from_signal_handler,
                 rx_feed_from_messaging,
                 &mut food_injection,
+                sql_interface_feed
             );
             trace!(target: LOG_TARGET_MAIN, "Feed terminated.");
         });

@@ -22,6 +22,7 @@ use crate::food_injection::FoodInjectionTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_feed::SqlInterfaceFeed;
+use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
 
 const LOG_TARGET_FEED: &str = "feed";
 
@@ -59,9 +60,6 @@ pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
 
-    /// SQL interface for the feed control
-    sql_interface_feed: SqlInterfaceFeed,
-
     /// communication from trait implementation: request to execute a certain feed profile has been received
     pub execute_command_received: bool,
 
@@ -82,11 +80,9 @@ impl Feed {
     /// Provides a struct of type Feed
     /// # Arguments
     /// * `config` - configuration data for feed control
-    /// * `sql_interface_feed` - specific SQL interface for feed control           
-    pub fn new(config: FeedConfig, sql_interface_feed: SqlInterfaceFeed) -> Feed {
+    pub fn new(config: FeedConfig) -> Feed {
         Self {
             config: config,
-            sql_interface_feed: sql_interface_feed,
             execute_command_received: false,
             profile_id_requested: -1,
             lock_error_get_feedschedule_entry: false,
@@ -102,6 +98,7 @@ impl Feed {
     /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
     /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
     /// * `food_injection` - Trait method for actuation to execute the feed profile
+    /// * `sql_interface_feed` - specific SQL interface for feed control           
     fn execute_feed(
         &mut self,
         profile_id: i32,
@@ -109,11 +106,11 @@ impl Feed {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
+        sql_interface_feed: &mut SqlInterfaceFeed
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
         // load feed pattern from database
-        let result = match self
-            .sql_interface_feed
+        let result = match sql_interface_feed
             .get_single_feedpattern_from_database(profile_id)
         {
             Ok(feed_pattern) => {
@@ -126,7 +123,7 @@ impl Feed {
                 );
 
                 let current_timestamp =
-                    match SqlInterface::get_current_timestamp(&mut self.sql_interface_feed.conn) {
+                    match SqlInterface::get_current_timestamp(&mut sql_interface_feed.conn) {
                         Ok(c) => c,
                         Err(e) => {
                             error!(
@@ -138,7 +135,7 @@ impl Feed {
                     };
 
                 //*** insert feed event in log ***
-                match self.sql_interface_feed.insert_feed_event(
+                match sql_interface_feed.insert_feed_event(
                     current_timestamp,
                     feed_pattern.calc_feeder_runtime(),
                     feed_pattern.profile_name,
@@ -183,6 +180,7 @@ impl Feed {
         rx_from_signal_handler: Receiver<InternalCommand>,
         rx_from_messaging: Receiver<InternalCommand>,
         food_injection: &mut impl FoodInjectionTrait,
+        mut sql_interface_feed: SqlInterfaceFeed
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -198,8 +196,7 @@ impl Feed {
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                match self
-                    .sql_interface_feed
+                match sql_interface_feed
                     .get_feedschedule_entry_from_database()
                 {
                     Ok(c) => match c {
@@ -226,6 +223,7 @@ impl Feed {
                                             &tx_to_controllino,
                                             &rx_from_controllino,
                                             &rx_from_signal_handler,
+                                            &mut sql_interface_feed
                                         );
 
                                     quit_command_received = quit_command_received_during_feed;
@@ -241,8 +239,7 @@ impl Feed {
                                     *mutex_data += 1;
 
                                     //*** update schedule ***
-                                    match self
-                                        .sql_interface_feed
+                                    match sql_interface_feed
                                         .update_feedschedule_entry_in_database(
                                             &mut feed_schedule_entry,
                                         ) {
@@ -319,6 +316,7 @@ impl Feed {
                         &tx_to_controllino,
                         &rx_from_controllino,
                         &rx_from_signal_handler,
+                        &mut sql_interface_feed
                     );
                     match result {
                         Ok(_) => { /* do nothing */ }
@@ -418,7 +416,7 @@ pub mod tests {
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-
+    
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,
     }
@@ -558,7 +556,7 @@ pub mod tests {
         };
 
         // create test object
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed);
 
         scope(|scope| {
             let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
@@ -583,6 +581,7 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
+                    sql_interface_feed
                 );
 
                 // check if the right profiles have been executed in the right order
@@ -603,6 +602,8 @@ pub mod tests {
     #[test]
     pub fn test_messaging_stops_starts_execute_feed() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_2_secs = Duration::from_secs(2);
+        let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData =
@@ -651,7 +652,7 @@ pub mod tests {
         };
 
         // create test object
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed);
 
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
@@ -685,9 +686,7 @@ pub mod tests {
 
                 // wait for 10 seconds. If test object does not follow stop request,
                 // then food injection will happen in this period.
-                for _ in 0..100 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
-                }
+                spin_sleeper.sleep(sleep_duration_10_secs);
 
                 let actuation_count_1 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
@@ -708,9 +707,7 @@ pub mod tests {
 
                 // wait for 10 seconds. If test object follows start request,
                 // then food injections will happen in this period.
-                for _ in 0..100 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
-                }
+                spin_sleeper.sleep(sleep_duration_10_secs);
 
                 // get count of feed profiles executed
                 let actuation_count_2 =
@@ -732,9 +729,7 @@ pub mod tests {
 
                 // wait for 2 seconds. If test object follows execute request,
                 // then food injection will happen in this period.
-                for _ in 0..20 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
-                }
+                spin_sleeper.sleep(sleep_duration_2_secs);
 
                 // get count of feed profiles executed
                 let actuation_count_3 =
@@ -764,6 +759,7 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
+                    sql_interface_feed
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
 
