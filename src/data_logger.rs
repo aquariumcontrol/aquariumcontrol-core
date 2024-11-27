@@ -467,7 +467,7 @@ impl DataLogger {
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
 
-        loop {            
+        loop {
             // get information if refill is in progress from refill thread
             if !refill_channel_disconnected {
                 match tx_to_refill.send(InternalCommand::RequestSignal(
@@ -950,7 +950,7 @@ impl DataLogger {
                 remaining_sleep_time_millis =
                     self.config.logging_interval * 1000 - execution_duration_millis;
             }
-            
+
             // wait the remaining time period to complete the target cycle time
             i = 0;
             while i < remaining_sleep_time_millis {
@@ -965,7 +965,7 @@ impl DataLogger {
             if quit_command_received {
                 break;
             }
-            
+
             start_time = SystemTime::now(); // start time for next cycle
         }
 

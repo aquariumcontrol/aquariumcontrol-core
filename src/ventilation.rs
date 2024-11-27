@@ -667,8 +667,8 @@ pub mod tests {
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::ventilation::LOG_TARGET_VENTILATION;
     use crate::ventilation::Ventilation;
+    use crate::ventilation::LOG_TARGET_VENTILATION;
 
     use crate::mock::tests::mock_atlas_scientific;
     use crate::mock::tests::mock_controllino;

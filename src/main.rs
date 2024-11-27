@@ -94,6 +94,7 @@ use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::SqlInterfaceData;
+use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
@@ -250,7 +251,8 @@ fn main() {
         Box::new(sql_interface_midnight_calculator),
     );
 
-    let sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+    let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+        Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
@@ -977,7 +979,7 @@ fn main() {
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
-    let mut feed = Feed::new(config.feed);
+    let mut feed = Feed::new(config.feed, sql_interface_feed);
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
@@ -1286,7 +1288,6 @@ fn main() {
                 rx_feed_from_signal_handler,
                 rx_feed_from_messaging,
                 &mut food_injection,
-                sql_interface_feed
             );
             trace!(target: LOG_TARGET_MAIN, "Feed terminated.");
         });

@@ -7,9 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, trace, warn};
 #[cfg(not(test))]
 use log::info;
+use log::{error, trace, warn};
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -20,8 +20,6 @@ use std::time::Duration;
 use crate::channel_content::InternalCommand;
 use crate::food_injection::FoodInjectionTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sql_interface::SqlInterface;
-use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
 
 const LOG_TARGET_FEED: &str = "feed";
@@ -60,6 +58,9 @@ pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
 
+    /// interface to SQL data base (trait object)
+    sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+
     /// communication from trait implementation: request to execute a certain feed profile has been received
     pub execute_command_received: bool,
 
@@ -80,9 +81,13 @@ impl Feed {
     /// Provides a struct of type Feed
     /// # Arguments
     /// * `config` - configuration data for feed control
-    pub fn new(config: FeedConfig) -> Feed {
+    pub fn new(
+        config: FeedConfig,
+        sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+    ) -> Feed {
         Self {
             config: config,
+            sql_interface_feed: sql_interface_feed,
             execute_command_received: false,
             profile_id_requested: -1,
             lock_error_get_feedschedule_entry: false,
@@ -98,7 +103,6 @@ impl Feed {
     /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
     /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
     /// * `food_injection` - Trait method for actuation to execute the feed profile
-    /// * `sql_interface_feed` - specific SQL interface for feed control           
     fn execute_feed(
         &mut self,
         profile_id: i32,
@@ -106,11 +110,11 @@ impl Feed {
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
-        sql_interface_feed: &mut SqlInterfaceFeed
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
         // load feed pattern from database
-        let result = match sql_interface_feed
+        let result = match self
+            .sql_interface_feed
             .get_single_feedpattern_from_database(profile_id)
         {
             Ok(feed_pattern) => {
@@ -122,20 +126,19 @@ impl Feed {
                     &feed_pattern,
                 );
 
-                let current_timestamp =
-                    match SqlInterface::get_current_timestamp(&mut sql_interface_feed.conn) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_FEED,
-                                "could not get current timestamp from database ({e:?})"
-                            );
-                            return (Err(()), quit_command_received);
-                        }
-                    };
+                let current_timestamp = match self.sql_interface_feed.get_current_timestamp() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_FEED,
+                            "could not get current timestamp from database ({e:?})"
+                        );
+                        return (Err(()), quit_command_received);
+                    }
+                };
 
                 //*** insert feed event in log ***
-                match sql_interface_feed.insert_feed_event(
+                match self.sql_interface_feed.insert_feed_event(
                     current_timestamp,
                     feed_pattern.calc_feeder_runtime(),
                     feed_pattern.profile_name,
@@ -180,7 +183,6 @@ impl Feed {
         rx_from_signal_handler: Receiver<InternalCommand>,
         rx_from_messaging: Receiver<InternalCommand>,
         food_injection: &mut impl FoodInjectionTrait,
-        mut sql_interface_feed: SqlInterfaceFeed
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -196,7 +198,8 @@ impl Feed {
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
-                match sql_interface_feed
+                match self
+                    .sql_interface_feed
                     .get_feedschedule_entry_from_database()
                 {
                     Ok(c) => match c {
@@ -223,7 +226,6 @@ impl Feed {
                                             &tx_to_controllino,
                                             &rx_from_controllino,
                                             &rx_from_signal_handler,
-                                            &mut sql_interface_feed
                                         );
 
                                     quit_command_received = quit_command_received_during_feed;
@@ -239,7 +241,8 @@ impl Feed {
                                     *mutex_data += 1;
 
                                     //*** update schedule ***
-                                    match sql_interface_feed
+                                    match self
+                                        .sql_interface_feed
                                         .update_feedschedule_entry_in_database(
                                             &mut feed_schedule_entry,
                                         ) {
@@ -316,7 +319,6 @@ impl Feed {
                         &tx_to_controllino,
                         &rx_from_controllino,
                         &rx_from_signal_handler,
-                        &mut sql_interface_feed
                     );
                     match result {
                         Ok(_) => { /* do nothing */ }
@@ -416,7 +418,7 @@ pub mod tests {
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-    
+
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,
     }
@@ -494,7 +496,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let (mut sql_interface_feed, mut conn) =
+            SqlInterfaceFeed::new(sql_interface.get_connection());
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -526,6 +529,7 @@ pub mod tests {
 
         // manipulation of database: inserting feed schedule entries with future timestamp
         match sql_interface_feed.insert_feed_schedule_entry(
+            conn,
             time_stamp_feed_schedule_entry_one_time,
             1,
             "testOneTime".to_string(),
@@ -541,6 +545,7 @@ pub mod tests {
         };
 
         match sql_interface_feed.insert_feed_schedule_entry(
+            conn,
             time_stamp_feed_schedule_entry_repeat,
             2,
             "testRepeat".to_string(),
@@ -581,7 +586,8 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
-                    sql_interface_feed
+                    sql_interface_feed,
+                    conn,
                 );
 
                 // check if the right profiles have been executed in the right order
@@ -615,7 +621,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let (mut sql_interface_feed, mut conn) =
+            SqlInterfaceFeed::new(sql_interface.get_connection());
 
         // empty the feed schedule
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -637,6 +644,7 @@ pub mod tests {
 
         // manipulation of database: inserting feed schedule entries with future timestamp
         match sql_interface_feed.insert_feed_schedule_entry(
+            conn,
             time_stamp_feed_schedule_entry,
             1,
             "testOneTime".to_string(),
@@ -759,7 +767,8 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
-                    sql_interface_feed
+                    sql_interface_feed,
+                    conn,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
 

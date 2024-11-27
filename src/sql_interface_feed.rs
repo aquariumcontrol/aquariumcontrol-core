@@ -13,7 +13,7 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::feedpattern::{FeedPhase, Feedpattern};
-use crate::sql_interface::{sql_query_strings, SqlInterfaceError};
+use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
 #[derive(Clone)]
 /// Holds the header information of a feed pattern.
@@ -83,20 +83,104 @@ pub struct FeedScheduleEntry {
 
 /// Trait for interfacing between feed and SQL database
 /// This trait is prerequiste to use mock implementation for testing
-pub trait DatabaseInterfaceFeedTrait { 
+pub trait DatabaseInterfaceFeedTrait {
+    fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError>;
+
+    fn get_feedschedule_entry_from_database(
+        &mut self,
+    ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError>;
+
+    fn insert_feed_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        feeder_run_time: f64,
+        profile_name: String,
+        profile_id: i32,
+    ) -> Result<(), SqlInterfaceError>;
+
     fn get_single_feedpattern_from_database(
         &mut self,
         profile_id: i32,
     ) -> Result<Feedpattern, SqlInterfaceError>;
+
+    fn update_feedschedule_entry_in_database(
+        &mut self,
+        feedschedule_entry: &mut FeedScheduleEntry,
+    ) -> Result<(), SqlInterfaceError>;
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Feed.
 pub struct SqlInterfaceFeed {
-    /// Connection to database
-    pub conn: PooledConn,
+    /// connection to SQL database
+    conn: PooledConn,
 }
 
 impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
+    /// Provides current timestamp using its own connection
+    fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
+        SqlInterface::get_current_timestamp(&mut self.conn)
+    }
+
+    /// Retrieve from SQL database the oldest feed schedule entry which lies in the past.
+    /// Function provides wrapped into Result type either
+    /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
+    /// - a value of enum SqlInterfaceError
+    fn get_feedschedule_entry_from_database(
+        &mut self,
+    ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
+        let sql_query = sql_query_strings::SQL_QUERY_READ_FEED_SCHEDULE_ENTRY;
+
+        let feedschedule_entry_array = match self.conn.query_map(
+            sql_query,
+            |(timestamp, profile_id, profile_name, repeat_daily)| SqlFeedScheduleEntry {
+                timestamp,
+                profile_id,
+                profile_name,
+                repeat_daily,
+            },
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
+                    "Could not get feed schedule entry from SQL database with query:".to_string()
+                        + sql_query,
+                ));
+            }
+        };
+
+        // return none if query result is empty
+        if feedschedule_entry_array.len() == 0 {
+            return Ok(None);
+        }
+
+        let timestamp = match NaiveDateTime::parse_from_str(
+            feedschedule_entry_array[0].timestamp.as_str(),
+            "%Y-%m-%d %H:%M:%S",
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not get feed schedule entry from database ({e:?})"
+                );
+                return Err(
+                    SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
+                        "Could not convert timestamp string read from SQL database".to_string(),
+                    ),
+                );
+            }
+        };
+
+        let feedschedule_entry = FeedScheduleEntry {
+            timestamp: timestamp,
+            profile_id: feedschedule_entry_array[0].profile_id,
+            profile_name: feedschedule_entry_array[0].profile_name.clone(),
+            repeat_daily: feedschedule_entry_array[0].repeat_daily != 0,
+        };
+
+        Ok(Some(feedschedule_entry))
+    }
+
     /// The function retrieves the header and all phases of a feed pattern from the SQL database.
     /// It provides wrapped into Result type either
     /// - the result of type Feedpattern
@@ -147,13 +231,108 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             profile_name: sql_feedpattern_header.profile_name,
             feedphases: feed_phases,
         })
-    }    
+    }
+
+    /// Inserts one dataset of feed event into the database.
+    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    /// # Arguments
+    /// * `timestamp` - timestamp of feed event
+    /// * `feeder_run_time` - run time of feeder in seconds
+    /// * `profile_name` - name of the feed profile executed
+    /// * `profile_id` - ID of the feed profile executed
+    fn insert_feed_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        feeder_run_time: f64,
+        profile_name: String,
+        profile_id: i32,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "feeder_run_time" => feeder_run_time,
+            "profile_name" => profile_name,
+            "profile_id" => profile_id,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not insert feed event into database ({e:?})"
+                );
+                Err(SqlInterfaceError::InsertFeedEventFailure(
+                    "Error when inserting refill event into database.".to_string(),
+                ))
+            }
+        }
+    }
+
+    /// Triggers the SQL queries to either update the existing feed schedule entry with
+    /// tomorrow's date or delete the entry.
+    /// # Arguments
+    /// * `feedschedule_entry` - reference to a struct of type FeedScheduleEntry for which the timestamp shall be updated.
+    fn update_feedschedule_entry_in_database(
+        &mut self,
+        feedschedule_entry: &mut FeedScheduleEntry,
+    ) -> Result<(), SqlInterfaceError> {
+        if feedschedule_entry.repeat_daily {
+            // feed schedule shall be repeated daily, so update the entry with a date 24h in the future
+            let sql_query_string =
+                sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
+            let timestamp_tomorrow = feedschedule_entry.timestamp + Duration::days(1);
+            match self.conn.exec_drop::<_, _>(
+                sql_query_string,
+                params! {
+                "timestamp_new" => timestamp_tomorrow.format("%Y-%m-%d %H:%M:%S").to_string(),
+                "timestamp_old" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                },
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                        "could not update feed schedule entry ({e:?})"
+                    );
+                    Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                        "Error when updating feed schedule of entry which shall be repeated.".to_string(),
+                    ))
+                }
+            }
+        } else {
+            // feed schedule shall not be repeated daily, delete the entry from the database
+            let sql_query_string =
+                sql_query_strings::SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY.to_owned();
+            match self.conn.exec_drop::<_, _>(
+                sql_query_string,
+                params! {
+                "timestamp" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                },
+            ) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    error!(
+                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
+                        "could not delete feed schedule entry ({e:?})"
+                    );
+                    Err(
+                        SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                            "Error when deleting refill entry which shall be not repeated."
+                                .to_string(),
+                        ),
+                    )
+                }
+            }
+        }
+    }
 }
 
 impl SqlInterfaceFeed {
     const LOG_TARGET_SQL_INTERFACE_FEED: &'static str = "sql_interface_feed";
 
-    /// Provides a struct of type SqlInterfaceFeed.
+    /// Provides a tuple of struct of type SqlInterfaceFeed and connection to database
     /// # Arguments
     /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
@@ -289,161 +468,6 @@ impl SqlInterfaceFeed {
         Ok(feed_phase.clone())
     }
 
-    /// Inserts one dataset of feed event into the database.
-    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
-    /// # Arguments
-    /// * `timestamp` - timestamp of feed event
-    /// * `feeder_run_time` - run time of feeder in seconds
-    /// * `profile_name` - name of the feed profile executed
-    /// * `profile_id` - ID of the feed profile executed
-    pub fn insert_feed_event(
-        &mut self,
-        timestamp: NaiveDateTime,
-        feeder_run_time: f64,
-        profile_name: String,
-        profile_id: i32,
-    ) -> Result<(), SqlInterfaceError> {
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_EVENT.to_owned();
-        match self.conn.exec_drop::<_, _>(
-            sql_query_string,
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "feeder_run_time" => feeder_run_time,
-            "profile_name" => profile_name,
-            "profile_id" => profile_id,
-            },
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not insert feed event into database ({e:?})"
-                );
-                Err(SqlInterfaceError::InsertFeedEventFailure(
-                    "Error when inserting refill event into database.".to_string(),
-                ))
-            }
-        }
-    }
-
-    /// Retrieve from SQL database the oldest feed schedule entry which lies in the past.
-    /// Function provides wrapped into Result type either
-    /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
-    /// - a value of enum SqlInterfaceError
-    pub fn get_feedschedule_entry_from_database(
-        &mut self,
-    ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
-        let sql_query = sql_query_strings::SQL_QUERY_READ_FEED_SCHEDULE_ENTRY;
-
-        let feedschedule_entry_array = match self.conn.query_map(
-            sql_query,
-            |(timestamp, profile_id, profile_name, repeat_daily)| SqlFeedScheduleEntry {
-                timestamp,
-                profile_id,
-                profile_name,
-                repeat_daily,
-            },
-        ) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
-                    "Could not get feed schedule entry from SQL database with query:".to_string()
-                        + sql_query,
-                ));
-            }
-        };
-
-        // return none if query result is empty
-        if feedschedule_entry_array.len() == 0 {
-            return Ok(None);
-        }
-
-        let timestamp = match NaiveDateTime::parse_from_str(
-            feedschedule_entry_array[0].timestamp.as_str(),
-            "%Y-%m-%d %H:%M:%S",
-        ) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not get feed schedule entry from database ({e:?})"
-                );
-                return Err(
-                    SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
-                        "Could not convert timestamp string read from SQL database".to_string(),
-                    ),
-                );
-            }
-        };
-
-        let feedschedule_entry = FeedScheduleEntry {
-            timestamp: timestamp,
-            profile_id: feedschedule_entry_array[0].profile_id,
-            profile_name: feedschedule_entry_array[0].profile_name.clone(),
-            repeat_daily: feedschedule_entry_array[0].repeat_daily != 0,
-        };
-
-        Ok(Some(feedschedule_entry))
-    }
-
-    /// Triggers the SQL queries to either update the existing feed schedule entry with
-    /// tomorrow's date or delete the entry.
-    /// # Arguments
-    /// * `feedschedule_entry` - reference to a struct of type FeedScheduleEntry for which the timestamp shall be updated.
-    pub fn update_feedschedule_entry_in_database(
-        &mut self,
-        feedschedule_entry: &mut FeedScheduleEntry,
-    ) -> Result<(), SqlInterfaceError> {
-        if feedschedule_entry.repeat_daily {
-            // feed schedule shall be repeated daily, so update the entry with a date 24h in the future
-            let sql_query_string =
-                sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
-            let timestamp_tomorrow = feedschedule_entry.timestamp + Duration::days(1);
-            match self.conn.exec_drop::<_, _>(
-                sql_query_string,
-                params! {
-                "timestamp_new" => timestamp_tomorrow.format("%Y-%m-%d %H:%M:%S").to_string(),
-                "timestamp_old" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                },
-            ) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
-                        "could not update feed schedule entry ({e:?})"
-                    );
-                    Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
-                        "Error when updating feed schedule of entry which shall be repeated.".to_string(),
-                    ))
-                }
-            }
-        } else {
-            // feed schedule shall not be repeated daily, delete the entry from the database
-            let sql_query_string =
-                sql_query_strings::SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY.to_owned();
-            match self.conn.exec_drop::<_, _>(
-                sql_query_string,
-                params! {
-                "timestamp" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                },
-            ) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SQL_INTERFACE_FEED,
-                        "could not delete feed schedule entry ({e:?})"
-                    );
-                    Err(
-                        SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
-                            "Error when deleting refill entry which shall be not repeated."
-                                .to_string(),
-                        ),
-                    )
-                }
-            }
-        }
-    }
-
     // Inserts one dataset of feed schedule entry into the database - for testing purposes only.
     // The function either returns an empty Ok value or a value of type SqlInterfaceError.
     // # Arguments
@@ -494,9 +518,9 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_feed::SqlInterfaceFeed;
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-    
+    use crate::sql_interface_feed::SqlInterfaceFeed;
+
     pub struct SqlFeedEvent {
         timestamp: String,
         feeder_run_time: f32,
@@ -547,7 +571,8 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let (mut sql_interface_feed, mut conn) =
+            SqlInterfaceFeed::new(sql_interface.get_connection());
 
         //*** check retrieving of feed pattern from empty table - FAIL **************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedpatterns".to_string()) {
@@ -736,7 +761,8 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let (mut sql_interface_feed, mut conn) =
+            SqlInterfaceFeed::new(sql_interface.get_connection());
         //*** check inserting of feed event into empty table - FAIL ****************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedlog".to_string()) {
             Ok(_) => {}
@@ -744,7 +770,8 @@ pub mod tests {
         }
         let feed_timestamp =
             NaiveDateTime::parse_from_str("2022-04-11 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        match sql_interface_feed.insert_feed_event(feed_timestamp, 5.5, "Test".to_string(), 1) {
+        match sql_interface_feed.insert_feed_event(conn, feed_timestamp, 5.5, "Test".to_string(), 1)
+        {
             Ok(_) => {}
             Err(e) => panic!("Could not insert feed event into database: {e:?}"),
         }
@@ -792,13 +819,14 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let (mut sql_interface_feed, mut conn) =
+            SqlInterfaceFeed::new(sql_interface.get_connection());
         // *** check trying to load feed schedule entry when table is empty *********************
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
-        match sql_interface_feed.get_feedschedule_entry_from_database() {
+        match sql_interface_feed.get_feedschedule_entry_from_database(conn) {
             Ok(c) => {
                 assert_eq!(c, None);
             }
@@ -832,7 +860,7 @@ pub mod tests {
         };
 
         let mut feedschedule_entry_before_update = match sql_interface_feed
-            .get_feedschedule_entry_from_database()
+            .get_feedschedule_entry_from_database(conn)
         {
             Ok(c) => match c {
                 Some(d) => {
@@ -868,7 +896,7 @@ pub mod tests {
         }
 
         let mut feedschedule_entry_after_update = match sql_interface_feed
-            .get_feedschedule_entry_from_database()
+            .get_feedschedule_entry_from_database(conn)
         {
             Ok(c) => match c {
                 Some(d) => {
@@ -904,7 +932,7 @@ pub mod tests {
             }
         }
 
-        match sql_interface_feed.get_feedschedule_entry_from_database() {
+        match sql_interface_feed.get_feedschedule_entry_from_database(conn) {
             Ok(c) => {
                 assert_eq!(c, None);
             }
