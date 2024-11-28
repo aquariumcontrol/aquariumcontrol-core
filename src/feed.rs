@@ -417,6 +417,7 @@ pub mod tests {
     use crate::feedpattern::Feedpattern;
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
+    use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
     use crate::sql_interface_feed::SqlInterfaceFeed;
 
     pub struct MockFoodInjection {
@@ -496,8 +497,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let (mut sql_interface_feed, mut conn) =
-            SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -529,7 +530,6 @@ pub mod tests {
 
         // manipulation of database: inserting feed schedule entries with future timestamp
         match sql_interface_feed.insert_feed_schedule_entry(
-            conn,
             time_stamp_feed_schedule_entry_one_time,
             1,
             "testOneTime".to_string(),
@@ -545,7 +545,6 @@ pub mod tests {
         };
 
         match sql_interface_feed.insert_feed_schedule_entry(
-            conn,
             time_stamp_feed_schedule_entry_repeat,
             2,
             "testRepeat".to_string(),
@@ -560,8 +559,7 @@ pub mod tests {
             }
         };
 
-        // create test object
-        let mut feed = Feed::new(config.feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
 
         scope(|scope| {
             let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
@@ -586,8 +584,6 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
-                    sql_interface_feed,
-                    conn,
                 );
 
                 // check if the right profiles have been executed in the right order
@@ -621,8 +617,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let (mut sql_interface_feed, mut conn) =
-            SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
 
         // empty the feed schedule
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -644,7 +640,6 @@ pub mod tests {
 
         // manipulation of database: inserting feed schedule entries with future timestamp
         match sql_interface_feed.insert_feed_schedule_entry(
-            conn,
             time_stamp_feed_schedule_entry,
             1,
             "testOneTime".to_string(),
@@ -660,7 +655,7 @@ pub mod tests {
         };
 
         // create test object
-        let mut feed = Feed::new(config.feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
 
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
@@ -767,8 +762,6 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging,
                     &mut mock_food_injection,
-                    sql_interface_feed,
-                    conn,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
 
