@@ -16,6 +16,30 @@ use crate::sql_interface::sql_query_strings;
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface::SqlInterfaceError;
 
+/// Trait for interfacing between refill and SQL database
+/// This trait is prerequiste to use mock implementation for testing
+pub trait DatabaseInterfaceRefillTrait {
+    fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError>;
+
+    fn check_empty(&mut self) -> Result<i64, SqlInterfaceError>;
+
+    fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError>;
+
+    fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError>;
+
+    fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError>;
+
+    fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError>;
+
+    fn insert_refill_event(
+        &mut self,
+        timestamp: NaiveDateTime,
+        duration: f64,
+        volume: f64,
+        error_code: i32,
+    ) -> Result<(), SqlInterfaceError>;
+}
+
 /// Contains the configuration and the implementation of the SQL interface for Refill.
 pub struct SqlInterfaceRefill {
     /// Connection to database
@@ -42,12 +66,14 @@ impl SqlInterfaceRefill {
             sql_query_strings::SQL_QUERY_READ_LAST_REFILL_TIMESTAMP,
         )
     }
+}
 
+impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// Requests current timestamp and timestamp of last refill event and calculates the difference between them in seconds.
     /// It provides wrapped into Result type either
     /// - number of seconds since last refill event
     /// - or a value from enum SqlInterfaceError    
-    pub fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
             Ok(c) => c,
             Err(e) => {
@@ -72,7 +98,7 @@ impl SqlInterfaceRefill {
     /// - a value of one if there is at least one entry in the table or
     /// - a value of zero if there is not entry in the table or
     /// - a value from enum SqlInterfaceError
-    pub fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
@@ -86,7 +112,7 @@ impl SqlInterfaceRefill {
     /// It returns wrapped into Result type either
     /// - the number of refill events in the last 24 hours
     /// - a value from enum SqlInterfaceError    
-    pub fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
@@ -99,8 +125,8 @@ impl SqlInterfaceRefill {
     /// Retrieves the number of water refill events in the last hour.
     /// It returns wrapped into Result type either
     /// - the number of refill events in the last hour
-    /// - a value from enum SqlInterfaceError    
-    pub fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
+    /// - a value from enum SqlInterfaceError
+    fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
@@ -114,7 +140,7 @@ impl SqlInterfaceRefill {
     /// It returns wrapped into Result type either
     /// - the refill volume in literes of the last 24 hours
     /// - a value from enum SqlInterfaceError
-    pub fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
+    fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
@@ -134,7 +160,7 @@ impl SqlInterfaceRefill {
     /// It returns wrapped into Result type either
     /// - the refill volume in literes of the last hour
     /// - a value from enum SqlInterfaceError
-    pub fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
+    fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR,
@@ -159,7 +185,7 @@ impl SqlInterfaceRefill {
     /// * `duration` - duration of refill event to be inserted in seconds
     /// * `volume` - volume of refill event to be inserted in literser
     /// * `error_code` - numerical error code of refill event to be inserted in liters    
-    pub fn insert_refill_event(
+    fn insert_refill_event(
         &mut self,
         timestamp: NaiveDateTime,
         duration: f64,
@@ -197,6 +223,7 @@ pub mod tests {
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
+    use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sql_interface_refill::SqlInterfaceRefill;
     use chrono::{NaiveDateTime, SubsecRound};
 

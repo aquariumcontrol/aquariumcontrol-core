@@ -17,7 +17,7 @@ use crate::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
-use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
@@ -44,7 +44,7 @@ pub trait WaterInjectionTrait {
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
-        sql_interface_refill: &mut SqlInterfaceRefill,
+        sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
     ) -> bool;
 }
 
@@ -276,7 +276,7 @@ impl WaterInjectionTrait for WaterInjection {
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
-        sql_interface_refill: &mut SqlInterfaceRefill,
+        sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
     ) -> bool {
         let mut quit_command_received = false;
 
@@ -409,14 +409,15 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::channel_content::{AquariumDevice, InternalCommand};
+    use crate::refill::tests::prepare_refill_tests;
+    use crate::water_injection::WaterInjection;
+    use crate::water_injection::WaterInjectionTrait;
+
     use crate::mock::tests::mock_controllino;
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_tank_level_switch;
     use crate::mock::tests::MockSignal;
     use crate::mock::tests::TestCommand;
-    use crate::refill::tests::prepare_refill_tests;
-    use crate::water_injection::WaterInjection;
-    use crate::water_injection::WaterInjectionTrait;
 
     #[test]
     // this test case executes inject_water function and immediately sets the sensor signal to high

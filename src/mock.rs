@@ -28,7 +28,7 @@ pub mod tests {
     use crate::sql_interface_data::SqlInterfaceData;
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
     use crate::sql_interface_feed::FeedScheduleEntry;
-    use crate::sql_interface_refill::SqlInterfaceRefill;
+    use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::water_injection::WaterInjectionTrait;
 
     /// Enum is used for internal thread messaging between test environment and mock threads
@@ -224,7 +224,7 @@ pub mod tests {
             _tx_to_data_logger: &Sender<bool>,
             _rx_from_data_logger: &Receiver<InternalCommand>,
             _refill_errors: &mut RefillErrors,
-            _sql_interface_refill: &mut SqlInterfaceRefill,
+            _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
                 let tx_water_injection_to_test_environment = self
@@ -1524,6 +1524,44 @@ pub mod tests {
             _profile_name: String,
             _is_weekly: bool,
             _is_daily: bool,
+        ) -> Result<(), SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+    }
+
+    pub struct MockSqlInterfaceRefill {}
+
+    impl DatabaseInterfaceRefillTrait for MockSqlInterfaceRefill {
+        fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn insert_refill_event(
+            &mut self,
+            _timestamp: NaiveDateTime,
+            _duration: f64,
+            _volume: f64,
+            _error_code: i32,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }

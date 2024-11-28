@@ -22,7 +22,7 @@ use std::time::Duration;
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::water_injection::WaterInjectionTrait;
 
 /// Holds the configuration data for the refill control.
@@ -81,6 +81,7 @@ pub struct RefillErrors {
     pub error_switch_stuck_low: bool,
     pub error_receive_tank_level_switch_position: bool,
     pub error_sql_update_failed: bool,
+    pub error_sql_get_historic_data_failed: bool,
 }
 
 impl RefillErrors {
@@ -90,6 +91,7 @@ impl RefillErrors {
         self.error_switch_stuck_low = false;
         self.error_receive_tank_level_switch_position = false;
         self.error_sql_update_failed = false;
+        self.error_sql_get_historic_data_failed = false;
     }
 
     #[cfg(test)]
@@ -98,6 +100,7 @@ impl RefillErrors {
             || self.error_switch_stuck_low
             || self.error_receive_tank_level_switch_position
             || self.error_sql_update_failed
+            || self.error_sql_get_historic_data_failed
     }
 }
 
@@ -107,11 +110,12 @@ impl fmt::Display for RefillErrors {
     /// * `f` - configuration for formatting
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}",
+            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}",
             self.error_switch_stuck_high,
             self.error_switch_stuck_low,
             self.error_receive_tank_level_switch_position,
             self.error_sql_update_failed,
+            self.error_sql_get_historic_data_failed,
         )
     }
 }
@@ -162,7 +166,7 @@ pub struct Refill {
 
     /// interface to SQL database
     /// Attribute is public becaused access from within test cases.
-    pub sql_interface_refill: SqlInterfaceRefill,
+    pub sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
 
     /// struct of type RefillErrors which includes flags for different kind of errors
     pub refill_errors: RefillErrors,
@@ -259,6 +263,19 @@ struct RefillSqlData {
     refill_count_last_hour: i64,
 }
 
+impl RefillSqlData {
+    /// Initializer using all zero data.
+    pub fn new() -> RefillSqlData {
+        RefillSqlData {
+            duration_since_last_refill: 0,
+            refill_volume_last_24h: 0.0,
+            refill_count_last_24h: 0,
+            refill_volume_last_hour: 0.0,
+            refill_count_last_hour: 0,
+        }
+    }
+}
+
 impl fmt::Display for RefillSqlData {
     /// Function provides output of the struct values for debugging purposes.
     /// # Arguments
@@ -284,7 +301,10 @@ impl Refill {
     /// # Arguments
     /// * `config` - configuration data for refill control
     /// * `sql_interface_refill` - specific SQL interface for refill
-    pub fn new(config: RefillConfig, sql_interface_refill: SqlInterfaceRefill) -> Refill {
+    pub fn new(
+        config: RefillConfig,
+        sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
+    ) -> Refill {
         Self {
             config: config,
             sql_interface_refill: sql_interface_refill,
@@ -293,6 +313,7 @@ impl Refill {
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
             },
             lock_info_stop_command_received: false,
             lock_info_start_command_received: false,
@@ -332,7 +353,7 @@ impl Refill {
     /// * `refill_errors` - struct containing the error bits
     pub fn new_with_errors(
         config: RefillConfig,
-        sql_interface_refill: SqlInterfaceRefill,
+        sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         refill_errors: RefillErrors,
     ) -> Refill {
         Self {
@@ -375,101 +396,135 @@ impl Refill {
     /// - number of refill operations in last 24h
     /// - volume refilled in the last hour
     /// - number of refill operations in the last hour
-    fn get_sql_refill_data(&mut self) -> RefillSqlData {
-        let duration_since_last_refill = match self.sql_interface_refill.check_empty() {
+    fn get_sql_refill_data(&mut self, refill_sql_data: &mut RefillSqlData) {
+        match self.sql_interface_refill.check_empty() {
             Ok(0) => {
                 self.lock_error_check_empty = false;
-                self.config.min_interval_last_refill + 1
+                refill_sql_data.duration_since_last_refill =
+                    self.config.min_interval_last_refill + 1;
             }
             Ok(_) => {
                 self.lock_error_check_empty = false;
                 match self.sql_interface_refill.get_duration_since_last_refill() {
                     Ok(c) => {
                         self.lock_error_read_duration_since_last_refill = false;
-                        c
+                        refill_sql_data.duration_since_last_refill = c;
                     }
+                    #[cfg(not(test))]
                     Err(e) => {
                         if !self.lock_error_read_duration_since_last_refill {
+                            #[cfg(not(test))]
                             error!(
                                 target: LOG_TARGET_REFILL,
                                 "could not get duration since last refill event ({e:?})"
                             );
                             self.lock_error_read_duration_since_last_refill = true;
                         }
-                        99 // @todo: replace with default value
+                        self.refill_errors.error_sql_get_historic_data_failed = true;
+                    }
+                    #[cfg(test)]
+                    Err(_) => {
+                        self.lock_error_read_duration_since_last_refill = true;
+                        self.refill_errors.error_sql_get_historic_data_failed = true;                        
                     }
                 }
             }
+            #[cfg(not(test))]
             Err(e) => {
                 if !self.lock_error_check_empty {
+                    #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_REFILL,
                         "could not check if refill table is empty or not ({e:?})"
                     );
                     self.lock_error_check_empty = true;
                 }
-                99 // @todo: replace with default value
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
+            #[cfg(test)]
+            Err(_) => {
+                self.lock_error_check_empty = true;
+                self.refill_errors.error_sql_get_historic_data_failed = true;
             }
         };
 
-        let refill_volume_last_24h = match self.sql_interface_refill.get_refill_volume_of_last_24h()
-        {
+        match self.sql_interface_refill.get_refill_volume_of_last_24h() {
             Ok(c) => {
                 self.lock_error_read_refill_volume_last_24h = false;
-                c
+                refill_sql_data.refill_volume_last_24h = c;
             }
+            #[cfg(not(test))]
             Err(e) => {
                 if !self.lock_error_read_refill_volume_last_24h {
+                    #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_REFILL,
                         "could not get refill volume of last 24 hours ({e:?})");
                     self.lock_error_read_refill_volume_last_24h = true;
                 }
-                99.0 // @todo: replace with default value
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
+            #[cfg(test)]
+            Err(_) => {
+                self.lock_error_read_refill_volume_last_24h = true;
+                self.refill_errors.error_sql_get_historic_data_failed = true;
             }
         };
 
-        let refill_count_last_24h = match self.sql_interface_refill.get_refill_count_of_last_24h() {
+        match self.sql_interface_refill.get_refill_count_of_last_24h() {
             Ok(c) => {
                 self.lock_error_read_refill_count_last_24h = false;
-                c
+                refill_sql_data.refill_count_last_24h = c;
             }
+            #[cfg(not(test))]
             Err(e) => {
                 if !self.lock_error_read_refill_count_last_24h {
+                    #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_REFILL,
                         "could not get refill count of last 24 hours: {e:?}"
                     );
                     self.lock_error_read_refill_count_last_24h = true;
                 }
-                99 // @todo: replace with default value
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
+            #[cfg(test)]
+            Err(_) => {
+                self.lock_error_read_refill_count_last_24h = true;
+                self.refill_errors.error_sql_get_historic_data_failed = true;
             }
         };
 
-        let refill_volume_last_hour =
-            match self.sql_interface_refill.get_refill_volume_of_last_hour() {
-                Ok(c) => {
-                    self.lock_error_read_refill_volume_last_hour = false;
-                    c
+        match self.sql_interface_refill.get_refill_volume_of_last_hour() {
+            Ok(c) => {
+                self.lock_error_read_refill_volume_last_hour = false;
+                refill_sql_data.refill_volume_last_hour = c;
+            }
+            #[cfg(not(test))]
+            Err(e) => {
+                if !self.lock_error_read_refill_volume_last_hour {
+                    #[cfg(not(test))]
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "Could not get refill volume of last hour: {e:?}"
+                    );
+                    self.lock_error_read_refill_volume_last_hour = true;
                 }
-                Err(e) => {
-                    if !self.lock_error_read_refill_volume_last_hour {
-                        error!(
-                            target: LOG_TARGET_REFILL,
-                            "Could not get refill volume of last hour: {e:?}"
-                        );
-                        self.lock_error_read_refill_volume_last_hour = true;
-                    }
-                    99.0 // @todo: replace with default value
-                }
-            };
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
+            #[cfg(test)]
+            Err(_) => {
+                self.lock_error_read_refill_volume_last_hour = true;
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
+        };
 
-        let refill_count_last_hour = match self.sql_interface_refill.get_refill_count_of_last_hour()
-        {
+        match self.sql_interface_refill.get_refill_count_of_last_hour() {
             Ok(c) => {
                 self.lock_error_read_refill_count_last_hour = false;
-                c
+                refill_sql_data.refill_count_last_hour = c;
             }
+            #[cfg(not(test))]
             Err(e) => {
                 if !self.lock_error_read_refill_count_last_hour {
                     error!(
@@ -478,16 +533,14 @@ impl Refill {
                     );
                     self.lock_error_read_refill_count_last_hour = true;
                 }
-                99 // @todo: replace with default value
+                self.refill_errors.error_sql_get_historic_data_failed = true;
             }
+            #[cfg(test)]
+            Err(_) => {
+                self.lock_error_read_refill_count_last_hour = true;
+                self.refill_errors.error_sql_get_historic_data_failed = true;                
+            }            
         };
-        RefillSqlData {
-            duration_since_last_refill,
-            refill_volume_last_24h,
-            refill_count_last_24h,
-            refill_volume_last_hour,
-            refill_count_last_hour,
-        }
     }
 
     /// Checks if the duration since the last refill operation eceeds a configurable limit.
@@ -884,7 +937,8 @@ impl Refill {
         let mut tank_level_switch_position_stabilized: bool;
 
         // retrieving data from SQL data base
-        let mut sql_refill_data = self.get_sql_refill_data();
+        let mut sql_refill_data = RefillSqlData::new();
+        self.get_sql_refill_data(&mut sql_refill_data);
 
         let mut refill_inhibited = false;
         let mut quit_command_received = false; // request to end the application has been received
@@ -942,12 +996,13 @@ impl Refill {
                         &tx_to_tank_level_switch,
                         &rx_from_tank_level_switch,
                     );
-                    sql_refill_data = self.get_sql_refill_data();
+                    self.get_sql_refill_data(&mut sql_refill_data);
 
                     // execute checks before initiating refill
                     if !self.check_volume_count_time_limits(&sql_refill_data) {
                         if !self.refill_errors.error_switch_stuck_low
                             && !self.refill_errors.error_sql_update_failed
+                            && !self.refill_errors.error_sql_get_historic_data_failed
                         {
                             // schedule check to see if actuation is allowed
                             match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
@@ -1119,6 +1174,7 @@ pub mod tests {
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
 
+    use crate::mock::tests::MockSqlInterfaceRefill;
     use crate::mock::tests::MockSignal::{
         TankLevelSwitchPosition, TankLevelSwitchPositionStabilized,
     };
@@ -1164,12 +1220,35 @@ pub mod tests {
             match refill_errors.is_some() {
                 true => Refill::new_with_errors(
                     refill_config,
-                    sql_interface_refill,
+                    Box::new(sql_interface_refill),
                     refill_errors.unwrap(),
                 ),
-                false => Refill::new(refill_config, sql_interface_refill),
+                false => Refill::new(refill_config, Box::new(sql_interface_refill)),
             },
             sql_interface,
+        )
+    }
+
+    pub fn prepare_refill_tests_with_mock_database_interface(
+        config_file_name: &str,
+        refill_errors: Option<RefillErrors>,
+    ) -> (ConfigData, Refill) {
+        // prepare struct Refill for subsequent tests
+        let config: ConfigData = read_config_file(config_file_name.to_string());
+
+        let sql_interface_refill = MockSqlInterfaceRefill {};
+
+        let refill_config = config.refill.clone();
+        (
+            config,
+            match refill_errors.is_some() {
+                true => Refill::new_with_errors(
+                    refill_config,
+                    Box::new(sql_interface_refill),
+                    refill_errors.unwrap(),
+                ),
+                false => Refill::new(refill_config, Box::new(sql_interface_refill)),
+            },
         )
     }
 
@@ -1180,6 +1259,7 @@ pub mod tests {
             error_switch_stuck_low: false,
             error_receive_tank_level_switch_position: false,
             error_sql_update_failed: false,
+            error_sql_get_historic_data_failed: false,
         };
         let (_, mut refill, _) = prepare_refill_tests(
             "/config/aquarium_control_test_refill.toml",
@@ -1782,8 +1862,8 @@ pub mod tests {
 
     #[test]
     // this test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
-    // the refill shall controll shall not initiate a refill operation
-    pub fn test_refill_conditions_historic_data_error_sql_update_failed() {
+    // the refill control shall not initiate a refill operation
+    pub fn test_refill_conditions_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) =
@@ -1874,6 +1954,7 @@ pub mod tests {
             })
             .unwrap();
 
+        // thread for mock Test environment
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
@@ -1974,6 +2055,7 @@ pub mod tests {
             error_switch_stuck_low: true,
             error_receive_tank_level_switch_position: true,
             error_sql_update_failed: true,
+            error_sql_get_historic_data_failed: true,
         };
 
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(
@@ -2527,6 +2609,185 @@ pub mod tests {
 
                 // check if there was only one water injection
                 assert_eq!(mock_water_injection.injection_recorder.len(), 1);
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+
+                spin_sleeper.sleep(sleep_duration_two_millis);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // this test case executes multiple iterations of the loop inside .execute function
+    // using mock version of SQL interface which returns only errors.
+    // the refill control shall not initiate a refill operation
+    pub fn test_refill_conditions_error_get_historic_data_failed() {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+        let (_, mut refill) = prepare_refill_tests_with_mock_database_interface(
+            "/config/aquarium_control_test_refill_secondary.toml",
+            None,
+        );
+        // this test case does not use the SQL database, so no conflict arises
+        // when concurrently executing other test cases on the same DB.
+
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+            mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection =
+            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    Some(&rx_tank_level_switch_from_test_environment),
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Test environment
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                for _ in 0..999 {
+                    assert_eq!(
+                        rx_test_environment_from_mock_water_injection.try_recv(),
+                        Err(TryRecvError::Empty)
+                    );
+                    spin_sleeper.sleep(sleep_duration_two_millis);
+                }
+
+                println!("sending quit signal to test object...");
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let sleep_duration_two_millis = Duration::from_millis(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                let tx_refill_to_schedule_check_for_test_case_finish =
+                    tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
+                    rx_refill_from_messaging,
+                    &mut mock_water_injection,
+                );
+
+                // check if there was no water injection
+                assert_eq!(mock_water_injection.injection_recorder.is_empty(), true);
 
                 // send Quit signal to mock threads because test object has terminated
                 let _ =

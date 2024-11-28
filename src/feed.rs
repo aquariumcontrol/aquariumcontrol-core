@@ -250,11 +250,16 @@ impl Feed {
                                             // do nothing
                                             //println!("Updated feed schedule entry");
                                         }
+                                        #[cfg(not(test))]
                                         Err(e) => {
                                             error!(
                                                 target: LOG_TARGET_FEED,
                                                 "updating feed schedule entry failed ({e:?})"
                                             );
+                                            execution_blocked = true;
+                                        }
+                                        #[cfg(test)]
+                                        Err(_) => {
                                             execution_blocked = true;
                                         }
                                     }
@@ -266,6 +271,7 @@ impl Feed {
                             //println!("Database has no feed schedule entry which lies in the past.");
                         }
                     },
+                    #[cfg(not(test))]
                     Err(e) => {
                         if !self.lock_error_get_feedschedule_entry {
                             error!(
@@ -275,6 +281,10 @@ impl Feed {
                             self.lock_error_get_feedschedule_entry = true;
                         }
                     }
+                    #[cfg(test)]
+                    Err(_) => {
+                        self.lock_error_get_feedschedule_entry = true;
+                    }                    
                 };
             }
             // exit loop right after feed execution if quit command has been received meanwhile

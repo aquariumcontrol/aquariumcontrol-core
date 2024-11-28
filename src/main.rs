@@ -98,6 +98,7 @@ use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
 use crate::sql_interface_feed::SqlInterfaceFeed;
 use crate::sql_interface_heating::SqlInterfaceHeating;
 use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
+use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sql_interface_refill::SqlInterfaceRefill;
 use crate::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::tank_level_switch::TankLevelSwitch;
@@ -241,7 +242,8 @@ fn main() {
 
     let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-    let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+    let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> =
+        Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
 
     let sql_interface_midnight_calculator =
         SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection());
