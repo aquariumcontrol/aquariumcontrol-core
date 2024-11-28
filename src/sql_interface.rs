@@ -266,6 +266,8 @@ pub enum SqlInterfaceError {
     SingleDataFrameRequestNoSingleResponse(String),
     #[cfg(test)]
     TruncateTableFailure(String),
+    #[cfg(test)]
+    MockError,
 }
 
 /// Holds the configuration and the implementation of the SQL interface.

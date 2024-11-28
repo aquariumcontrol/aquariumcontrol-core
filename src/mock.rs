@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK: &str = "mock";
 
+    use chrono::NaiveDateTime;
     use chrono::{DateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
@@ -20,9 +21,13 @@ pub mod tests {
     use crate::channel_content::AquariumSignal;
     use crate::channel_content::InternalCommand;
     use crate::data_injection::DataInjectionTrait;
+    use crate::feedpattern::Feedpattern;
     use crate::refill::RefillErrors;
+    use crate::sql_interface::SqlInterfaceError;
     use crate::sql_interface_data::DataFrame;
     use crate::sql_interface_data::SqlInterfaceData;
+    use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
+    use crate::sql_interface_feed::FeedScheduleEntry;
     use crate::sql_interface_refill::SqlInterfaceRefill;
     use crate::water_injection::WaterInjectionTrait;
 
@@ -1464,5 +1469,63 @@ pub mod tests {
         }
 
         commands_received
+    }
+
+    /// Contains the configuration and the implementation of the mock SQL interface for Feed.
+    /// This mock version only returns errors instead of any data.
+    pub struct MockSqlInterfaceFeed {}
+
+    impl MockSqlInterfaceFeed {
+        pub fn new() -> MockSqlInterfaceFeed {
+            MockSqlInterfaceFeed {}
+        }
+    }
+
+    impl DatabaseInterfaceFeedTrait for MockSqlInterfaceFeed {
+        fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_feedschedule_entry_from_database(
+            &mut self,
+        ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_single_feedpattern_from_database(
+            &mut self,
+            _profile_id: i32,
+        ) -> Result<Feedpattern, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn insert_feed_event(
+            &mut self,
+            _timestamp: NaiveDateTime,
+            _feeder_run_time: f64,
+            _profile_name: String,
+            _profile_id: i32,
+        ) -> Result<(), SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn update_feedschedule_entry_in_database(
+            &mut self,
+            _feedschedule_entry: &mut FeedScheduleEntry,
+        ) -> Result<(), SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        #[cfg(test)]
+        fn insert_feed_schedule_entry(
+            &mut self,
+            _timestamp: NaiveDateTime,
+            _profile_id: i32,
+            _profile_name: String,
+            _is_weekly: bool,
+            _is_daily: bool,
+        ) -> Result<(), SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
     }
 }
