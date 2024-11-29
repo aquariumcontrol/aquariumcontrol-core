@@ -304,7 +304,8 @@ pub mod tests {
             use spin_sleep::SpinSleeper;
             use std::time::Duration;
     
-            use crate::controllino::{Controllino, ControllinoActuateHardware, RelayActuationTrait};
+            use crate::controllino::{Controllino, RelayActuationTrait};
+            use crate::controllino_actuate_hardware::ControllinoActuateHardware;
         }
     }
 
