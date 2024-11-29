@@ -82,8 +82,8 @@ impl fmt::Display for AquariumDevice {
 pub enum AquariumSignal {
     /// water temperature in °C
     WaterTemperature,
+    
     #[allow(non_camel_case_types)]
-
     /// pH Value
     pH,
 
@@ -113,6 +113,9 @@ pub enum AquariumSignal {
 
     /// refill pump status
     RefillPumpStatus,
+    
+    #[cfg(all(target_os = "linux", test))]
+    MockInvalidSignal,
 }
 
 impl fmt::Display for AquariumSignal {

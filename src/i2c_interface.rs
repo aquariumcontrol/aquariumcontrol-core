@@ -731,4 +731,16 @@ pub mod tests {
             }
         }
     }
+    
+    #[test]
+    #[cfg(target_os = "linux")]
+    pub fn test_i2c_error_response_to_invalid_signal_request() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
+        let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+
+        let result = i2c_interface.get_response_from_i2c(AquariumSignal::MockInvalidSignal);
+        
+        assert_eq!(result, Err(I2cError::InvalidSignalRequest(AquariumSignal::MockInvalidSignal)));
+    }
 }
