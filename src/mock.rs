@@ -1486,7 +1486,7 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_feedschedule_entry_from_database(
+        fn get_past_feedschedule_entry_from_database(
             &mut self,
         ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)

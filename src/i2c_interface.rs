@@ -520,7 +520,7 @@ pub mod tests {
     use crate::i2c_interface::atlas_scientific_constants;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
-    
+
     // feature-specific imports
     cfg_if::cfg_if! {
         if #[cfg(all(feature = "target_hw", target_os = "linux"))] {

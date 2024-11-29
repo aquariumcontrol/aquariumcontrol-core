@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 
 #[cfg(not(test))]
-use log::error;
+use log::{error, info};
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -157,6 +157,11 @@ impl ProcessExternalRequestTrait for Refill {
                         InternalCommand::Start => (true, false),
                         InternalCommand::Stop => (false, true),
                         InternalCommand::ResetAllErrors => {
+                            #[cfg(not(test))]
+                            info!(
+                                target: LOG_TARGET_PROC_EXT_REQ,
+                                "Received reset command for errors of refill control."
+                            );
                             self.refill_errors.reset_all_errors();
                             (false, false)
                         }
@@ -397,6 +402,15 @@ impl ProcessExternalRequestTrait for Feed {
                         Ok(c) => match c {
                             InternalCommand::Start => (true, false, false, 0),
                             InternalCommand::Stop => (false, true, false, 0),
+                            InternalCommand::ResetAllErrors => {
+                                #[cfg(not(test))]
+                                info!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "Received reset command for errors of refill control."
+                                );
+                                self.execution_blocked = false;
+                                (false, false, false, 0)
+                            }
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
                                 warn!(

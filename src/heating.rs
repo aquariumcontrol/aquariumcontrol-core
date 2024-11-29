@@ -43,7 +43,6 @@ pub trait HeatingStatsDataTransferTrait {
         &mut self,
         data: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
-        sql_interface: &mut SqlInterface,
     );
 }
 
@@ -54,10 +53,9 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
         &mut self,
         mut heating_stats_entry: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
-        sql_interface: &mut SqlInterface,
     ) {
         // two subsequent sections.
-        let today = match sql_interface.get_current_date() {
+        let today = match SqlInterface::get_current_date(&mut sql_interface_heating.conn) {
             Ok(c) => c,
             Err(e) => {
                 error!(
@@ -458,7 +456,6 @@ impl Heating {
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         rx_from_messaging: Receiver<InternalCommand>,
-        sql_interface: &mut SqlInterface,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {
         let mut _refill_error = false;
@@ -885,7 +882,6 @@ impl Heating {
                         heating_stats_transfer.transfer_heating_stats(
                             heating_stats_opt.clone().unwrap(),
                             &mut self.sql_interface_heating,
-                            sql_interface,
                         );
                         // reset heating stats
                         heating_stats_opt = Some(HeatingStatsEntry::new());
@@ -942,7 +938,6 @@ impl Heating {
             heating_stats_transfer.transfer_heating_stats(
                 heating_stats_opt.clone().unwrap(),
                 &mut self.sql_interface_heating,
-                sql_interface,
             );
         }
 
@@ -1053,7 +1048,6 @@ pub mod tests {
             &mut self,
             heating_stats_entry: HeatingStatsEntry,
             _sql_interface_heating: &mut SqlInterfaceHeating,
-            _sql_interface: &mut SqlInterface,
         ) {
             self.heating_stats_entry_previous = self.heating_stats_entry.clone();
             self.heating_stats_entry = heating_stats_entry.clone();
@@ -1085,7 +1079,7 @@ pub mod tests {
 
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
-    ) -> (ConfigData, Heating, SqlInterface) {
+    ) -> (ConfigData, Heating) {
         // prepare struct Heating for subsequent tests
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_heating.toml".to_string());
@@ -1108,11 +1102,7 @@ pub mod tests {
             config.heating.switch_on_temperature, config.heating.switch_off_temperature
         );
         let heating_config = config.heating.clone();
-        (
-            config,
-            Heating::new(heating_config, sql_interface_heating),
-            sql_interface,
-        )
+        (config, Heating::new(heating_config, sql_interface_heating))
     }
 
     // Check if the heater remains switched off with high temperature.
@@ -1122,8 +1112,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -1283,7 +1272,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -1335,8 +1323,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -1501,7 +1488,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -1553,8 +1539,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -1839,7 +1824,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -1890,7 +1874,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2052,7 +2036,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -2110,7 +2093,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2282,7 +2265,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -2440,7 +2422,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2612,7 +2594,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -2770,8 +2751,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2931,7 +2911,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -2980,7 +2959,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, mut sql_interface) = prepare_heating_tests_mock_midnight_calculator(3);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -3145,7 +3124,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
 
@@ -3195,8 +3173,7 @@ pub mod tests {
     // resumes operation.
     #[test]
     pub fn test_messaging_stops_starts_heating() {
-        let (_, mut heating, mut sql_interface) =
-            prepare_heating_tests_mock_midnight_calculator(3600);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
         let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();
@@ -3438,7 +3415,6 @@ pub mod tests {
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging,
-                    &mut sql_interface,
                     &mut heating_stats_transfer,
                 );
                 // send Quit signal to mock threads because test object has terminated

@@ -67,6 +67,9 @@ pub struct Feed {
     /// communication from trait implementation: id of feed profile to be executed requested externally
     pub profile_id_requested: i32,
 
+    /// flag inhibiting further execution of feed profiles. It is set whenever errors occur during feeding and can be reset by external command.
+    pub execution_blocked: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from database
     lock_error_get_feedschedule_entry: bool,
 
@@ -90,6 +93,7 @@ impl Feed {
             sql_interface_feed: sql_interface_feed,
             execute_command_received: false,
             profile_id_requested: -1,
+            execution_blocked: false,
             lock_error_get_feedschedule_entry: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_receive_termination_signal: false,
@@ -188,7 +192,6 @@ impl Feed {
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
         let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
-        let mut execution_blocked: bool = false;
         let mut quit_command_received: bool = false; // request to end the application has been received
         let mut start_command_received: bool; // request to (re-)start feed has been received
         let mut stop_command_received: bool; // request to (temporarily) stop feed has been received
@@ -200,20 +203,13 @@ impl Feed {
             {
                 match self
                     .sql_interface_feed
-                    .get_feedschedule_entry_from_database()
+                    .get_past_feedschedule_entry_from_database()
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entry) => {
                             self.lock_error_get_feedschedule_entry = false;
-                            //println!(
-                            //    "Feed schedule entry before update: \
-                            //    timestamp={}, profile_name={}, repeat_daily={}",
-                            //    feed_schedule_entry.timestamp,
-                            //    feed_schedule_entry.profile_name,
-                            //    feed_schedule_entry.repeat_daily
-                            //);
 
-                            if !execution_blocked {
+                            if !self.execution_blocked {
                                 {
                                     // scope to limit lifetime of unlocked mutex
                                     let mut mutex_data =
@@ -234,7 +230,7 @@ impl Feed {
                                         Ok(_) => { /* do nothing */ }
                                         Err(_) => {
                                             // error occurred. Block subsequent executions
-                                            execution_blocked = true;
+                                            self.execution_blocked = true;
                                         }
                                     }
 
@@ -248,7 +244,6 @@ impl Feed {
                                         ) {
                                         Ok(()) => {
                                             // do nothing
-                                            //println!("Updated feed schedule entry");
                                         }
                                         #[cfg(not(test))]
                                         Err(e) => {
@@ -256,11 +251,11 @@ impl Feed {
                                                 target: LOG_TARGET_FEED,
                                                 "updating feed schedule entry failed ({e:?})"
                                             );
-                                            execution_blocked = true;
+                                            self.execution_blocked = true;
                                         }
                                         #[cfg(test)]
                                         Err(_) => {
-                                            execution_blocked = true;
+                                            self.execution_blocked = true;
                                         }
                                     }
                                 }
@@ -317,7 +312,9 @@ impl Feed {
                 );
                 feed_inhibited = false;
             }
-            if self.execute_command_received && self.profile_id_requested >= 0 && !execution_blocked
+            if self.execute_command_received
+                && self.profile_id_requested >= 0
+                && !self.execution_blocked
             {
                 {
                     // scope to limit lifetime of unlocked mutex
@@ -334,7 +331,7 @@ impl Feed {
                         Ok(_) => { /* do nothing */ }
                         Err(_) => {
                             // error occurred. Block subsequent executions
-                            execution_blocked = true;
+                            self.execution_blocked = true;
                         }
                     }
                     quit_command_received = quit_command_received_during_requested_feed;

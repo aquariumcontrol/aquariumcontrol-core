@@ -303,7 +303,7 @@ pub mod tests {
             use serialport::SerialPort;
             use spin_sleep::SpinSleeper;
             use std::time::Duration;
-    
+
             use crate::controllino::{Controllino, RelayActuationTrait};
             use crate::controllino_actuate_hardware::ControllinoActuateHardware;
         }

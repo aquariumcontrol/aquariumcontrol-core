@@ -1236,7 +1236,6 @@ fn main() {
                 tx_heating_to_schedule_check,
                 rx_heating_from_schedule_check,
                 rx_heating_from_messaging,
-                &mut sql_interface,
                 &mut heating_stats_transfer,
             );
             trace!(target: LOG_TARGET_MAIN, "Heating terminated.");

@@ -33,6 +33,9 @@ pub mod sql_query_strings {
     /// Provides the current date (without time) from the database.
     pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
 
+    /// Provides tomorrow's date (without time) from the database.
+    pub const SQL_QUERY_READ_TOMORROW_DATE: &str = "SELECT CURRENT_DATE() + INTERVAL 1 DAY;";
+
     /// Provides the current timestamp from the database.
     pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
 
@@ -100,9 +103,15 @@ pub mod sql_query_strings {
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
     /// Provides the oldest feed schedule entry which lies in the past.
-    pub const SQL_QUERY_READ_FEED_SCHEDULE_ENTRY: &str =
+    pub const SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY: &str =
         "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
         FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
+
+    #[cfg(test)]
+    /// Provides the feed schedule entry which lies in furthest in the future.
+    pub const SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY: &str =
+        "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
+        FROM feedschedule WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC;";
 
     /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall be repeated daily.
@@ -747,19 +756,21 @@ impl SqlInterface {
     /// - or an error code from the enum SqlInterfaceError
     /// # Arguments
     /// * `sql_query_string` - SQL query for retrieving timestamp as String
-    fn get_date(&mut self, sql_query_string: &str) -> Result<NaiveDate, SqlInterfaceError> {
+    fn get_date(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<NaiveDate, SqlInterfaceError> {
         // trigger SQL call
-        let timestamp_string =
-            match Self::get_single_string_from_database(&mut self.conn, sql_query_string) {
-                Ok(c) => c,
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SQL_INTERFACE,
-                        "could not retrieve date from database ({e:?})"
-                    );
-                    return Err(e);
-                }
-            };
+        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
+            Ok(c) => c,
+            Err(e) => {
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE,
+                    "could not retrieve date from database ({e:?})"
+                );
+                return Err(e);
+            }
+        };
         // convert data type
         match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
@@ -779,8 +790,15 @@ impl SqlInterface {
     /// Retrieves the current date from SQL database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDate
     /// - or an error code from the enum SqlInterfaceError
-    pub fn get_current_date(&mut self) -> Result<NaiveDate, SqlInterfaceError> {
-        self.get_date(sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
+    pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
+        Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
+    }
+
+    /// Retrieves the date of tomorrow from SQL database and provides wrapped in Result type either
+    /// - tomorrow's timestamp as type NaiveDate
+    /// - or an error code from the enum SqlInterfaceError
+    pub fn get_tomorrow_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
+        Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_TOMORROW_DATE)
     }
 
     /// Retrieves the names of all tables in the SQL database provides wrapped in Result type either
@@ -948,7 +966,7 @@ pub mod tests {
         // **************************************************************************************
 
         // *** check if current date is local date - PASS ***************************************
-        let sql_date = match SqlInterface::get_current_date(&mut sql_interface) {
+        let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from SQL database."),
         };

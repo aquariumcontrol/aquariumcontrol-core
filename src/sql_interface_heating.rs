@@ -438,7 +438,7 @@ pub mod tests {
 
         // *** insert heating stats - PASS ******************************************************
         // prepare data for inserting into database
-        let today = match sql_interface.get_current_date() {
+        let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date."),
         };
