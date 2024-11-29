@@ -425,7 +425,7 @@ impl Refill {
                     #[cfg(test)]
                     Err(_) => {
                         self.lock_error_read_duration_since_last_refill = true;
-                        self.refill_errors.error_sql_get_historic_data_failed = true;                        
+                        self.refill_errors.error_sql_get_historic_data_failed = true;
                     }
                 }
             }
@@ -538,8 +538,8 @@ impl Refill {
             #[cfg(test)]
             Err(_) => {
                 self.lock_error_read_refill_count_last_hour = true;
-                self.refill_errors.error_sql_get_historic_data_failed = true;                
-            }            
+                self.refill_errors.error_sql_get_historic_data_failed = true;
+            }
         };
     }
 
@@ -1174,10 +1174,10 @@ pub mod tests {
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
 
-    use crate::mock::tests::MockSqlInterfaceRefill;
     use crate::mock::tests::MockSignal::{
         TankLevelSwitchPosition, TankLevelSwitchPositionStabilized,
     };
+    use crate::mock::tests::MockSqlInterfaceRefill;
     use crate::mock::tests::{
         mock_data_logger, mock_schedule_check, mock_tank_level_switch, MockSignal,
         MockWaterInjection, TestCommand,

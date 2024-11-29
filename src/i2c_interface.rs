@@ -520,15 +520,15 @@ pub mod tests {
     use crate::i2c_interface::atlas_scientific_constants;
     use crate::i2c_interface::AtlasScientificError;
     use crate::i2c_interface::I2cInterface;
-
-    #[cfg(target_os = "linux")]
-    use crate::config::read_config_file;
-
-    #[cfg(target_os = "linux")]
-    use crate::config::ConfigData;
-
-    #[cfg(target_os = "linux")]
-    use crate::channel_content::AquariumSignal;
+    
+    // feature-specific imports
+    cfg_if::cfg_if! {
+        if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
+            use crate::config::{read_config_file, ConfigData};
+            use crate::channel_content::AquariumSignal;
+            use crate::i2c_interface::I2cError;
+        }
+    }
 
     // happy case for evaluating response from pH sensor unit
     #[test]
@@ -557,7 +557,7 @@ pub mod tests {
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub fn test_i2c_interface_check_response_invalid_ph_negative() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
@@ -684,9 +684,8 @@ pub mod tests {
     // - pH sensor
     // - conductivity sensor
     // - temperature
-    #[ignore]
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn test_i2c_interface_read_sensors() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
@@ -731,16 +730,23 @@ pub mod tests {
             }
         }
     }
-    
+
+    // test the error response of get_response_from_i2c when requesting an invalid signal.
+    // This test case only runs on the target hardware, because it requires initialization of the I2C subsystem.
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn test_i2c_error_response_to_invalid_signal_request() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
         let mut i2c_interface = I2cInterface::new(config.i2c_interface);
 
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::MockInvalidSignal);
-        
-        assert_eq!(result, Err(I2cError::InvalidSignalRequest(AquariumSignal::MockInvalidSignal)));
+
+        assert_eq!(
+            result,
+            Err(I2cError::InvalidSignalRequest(
+                AquariumSignal::MockInvalidSignal
+            ))
+        );
     }
 }

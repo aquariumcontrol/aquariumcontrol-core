@@ -284,7 +284,7 @@ impl Feed {
                     #[cfg(test)]
                     Err(_) => {
                         self.lock_error_get_feedschedule_entry = true;
-                    }                    
+                    }
                 };
             }
             // exit loop right after feed execution if quit command has been received meanwhile

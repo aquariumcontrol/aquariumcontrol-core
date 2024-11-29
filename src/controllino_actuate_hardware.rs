@@ -297,44 +297,40 @@ impl RelayActuationTrait for ControllinoActuateHardware {
 
 #[cfg(test)]
 pub mod tests {
-    use serialport::SerialPort;
-    use spin_sleep::SpinSleeper;
-    use std::time::Duration;
+    // feature-specific imports
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "controllino_hw")] {
+            use serialport::SerialPort;
+            use spin_sleep::SpinSleeper;
+            use std::time::Duration;
+    
+            use crate::controllino::{Controllino, ControllinoActuateHardware, RelayActuationTrait};
+        }
+    }
 
-    use crate::channel_content::AquariumDevice::AuxPump1;
-    use crate::channel_content::AquariumDevice::AuxPump2;
-    use crate::channel_content::AquariumDevice::Feeder;
-    use crate::channel_content::AquariumDevice::Heater;
-    use crate::channel_content::AquariumDevice::MainPump1;
-    use crate::channel_content::AquariumDevice::MainPump2;
-    use crate::channel_content::AquariumDevice::PeristalticPump1;
-    use crate::channel_content::AquariumDevice::PeristalticPump2;
-    use crate::channel_content::AquariumDevice::PeristalticPump3;
-    use crate::channel_content::AquariumDevice::PeristalticPump4;
-    use crate::channel_content::AquariumDevice::Skimmer;
-    use crate::channel_content::AquariumDevice::Ventilation;
+    use crate::channel_content::AquariumDevice::{
+        AuxPump1, AuxPump2, Feeder, Heater, MainPump1, MainPump2, PeristalticPump1,
+        PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
+    };
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
     use crate::controllino::controllino_constants;
-    use crate::controllino::Controllino;
     use crate::controllino::ControllinoError;
-    use crate::controllino::RelayActuationTrait;
     use crate::controllino_actuate_hardware::create_command_message;
-    use crate::controllino_actuate_hardware::ControllinoActuateHardware;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
     fn get_platform_specific_configuration_file() -> String {
         "/config/aquarium_control_test_controllino_macos.toml".to_string()
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "controllino_hw"))]
     fn get_platform_specific_configuration_file() -> String {
         "/config/aquarium_control_test_controllino_linux.toml".to_string()
     }
 
-    #[ignore]
+    #[cfg(feature = "controllino_hw")]
     #[test]
     // Actuates on real hardware.
     // Execution of this test case requires serial port connection to Controllino device.

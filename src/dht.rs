@@ -696,12 +696,13 @@ pub mod tests {
     use crate::dht::DhtError;
     use crate::logger::setup_logger;
 
-    #[cfg(target_os = "linux")]
-    use crate::config::read_config_file;
-    #[cfg(target_os = "linux")]
-    use crate::config::ConfigData;
-    #[cfg(target_os = "linux")]
-    use rppal::gpio::Gpio;
+    // feature-specific imports
+    cfg_if::cfg_if! {
+        if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
+            use crate::config::{read_config_file, ConfigData};
+            use rppal::gpio::Gpio;
+        }
+    }
 
     #[test]
     pub fn test_dht_calc_byte_array() {
@@ -795,8 +796,7 @@ pub mod tests {
         );
     }
 
-    #[ignore]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[test]
     pub fn test_dht_read() {
         setup_logger();

@@ -386,24 +386,18 @@ pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
-    use std::thread::scope;
+    use std::thread;
     use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
     use crate::config::ConfigData;
-    use crate::feed::tests::MockFoodInjection;
-    use crate::feed::Feed;
     use crate::messaging::messaging_commands;
     use crate::messaging::messaging_domains;
     use crate::messaging::Message;
     use crate::messaging::Messaging;
     use crate::messaging::LOG_TARGET_MESSAGING;
     use crate::mock::tests::mock_message_command_receiver;
-    use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_feed::SqlInterfaceFeed;
-    use std::thread;
 
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
