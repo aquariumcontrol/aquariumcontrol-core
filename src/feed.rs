@@ -9,8 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(not(test))]
 use log::info;
-use log::{error, trace, warn};
 
+use log::{error, trace, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -21,6 +21,7 @@ use crate::channel_content::InternalCommand;
 use crate::food_injection::FoodInjectionTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
+use crate::sql_interface_feed::FeedScheduleEntry;
 
 const LOG_TARGET_FEED: &str = "feed";
 
@@ -37,6 +38,15 @@ pub struct FeedConfig {
 
     /// waiting time in milliseconds before switching on or off a device during feed
     pub device_switch_delay_millis: u32,
+
+    /// describes strategy to use when there are multiple feed schedule entries in the past
+    /// negative value: execute none of them
+    /// positive value: execute the xth entry according to how they are stacked in time
+    /// - e.g. 0: execute the first entry which has a timestamp closest to now
+    /// - e.g. 1: execute the second last entry which lies closest to now
+    /// - e.g. 99: numbers higher than the amount of entries found in the past will trigger execution of the
+    /// last entry which has timestamp furthest from now
+    strategy_multiple_schedule_entries_in_past: i32,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -169,6 +179,40 @@ impl Feed {
         (result, quit_command_received)
     }
 
+    /// Applies the configured strategy to select one of multiple feed schedule entries
+    /// if there are multiple entries in the past.
+    /// Using strategy_multiple_schedule_entries_in_past:
+    /// negative value: execute none of them
+    /// positive value: execute the xth entry according to how they are stacked in time
+    /// - e.g. 0: execute the first entry which has a timestamp closest to now
+    /// - e.g. 1: execute the second last entry which lies closest to now
+    /// - e.g. 99: numbers higher than the amount of entries found in the past will trigger execution of the
+    /// last entry which has timestamp furthest from now     
+    fn select_feed_schedule_entry_for_execution(
+        &self,
+        feedschedule_entries: &Vec<FeedScheduleEntry>,
+    ) -> Option<FeedScheduleEntry> {
+        if self.config.strategy_multiple_schedule_entries_in_past >= 0 {
+            // user chose strategy to select one element
+            if (self.config.strategy_multiple_schedule_entries_in_past as usize + 1)
+                > feedschedule_entries.len()
+            {
+                // vector has not sufficient number of lements - choose last element
+                feedschedule_entries
+                    .get(feedschedule_entries.len() - 1)
+                    .cloned()
+            } else {
+                // vector has sufficient number of elements - choose as per parameter
+                feedschedule_entries
+                    .get(self.config.strategy_multiple_schedule_entries_in_past as usize)
+                    .cloned()
+            }
+        } else {
+            // user chose strategy to select no element
+            None
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
@@ -203,68 +247,75 @@ impl Feed {
             {
                 match self
                     .sql_interface_feed
-                    .get_past_feedschedule_entry_from_database()
+                    .get_past_feedschedule_entries_from_database()
                 {
                     Ok(c) => match c {
-                        Some(mut feed_schedule_entry) => {
-                            self.lock_error_get_feedschedule_entry = false;
+                        Some(mut feed_schedule_entries) => {
+                            let feed_schedule_entry_opt = self
+                                .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
-                            if !self.execution_blocked {
-                                {
-                                    // scope to limit lifetime of unlocked mutex
-                                    let mut mutex_data =
-                                        mutex_device_scheduler_feed.lock().unwrap();
+                            match feed_schedule_entry_opt {
+                                Some(feed_schedule_entry) => {
+                                    self.lock_error_get_feedschedule_entry = false;
 
-                                    let (result, quit_command_received_during_feed) = self
-                                        .execute_feed(
-                                            feed_schedule_entry.profile_id,
-                                            food_injection,
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &rx_from_signal_handler,
-                                        );
+                                    if !self.execution_blocked {
+                                        {
+                                            // scope to limit lifetime of unlocked mutex
+                                            let mut mutex_data =
+                                                mutex_device_scheduler_feed.lock().unwrap();
 
-                                    quit_command_received = quit_command_received_during_feed;
+                                            let (result, quit_command_received_during_feed) = self
+                                                .execute_feed(
+                                                    feed_schedule_entry.profile_id,
+                                                    food_injection,
+                                                    &tx_to_controllino,
+                                                    &rx_from_controllino,
+                                                    &rx_from_signal_handler,
+                                                );
 
-                                    match result {
-                                        Ok(_) => { /* do nothing */ }
-                                        Err(_) => {
-                                            // error occurred. Block subsequent executions
-                                            self.execution_blocked = true;
-                                        }
-                                    }
+                                            quit_command_received =
+                                                quit_command_received_during_feed;
 
-                                    *mutex_data += 1;
+                                            match result {
+                                                Ok(_) => { /* do nothing */ }
+                                                Err(_) => {
+                                                    // error occurred. Block subsequent executions
+                                                    self.execution_blocked = true;
+                                                }
+                                            }
 
-                                    //*** update schedule ***
-                                    match self
-                                        .sql_interface_feed
-                                        .update_feedschedule_entry_in_database(
-                                            &mut feed_schedule_entry,
-                                        ) {
-                                        Ok(()) => {
-                                            // do nothing
-                                        }
-                                        #[cfg(not(test))]
-                                        Err(e) => {
-                                            error!(
-                                                target: LOG_TARGET_FEED,
-                                                "updating feed schedule entry failed ({e:?})"
-                                            );
-                                            self.execution_blocked = true;
-                                        }
-                                        #[cfg(test)]
-                                        Err(_) => {
-                                            self.execution_blocked = true;
+                                            *mutex_data += 1;
+
+                                            //*** update schedule ***
+                                            match self
+                                                .sql_interface_feed
+                                                .update_feedschedule_entries_in_database(
+                                                    &mut feed_schedule_entries,
+                                                ) {
+                                                Ok(()) => {
+                                                    // do nothing
+                                                }
+                                                #[cfg(not(test))]
+                                                Err(e) => {
+                                                    error!(
+                                                        target: LOG_TARGET_FEED,
+                                                        "updating feed schedule entry failed ({e:?})"
+                                                    );
+                                                    self.execution_blocked = true;
+                                                }
+                                                #[cfg(test)]
+                                                Err(_) => {
+                                                    self.execution_blocked = true;
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                                None => { /* do nothing - none of the feed schedule entries in the past has been selected */
+                                }
                             }
                         }
-                        None => {
-                            // do nothing
-                            //println!("Database has no feed schedule entry which lies in the past.");
-                        }
+                        None => { /* do nothing - no feed schedule entry in the past */ }
                     },
                     #[cfg(not(test))]
                     Err(e) => {
@@ -425,6 +476,7 @@ pub mod tests {
     use crate::food_injection::FoodInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
+    use crate::sql_interface_feed::FeedScheduleEntry;
     use crate::sql_interface_feed::SqlInterfaceFeed;
 
     use crate::mock::tests::MockSqlInterfaceFeed;
@@ -483,6 +535,7 @@ pub mod tests {
     }
 
     #[test]
+    // "happy" case executing a set of feed schedule entries
     pub fn test_feed_schedule_execution() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let sleep_duration_8_seconds = Duration::from_millis(10000);
@@ -910,5 +963,378 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
+    }
+
+    fn create_mock_feedschedule_entries() -> Vec<FeedScheduleEntry> {
+        let mut feedschedule_entries: Vec<FeedScheduleEntry> = Vec::new();
+
+        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+            "2024-10-24 10:00:00",
+            77,
+            "dummy1",
+            true,
+        ));
+        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+            "2024-10-24 11:00:00",
+            78,
+            "dummy2",
+            true,
+        ));
+        feedschedule_entries.push(FeedScheduleEntry::new_for_test(
+            "2024-10-24 12:00:00",
+            79,
+            "dummy3",
+            true,
+        ));
+
+        feedschedule_entries
+    }
+
+    // Test case test selection of feed schedule entry in case there are multiple entries in the past
+    // This test case tests the strategy to select none of them
+    #[test]
+    pub fn test_select_feed_schedule_entry_for_execution_none() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        config.feed.strategy_multiple_schedule_entries_in_past = -1;
+
+        // mock interface will be used in operation of test object
+        let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(MockSqlInterfaceFeed::new());
+
+        // create test object
+        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+
+        // input for function to be tested
+        let feedschedule_entries = create_mock_feedschedule_entries();
+
+        assert_eq!(
+            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries),
+            None
+        );
+    }
+
+    // Test case test selection of feed schedule entry in case there are multiple entries in the past
+    // This test case tests the strategy to select the first
+    #[test]
+    pub fn test_select_feed_schedule_entry_for_execution_first() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        config.feed.strategy_multiple_schedule_entries_in_past = 0;
+
+        // mock interface will be used in operation of test object
+        let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(MockSqlInterfaceFeed::new());
+
+        // create test object
+        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+
+        // input for function to be tested
+        let feedschedule_entries = create_mock_feedschedule_entries();
+
+        assert_eq!(
+            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+                .unwrap()
+                .profile_id,
+            77
+        );
+    }
+
+    // Test case test selection of feed schedule entry in case there are multiple entries in the past
+    // This test case tests the strategy to select a middle one
+    #[test]
+    pub fn test_select_feed_schedule_entry_for_execution_middle() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        config.feed.strategy_multiple_schedule_entries_in_past = 1;
+
+        // mock interface will be used in operation of test object
+        let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(MockSqlInterfaceFeed::new());
+
+        // create test object
+        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+
+        // input for function to be tested
+        let feedschedule_entries = create_mock_feedschedule_entries();
+
+        assert_eq!(
+            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+                .unwrap()
+                .profile_id,
+            78
+        );
+    }
+
+    // Test case test selection of feed schedule entry in case there are multiple entries in the past
+    // This test case tests the strategy to select the last
+    #[test]
+    pub fn test_select_feed_schedule_entry_for_execution_last() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        config.feed.strategy_multiple_schedule_entries_in_past = 99;
+
+        // mock interface will be used in operation of test object
+        let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(MockSqlInterfaceFeed::new());
+
+        // create test object
+        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+
+        // input for function to be tested
+        let feedschedule_entries = create_mock_feedschedule_entries();
+
+        assert_eq!(
+            feed.select_feed_schedule_entry_for_execution(&feedschedule_entries)
+                .unwrap()
+                .profile_id,
+            79
+        );
+    }
+
+    #[test]
+    // case executing with multiple feed schedule entries in the past - select youngest
+    pub fn test_feed_schedule_execution_past_entries_select_youngest() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_8_seconds = Duration::from_millis(10000);
+        let spin_sleeper = SpinSleeper::default();
+
+        // channels for the test object
+        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+
+        let mut mock_food_injection = MockFoodInjection::new();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed_quaternary.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+
+        // empty the feed schedule table
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let time_stamp_feed_schedule_entry_one_time =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, -2) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        let time_stamp_feed_schedule_entry_repeat =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, -4) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        // manipulation of database: inserting feed schedule entries with future timestamp
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_one_time,
+            1,
+            "testOneTimePast".to_string(),
+            false,
+            false,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_repeat,
+            2,
+            "testRepeatPast".to_string(),
+            false,
+            true,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
+
+        scope(|scope| {
+            let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+
+            // thread for mock signal handler
+            scope.spawn(move || {
+                spin_sleeper.sleep(sleep_duration_8_seconds);
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                rx_signal_handler_from_feed.recv().unwrap();
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed.clone(),
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    tx_feed_to_signal_handler,
+                    rx_feed_from_signal_handler,
+                    rx_feed_from_messaging,
+                    &mut mock_food_injection,
+                );
+
+                // check if the right profiles have been executed in the right order
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(1));
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
+
+                println!("* [Feed] checking feed schedule execution of multiple schedule entries in the past (select youngest) succeeded.");
+            });
+        });
+    }
+
+    #[test]
+    // case executing with multiple feed schedule entries in the past - select oldest
+    pub fn test_feed_schedule_execution_past_entries_select_oldest() {
+        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_8_seconds = Duration::from_millis(10000);
+        let spin_sleeper = SpinSleeper::default();
+
+        // channels for the test object
+        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
+
+        let mut mock_food_injection = MockFoodInjection::new();
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_feed_quinary.toml".to_string());
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
+            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+
+        // empty the feed schedule table
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let time_stamp_feed_schedule_entry_one_time =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, -2) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        let time_stamp_feed_schedule_entry_repeat =
+            match SqlInterface::get_current_timestamp_offset_seconds(&mut sql_interface.conn, -4) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "test_feed_schedule_execution: Could not calculate timestamp for stimuli: {e:?}"
+                    );
+                }
+            };
+
+        // manipulation of database: inserting feed schedule entries with future timestamp
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_one_time,
+            1,
+            "testOneTimePast".to_string(),
+            false,
+            false,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        match sql_interface_feed.insert_feed_schedule_entry(
+            time_stamp_feed_schedule_entry_repeat,
+            2,
+            "testRepeatPast".to_string(),
+            false,
+            true,
+        ) {
+            Ok(()) => { /* do nothing */ }
+            Err(e) => {
+                panic!(
+                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
+                );
+            }
+        };
+
+        let mut feed = Feed::new(config.feed, sql_interface_feed);
+
+        scope(|scope| {
+            let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
+
+            // thread for mock signal handler
+            scope.spawn(move || {
+                spin_sleeper.sleep(sleep_duration_8_seconds);
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+                rx_signal_handler_from_feed.recv().unwrap();
+                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+            });
+
+            spin_sleeper.sleep(sleep_duration_100_millisec);
+
+            // thread for test object
+            scope.spawn(move || {
+                feed.execute(
+                    mutex_device_scheduler_feed.clone(),
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    tx_feed_to_signal_handler,
+                    rx_feed_from_signal_handler,
+                    rx_feed_from_messaging,
+                    &mut mock_food_injection,
+                );
+
+                // check if the right profiles have been executed in the right order
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), Some(2));
+                assert_eq!(mock_food_injection.pop_profile_id_executed(), None);
+
+                println!("* [Feed] checking feed schedule execution of multiple schedule entries in the past (select oldest) succeeded.");
+            });
+        });
     }
 }

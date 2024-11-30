@@ -113,6 +113,22 @@ impl FeedScheduleEntry {
             repeat_daily: sql_feed_schedule_entry.repeat_daily != 0,
         })
     }
+
+    #[cfg(test)]
+    pub fn new_for_test(
+        timestamp_string: &str,
+        profile_id: i32,
+        profile_name: &str,
+        repeat_daily: bool,
+    ) -> FeedScheduleEntry {
+        FeedScheduleEntry {
+            timestamp: NaiveDateTime::parse_from_str(timestamp_string, "%Y-%m-%d %H:%M:%S")
+                .unwrap(),
+            profile_id: profile_id,
+            profile_name: profile_name.to_string(),
+            repeat_daily: repeat_daily,
+        }
+    }
 }
 
 impl fmt::Display for FeedScheduleEntry {
@@ -133,9 +149,9 @@ impl fmt::Display for FeedScheduleEntry {
 pub trait DatabaseInterfaceFeedTrait {
     fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError>;
 
-    fn get_past_feedschedule_entry_from_database(
+    fn get_past_feedschedule_entries_from_database(
         &mut self,
-    ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError>;
+    ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError>;
 
     fn insert_feed_event(
         &mut self,
@@ -150,9 +166,9 @@ pub trait DatabaseInterfaceFeedTrait {
         profile_id: i32,
     ) -> Result<Feedpattern, SqlInterfaceError>;
 
-    fn update_feedschedule_entry_in_database(
+    fn update_feedschedule_entries_in_database(
         &mut self,
-        feedschedule_entry: &mut FeedScheduleEntry,
+        feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError>;
 
     #[cfg(test)]
@@ -178,23 +194,16 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         SqlInterface::get_current_timestamp(&mut self.conn)
     }
 
-    /// Retrieve from SQL database the oldest feed schedule entry which lies in the past.
+    /// Retrieve from SQL database the feed schedule entries which lies in the past.
     /// Function provides wrapped into Result type either
-    /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
+    /// - Feedschedule entries as vector of type FeedScheduleEntry or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
-    fn get_past_feedschedule_entry_from_database(
+    fn get_past_feedschedule_entries_from_database(
         &mut self,
-    ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
-        let result = self.get_feedschedule_entries_from_database(
+    ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
+        self.get_feedschedule_entries_from_database(
             sql_query_strings::SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY,
-        );
-        match result {
-            Ok(vector_or_none) => match vector_or_none {
-                Some(vector) => Ok(Some(vector[0].clone())),
-                None => Ok(None),
-            },
-            Err(e) => Err(e),
-        }
+        )
     }
 
     /// The function retrieves the header and all phases of a feed pattern from the SQL database.
@@ -290,78 +299,86 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// tomorrow's date or delete the entry.
     /// # Arguments
     /// * `feedschedule_entry` - reference to a struct of type FeedScheduleEntry for which the timestamp shall be updated.
-    fn update_feedschedule_entry_in_database(
+    fn update_feedschedule_entries_in_database(
         &mut self,
-        feedschedule_entry: &mut FeedScheduleEntry,
+        feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError> {
-        if feedschedule_entry.repeat_daily {
-            // feed schedule shall be repeated daily, so update the entry with
-            // - tomorrow's date
-            // - same time of day as the entry
-            let sql_query_string =
-                sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
+        let mut result = Ok(()); // initial value - will be overwritten by any error occurred
+        for feedschedule_entry in feedschedule_entries {
+            if feedschedule_entry.repeat_daily {
+                // feed schedule shall be repeated daily, so update the entry with
+                // - tomorrow's date
+                // - same time of day as the entry
+                let sql_query_string =
+                    sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
 
-            let timestamp_tomorrow_date_only = match SqlInterface::get_tomorrow_date(&mut self.conn)
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SQL_INTERFACE_FEED,
-                        "could not calculate update of feed schedule entry ({e:?})"
-                    );
-                    return Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
-                        "Error calculating update of feed schedule entry which shall be repeated.".to_string(),
-                    ));
-                }
-            };
+                let timestamp_tomorrow_date_only = match SqlInterface::get_tomorrow_date(
+                    &mut self.conn,
+                ) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_SQL_INTERFACE_FEED,
+                            "could not calculate update of feed schedule entry ({e:?})"
+                        );
+                        result = Err(
+                            SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                                "Error calculating update of feed schedule entry which shall be repeated.".to_string(),
+                            )
+                        );
+                        continue;
+                    }
+                };
 
-            let timestamp_tomorrow = NaiveDateTime::new(
-                timestamp_tomorrow_date_only,
-                feedschedule_entry.timestamp.time(),
-            );
-            match self.conn.exec_drop::<_, _>(
-                sql_query_string,
-                params! {
-                "timestamp_new" => timestamp_tomorrow.format("%Y-%m-%d %H:%M:%S").to_string(),
-                "timestamp_old" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                },
-            ) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SQL_INTERFACE_FEED,
-                        "could not update feed schedule entry ({e:?})"
-                    );
-                    Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
-                        "Error updating feed schedule of entry which shall be repeated.".to_string(),
-                    ))
-                }
-            }
-        } else {
-            // feed schedule shall not be repeated daily, delete the entry from the database
-            let sql_query_string =
-                sql_query_strings::SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY.to_owned();
-            match self.conn.exec_drop::<_, _>(
-                sql_query_string,
-                params! {
-                "timestamp" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-                },
-            ) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SQL_INTERFACE_FEED,
-                        "could not delete feed schedule entry ({e:?})"
-                    );
-                    Err(
-                        SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
-                            "Error when deleting refill entry which shall be not repeated."
-                                .to_string(),
-                        ),
-                    )
-                }
+                let timestamp_tomorrow = NaiveDateTime::new(
+                    timestamp_tomorrow_date_only,
+                    feedschedule_entry.timestamp.time(),
+                );
+                match self.conn.exec_drop::<_, _>(
+                    sql_query_string,
+                    params! {
+                        "timestamp_new" => timestamp_tomorrow.format("%Y-%m-%d %H:%M:%S").to_string(),
+                        "timestamp_old" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    },
+                ) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_SQL_INTERFACE_FEED,
+                            "could not update feed schedule entry ({e:?})"
+                        );
+                        result = Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                            "Error updating feed schedule of entry which shall be repeated.".to_string(),
+                        ));
+                    }
+                };
+            } else {
+                // feed schedule shall not be repeated daily, delete the entry from the database
+                let sql_query_string =
+                    sql_query_strings::SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY.to_owned();
+                match self.conn.exec_drop::<_, _>(
+                    sql_query_string,
+                    params! {
+                        "timestamp" => feedschedule_entry.timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    },
+                ) {
+                    Ok(_) => { /* do nothing */ },
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_SQL_INTERFACE_FEED,
+                            "could not delete feed schedule entry ({e:?})"
+                        );
+                        result = Err(
+                            SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                                "Error when deleting refill entry which shall be not repeated."
+                                    .to_string(),
+                            ),
+                        );
+                    }
+                };
             }
         }
+        result
     }
 
     // Inserts one dataset of feed schedule entry into the database - for testing purposes only.
@@ -484,6 +501,19 @@ impl SqlInterfaceFeed {
             },
             Err(e) => Err(e),
         }
+    }
+
+    #[cfg(test)]
+    /// Retrieve from SQL database the feed schedule entries scheduled in the future
+    /// Function provides wrapped into Result type either
+    /// - Vector of feedschedule entries or None value wrapped in type Option
+    /// - a value of enum SqlInterfaceError
+    fn get_future_feedschedule_entries_from_database(
+        &mut self,
+    ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
+        self.get_feedschedule_entries_from_database(
+            sql_query_strings::SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY,
+        )
     }
 
     /// Retrieves the header of a feed pattern from SQL database.
@@ -626,6 +656,7 @@ pub mod tests {
     use crate::config::ConfigData;
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
+    use crate::sql_interface_feed::FeedScheduleEntry;
     use crate::sql_interface_feed::SqlInterfaceFeed;
 
     pub struct SqlFeedEvent {
@@ -929,7 +960,7 @@ pub mod tests {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
-        match sql_interface_feed.get_past_feedschedule_entry_from_database() {
+        match sql_interface_feed.get_past_feedschedule_entries_from_database() {
             Ok(c) => {
                 assert_eq!(c, None);
             }
@@ -962,21 +993,31 @@ pub mod tests {
             }
         };
 
-        let mut feedschedule_entry_before_update = match sql_interface_feed
-            .get_past_feedschedule_entry_from_database()
+        let feedschedule_entry_before_update = match sql_interface_feed
+            .get_past_feedschedule_entries_from_database()
         {
-            Ok(c) => match c {
-                Some(d) => {
+            Ok(feedschedule_entry_vector_opt) => match feedschedule_entry_vector_opt {
+                Some(feedschedule_entry_vector) => {
+                    if feedschedule_entry_vector.len() != 1 {
+                        panic!(
+                            "expected to find one feed schedule entry in data base, found {}",
+                            feedschedule_entry_vector.len()
+                        )
+                    }
+                    let feedschedule_entry = feedschedule_entry_vector.get(0).cloned().unwrap();
                     assert_eq!(
-                        d.timestamp,
+                        feedschedule_entry.timestamp,
                         NaiveDateTime::parse_from_str(timestamp_reference, "%Y-%m-%d %H:%M:%S")
                             .unwrap()
                     );
-                    println!("timestamp read from database: {}", d.timestamp);
-                    assert_eq!(d.profile_id, profile_id_reference);
-                    assert_eq!(d.profile_name, profile_name_reference);
-                    assert_eq!(d.repeat_daily, repeat_daily_reference);
-                    d
+                    println!(
+                        "timestamp read from database: {}",
+                        feedschedule_entry.timestamp
+                    );
+                    assert_eq!(feedschedule_entry.profile_id, profile_id_reference);
+                    assert_eq!(feedschedule_entry.profile_name, profile_name_reference);
+                    assert_eq!(feedschedule_entry.repeat_daily, repeat_daily_reference);
+                    feedschedule_entry
                 }
                 None => {
                     panic!("SQL database returned empty result although feed schedule entry was inserted.");
@@ -994,14 +1035,6 @@ pub mod tests {
             "Feed schedule entry before database update: {}",
             feedschedule_entry_before_update
         );
-        match sql_interface_feed
-            .update_feedschedule_entry_in_database(&mut feedschedule_entry_before_update)
-        {
-            Ok(()) => {}
-            Err(e) => {
-                panic!("Error occurred when trying to update feedschule entry which is marked for repetition: {e:?}");
-            }
-        }
 
         // calculate dynamic reference
         let local_date_tomorrow: NaiveDate =
@@ -1010,6 +1043,18 @@ pub mod tests {
             local_date_tomorrow,
             feedschedule_entry_before_update.timestamp.time(),
         );
+
+        let mut feedschedule_entries_before_update: Vec<FeedScheduleEntry> = Vec::new();
+        feedschedule_entries_before_update.push(feedschedule_entry_before_update);
+
+        match sql_interface_feed
+            .update_feedschedule_entries_in_database(&mut feedschedule_entries_before_update)
+        {
+            Ok(()) => {}
+            Err(e) => {
+                panic!("Error occurred when trying to update feedschule entry which is marked for repetition: {e:?}");
+            }
+        }
 
         let mut feedschedule_entry_after_update = match sql_interface_feed
             .get_future_feedschedule_entry_from_database()
@@ -1040,8 +1085,11 @@ pub mod tests {
         // *** check updating feed schedule without repetion ************************************
         // modify existing feed schedule entry -> it shall be deleted with call to update
         feedschedule_entry_after_update.repeat_daily = false;
+        let mut feedschedule_entries_after_update: Vec<FeedScheduleEntry> = Vec::new();
+        feedschedule_entries_after_update.push(feedschedule_entry_after_update);
+
         match sql_interface_feed
-            .update_feedschedule_entry_in_database(&mut feedschedule_entry_after_update)
+            .update_feedschedule_entries_in_database(&mut feedschedule_entries_after_update)
         {
             Ok(()) => {}
             Err(e) => {
@@ -1049,7 +1097,7 @@ pub mod tests {
             }
         }
 
-        match sql_interface_feed.get_past_feedschedule_entry_from_database() {
+        match sql_interface_feed.get_past_feedschedule_entries_from_database() {
             Ok(c) => {
                 assert_eq!(c, None);
             }
@@ -1058,6 +1106,128 @@ pub mod tests {
             }
         };
         println!("* deleting existing entry from feed schedule (PASS) succeeded.");
+        // **************************************************************************************
+
+        // *** check updating multiple feed schedule entries with repetion **********************
+        // calculate dynamic reference
+        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+
+        let timestamp_0 = "2024-04-10 14:00:00";
+        let profile_id_0 = 0;
+        let profile_name_0 = "test0";
+        let repeat_daily_0 = true;
+
+        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        match sql_interface_feed.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+                "timestamp" => timestamp_0,
+                "profile_id" => profile_id_0,
+                "profile_name" => profile_name_0,
+                "repeat_daily" => repeat_daily_0,
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting feed schedule entry into database: {e:?}");
+            }
+        };
+
+        let timestamp_1 = "2024-04-10 15:00:00";
+        let profile_id_1 = 1;
+        let profile_name_1 = "test1";
+        let repeat_daily_1 = true;
+
+        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        match sql_interface_feed.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+                "timestamp" => timestamp_1,
+                "profile_id" => profile_id_1,
+                "profile_name" => profile_name_1,
+                "repeat_daily" => repeat_daily_1,
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting feed schedule entry into database: {e:?}");
+            }
+        };
+
+        let mut feedschedule_entries_before_update = match sql_interface_feed
+            .get_past_feedschedule_entries_from_database()
+        {
+            Ok(feedschedule_entry_vector_opt) => match feedschedule_entry_vector_opt {
+                Some(feedschedule_entry_vector) => feedschedule_entry_vector,
+                None => {
+                    panic!("SQL database returned empty result although feed schedule entries were inserted.");
+                }
+            },
+            Err(_) => {
+                panic!("Error occurred when trying to load feed schedule entry.");
+            }
+        };
+
+        let local_date_tomorrow: NaiveDate =
+            (Local::now().naive_local() + Duration::days(1)).into();
+
+        let reference_timestamp0_tomorrow_same_time = NaiveDateTime::new(
+            local_date_tomorrow,
+            feedschedule_entries_before_update
+                .get(1)
+                .unwrap()
+                .timestamp
+                .time(),
+        );
+        let reference_timestamp1_tomorrow_same_time = NaiveDateTime::new(
+            local_date_tomorrow,
+            feedschedule_entries_before_update
+                .get(0)
+                .unwrap()
+                .timestamp
+                .time(),
+        );
+
+        match sql_interface_feed
+            .update_feedschedule_entries_in_database(&mut feedschedule_entries_before_update)
+        {
+            Ok(()) => {}
+            Err(e) => {
+                panic!("Error occurred when trying to update feedschule entry which is marked for repetition: {e:?}");
+            }
+        }
+
+        match sql_interface_feed.get_future_feedschedule_entries_from_database() {
+            Ok(c) => match c {
+                Some(d) => {
+                    assert_eq!(d.len(), 2);
+                    assert_eq!(
+                        d.get(0).unwrap().timestamp,
+                        reference_timestamp0_tomorrow_same_time
+                    );
+                    assert_eq!(d.get(0).unwrap().profile_id, profile_id_0);
+                    assert_eq!(d.get(0).unwrap().profile_name, profile_name_0);
+                    assert_eq!(d.get(0).unwrap().repeat_daily, repeat_daily_0);
+                    assert_eq!(
+                        d.get(1).unwrap().timestamp,
+                        reference_timestamp1_tomorrow_same_time
+                    );
+                    assert_eq!(d.get(1).unwrap().profile_id, profile_id_1);
+                    assert_eq!(d.get(1).unwrap().profile_name, profile_name_1);
+                    assert_eq!(d.get(1).unwrap().repeat_daily, repeat_daily_1);
+                }
+                None => {
+                    panic!("SQL database returned empty result although feed schedule entry was inserted.");
+                }
+            },
+            Err(_) => {
+                panic!("Error occurred when trying to load feed schedule entry.");
+            }
+        };
+        println!("* update of existing entries from feed schedule (PASS) succeeded.");
         // **************************************************************************************
     }
 }

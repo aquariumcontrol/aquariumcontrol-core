@@ -1486,9 +1486,9 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_past_feedschedule_entry_from_database(
+        fn get_past_feedschedule_entries_from_database(
             &mut self,
-        ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
+        ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 
@@ -1509,9 +1509,9 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn update_feedschedule_entry_in_database(
+        fn update_feedschedule_entries_in_database(
             &mut self,
-            _feedschedule_entry: &mut FeedScheduleEntry,
+            _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }

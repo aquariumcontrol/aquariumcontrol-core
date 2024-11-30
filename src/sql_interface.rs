@@ -102,16 +102,16 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_READ_HEATING_STATS: &str =
         "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
 
-    /// Provides the oldest feed schedule entry which lies in the past.
+    /// Provides the feed schedule entries which lie in the past in descending order
     pub const SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY: &str =
         "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
-        FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
+        FROM feedschedule WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC;";
 
     #[cfg(test)]
-    /// Provides the feed schedule entry which lies in furthest in the future.
+    /// Provides the feed schedule entries which lie in the future in ascending order
     pub const SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY: &str =
         "SELECT TimeStamp, ProfileId, ProfileName, IsDaily \
-        FROM feedschedule WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC;";
+        FROM feedschedule WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;";
 
     /// Updates a feed schedule entry after having executing a feed pattern
     /// which shall be repeated daily.
