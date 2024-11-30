@@ -7,17 +7,21 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#[cfg(target_os = "linux")]
-use log::{error, info, warn};
-#[cfg(target_os = "linux")]
-use posixmq::PosixMq;
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        #[cfg(not(test))]
+        use log::info;
+        
+        use log::{error, warn};
+        use posixmq::PosixMq;
+        use std::sync::mpsc::{Receiver, Sender};
+        use std::time::Duration;
+    }
+}
+
 use serde_derive::Deserialize;
 use std::fmt;
 use std::io::ErrorKind;
-#[cfg(target_os = "linux")]
-use std::sync::mpsc::{Receiver, Sender};
-#[cfg(target_os = "linux")]
-use std::time::Duration;
 
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
@@ -276,6 +280,7 @@ impl Messaging {
                         command_param2_buf[3] = msgbuf[19];
                         msg.command_param2 = i32::from_le_bytes(command_param2_buf);
 
+                        #[cfg(not(test))]
                         info!(
                             target: LOG_TARGET_MESSAGING,
                             "received message: domain={}, cmd={}, param1={}, param2={}",
@@ -335,6 +340,7 @@ impl Messaging {
                                 MessagingDomain::Unknown => unreachable!(),
                             };
 
+                            #[cfg(not(test))]
                             info!(
                                 target: LOG_TARGET_MESSAGING,
                                 "forwarding message to domain {}",
