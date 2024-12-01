@@ -17,7 +17,7 @@ use spin_sleep::SpinSleeper;
 use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
@@ -34,14 +34,14 @@ pub struct RefillConfig {
     active: bool,
 
     /// time interval in seconds which need to pass after initialization of the application before refill control is becoming active
-    initial_wait_interval: i64,
+    initial_wait_interval: u64,
 
     /// interval for the main control in seconds    
-    check_interval: i64,
+    check_interval: u64,
 
     /// maximum number of permitted refill operations within last 24h
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
-    max_refill_count_24h: i64,
+    max_refill_count_24h: u64,
 
     /// maximum permitted refill volume within last 24h
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
@@ -49,17 +49,17 @@ pub struct RefillConfig {
 
     /// maximum number of permitted refill operations within last hour
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
-    max_refill_count_hour: i64,
+    max_refill_count_hour: u64,
 
     /// maximum permitted refill volume within last hour
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
     max_refill_volume_hour: f64,
 
     /// minimum time which has to pass after a refill operation before a subsequent refill operation is started
-    min_interval_last_refill: i64,
+    min_interval_last_refill: u64,
 
     /// time interval in seconds which need to pass before the application recognizes a potential tank level switch fault
-    max_duration_since_last_refill: i64,
+    max_duration_since_last_refill: u64,
 
     /// flow of the refill pump in liters / second
     pub refill_pump_flow: f64,
@@ -74,6 +74,8 @@ pub struct RefillConfig {
 }
 
 const LOG_TARGET_REFILL: &str = "refill";
+
+const MILLIS_PER_SEC: u64 = 1000;
 
 /// Contains the error flags for the refill component.
 pub struct RefillErrors {
@@ -256,11 +258,11 @@ pub struct Refill {
 /// Contains the data retrieved from SQL database.
 /// It is also used to communicate data to be updated in SQL database.
 struct RefillSqlData {
-    duration_since_last_refill: i64,
+    duration_since_last_refill: u64,
     refill_volume_last_24h: f64,
-    refill_count_last_24h: i64,
+    refill_count_last_24h: u64,
     refill_volume_last_hour: f64,
-    refill_count_last_hour: i64,
+    refill_count_last_hour: u64,
 }
 
 impl RefillSqlData {
@@ -547,7 +549,7 @@ impl Refill {
     /// If yes, then corresponding error flag is set.
     /// # Arguments
     /// * `duration_since_last_refill` - duration in seconds since last refill operation
-    fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: i64) {
+    fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: u64) {
         self.refill_errors.error_switch_stuck_high =
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
@@ -935,6 +937,8 @@ impl Refill {
         let mut schedule_check_result: bool = false;
         let mut tank_level_switch_invalid: bool;
         let mut tank_level_switch_position_stabilized: bool;
+        let mut lock_warn_cycle_time_exceeded: bool = false;
+        let mut cycle_time_exceeded: bool = false; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
         // retrieving data from SQL data base
         let mut sql_refill_data = RefillSqlData::new();
@@ -970,6 +974,8 @@ impl Refill {
         // frequent update required for calculation of error condition switch stuck high
         sql_refill_data.duration_since_last_refill =
             sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
+
+        let mut start_time = SystemTime::now();
 
         // main control loop for refill
         loop {
@@ -1065,12 +1071,35 @@ impl Refill {
                 }
             }
 
+            let stop_time = SystemTime::now();
+            let execution_duration_millis =
+                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+            let cycle_time_refill_millis: u64 = self.config.check_interval * MILLIS_PER_SEC;
+
+            let remaining_sleep_time_millis: u64;
+            if execution_duration_millis >= cycle_time_refill_millis {
+                if !lock_warn_cycle_time_exceeded {
+                    warn!(target: LOG_TARGET_REFILL,
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration_millis,
+                        cycle_time_refill_millis
+                    );
+                    lock_warn_cycle_time_exceeded = true;
+                } else {
+                    lock_warn_cycle_time_exceeded = false;
+                }
+                remaining_sleep_time_millis = 0;
+                cycle_time_exceeded = true;
+            } else {
+                remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
+            }
+
             // skip further waiting if quit command has been received during refilling
             if !quit_command_received {
                 // wait for configured time period before rechecking the sensor signal
                 // check for external requests while waiting
                 i = 0;
-                while i < self.config.check_interval * 10 {
+                while i < remaining_sleep_time_millis || cycle_time_exceeded {
                     i = i + 1;
                     (
                         quit_command_received,
@@ -1088,9 +1117,14 @@ impl Refill {
                     if quit_command_received {
                         break;
                     }
-                    spin_sleeper.sleep(sleep_duration_hundred_millis);
+                    if !cycle_time_exceeded {
+                        spin_sleeper.sleep(sleep_duration_hundred_millis);
+                    }
+                    cycle_time_exceeded = false;
                 }
             }
+
+            start_time = SystemTime::now();
 
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;

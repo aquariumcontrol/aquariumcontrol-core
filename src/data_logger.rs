@@ -27,6 +27,9 @@ use crate::sql_interface::SqlInterface;
 use crate::sql_interface_data::DataFrame;
 use crate::sql_interface_data::SqlInterfaceData;
 
+const LOG_TARGET_DATA_LOGGER: &str = "data_logger";
+const MILLIS_PER_SEC: u64 = 1000;
+
 /// Holds the configuration data for the regular data logging to SQL database.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -177,8 +180,6 @@ pub struct DataLogger {
 }
 
 impl DataLogger {
-    const LOG_TARGET_DATA_LOGGER: &'static str = "data_logger";
-
     /// Returns a struct of type DataLogger
     /// # Arguments
     /// * `config` - configuration data for data logger
@@ -221,7 +222,7 @@ impl DataLogger {
             {
                 panic!(
                     "{}: one of the output file names is empty.",
-                    Self::LOG_TARGET_DATA_LOGGER
+                    LOG_TARGET_DATA_LOGGER
                 );
             } else {
                 fs::write(config.output_file_name_timestamp.clone(), "")
@@ -319,7 +320,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "output of value {} to {} failed: {e:?}",
                             signal_string, output_file_name
                         );
@@ -360,7 +361,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "output of value {} to {} failed: {e:?}",
                             state_string, output_file_name
                         );
@@ -392,7 +393,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "output of value {} to {} failed: {e:?}",
                             timestamp,
                             output_file_name
@@ -442,9 +443,9 @@ impl DataLogger {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        let sleep_duration_one_millisec = Duration::from_millis(1);
-        let mut i;
+        let sleep_duration_ten_millisec = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
+        let mut i;
 
         // define and initialize with value which will be overwritten in first iteration
         let mut water_temperature: Option<f32> = Some(0.0);
@@ -489,7 +490,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from refill thread failed ({e:?})"
                                 );
                                 refill_channel_disconnected = true;
@@ -498,7 +499,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Refill thread failed ({e:?})"
                         );
                         refill_channel_disconnected = true;
@@ -526,7 +527,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from heating thread failed ({e:?})"
                                 );
                                 heating_channel_disconnected = true;
@@ -535,7 +536,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Heating thread failed ({e:?})"
                         );
                         heating_channel_disconnected = true;
@@ -564,7 +565,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from ventilation thread failed ({e:?})"
                                 );
                                 ventilation_channel_disconnected = true;
@@ -573,7 +574,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Ventilation thread failed ({e:?})"
                         );
                         ventilation_channel_disconnected = true;
@@ -601,7 +602,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Atlas Scientific thread for water temperature failed ({e:?})"
                                 );
                                 ambient_channel_disconnected = true;
@@ -611,7 +612,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
                         );
                         atlas_scientific_channel_disconnected = true;
@@ -636,7 +637,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Atlas Scientific thread for pH failed ({e:?})"
                                 );
                                 atlas_scientific_channel_disconnected = true;
@@ -646,7 +647,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Atlas Scientific thread when requesting pH failed ({e:?})"
                         );
                         atlas_scientific_channel_disconnected = true;
@@ -672,7 +673,7 @@ impl DataLogger {
                             Err(e) => {
                                 atlas_scientific_channel_disconnected = true;
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Atlas Scientific thread for conductivity failed ({e:?})"
                                 );
                                 None
@@ -681,7 +682,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Atlas Scientific thread when requesting conductivity failed ({e:?})"
                         );
                         atlas_scientific_channel_disconnected = true;
@@ -709,7 +710,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Ambient thread for temperature failed ({e:?})"
                                 );
                                 ambient_channel_disconnected = true;
@@ -719,7 +720,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Ambient thread when requesting ambient temperature failed ({e:?})"
                         );
                         ambient_channel_disconnected = true;
@@ -744,7 +745,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Ambient thread for humidity failed ({e:?})"
                                 );
                                 ambient_channel_disconnected = true;
@@ -754,7 +755,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to Ambient thread when requesting ambient humidity failed ({e:?})"
                         );
                         ambient_channel_disconnected = true;
@@ -783,7 +784,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Tank Level Switch thread for position failed ({e:?})"
                                 );
                                 tank_level_switch_channel_disconnected = true;
@@ -793,7 +794,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to tank level switch thread failed when requesting tank level switch position ({e:?})"
                         );
                         tank_level_switch_channel_disconnected = true;
@@ -820,7 +821,7 @@ impl DataLogger {
                             }
                             Err(e) => {
                                 error!(
-                                    target: Self::LOG_TARGET_DATA_LOGGER,
+                                    target: LOG_TARGET_DATA_LOGGER,
                                     "receiving value from Tank Level Switch thread for validity failed ({e:?})"
                                 );
                                 tank_level_switch_channel_disconnected = true;
@@ -830,7 +831,7 @@ impl DataLogger {
                     }
                     Err(e) => {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "channel communication to tank level switch thread failed when requesting tank level switch invalid  ({e:?})"
                         );
                         tank_level_switch_channel_disconnected = true;
@@ -897,7 +898,7 @@ impl DataLogger {
                     Err(e) => {
                         if !self.lock_error_get_timestamp {
                             error!(
-                                target: Self::LOG_TARGET_DATA_LOGGER,
+                                target: LOG_TARGET_DATA_LOGGER,
                                 "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
                             );
                             self.lock_error_get_timestamp = true;
@@ -935,12 +936,12 @@ impl DataLogger {
 
             // deduct the execution time of the thread from the target cycle time
             let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= self.config.logging_interval * 1000 {
+            if execution_duration_millis >= self.config.logging_interval * MILLIS_PER_SEC {
                 if !lock_warn_cycle_time_exceeded {
-                    warn!(target: Self::LOG_TARGET_DATA_LOGGER,
+                    warn!(target: LOG_TARGET_DATA_LOGGER,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
-                        self.config.logging_interval * 1000);
+                        self.config.logging_interval * MILLIS_PER_SEC);
                     lock_warn_cycle_time_exceeded = true;
                 } else {
                     lock_warn_cycle_time_exceeded = false;
@@ -948,14 +949,14 @@ impl DataLogger {
                 remaining_sleep_time_millis = 0;
             } else {
                 remaining_sleep_time_millis =
-                    self.config.logging_interval * 1000 - execution_duration_millis;
+                    self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
             }
 
             // wait the remaining time period to complete the target cycle time
             i = 0;
             while i < remaining_sleep_time_millis {
-                i += 1;
-                spin_sleeper.sleep(sleep_duration_one_millisec);
+                i += 10;
+                spin_sleeper.sleep(sleep_duration_ten_millisec);
                 (quit_command_received, _, _) =
                     self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
@@ -975,7 +976,7 @@ impl DataLogger {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_DATA_LOGGER,
+                    target: LOG_TARGET_DATA_LOGGER,
                     "sending confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -995,7 +996,7 @@ impl DataLogger {
                     _ => {
                         if !self.lock_warn_inapplicable_command {
                             warn!(
-                                target: Self::LOG_TARGET_DATA_LOGGER,
+                                target: LOG_TARGET_DATA_LOGGER,
                                 "ignoring inapplicable command from signal handler ({})",
                                 c
                             );
@@ -1007,7 +1008,7 @@ impl DataLogger {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination {
                         error!(
-                            target: Self::LOG_TARGET_DATA_LOGGER,
+                            target: LOG_TARGET_DATA_LOGGER,
                             "receiving termination signal from signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination = true;
@@ -1015,7 +1016,7 @@ impl DataLogger {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_one_millisec);
+            spin_sleeper.sleep(sleep_duration_ten_millisec);
         }
     }
 }

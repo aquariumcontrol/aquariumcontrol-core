@@ -28,7 +28,7 @@ use crate::sawtooth_profile::SawToothProfileConfig;
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
-const CYCLE_TIME_VENTILATION_MILLIS: u64 = 50;
+const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
 const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f32 / 1000.0;
 

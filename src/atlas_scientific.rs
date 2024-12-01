@@ -24,7 +24,7 @@ use crate::proc_ext_req::ProcessExternalRequestTrait;
 const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
 
 // time interval for repeating measurement
-const MEASUREMENT_INTERVAL_SECS: i32 = 60;
+const MEASUREMENT_INTERVAL_SECS: i32 = 1;
 
 /// Holds the configuration data for the Atlas Scientific sensor communication.
 /// The configuration is loaded from the .toml configuration file.
@@ -133,15 +133,15 @@ pub struct AtlasScientific {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from ventilation control thread
     lock_error_invalid_signal_request_ventilation: bool,
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to received via channel from I2cInterface thread
     lock_error_channel_receive_i2c_interface: bool,
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from Atlas Scientific sensors
     lock_error_i2c_interface: bool,
 }
@@ -177,11 +177,12 @@ impl AtlasScientific {
             lock_error_ventilation_response: false,
             lock_warn_inapplicable_command_ventilation: false,
             lock_error_invalid_signal_request_ventilation: false,
-            #[cfg(target_os = "linux")]
+
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_channel_send_i2c_interface: false,
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_channel_receive_i2c_interface: false,
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_i2c_interface: false,
         }
     }
@@ -298,13 +299,13 @@ impl AtlasScientific {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        let sleep_duration_hundred_millisec = Duration::from_millis(100);
+        let sleep_duration_ten_millisec = Duration::from_millis(10);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut request_sent_to_i2c_interface: bool = false;
 
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
             || rx_atlas_scientific_from_i2c_interface_opt.is_some()
         {
@@ -341,7 +342,7 @@ impl AtlasScientific {
                 measurement_countdown -= 1;
             } else {
                 if !self.config.use_simulator {
-                    #[cfg(target_os = "linux")]
+                    #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
                         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
                             && rx_atlas_scientific_from_i2c_interface_opt.is_some()
@@ -439,6 +440,8 @@ impl AtlasScientific {
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
                     );
+                    println!("simulator responded with water temperature {}", self.water_temperature);
+                    
                     self.conductivity = Self::get_response_from_simulator(
                         &tx_to_simulator,
                         &rx_from_simulator,
@@ -450,11 +453,11 @@ impl AtlasScientific {
                         InternalCommand::RequestSignal(AquariumSignal::pH),
                     );
                 }
-                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 100;
+                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
             }
 
             //*** communication to heating thread ****
-            let response_to_heating = match rx_from_heating.try_recv() {
+            let response_to_heating_opt = match rx_from_heating.try_recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_heating = false;
                     match c {
@@ -463,7 +466,11 @@ impl AtlasScientific {
                             match d {
                                 AquariumSignal::WaterTemperature => {
                                     self.lock_error_invalid_signal_request_heating = false;
-                                    self.water_temperature
+                                    println!(
+                                        "AtlasScientific responding with temperature {}",
+                                        self.water_temperature
+                                    );
+                                    Some(self.water_temperature)
                                 }
                                 _ => {
                                     if !self.lock_error_invalid_signal_request_heating {
@@ -474,7 +481,7 @@ impl AtlasScientific {
                                         );
                                         self.lock_error_invalid_signal_request_heating = true;
                                     }
-                                    0.0 // default response to unknown signal request instead of panicking
+                                    Some(0.0) // default response to unknown signal request instead of panicking
                                 }
                             }
                         }
@@ -486,7 +493,7 @@ impl AtlasScientific {
                                 );
                                 self.lock_warn_inapplicable_command_heating = true;
                             }
-                            0.0 // default response to unknown request instead of panicking
+                            None
                         }
                     }
                 }
@@ -506,27 +513,32 @@ impl AtlasScientific {
                             }
                         }
                     }
-                    0.0
+                    None
                 }
             };
 
-            _ = match tx_to_heating.send(response_to_heating.into()) {
-                Ok(()) => {
-                    self.lock_error_heating_response = false;
+            match response_to_heating_opt {
+                Some(response_to_heating) => {
+                    _ = match tx_to_heating.send(response_to_heating.into()) {
+                        Ok(()) => {
+                            self.lock_error_heating_response = false;
+                        }
+                        Err(e) => {
+                            if !self.lock_error_heating_response {
+                                error!(
+                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                    "responding back to heating thread failed ({e:?})"
+                                );
+                                self.lock_error_heating_response = true;
+                            }
+                        }
+                    };
                 }
-                Err(e) => {
-                    if !self.lock_error_heating_response {
-                        error!(
-                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                            "responding back to heating thread failed ({e:?})"
-                        );
-                        self.lock_error_heating_response = true;
-                    }
-                }
+                None => { /* do nothing */ }
             };
 
             //*** communication to ventilation thread ****
-            let response_to_ventilation = match rx_from_ventilation.try_recv() {
+            let response_to_ventilation_opt = match rx_from_ventilation.try_recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_ventilation = false;
                     match c {
@@ -535,7 +547,7 @@ impl AtlasScientific {
                             match d {
                                 AquariumSignal::WaterTemperature => {
                                     self.lock_error_invalid_signal_request_ventilation = false;
-                                    self.water_temperature
+                                    Some(self.water_temperature)
                                 }
                                 _ => {
                                     if !self.lock_error_invalid_signal_request_ventilation {
@@ -546,7 +558,7 @@ impl AtlasScientific {
                                         );
                                         self.lock_error_invalid_signal_request_ventilation = true;
                                     }
-                                    0.0 // default response to unknown signal request instead of panicking
+                                    Some(0.0) // default response to unknown signal request instead of panicking
                                 }
                             }
                         }
@@ -558,7 +570,7 @@ impl AtlasScientific {
                                 );
                                 self.lock_warn_inapplicable_command_ventilation = true;
                             }
-                            0.0 // default response to unknown request instead of panicking
+                            None
                         }
                     }
                 }
@@ -578,29 +590,34 @@ impl AtlasScientific {
                             }
                         }
                     }
-                    0.0
+                    None
                 }
             };
 
-            _ = match tx_to_ventilation.send(response_to_ventilation.into()) {
-                Ok(()) => {
-                    self.lock_error_ventilation_response = false;
+            match response_to_ventilation_opt {
+                Some(response_to_ventilation) => {
+                    _ = match tx_to_ventilation.send(response_to_ventilation.into()) {
+                        Ok(()) => {
+                            self.lock_error_ventilation_response = false;
+                        }
+                        Err(e) => {
+                            if !self.lock_error_ventilation_response {
+                                error!(
+                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                    "responding back to ventilation thread failed ({e:?})"
+                                );
+                                self.lock_error_ventilation_response = true;
+                            }
+                        }
+                    };
                 }
-                Err(e) => {
-                    if !self.lock_error_ventilation_response {
-                        error!(
-                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                            "responding back to ventilation thread failed ({e:?})"
-                        );
-                        self.lock_error_ventilation_response = true;
-                    }
-                }
-            };
+                None => { /* do nothing */ }
+            }
 
             //*** communication to data logger thread ***
             self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
-            spin_sleeper.sleep(sleep_duration_hundred_millisec);
+            spin_sleeper.sleep(sleep_duration_ten_millisec);
         }
 
         _ = match tx_to_signal_handler.send(true) {

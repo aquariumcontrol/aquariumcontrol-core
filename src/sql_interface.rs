@@ -271,6 +271,7 @@ pub enum SqlInterfaceError {
     SqlInterfaceErrorFeedScheduleUpdateFailure(String),
     SingleBallingSetValRequestFailure(String),
     InsertDataFrameFailure(String),
+    NegativeInteger(i64),
     #[cfg(test)]
     SingleDataFrameRequestNoSingleResponse(String),
     #[cfg(test)]

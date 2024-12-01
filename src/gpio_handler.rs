@@ -13,7 +13,7 @@ use log::error;
 use serde_derive::Deserialize;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             use rppal::gpio::{Gpio, InputPin};
             use crate::dht::DhtConfig;
             use crate::dht::Dht;
@@ -87,7 +87,7 @@ impl GpioHandler {
         }
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// This function returns a struct of type GpioHandler.
     /// If real hardware is used, then the function also opens interface to GPIO and I2C.
     /// # Arguments
@@ -151,7 +151,7 @@ impl GpioHandler {
         }
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     /// This function returns a struct of type GpioHandler for development purposes.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
@@ -176,7 +176,7 @@ impl GpioHandler {
 pub mod tests {
 
     cfg_if::cfg_if! {
-        if #[cfg(all(target_os = "linux", test))] {
+        if #[cfg(all(feature = "target_hw", target_os = "linux", test))] {
             use crate::logger::setup_logger;
             use crate::config::read_config_file;
             use crate::config::ConfigData;
@@ -185,7 +185,7 @@ pub mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub fn test_valid_gpio_config() {
         setup_logger();
 
@@ -195,7 +195,7 @@ pub mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[should_panic]
     pub fn test_invalid_gpio_config_low() {
         let config: ConfigData = read_config_file(
@@ -205,7 +205,7 @@ pub mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[should_panic]
     pub fn test_invalid_gpio_config_high() {
         let config: ConfigData = read_config_file(

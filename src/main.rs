@@ -85,6 +85,7 @@ use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
 use crate::logger::setup_logger;
+use crate::messaging::Messaging;
 use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
 use crate::publish_pid::PublishPid;
@@ -108,7 +109,7 @@ use crate::version_information::VersionInformation;
 use crate::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
         use crate::dht::DhtError;
         use crate::messaging::Messaging;
         use crate::i2c_interface::I2cError;
@@ -331,86 +332,98 @@ fn main() {
         | config.tank_level_switch.use_simulator;
 
     // create channels for communication between threads
-    // *** signal_handler => messaging ***
-    #[cfg(target_os = "linux")]
-    let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (tx_signal_handler_to_messaging, _): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    // ****************************
 
-    // *** messaging => refill ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_refill, rx_refill_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_refill_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    // ****************************
+    cfg_if::cfg_if! {
+        // channels for linux-specific code (messaging)
+        if #[cfg(target_os = "linux")] {
+            // *** signal_handler => messaging ***
+            let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
 
-    // *** messaging => ventilation ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_ventilation_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    // ****************************
+            // *** messaging => refill ***
+            let (tx_messaging_to_refill, rx_refill_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
 
-    // *** messaging => heating ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_heating, rx_heating_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_heating_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    // ****************************
+            // *** messaging => ventilation ***
+            let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
 
-    // *** messaging => feed ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_feed, rx_feed_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_feed_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    // ****************************
+            // *** messaging => heating ***
+            let (tx_messaging_to_heating, rx_heating_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
 
-    // *** messaging => balling ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_balling, rx_balling_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_balling_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    // ****************************
+            // *** messaging => feed ***
+            let (tx_messaging_to_feed, rx_feed_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
 
-    // *** messaging => monitors ***
-    #[cfg(target_os = "linux")]
-    let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    #[cfg(not(target_os = "linux"))]
-    let (_, rx_monitors_from_messaging): (Sender<InternalCommand>, Receiver<InternalCommand>) =
-        mpsc::channel();
-    // ****************************
+            // *** messaging => balling ***
+            let (tx_messaging_to_balling, rx_balling_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+
+            // *** messaging => monitors ***
+            let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+        }
+
+        // channels for non-linux specific code (receivers)
+        else {
+            // *** signal_handler => messaging ***
+            let (tx_signal_handler_to_messaging, _): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+
+            // *** messaging => refill ***
+            let (_, rx_refill_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>
+            ) = mpsc::channel();
+
+            // *** messaging => ventilation ***
+            let (_, rx_ventilation_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+
+            // *** messaging => heating ***
+            let (_, rx_heating_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>
+            ) = mpsc::channel();
+
+            // *** messaging => feed ***
+            let (_, rx_feed_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>
+            ) = mpsc::channel();
+
+            // *** messaging => balling ***
+            let (_, rx_balling_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>
+            ) = mpsc::channel();
+
+            // *** messaging => monitors ***
+            let (_, rx_monitors_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>
+            ) = mpsc::channel();
+        }
+    }
 
     // *** data_logger <=> ambient ***
     let (tx_data_logger_to_ambient, rx_ambient_from_data_logger): (
@@ -897,44 +910,55 @@ fn main() {
     // platform specific channels for Linux wrapped in Option
     cfg_if::cfg_if! {
         if #[cfg(target_os = "linux")] {
-            // ambient <=> dht
-            let (tx_ambient_to_dht, rx_dht_from_ambient): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            let (tx_dht_to_ambient, rx_ambient_from_dht): (
-                Sender<Result<(f32, f32), DhtError>>,
-                Receiver<Result<(f32, f32), DhtError>>,
-            ) = mpsc::channel();
-            let tx_signal_handler_to_dht = tx_ambient_to_dht.clone();
-            let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> =
-                Some(tx_ambient_to_dht);
-            let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
-                Some(rx_ambient_from_dht);
-            let tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>> =
-                Some(tx_signal_handler_to_dht);
+            cfg_if::cfg_if! {
+            if #[cfg(feature = "target_hw")] {
+                // ambient <=> dht
+                let (tx_ambient_to_dht, rx_dht_from_ambient): (
+                    Sender<InternalCommand>,
+                    Receiver<InternalCommand>,
+                ) = mpsc::channel();
+                let (tx_dht_to_ambient, rx_ambient_from_dht): (
+                    Sender<Result<(f32, f32), DhtError>>,
+                    Receiver<Result<(f32, f32), DhtError>>,
+                ) = mpsc::channel();
+                let tx_signal_handler_to_dht = tx_ambient_to_dht.clone();
+                let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> =
+                    Some(tx_ambient_to_dht);
+                let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
+                    Some(rx_ambient_from_dht);
+                let tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>> =
+                    Some(tx_signal_handler_to_dht);
 
-            // Atlas Scientific <=> i2c_interface
-            let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-            let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-                Sender<Result<(f32, f32, f32), I2cError>>,
-                Receiver<Result<(f32, f32, f32), I2cError>>,
-            ) = mpsc::channel();
-            let tx_signal_handler_to_i2c_interface = tx_atlas_scientific_to_i2c_interface.clone();
-            let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-                Some(tx_atlas_scientific_to_i2c_interface);
-            let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<(f32, f32, f32), I2cError>>> =
-                Some(rx_atlas_scientific_from_i2c_interface);
-            let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-                Some(tx_signal_handler_to_i2c_interface);
+                // Atlas Scientific <=> i2c_interface
+                let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
+                    Sender<InternalCommand>,
+                    Receiver<InternalCommand>,
+                ) = mpsc::channel();
+                let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
+                    Sender<Result<(f32, f32, f32), I2cError>>,
+                    Receiver<Result<(f32, f32, f32), I2cError>>,
+                ) = mpsc::channel();
+                let tx_signal_handler_to_i2c_interface = tx_atlas_scientific_to_i2c_interface.clone();
+                let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                    Some(tx_atlas_scientific_to_i2c_interface);
+                let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<(f32, f32, f32), I2cError>>> =
+                    Some(rx_atlas_scientific_from_i2c_interface);
+                let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                    Some(tx_signal_handler_to_i2c_interface);
+            }
+            else {
+                // ambient <=> dht and signal handler => dht
+                let tx_ambient_to_dht_opt = None;
+                let rx_ambient_from_dht_opt = None;
+                let tx_signal_handler_to_dht_opt = None;
+                // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
+                let tx_atlas_scientific_to_i2c_interface_opt = None;
+                let rx_atlas_scientific_from_i2c_interface_opt = None;
+                let tx_signal_handler_to_i2c_interface_opt = None;
+            }
+            }
         }
-    }
-
-    cfg_if::cfg_if! {
-        if #[cfg(not(target_os = "linux"))] {
+        else {
             // ambient <=> dht and signal handler => dht
             let tx_ambient_to_dht_opt = None;
             let rx_ambient_from_dht_opt = None;
@@ -955,11 +979,15 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
 
-    #[cfg(target_os = "linux")]
-    let (_, tank_level_switch_input_pin_opt, dht_opt) =
-        GpioHandler::new(config.gpio_handler, config.dht);
-    #[cfg(not(target_os = "linux"))]
-    let _ = GpioHandler::new(config.gpio_handler);
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let (_, tank_level_switch_input_pin_opt, dht_opt) =
+                GpioHandler::new(config.gpio_handler, config.dht);
+        }
+        else {
+            let _ = GpioHandler::new(config.gpio_handler);
+        }
+    }
 
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
     let mut ambient = Ambient::new(config.ambient);
@@ -970,14 +998,18 @@ fn main() {
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
 
-    #[cfg(target_os = "linux")]
-    let mut tank_level_switch = TankLevelSwitch::new(
-        config.tank_level_switch,
-        true,
-        tank_level_switch_input_pin_opt,
-    );
-    #[cfg(not(target_os = "linux"))]
-    let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut tank_level_switch = TankLevelSwitch::new(
+                config.tank_level_switch,
+                true,
+                tank_level_switch_input_pin_opt,
+            );
+        }
+        else {
+            let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        }
+    }
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
@@ -1117,7 +1149,7 @@ fn main() {
             trace!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
         });
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface);
             let mut dht = dht_opt.expect("unwrapping of Dht failed");

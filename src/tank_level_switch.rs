@@ -10,15 +10,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::{Duration, SystemTime};
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-#[cfg(target_os = "linux")]
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use rppal::gpio::InputPin;
 
 /// Holds the configuration data for the tank level switch calculation.
@@ -34,6 +34,10 @@ pub struct TankLevelSwitchConfig {
 }
 
 const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
+
+/// application is monitoring if execution duration can maintain this limit
+/// sleep time is adjusted accordingly to run at fixed execution time
+const CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS: u64 = 100;
 
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
 /// Tank level position is measured by accessing the state of a dedicated GPIO pin.
@@ -113,12 +117,12 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send back value to data logger thread
     lock_error_data_logger_response: bool,
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
-    #[cfg(target_os = "linux")]
     lock_error_input_pin_none: bool,
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     // interface to GPIO pin wrapped as optional
-    #[cfg(target_os = "linux")]
     input_pin_opt: Option<InputPin>,
 }
 
@@ -127,8 +131,8 @@ impl ProcessExternalRequestTrait for TankLevelSwitch {}
 impl GetResponseFromSimulatorTrait for TankLevelSwitch {}
 
 impl TankLevelSwitch {
-    #[cfg(not(target_os = "linux"))]
-    /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms
+    #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+    /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms when not running on target HW
     /// # Arguments
     /// * `config` - configuration data for TankLevelSwitch
     /// * `initial_position_stabilized` - assumed initial position of tank level before first measurement
@@ -159,8 +163,8 @@ impl TankLevelSwitch {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    /// provides a struct of type TankLevelSwitchSignals for Linux platform.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// provides a struct of type TankLevelSwitchSignals for target HW
     /// # Arguments
     /// * `config` - configuration data for TankLevelSwitch
     /// * `initial_position_stabilized` - assumed initial position of tank level before first measurement
@@ -222,7 +226,7 @@ impl TankLevelSwitch {
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
             ) > 0.0;
         } else {
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
                 // unwrap is safe, because tested in constructor
                 match self.input_pin_opt.as_mut() {
@@ -309,9 +313,9 @@ impl TankLevelSwitch {
         tx_to_signal_handler: &Sender<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
     ) {
-        let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+        let mut lock_warn_cycle_time_exceeded: bool = false;
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!(
@@ -319,6 +323,8 @@ impl TankLevelSwitch {
                 LOG_TARGET_TANK_LEVEL_SWITCH
             );
         }
+
+        let mut start_time = SystemTime::now();
 
         loop {
             let (
@@ -605,7 +611,30 @@ impl TankLevelSwitch {
                 }
             };
 
-            spin_sleeper.sleep(sleep_duration_hundred_millisec);
+            let stop_time = SystemTime::now();
+            let execution_duration_millis =
+                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+
+            let remaining_sleep_time_millis: u64;
+            if execution_duration_millis >= CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS {
+                if !lock_warn_cycle_time_exceeded {
+                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                        "execution duration of {} milliseconds exceeds cycle time of {}",
+                        execution_duration_millis,
+                        CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
+                    lock_warn_cycle_time_exceeded = true;
+                } else {
+                    lock_warn_cycle_time_exceeded = false;
+                }
+                remaining_sleep_time_millis = 0;
+            } else {
+                remaining_sleep_time_millis =
+                    CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS - execution_duration_millis;
+            }
+            let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
+            spin_sleeper.sleep(sleep_duration);
+
+            start_time = SystemTime::now();
         }
 
         _ = match tx_to_signal_handler.send(true) {
@@ -706,9 +735,9 @@ pub mod tests {
             .tank_level_switch_position_high_stabilization_count
             + 1;
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
@@ -870,9 +899,9 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false, None);
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
 
         // thread for mock tcp
@@ -1044,9 +1073,9 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
@@ -1218,9 +1247,9 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_refill.toml".to_string());
         let duration_test_case_part: u64 = 2; // two seconds with level switch before toggling
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp

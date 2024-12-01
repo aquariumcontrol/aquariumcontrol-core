@@ -253,6 +253,7 @@ pub struct Controllino {
 
 impl Controllino {
     const LOG_TARGET_CONTROLLINO: &'static str = "controllino";
+    const SW_LOG_SENDER: bool = false;
 
     /// Provides a struct of type Controllino
     /// # Arguments
@@ -405,6 +406,13 @@ impl Controllino {
             // *** communication with refill control ***
             match rx_from_refill.try_recv() {
                 Ok(c) => {
+                    if Self::SW_LOG_SENDER {
+                        println!(
+                            "{}: received command from Refill: {}",
+                            Self::LOG_TARGET_CONTROLLINO,
+                            c
+                        );
+                    }
                     self.lock_error_channel_receive_refill = false;
                     match actuator.actuate(
                         c,
@@ -465,6 +473,13 @@ impl Controllino {
             // *** communication with heating control ***
             match rx_from_heating.try_recv() {
                 Ok(c) => {
+                    if Self::SW_LOG_SENDER {
+                        println!(
+                            "{}: received command from heating: {}",
+                            Self::LOG_TARGET_CONTROLLINO,
+                            c
+                        );
+                    }
                     self.lock_error_channel_receive_heating = false;
                     match actuator.actuate(
                         c,
@@ -525,6 +540,13 @@ impl Controllino {
             // *** communication with ventilation control ***
             match rx_from_ventilation.try_recv() {
                 Ok(c) => {
+                    if Self::SW_LOG_SENDER {
+                        println!(
+                            "{}: received command from ventilation: {}",
+                            Self::LOG_TARGET_CONTROLLINO,
+                            c
+                        );
+                    }
                     self.lock_error_channel_receive_ventilation = false;
                     match actuator.actuate(
                         c,
@@ -585,6 +607,13 @@ impl Controllino {
             // *** communication with Balling dosing control ***
             match rx_from_balling.try_recv() {
                 Ok(c) => {
+                    if Self::SW_LOG_SENDER {
+                        println!(
+                            "{}: received command from Balling: {}",
+                            Self::LOG_TARGET_CONTROLLINO,
+                            c
+                        );
+                    }
                     self.lock_error_channel_receive_balling = false;
                     match actuator.actuate(
                         c,
@@ -645,6 +674,13 @@ impl Controllino {
             // *** communication with feed control ***
             match rx_from_feed.try_recv() {
                 Ok(c) => {
+                    if Self::SW_LOG_SENDER {
+                        println!(
+                            "{}: received command from Feed: {}",
+                            Self::LOG_TARGET_CONTROLLINO,
+                            c
+                        );
+                    }
                     self.lock_error_channel_receive_feed = false;
                     match actuator.actuate(
                         c,

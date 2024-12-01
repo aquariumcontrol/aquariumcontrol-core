@@ -9,11 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 
-#[cfg(any(not(test), target_os = "linux"))]
-use log::error;
-
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread;
         use std::thread::sleep;
@@ -21,10 +18,12 @@ cfg_if::cfg_if! {
         use crate::InternalCommand;
         use std::sync::mpsc::{Sender, Receiver};
         use crate::channel_content::AquariumSignal;
+
     }
 }
+#[cfg(not(test))]
+use log::error;
 
-#[allow(unused)]
 const LOG_TARGET_DHT: &str = "dht";
 
 /// Holds the configuration data for the GPIO handler.
@@ -124,31 +123,31 @@ pub mod dht22_constants {
 #[derive(Debug, PartialEq)]
 pub enum DhtError {
     /// Vcc pin acquisition failed
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     VccPinAcquisitionFailed,
 
     /// Data pin acquisition for output failed
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     DataPinOutputAcquisitionFailed,
 
     /// Data pin acquisition for input failed
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     DataPinInputAcquisitionFailed,
 
     /// Could not set interrupt
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     CouldNotSetInterrupt,
 
     /// Could not clear interrupt
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     CouldNotClearInterrupt,
 
     // execution of interrupt failed
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     InterruptFailed,
 
     // transmission yields wrong number of valid bits
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     WrongNumberOfValidTicks,
 
     // error occurred during calculation of checksum
@@ -174,7 +173,7 @@ pub struct Dht {
     config: DhtConfig,
 
     // reference to GPIO interface
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     gpio: Gpio,
 
     /// GPIO pin number for communication with DHT22 sensor
@@ -191,7 +190,7 @@ impl Dht {
     /// # Arguments    
     /// * `config` - configuration for communication with DHT sensor
     /// * `gpio` - reference to GPIO interface
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn new(
         config: DhtConfig,
         gpio: Gpio,
@@ -390,7 +389,7 @@ impl Dht {
         Ok((temperature, humidity))
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// reads temperature and humity from DHT sensor
     /// # Arguments
     /// * `reset_sensor` - flag to indicate if power supply to sensor shall be interrupted before measuring
@@ -582,7 +581,7 @@ impl Dht {
     }
 
     /// initiates reading and postprocesses data read from sensor
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
@@ -623,7 +622,7 @@ impl Dht {
         Ok(result_tuple)
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// receives and response to requests via channel        
     pub fn execute(
         &mut self,

@@ -135,11 +135,6 @@ impl Monitors {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        info!(
-            target: Self::LOG_TARGET_MONITORS,
-            "sending Quit confirmation to signal handler."
-        );
-
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {

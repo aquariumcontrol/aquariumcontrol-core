@@ -15,7 +15,7 @@ use std::time::Duration;
 use crate::channel_content::AquariumSignal;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use log::{error, warn};
         use std::sync::mpsc::{Sender, Receiver};
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
@@ -179,7 +179,7 @@ mod atlas_scientific_constants {
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct I2cInterface {
     /// I2C interface of rppal library
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     i2c: I2c,
 
     /// sleep duration for waiting response of Atlas Scientific conductivity sensor
@@ -199,13 +199,13 @@ pub struct I2cInterface {
 }
 
 impl I2cInterface {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     const LOG_TARGET_I2C_INTERFACE: &'static str = "i2c_interface";
 
     /// Provides a struct of type I2cInterface
     /// # Arguments    
     /// * `config` - configuration for I2C interface
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
             i2c: {
@@ -316,7 +316,7 @@ impl I2cInterface {
     /// - error code
     /// # Arguments
     /// * `signal` - enum value describing which sensor shall be read
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn get_response_from_i2c(&mut self, signal: AquariumSignal) -> Result<f32, I2cError> {
         let i2c_address = match signal {
             AquariumSignal::pH => self.config.address_atlas_scientific_ph,
@@ -416,7 +416,7 @@ impl I2cInterface {
         }
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     // measures all three signals sequentially
     // In case one measurement yields an error, the function return this error.
     // In case all measurements yield success, the function returns a tuple of
@@ -448,7 +448,7 @@ impl I2cInterface {
         ))
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// receives and response to requests via channel        
     pub fn execute(
         &mut self,

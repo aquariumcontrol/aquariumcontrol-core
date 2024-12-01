@@ -19,13 +19,13 @@ use crate::sql_interface::SqlInterfaceError;
 /// Trait for interfacing between refill and SQL database
 /// This trait is prerequiste to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait {
-    fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError>;
+    fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
 
-    fn check_empty(&mut self) -> Result<i64, SqlInterfaceError>;
+    fn check_empty(&mut self) -> Result<u64, SqlInterfaceError>;
 
-    fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError>;
+    fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError>;
 
-    fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError>;
+    fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError>;
 
     fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError>;
 
@@ -73,7 +73,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// It provides wrapped into Result type either
     /// - number of seconds since last refill event
     /// - or a value from enum SqlInterfaceError    
-    fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
             Ok(c) => c,
             Err(e) => {
@@ -90,7 +90,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
 
         let delta_time = current_datetime.signed_duration_since(last_refill_datetime);
 
-        Ok(delta_time.num_seconds())
+        if delta_time.num_seconds() >= 0 {
+            Ok(delta_time.num_seconds() as u64)
+        } else {
+            Err(SqlInterfaceError::NegativeInteger(delta_time.num_seconds()))
+        }
     }
 
     /// Checks if the SQL table of refill events is empty.
@@ -98,12 +102,18 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// - a value of one if there is at least one entry in the table or
     /// - a value of zero if there is not entry in the table or
     /// - a value from enum SqlInterfaceError
-    fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
         ) {
-            Ok(c) => Ok(c),
+            Ok(c) => {
+                if c >= 0 {
+                    Ok(c as u64)
+                } else {
+                    Err(SqlInterfaceError::NegativeInteger(c))
+                }
+            }
             Err(e) => Err(e),
         }
     }
@@ -112,12 +122,18 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// It returns wrapped into Result type either
     /// - the number of refill events in the last 24 hours
     /// - a value from enum SqlInterfaceError    
-    fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
         ) {
-            Ok(c) => Ok(c),
+            Ok(c) => {
+                if c >= 0 {
+                    Ok(c as u64)
+                } else {
+                    Err(SqlInterfaceError::NegativeInteger(c))
+                }
+            }
             Err(e) => Err(e),
         }
     }
@@ -126,12 +142,18 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// It returns wrapped into Result type either
     /// - the number of refill events in the last hour
     /// - a value from enum SqlInterfaceError
-    fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
+    fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
         ) {
-            Ok(c) => Ok(c),
+            Ok(c) => {
+                if c >= 0 {
+                    Ok(c as u64)
+                } else {
+                    Err(SqlInterfaceError::NegativeInteger(c))
+                }
+            }
             Err(e) => Err(e),
         }
     }

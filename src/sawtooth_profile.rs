@@ -103,6 +103,7 @@ impl SawToothProfile {
     pub fn execute_with(&mut self, increment: f32) {
         // if counter exceeds final limit, reset. Otherwise increment.
         if self.counter >= (self.phase4_counter_limit - 3.0 * increment) {
+            println!("saw tooth profile resetting phase");
             self.counter = 0.0;
         } else {
             self.counter += increment;

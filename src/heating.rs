@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Copyrigh 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -30,7 +30,7 @@ use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
 const LOG_TARGET_HEATING: &str = "heating";
 
-const CYCLE_TIME_HEATING_MILLIS: u64 = 50;
+const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
 
@@ -474,13 +474,7 @@ impl Heating {
         let mut tank_level_low_counter = 0;
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
-        let mut lock_warn_cycle_time_exceeded = false;
-
-        #[cfg(test)]
-        println!(
-            "{}: duration until midnight is {} seconds.",
-            LOG_TARGET_HEATING, duration_until_midnight
-        );
+        let mut lock_warn_cycle_time_exceeded: bool = false;
 
         let mut heating_stats_opt = match self
             .sql_interface_heating
@@ -527,7 +521,6 @@ impl Heating {
                 heating_inhibited = false;
             }
 
-            // temperature control runs 10 times per second
             if self.config.active {
                 // send request for water temperature
                 match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
