@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #![allow(non_snake_case)]
 use chrono::Local;
 use chrono::NaiveDateTime;
-use log::{error, warn};
+use log::{error, warn, debug};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
@@ -952,6 +952,12 @@ impl DataLogger {
                     self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
             }
 
+            debug!(
+                target: LOG_TARGET_DATA_LOGGER,
+                "inserted data into database, now idling for {} milliseconds",
+                remaining_sleep_time_millis
+            );
+            
             // wait the remaining time period to complete the target cycle time
             i = 0;
             while i < remaining_sleep_time_millis {
@@ -960,12 +966,21 @@ impl DataLogger {
                 (quit_command_received, _, _) =
                     self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "received QUIT command from signal handler"
+                    );                    
                     break;
                 }
             }
             if quit_command_received {
                 break;
             }
+            
+            debug!(
+                target: LOG_TARGET_DATA_LOGGER,
+                "finished idling restarting loop"
+            );
 
             start_time = SystemTime::now(); // start time for next cycle
         }

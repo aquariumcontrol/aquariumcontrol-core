@@ -197,7 +197,7 @@ const LOG_TARGET_MAIN: &str = "main";
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
-///	    signal_handler --> messaging[Messaging]
+///	signal_handler --> messaging[Messaging]
 ///     signal_handler --> ambient
 ///     ambient --> signal_handler
 ///     signal_handler --> atlas_scientific

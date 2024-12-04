@@ -440,8 +440,7 @@ impl AtlasScientific {
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
                     );
-                    println!("simulator responded with water temperature {}", self.water_temperature);
-                    
+
                     self.conductivity = Self::get_response_from_simulator(
                         &tx_to_simulator,
                         &rx_from_simulator,
@@ -466,10 +465,6 @@ impl AtlasScientific {
                             match d {
                                 AquariumSignal::WaterTemperature => {
                                     self.lock_error_invalid_signal_request_heating = false;
-                                    println!(
-                                        "AtlasScientific responding with temperature {}",
-                                        self.water_temperature
-                                    );
                                     Some(self.water_temperature)
                                 }
                                 _ => {

@@ -45,3 +45,4 @@ all_asserts = "2.3.1"
 [features]
 target_hw = []
 controllino_hw = []
+debug_signal_handler = []
