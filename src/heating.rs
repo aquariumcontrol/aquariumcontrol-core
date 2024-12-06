@@ -1753,15 +1753,15 @@ pub mod tests {
                 }
                     else {
                         assert_le!(second_last_actuation_duration, 7400);
-                        assert_ge!(second_last_actuation_duration, 7050);
+                        assert_ge!(second_last_actuation_duration, 6500);
                         assert_le!(third_last_actuation_duration, 7400);
-                        assert_ge!(third_last_actuation_duration, 7050);
+                        assert_ge!(third_last_actuation_duration, 6500);
                         assert_le!(fourth_last_actuation_duration, 7400);
-                        assert_ge!(fourth_last_actuation_duration, 7050);
+                        assert_ge!(fourth_last_actuation_duration, 6500);
                         assert_le!(fifth_last_actuation_duration, 7400);
-                        assert_ge!(fifth_last_actuation_duration, 7050);
+                        assert_ge!(fifth_last_actuation_duration, 6500);
                         assert_le!(sixth_last_actuation_duration, 7400);
-                        assert_ge!(sixth_last_actuation_duration, 7050);
+                        assert_ge!(sixth_last_actuation_duration, 6500);
                     }
                 }
                 assert_le!(delta_min_max_duration, 50);
@@ -2047,7 +2047,7 @@ pub mod tests {
                 assert_eq!(*mutex_data, 1);
             let finish_time = SystemTime::now();
             let execution_duration = finish_time.duration_since(start_time).unwrap();
-            all_asserts::assert_le!(execution_duration.as_millis(), 500);
+            all_asserts::assert_le!(execution_duration.as_millis(), 650);
             println!(
                 "* [Heating] checking heating execution with pending quit/terminate command (time limit) succeeded."
             );

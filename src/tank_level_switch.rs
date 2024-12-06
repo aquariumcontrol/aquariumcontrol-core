@@ -737,7 +737,7 @@ pub mod tests {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
@@ -901,7 +901,7 @@ pub mod tests {
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false, None);
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
 
         // thread for mock tcp
@@ -1075,7 +1075,7 @@ pub mod tests {
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp
@@ -1249,7 +1249,7 @@ pub mod tests {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         // thread for mock tcp

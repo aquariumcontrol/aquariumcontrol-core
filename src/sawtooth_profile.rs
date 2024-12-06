@@ -7,9 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(feature = "debug_sawtooth_profile")]
+use log::debug;
+
 use serde_derive::Deserialize;
 use std::fmt;
-use log::info;
 
 /// Holds the data for the calculation of the saw tooth profile.
 /// The configuration is loaded from the .toml configuration file.
@@ -104,7 +106,8 @@ impl SawToothProfile {
     pub fn execute_with(&mut self, increment: f32) {
         // if counter exceeds final limit, reset. Otherwise increment.
         if self.counter >= (self.phase4_counter_limit - 3.0 * increment) {
-            info!("saw tooth profile resetting phase");
+            #[cfg(feature = "debug_sawtooth_profile")]
+            debug!("saw tooth profile resetting phase");
             self.counter = 0.0;
         } else {
             self.counter += increment;

@@ -85,7 +85,10 @@ use crate::gpio_handler::GpioHandler;
 use crate::heating::Heating;
 use crate::heating::HeatingStatsDataTransfer;
 use crate::logger::setup_logger;
+
+#[cfg(target_os = "linux")]
 use crate::messaging::Messaging;
+
 use crate::mineral_injection::MineralInjection;
 use crate::monitors::Monitors;
 use crate::publish_pid::PublishPid;

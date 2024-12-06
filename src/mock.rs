@@ -1532,19 +1532,19 @@ pub mod tests {
     pub struct MockSqlInterfaceRefill {}
 
     impl DatabaseInterfaceRefillTrait for MockSqlInterfaceRefill {
-        fn get_duration_since_last_refill(&mut self) -> Result<i64, SqlInterfaceError> {
+        fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn check_empty(&mut self) -> Result<i64, SqlInterfaceError> {
+        fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_refill_count_of_last_24h(&mut self) -> Result<i64, SqlInterfaceError> {
+        fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_refill_count_of_last_hour(&mut self) -> Result<i64, SqlInterfaceError> {
+        fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 

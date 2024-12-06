@@ -61,7 +61,7 @@ pub trait ProcessExternalRequestTrait {
                 match e {
                     TryRecvError::Empty => { /* empty buffer - no action required */ }
                     TryRecvError::Disconnected => {
-                        #[cfg(all(not(test),not(feature = "debug_signal_handler")))]
+                        #[cfg(all(not(test), not(feature = "debug_signal_handler")))]
                         error!(
                             target: LOG_TARGET_PROC_EXT_REQ,
                             "receiving command from signal handler failed ({e:?})"

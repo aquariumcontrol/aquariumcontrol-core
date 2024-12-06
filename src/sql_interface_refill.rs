@@ -313,8 +313,9 @@ pub mod tests {
             Ok(c) => c,
             Err(e) => panic!("Could not calculate duration since last refill: {e:?}"),
         };
-        let reference_duration_since_last_refill =
-            SqlInterface::get_duration_from_naive_timestamp_to_local_now(refill_timestamp).unwrap();
+        let reference_duration_since_last_refill: u64 =
+            SqlInterface::get_duration_from_naive_timestamp_to_local_now(refill_timestamp).unwrap()
+                as u64;
         assert_eq!(
             duration_since_last_refill,
             reference_duration_since_last_refill

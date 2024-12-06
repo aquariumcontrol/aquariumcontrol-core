@@ -299,7 +299,7 @@ pub fn handle_signals(
     match tx_to_ambient.send(InternalCommand::Quit) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ambient");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ambient");
             match rx_from_ambient.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -510,8 +510,9 @@ pub fn handle_signals(
                 }
             }
         }
-        None => { /* do nothing */
-             #[cfg(feature = "debug_signal_handler")]
+        None => {
+            /* do nothing */
+            #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "Not sending Quit signal to tcp_communication");
         }
     }
@@ -534,7 +535,7 @@ pub fn handle_signals(
     match tx_to_heating.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to heating");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to heating");
         }
         Err(e) => {
             error!(
@@ -548,7 +549,7 @@ pub fn handle_signals(
     match tx_to_ventilation.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ventilation");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ventilation");
         }
         Err(e) => {
             error!(
@@ -562,7 +563,7 @@ pub fn handle_signals(
     match tx_to_atlas_scientific.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to atlas_scientific");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to atlas_scientific");
         }
         Err(e) => {
             error!(
@@ -576,7 +577,7 @@ pub fn handle_signals(
     match tx_to_ambient.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ambient");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ambient");
         }
         Err(e) => {
             error!(
@@ -590,7 +591,7 @@ pub fn handle_signals(
     match tx_to_feed.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to feed");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to feed");
         }
         Err(e) => {
             error!(
@@ -632,7 +633,7 @@ pub fn handle_signals(
     match tx_to_refill.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to refill");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to refill");
         }
         Err(e) => {
             error!(
@@ -646,7 +647,7 @@ pub fn handle_signals(
     match tx_to_tank_level_switch.send(InternalCommand::Terminate) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to tank level switch");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to tank level switch");
         }
         Err(e) => {
             error!(
@@ -660,7 +661,7 @@ pub fn handle_signals(
     match tx_to_messaging.send(InternalCommand::Quit) {
         Ok(_) => {
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");        
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");
         }
         Err(e) => {
             error!(

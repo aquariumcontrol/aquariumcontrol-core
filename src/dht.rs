@@ -24,6 +24,7 @@ cfg_if::cfg_if! {
 #[cfg(not(test))]
 use log::error;
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 const LOG_TARGET_DHT: &str = "dht";
 
 /// Holds the configuration data for the GPIO handler.

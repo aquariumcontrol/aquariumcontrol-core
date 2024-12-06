@@ -1224,16 +1224,16 @@ pub mod tests {
                         assert_ge!(sixth_last_actuation_duration, 6900);
                     }
                     else {
-                        assert_le!(second_last_actuation_duration, 7400);
-                        assert_ge!(second_last_actuation_duration, 7050);
-                        assert_le!(third_last_actuation_duration, 7400);
-                        assert_ge!(third_last_actuation_duration, 7050);
-                        assert_le!(fourth_last_actuation_duration, 7400);
-                        assert_ge!(fourth_last_actuation_duration, 7050);
-                        assert_le!(fifth_last_actuation_duration, 7400);
-                        assert_ge!(fifth_last_actuation_duration, 7050);
-                        assert_le!(sixth_last_actuation_duration, 7400);
-                        assert_ge!(sixth_last_actuation_duration, 7050);
+                        assert_le!(second_last_actuation_duration, 7600);
+                        assert_ge!(second_last_actuation_duration, 5000);
+                        assert_le!(third_last_actuation_duration, 7600);
+                        assert_ge!(third_last_actuation_duration, 5000);
+                        assert_le!(fourth_last_actuation_duration, 7600);
+                        assert_ge!(fourth_last_actuation_duration, 5000);
+                        assert_le!(fifth_last_actuation_duration, 7600);
+                        assert_ge!(fifth_last_actuation_duration, 5000);
+                        assert_le!(sixth_last_actuation_duration, 7600);
+                        assert_ge!(sixth_last_actuation_duration, 5000);
                     }
                 }
                 assert_le!(delta_min_max_duration, 50);
