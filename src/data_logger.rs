@@ -475,6 +475,9 @@ impl DataLogger {
         loop {
             // get information if refill is in progress from refill thread
             if !refill_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_refill = SystemTime::now();
+
                 match tx_to_refill.send(InternalCommand::RequestSignal(
                     AquariumSignal::RefillPumpStatus,
                 )) {
@@ -509,10 +512,27 @@ impl DataLogger {
                         refill_channel_disconnected = true;
                     }
                 }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_refill = SystemTime::now();
+                    let execution_duration_refill_millis = stop_time_refill
+                        .duration_since(start_time_refill)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with refill took {} ms.",
+                        execution_duration_refill_millis
+                    );
+                }
             }
 
             // get information if heater is on from heating thread
             if !heating_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_heating = SystemTime::now();
+
                 match tx_to_heating.send(InternalCommand::RequestSignal(
                     AquariumSignal::HeatingControlStatus,
                 )) {
@@ -546,10 +566,27 @@ impl DataLogger {
                         heating_channel_disconnected = true;
                     }
                 }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_heating = SystemTime::now();
+                    let execution_duration_heating_millis = stop_time_heating
+                        .duration_since(start_time_heating)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with heating took {} ms.",
+                        execution_duration_heating_millis
+                    );
+                }
             }
 
             // get information if ventilation is on from ventilation thread
             if !ventilation_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_ventilation = SystemTime::now();
+
                 // send request for water temperature
                 match tx_to_ventilation.send(InternalCommand::RequestSignal(
                     AquariumSignal::VentilationControlStatus,
@@ -584,9 +621,26 @@ impl DataLogger {
                         ventilation_channel_disconnected = true;
                     }
                 }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_ventilation = SystemTime::now();
+                    let execution_duration_ventilation_millis = stop_time_ventilation
+                        .duration_since(start_time_ventilation)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with ventilation took {} ms.",
+                        execution_duration_ventilation_millis
+                    );
+                }
             }
 
             if !atlas_scientific_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_atlas_scientific = SystemTime::now();
+
                 // send request for water temperature
                 match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                     AquariumSignal::WaterTemperature,
@@ -692,9 +746,26 @@ impl DataLogger {
                         atlas_scientific_channel_disconnected = true;
                     }
                 }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_atlas_scientific = SystemTime::now();
+                    let execution_duration_atlas_scientific_millis = stop_time_refill
+                        .duration_since(start_time_atlas_scientific)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with atlas_scientific took {} ms.",
+                        execution_duration_atlas_scientific_millis
+                    );
+                }
             }
 
             if !ambient_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_ambient = SystemTime::now();
+
                 // send request for ambient temperature
                 match tx_to_ambient.send(InternalCommand::RequestSignal(
                     AquariumSignal::AmbientTemperature,
@@ -765,9 +836,26 @@ impl DataLogger {
                         ambient_channel_disconnected = true;
                     }
                 }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_ambient = SystemTime::now();
+                    let execution_duration_ambient_millis = stop_time_refill
+                        .duration_since(start_time_ambient)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with ambient took {} ms.",
+                        execution_duration_ambient_millis
+                    );
+                }
             }
 
             if !tank_level_switch_channel_disconnected {
+                #[cfg(feature = "debug_data_logger")]
+                let start_time_tank_level_switch = SystemTime::now();
+
                 // send request for tank level switch position
                 match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                     AquariumSignal::TankLevelSwitchPosition,
@@ -840,6 +928,20 @@ impl DataLogger {
                         );
                         tank_level_switch_channel_disconnected = true;
                     }
+                }
+                #[cfg(feature = "debug_data_logger")]
+                {
+                    let stop_time_tank_level_switch = SystemTime::now();
+                    let execution_duration_tank_level_switch_millis = stop_time_tank_level_switch
+                        .duration_since(start_time_tank_level_switch)
+                        .unwrap()
+                        .as_millis()
+                        as u64;
+                    debug!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "communication with tank_level_switch took {} ms.",
+                        execution_duration_tank_level_switch_millis
+                    );
                 }
             }
 
