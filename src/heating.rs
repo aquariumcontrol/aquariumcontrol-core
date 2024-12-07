@@ -455,7 +455,7 @@ impl Heating {
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
     ) {
         let mut _refill_error = false;
@@ -498,7 +498,7 @@ impl Heating {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start heating has been received
                 stop_command_received,  // request to (temporarily) stop heating has been received
-            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+            ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }
@@ -1122,7 +1122,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -1264,7 +1263,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -1333,7 +1332,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -1480,7 +1478,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -1549,7 +1547,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -1816,7 +1813,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -1884,7 +1881,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -2028,7 +2024,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -2103,7 +2099,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -2257,7 +2252,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -2432,7 +2427,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -2586,7 +2580,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -2761,7 +2755,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -2903,7 +2896,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -2969,7 +2962,6 @@ pub mod tests {
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_heating_to_messaging, rx_heating_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
@@ -3116,7 +3108,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    None,
                     &mut heating_stats_transfer,
                 );
 
@@ -3407,7 +3399,7 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    rx_heating_from_messaging,
+                    Some(rx_heating_from_messaging),
                     &mut heating_stats_transfer,
                 );
                 // send Quit signal to mock threads because test object has terminated

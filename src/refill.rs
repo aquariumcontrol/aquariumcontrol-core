@@ -614,7 +614,7 @@ impl Refill {
                 #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
-                    "refill volume of last 24h exceeds permissible refill volume per 24h of {}",
+                    "refill volume of last 24h exceeds permissible refill volume per 24h of {} L",
                     self.config.max_refill_volume_24h
                 );
 
@@ -631,7 +631,7 @@ impl Refill {
                 #[cfg(not(test))]
                 info!(
                     target: LOG_TARGET_REFILL,
-                    "refill count of last 24h exceeds permissible refill count per 24h of {}",
+                    "refill count of last 24h exceeds permissible refill count per 24h of {} L",
                     self.config.max_refill_count_24h
                 );
 
@@ -928,7 +928,7 @@ impl Refill {
         rx_from_schedule_check: Receiver<bool>,
         tx_to_data_logger: Sender<bool>,
         rx_from_data_logger: Receiver<InternalCommand>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         water_injection: &mut impl WaterInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -957,8 +957,7 @@ impl Refill {
                     quit_command_received,
                     start_command_received,
                     stop_command_received,
-                ) = self
-                    .process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+                ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
                 refill_inhibited = self.calc_inhibition_flag(
                     refill_inhibited,
                     start_command_received,
@@ -1107,7 +1106,7 @@ impl Refill {
                         stop_command_received,
                     ) = self.process_external_request(
                         &rx_from_signal_handler,
-                        Some(&rx_from_messaging),
+                        rx_from_messaging_opt.as_ref(),
                     );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,
@@ -1346,8 +1345,6 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
-            mpsc::channel::<InternalCommand>();
         let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
         let (
@@ -1472,7 +1469,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    None,
                     &mut mock_water_injection,
                 );
 
@@ -1527,8 +1524,6 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
             mpsc::channel::<InternalCommand>();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
@@ -1656,7 +1651,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    None,
                     &mut mock_water_injection,
                 );
 
@@ -1862,7 +1857,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    Some(rx_refill_from_messaging),
                     &mut mock_water_injection,
                 );
 
@@ -1923,8 +1918,6 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
             mpsc::channel::<InternalCommand>();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
@@ -2045,7 +2038,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    None,
                     &mut mock_water_injection,
                 );
 
@@ -2235,7 +2228,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    Some(rx_refill_from_messaging),
                     &mut mock_water_injection,
                 );
 
@@ -2297,8 +2290,6 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
             mpsc::channel::<InternalCommand>();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
@@ -2418,7 +2409,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    None,
                     &mut mock_water_injection,
                 );
 
@@ -2637,7 +2628,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    Some(rx_refill_from_messaging),
                     &mut mock_water_injection,
                 );
 
@@ -2702,8 +2693,6 @@ pub mod tests {
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_messaging_to_refill, rx_refill_from_messaging) =
             mpsc::channel::<InternalCommand>();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
@@ -2816,7 +2805,7 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    rx_refill_from_messaging,
+                    None,
                     &mut mock_water_injection,
                 );
 

@@ -325,7 +325,7 @@ impl Ventilation {
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -340,7 +340,7 @@ impl Ventilation {
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) =
-                self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+                self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }
@@ -714,7 +714,6 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
-        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
@@ -816,7 +815,7 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
+                    None,
                 );
 
                 // send Quit signal to mock threads because test object has terminated
@@ -877,7 +876,6 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
-        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
@@ -984,7 +982,7 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
+                    None,
                 );
 
                 // send Quit signal to mock threads because test object has terminated
@@ -1045,7 +1043,6 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
-        let (_tx_ventilation_to_messaging, rx_ventilation_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
@@ -1279,7 +1276,7 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
+                    None,
                 );
 
                 // send Quit signal to mock threads because test object has terminated
@@ -1338,7 +1335,6 @@ pub mod tests {
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
             mpsc::channel();
-        let (_tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
@@ -1445,7 +1441,7 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
+                    None,
                 );
 
                 // send Quit signal to mock threads because test object has terminated
@@ -1701,7 +1697,7 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    rx_ventilation_from_messaging,
+                    Some(rx_ventilation_from_messaging),
                 );
 
                 // send Quit signal to mock threads because test object has terminated

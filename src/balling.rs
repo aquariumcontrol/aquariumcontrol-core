@@ -337,7 +337,7 @@ impl Balling {
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce frequency of channel polling
@@ -497,7 +497,7 @@ impl Balling {
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
-            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+            ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 #[cfg(test)]
                 println!("{}: received Quit command. Exiting...", LOG_TARGET_BALLING);
@@ -838,7 +838,6 @@ pub mod tests {
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
         let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
-        let (_tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
@@ -894,7 +893,7 @@ pub mod tests {
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
-                    rx_balling_from_messaging,
+                    None,
                     &mut mock_mineral_injection,
                 );
 
@@ -1238,7 +1237,7 @@ pub mod tests {
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
-                    rx_balling_from_messaging,
+                    Some(rx_balling_from_messaging),
                     &mut mock_mineral_injection,
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);

@@ -335,96 +335,76 @@ fn main() {
         | config.tank_level_switch.use_simulator;
 
     // create channels for communication between threads
+    let tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>;
+    let rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>;
 
     cfg_if::cfg_if! {
-        // channels for linux-specific code (messaging)
         if #[cfg(target_os = "linux")] {
+            // channels for linux-specific code (messaging)
             // *** signal_handler => messaging ***
             let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
+            rx_messaging_from_signal_handler_opt = Some(rx_messaging_from_signal_handler);
 
             // *** messaging => refill ***
             let (tx_messaging_to_refill, rx_refill_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_refill_from_messaging_opt = Some(rx_refill_from_messaging);
 
             // *** messaging => ventilation ***
             let (tx_messaging_to_ventilation, rx_ventilation_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_ventilation_from_messaging_opt = Some(rx_ventilation_from_messaging);
 
             // *** messaging => heating ***
             let (tx_messaging_to_heating, rx_heating_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_heating_from_messaging_opt = Some(rx_heating_from_messaging);
 
             // *** messaging => feed ***
             let (tx_messaging_to_feed, rx_feed_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_feed_from_messaging_opt = Some(rx_feed_from_messaging);
 
             // *** messaging => balling ***
             let (tx_messaging_to_balling, rx_balling_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
 
             // *** messaging => monitors ***
-            let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
+            let (tx_messaging_to_monitors, rx_balling_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
+            rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
         }
-
-        // channels for non-linux specific code (receivers)
         else {
-            // *** signal_handler => messaging ***
-            let (tx_signal_handler_to_messaging, _): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-
-            // *** messaging => refill ***
-            let (_, rx_refill_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>
-            ) = mpsc::channel();
-
-            // *** messaging => ventilation ***
-            let (_, rx_ventilation_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>,
-            ) = mpsc::channel();
-
-            // *** messaging => heating ***
-            let (_, rx_heating_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>
-            ) = mpsc::channel();
-
-            // *** messaging => feed ***
-            let (_, rx_feed_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>
-            ) = mpsc::channel();
-
-            // *** messaging => balling ***
-            let (_, rx_balling_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>
-            ) = mpsc::channel();
-
-            // *** messaging => monitors ***
-            let (_, rx_monitors_from_messaging): (
-                Sender<InternalCommand>,
-                Receiver<InternalCommand>
-            ) = mpsc::channel();
+            // replacement values for channels for non-linux specific code
+            tx_signal_handler_to_messaging_opt = None;
+            rx_refill_from_messaging_opt = None;
+            rx_ventilation_from_messaging_opt = None;
+            rx_heating_from_messaging_opt = None;
+            rx_feed_from_messaging_opt = None;
+            rx_balling_from_messaging_opt = None;
+            rx_monitors_from_messaging_opt = None;
         }
     }
 
@@ -1085,7 +1065,7 @@ fn main() {
 
         scope.spawn(move || {
             handle_signals(
-                tx_signal_handler_to_messaging,
+                tx_signal_handler_to_messaging_opt,
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,
                 tx_signal_handler_to_tank_level_switch,
@@ -1242,7 +1222,7 @@ fn main() {
                 rx_refill_from_schedule_check,
                 tx_refill_to_data_logger,
                 rx_refill_from_data_logger,
-                rx_refill_from_messaging,
+                rx_refill_from_messaging_opt,
                 &mut water_injection,
             );
             trace!(target: LOG_TARGET_MAIN, "Refill terminated.");
@@ -1270,7 +1250,7 @@ fn main() {
                 rx_heating_from_data_logger,
                 tx_heating_to_schedule_check,
                 rx_heating_from_schedule_check,
-                rx_heating_from_messaging,
+                rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
             );
             trace!(target: LOG_TARGET_MAIN, "Heating terminated.");
@@ -1292,7 +1272,7 @@ fn main() {
                 rx_ventilation_from_data_logger,
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
-                rx_ventilation_from_messaging,
+                rx_ventilation_from_messaging_opt,
             );
             trace!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
         });
@@ -1307,7 +1287,7 @@ fn main() {
                 rx_monitors_from_controllino,
                 tx_monitors_to_signal_handler,
                 rx_monitors_from_signal_handler,
-                rx_monitors_from_messaging,
+                rx_monitors_from_messaging_opt,
             );
             trace!(target: LOG_TARGET_MAIN, "Monitors terminated.");
         });
@@ -1322,7 +1302,7 @@ fn main() {
                 rx_feed_from_controllino,
                 tx_feed_to_signal_handler,
                 rx_feed_from_signal_handler,
-                rx_feed_from_messaging,
+                rx_feed_from_messaging_opt,
                 &mut food_injection,
             );
             trace!(target: LOG_TARGET_MAIN, "Feed terminated.");
@@ -1340,7 +1320,7 @@ fn main() {
                 rx_balling_from_signal_handler,
                 tx_balling_to_schedule_check,
                 rx_balling_from_schedule_check,
-                rx_balling_from_messaging,
+                rx_balling_from_messaging_opt,
                 &mut mineral_injection,
             );
             trace!(target: LOG_TARGET_MAIN, "Balling terminated.");

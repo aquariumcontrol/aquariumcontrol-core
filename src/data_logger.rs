@@ -749,7 +749,7 @@ impl DataLogger {
                 #[cfg(feature = "debug_data_logger")]
                 {
                     let stop_time_atlas_scientific = SystemTime::now();
-                    let execution_duration_atlas_scientific_millis = stop_time_refill
+                    let execution_duration_atlas_scientific_millis = stop_time_atlas_scientific
                         .duration_since(start_time_atlas_scientific)
                         .unwrap()
                         .as_millis()
@@ -839,7 +839,7 @@ impl DataLogger {
                 #[cfg(feature = "debug_data_logger")]
                 {
                     let stop_time_ambient = SystemTime::now();
-                    let execution_duration_ambient_millis = stop_time_refill
+                    let execution_duration_ambient_millis = stop_time_ambient
                         .duration_since(start_time_ambient)
                         .unwrap()
                         .as_millis()

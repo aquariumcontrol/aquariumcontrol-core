@@ -81,7 +81,7 @@ impl Monitors {
         _rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -109,7 +109,7 @@ impl Monitors {
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
-            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+            ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }

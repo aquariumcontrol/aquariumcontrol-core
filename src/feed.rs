@@ -229,7 +229,7 @@ impl Feed {
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
-        rx_from_messaging: Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -343,7 +343,7 @@ impl Feed {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
-            ) = self.process_external_request(&rx_from_signal_handler, Some(&rx_from_messaging));
+            ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }
@@ -546,7 +546,6 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -644,7 +643,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    rx_feed_from_messaging,
+                    None,
                     &mut mock_food_injection,
                 );
 
@@ -822,7 +821,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    rx_feed_from_messaging,
+                    Some(rx_feed_from_messaging),
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -906,7 +905,6 @@ pub mod tests {
         let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -947,7 +945,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    rx_feed_from_messaging,
+                    None,
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -1104,7 +1102,6 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -1202,7 +1199,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    rx_feed_from_messaging,
+                    None,
                     &mut mock_food_injection,
                 );
 
@@ -1227,7 +1224,6 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
-        let (_tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -1325,7 +1321,7 @@ pub mod tests {
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    rx_feed_from_messaging,
+                    None,
                     &mut mock_food_injection,
                 );
 

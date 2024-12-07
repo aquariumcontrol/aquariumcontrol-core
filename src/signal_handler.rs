@@ -91,7 +91,7 @@ const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 /// ```
 
 pub fn handle_signals(
-    tx_to_messaging: Sender<InternalCommand>,
+    tx_to_messaging_opt: Option<Sender<InternalCommand>>,
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
     tx_to_tank_level_switch: Sender<InternalCommand>,
@@ -658,16 +658,19 @@ pub fn handle_signals(
     }
 
     // Messaging is checking for Quit signal periodically.
-    match tx_to_messaging.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Messaging failed when sending Quit  command ({e:?})"
-            );
-        }
+    match tx_to_messaging_opt {
+        Some(tx_to_messaging) => match tx_to_messaging.send(InternalCommand::Quit) {
+            Ok(_) => {
+                #[cfg(feature = "debug_signal_handler")]
+                debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");
+            }
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    "channel communication to Messaging failed when sending Quit  command ({e:?})"
+                );
+            }
+        },
+        None => { /* do nothing */ }
     }
 }
