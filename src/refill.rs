@@ -952,7 +952,10 @@ impl Refill {
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval * 10 {
-                i = i + 1;
+                i += 1;
+                
+                self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+                
                 (
                     quit_command_received,
                     start_command_received,
@@ -982,8 +985,6 @@ impl Refill {
             if quit_command_received {
                 break; // exit outer loop
             }
-
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
             if self.config.active {
                 // check when the last refill operation has taken place
@@ -1051,6 +1052,7 @@ impl Refill {
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
                                     // now we are given exclusive access to actuators
+                                    
                                     quit_command_received = water_injection.inject_water(
                                         &tx_to_controllino,
                                         &rx_from_controllino,
@@ -1099,7 +1101,10 @@ impl Refill {
                 // check for external requests while waiting
                 i = 0;
                 while i < remaining_sleep_time_millis || cycle_time_exceeded {
-                    i = i + 1;
+                    i += 1;
+                    
+                    self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+                    
                     (
                         quit_command_received,
                         start_command_received,

@@ -43,6 +43,7 @@ assert_float_eq = "1"
 all_asserts = "2.3.1"
 
 [features]
+default = ["debug"]
 target_hw = []
 controllino_hw = []
 debug_signal_handler = []
