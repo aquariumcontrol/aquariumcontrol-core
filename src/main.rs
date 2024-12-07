@@ -352,7 +352,6 @@ fn main() {
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
             tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
-            rx_messaging_from_signal_handler_opt = Some(rx_messaging_from_signal_handler);
 
             // *** messaging => refill ***
             let (tx_messaging_to_refill, rx_refill_from_messaging): (
@@ -390,11 +389,11 @@ fn main() {
             rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
 
             // *** messaging => monitors ***
-            let (tx_messaging_to_monitors, rx_balling_from_messaging): (
+            let (tx_messaging_to_monitors, rx_monitors_from_messaging): (
                 Sender<InternalCommand>,
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
-            rx_balling_from_messaging_opt = Some(rx_balling_from_messaging);
+            rx_monitors_from_messaging_opt = Some(rx_monitors_from_messaging);
         }
         else {
             // replacement values for channels for non-linux specific code
