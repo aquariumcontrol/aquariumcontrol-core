@@ -1077,12 +1077,22 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_heating.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        
+        // empty the heating stats table
+        match SqlInterface::truncate_table(&mut sql_interface, "heatingstats".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+        
         let sql_interface_heating_midnight_calculator = Box::new(
             SqlInterfaceHeatingMockMidnightCalculator::new(seconds_to_midnight),
         );
@@ -2431,7 +2441,7 @@ pub mod tests {
             mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
-
+       
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = match heating
             .sql_interface_heating

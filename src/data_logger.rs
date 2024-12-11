@@ -966,7 +966,7 @@ impl DataLogger {
                     let filtered_pH = self.filter_pH.get_filtered_value(c);
                     self.lock_error_output_signal_pH_filtered = self.output_signal(
                         filtered_pH,
-                        AquariumSignal::WaterTemperature,
+                        AquariumSignal::pH,
                         &self.config.output_file_name_pH_filtered,
                         self.lock_error_output_signal_pH_filtered,
                     );
@@ -1540,27 +1540,6 @@ pub mod tests {
                 println!("Printing recorded data:");
                 mock_data_injection.output();
 
-                //let mut data_frame: DataFrame = mock_data_injection.data_frames.pop().unwrap();
-
-                /*                // Dataframe #7
-                                println!("Asserting data frame #7");
-                                data_frame.assert(
-                                    Some(29.0),      // target_water_temperature
-                                    Some(28.8125),   // target_water_temperature_filtered
-                                    Some(7.0),       // target_water_ph
-                                    Some(7.0195313), // target_water_ph_filtered
-                                    Some(50_000.0),  // target_water_conductivity
-                                    Some(48437.83),  // target_water_conductivity_filtered
-                                    None,            // target_water_conductivity_compensated
-                                    Some(true),      // target_refill_in_progress
-                                    Some(false),     // target_tank_level_switch_position
-                                    Some(true),      // target_tank_level_switch_invalid
-                                    Some(true),      // target_surface_ventilation_status
-                                    Some(35.0),      // target_ambient_temperature
-                                    Some(66.0),      // target_ambient_humidity
-                                    Some(true),      // target_heater_status
-                                );
-                */
                 // Dataframe #6
                 let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #6");
@@ -1706,7 +1685,7 @@ pub mod tests {
                     29.0,                 // target_water_temperature
                     28.6,                 // target_water_temperature_filtered
                     7.0,                  // target_water_ph
-                    7.0,                  // target_water_ph_filtered
+                    7.04,                  // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated
