@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, warn};
+use log::{error};
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
@@ -18,6 +18,7 @@ use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
 use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
+use crate::data_logger_communication::DataLoggerCommunicationTrait;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
@@ -73,10 +74,10 @@ pub struct WaterInjection {
     lock_error_channel_receive_tank_level_switch_position: bool,
     lock_error_channel_send_tank_level_switch_invalid: bool,
     lock_error_channel_receive_tank_level_switch_invalid: bool,
-    lock_error_channel_receive_data_logger: bool,
-    lock_warn_inapplicable_command_data_logger: bool,
-    lock_error_invalid_signal_request_data_logger: bool,
-    lock_error_send_to_data_logger: bool,
+    pub lock_error_channel_receive_data_logger: bool,
+    pub lock_warn_inapplicable_command_data_logger: bool,
+    pub lock_error_invalid_signal_request_data_logger: bool,
+    pub lock_error_send_to_data_logger: bool,
 }
 
 impl WaterInjection {
@@ -189,79 +190,6 @@ impl WaterInjection {
 
         (tank_level_switch_position, tank_level_switch_invalid)
     }
-
-    /// check if data logger sent command and respond
-    fn communicate_with_data_logger(
-        &mut self,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        match d {
-                            AquariumSignal::RefillPumpStatus => {
-                                self.lock_error_invalid_signal_request_data_logger = true;
-                                match tx_to_data_logger.send(false) {
-                                    Ok(_) => {
-                                        self.lock_error_send_to_data_logger = false;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_send_to_data_logger {
-                                            error!(
-                                                target: LOG_TARGET_WATER_INJECTION,
-                                                "channel communication to data logger failed ({e:?})"
-                                            );
-                                            self.lock_error_send_to_data_logger = true;
-                                        }
-                                    }
-                                };
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_WATER_INJECTION,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_WATER_INJECTION,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            error!(
-                                target: LOG_TARGET_WATER_INJECTION,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
-    }
 }
 
 impl WaterInjectionTrait for WaterInjection {
@@ -309,7 +237,7 @@ impl WaterInjectionTrait for WaterInjection {
         let mut additional_refill_volume_executed = 0.0;
 
         loop {
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, true);
 
             self.spin_sleeper
                 .sleep(self.sleep_duration_hundred_milli_sec);

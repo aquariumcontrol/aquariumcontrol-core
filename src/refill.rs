@@ -15,7 +15,7 @@ use log::info;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fmt;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -24,6 +24,7 @@ use crate::channel_content::InternalCommand;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::water_injection::WaterInjectionTrait;
+use crate::data_logger_communication::DataLoggerCommunicationTrait;
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -243,16 +244,16 @@ pub struct Refill {
     lock_error_channel_receive_tank_level_switch_position_stabilized: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
-    lock_error_channel_receive_data_logger: bool,
+    pub lock_error_channel_receive_data_logger: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via channel
-    lock_warn_inapplicable_command_data_logger: bool,
+    pub lock_warn_inapplicable_command_data_logger: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having recevied request for invalid signal from data logger
-    lock_error_invalid_signal_request_data_logger: bool,
+    pub lock_error_invalid_signal_request_data_logger: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failuire to send response to data logger
-    lock_error_send_to_data_logger: bool,
+    pub lock_error_send_to_data_logger: bool,
 }
 
 /// Contains the data retrieved from SQL database.
@@ -828,79 +829,6 @@ impl Refill {
         )
     }
 
-    /// check if data logger sent command and respond
-    fn communicate_with_data_logger(
-        &mut self,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        match d {
-                            AquariumSignal::RefillPumpStatus => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                match tx_to_data_logger.send(false) {
-                                    Ok(_) => {
-                                        self.lock_error_send_to_data_logger = false;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_send_to_data_logger {
-                                            error!(
-                                                target: LOG_TARGET_REFILL,
-                                                "channel communication to data logger failed ({e:?})"
-                                            );
-                                            self.lock_error_send_to_data_logger = true;
-                                        }
-                                    }
-                                };
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_REFILL,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_REFILL,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
-    }
-
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
@@ -954,7 +882,7 @@ impl Refill {
             while i < self.config.initial_wait_interval * 10 {
                 i += 1;
                 
-                self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+                self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
                 
                 (
                     quit_command_received,
@@ -1103,7 +1031,7 @@ impl Refill {
                 while i < remaining_sleep_time_millis || cycle_time_exceeded {
                     i += 1;
                     
-                    self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
+                    self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
                     
                     (
                         quit_command_received,

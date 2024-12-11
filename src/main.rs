@@ -28,6 +28,7 @@ mod controllino_actuate_hardware;
 mod controllino_actuate_simulator;
 mod data_injection;
 mod data_logger;
+mod data_logger_communication;
 mod device_relay_logic;
 mod dht;
 mod feed;
