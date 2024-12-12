@@ -307,14 +307,7 @@ impl DataLogger {
         inhibit_error_log: bool,
     ) -> bool {
         if self.config.output_to_disk {
-            let signal_string = match signal_type {
-                AquariumSignal::WaterTemperature => format!("{:.1}", signal),
-                AquariumSignal::pH => format!("{:.2}", signal),
-                AquariumSignal::Conductivity => format!("{:.0}", signal),
-                AquariumSignal::AmbientTemperature => format!("{:.1}", signal),
-                AquariumSignal::AmbientHumidity => format!("{:.1}", signal),
-                _ => signal.to_string(),
-            };
+            let signal_string = signal_type.output_file_string(signal);
 
             match fs::write(output_file_name, signal_string.clone()) {
                 Ok(_) => {

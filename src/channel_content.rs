@@ -118,6 +118,21 @@ pub enum AquariumSignal {
     MockInvalidSignal,
 }
 
+impl AquariumSignal {
+    pub fn output_file_string(&self, signal: f32) -> String {
+        match self {
+            AquariumSignal::WaterTemperature => format!("{:.1}", signal),
+            AquariumSignal::Conductivity => format!("{:.0}", signal),
+            AquariumSignal::pH => format!("{:.2}", signal),
+            AquariumSignal::AmbientTemperature => format!("{:.1}", signal),
+            AquariumSignal::AmbientHumidity => format!("{:.1}", signal),
+            #[cfg(all(target_os = "linux", feature = "target_hw", test))]
+            AquariumSignal::MockInvalidSignal => "MockInvalid".to_string(),
+            _ => signal.to_string(),
+        }
+    }    
+}
+
 impl fmt::Display for AquariumSignal {
     /// Function provides output of the enum values for debugging purposes.
     /// # Arguments

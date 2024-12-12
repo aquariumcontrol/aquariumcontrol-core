@@ -406,7 +406,7 @@ impl ProcessExternalRequestTrait for Feed {
                                 #[cfg(not(test))]
                                 info!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
-                                    "Received reset command for errors of refill control."
+                                    "Received reset command for errors of feed control."
                                 );
                                 self.execution_blocked = false;
                                 (false, false, false, 0)
