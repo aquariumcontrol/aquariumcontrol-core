@@ -14,7 +14,7 @@ use std::process;
 /// Holds the configuration data for the PID publication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct PublishPidConfig {
     /// filename used for publishing the PID
     pid_filename: String,
@@ -22,6 +22,7 @@ pub struct PublishPidConfig {
 
 /// Contains the struct for configuration data and provides implementation for
 /// publication of process id (Pid).
+#[derive(Clone)]
 pub struct PublishPid {
     config: PublishPidConfig,
 }

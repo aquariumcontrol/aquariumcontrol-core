@@ -64,11 +64,12 @@ mod ventilation;
 mod version_information;
 mod water_injection;
 
-use log::{info, trace, warn};
+use log::{info, trace, warn, error};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
+use std::panic;
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -224,7 +225,25 @@ fn main() {
 
     // read configuration file for operating the control system
     let config = read_config_file("/config/aquarium_control.toml".to_string());
+    
+    // publish the PID to a file so that client application can communicate with this appcliation
+    let publish_pid = PublishPid::new(config.publish_pid);
+    let publish_pid_clone = publish_pid.clone();
+    
+    panic::set_hook(Box::new(move |panic_info| {
+        // custom panic handler: resets the PID to zero before entering in panic
+        // this allows subsequent runs of the application without needing to manually
+        // clear the PID file.
+        // Print the panic message to stderr.
+        publish_pid_clone.erase_pid();
+        error!("Panic occurred: {}", panic_info);
 
+        // Optionally, you can include more details like:
+        if let Some(location) = panic_info.location() {
+            error!("Panic occurred in file '{}' at line {}", location.file(), location.line());
+        }                        
+    }));
+        
     // calculate hash of executable
     let version_information = VersionInformation::new();
     info!(target: LOG_TARGET_MAIN,
@@ -952,8 +971,6 @@ fn main() {
             let tx_signal_handler_to_i2c_interface_opt = None;
         }
     }
-
-    let publish_pid = PublishPid::new(config.publish_pid);
 
     #[cfg(target_os = "linux")]
     let mut messaging = Messaging::new(config.messaging);
