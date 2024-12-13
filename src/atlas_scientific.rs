@@ -384,6 +384,7 @@ impl AtlasScientific {
                                             self.pH_invalid = false;
                                             self.conductivity_invalid = false;
                                             self.lock_error_i2c_interface = false;
+                                            request_sent_to_i2c_interface = false; // allow for next request to be sent
                                         }
                                         #[cfg(not(test))]
                                         Err(e) => {
@@ -426,7 +427,6 @@ impl AtlasScientific {
                                         }
                                     }
                                 }
-                                request_sent_to_i2c_interface = false; // allow for next request to be sent
                             }
                         }
                     }

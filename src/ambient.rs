@@ -10,6 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #![allow(non_snake_case)]
 use crate::channel_content::AquariumSignal;
 use log::{error, warn};
+
+#[cfg(feature = "debug_dht")]
+use log::debug;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
@@ -245,9 +249,19 @@ impl Ambient {
                                 match rx_from_dht.try_recv() {
                                     Ok(response) => match response {
                                         Ok((ambient_temperature, ambient_humidity)) => {
+
+                                            #[cfg(feature = "debug_dht")]
+                                            debug!(
+                                                target: LOG_TARGET_AMBIENT,
+                                                "received response from dht: temperature={}, humidity={}",
+                                                ambient_temperature,
+                                                ambient_humidity
+                                            );
+
                                             self.ambient_temperature = ambient_temperature;
                                             self.ambient_humidity = ambient_humidity;
                                             self.lock_error_dht = false;
+                                            request_sent_to_dht = false; // allow for next request to be sent
                                         }
                                         Err(e) => {
                                             if !self.lock_error_dht {
@@ -277,7 +291,6 @@ impl Ambient {
                                         }
                                     }
                                 }
-                                request_sent_to_dht = false; // allow for next request to be sent
                             }
                         }
                     }

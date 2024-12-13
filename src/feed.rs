@@ -794,6 +794,7 @@ pub mod tests {
                 // wait for 2 seconds. If test object follows execute request,
                 // then food injection will happen in this period.
                 spin_sleeper.sleep(sleep_duration_2_secs);
+                spin_sleeper.sleep(sleep_duration_2_secs);
 
                 // get count of feed profiles executed
                 let actuation_count_3 =

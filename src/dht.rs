@@ -11,6 +11,7 @@ use serde_derive::Deserialize;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use log::error;
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread;
         use std::thread::sleep;
@@ -19,14 +20,18 @@ cfg_if::cfg_if! {
         use std::sync::mpsc::{Sender, Receiver};
         use crate::channel_content::AquariumSignal;
 
+        const LOG_TARGET_DHT: &str = "dht";
+        
+        #[cfg(feature = "debug_dht")]
+        use log::debug;
     }
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(not(test))] {
+   if #[cfg(all(not(test), not(all(target_os = "linux", feature = "target_hw"))))] {
         use log::error;
         const LOG_TARGET_DHT: &str = "dht";
-    }
+   }
 }
 
 /// Holds the configuration data for the GPIO handler.
@@ -597,6 +602,15 @@ impl Dht {
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
+                    
+                    #[cfg(feature = "debug_dht")]
+                    debug!(
+                        target: LOG_TARGET_DHT,
+                        "measured successfully: temperature={}, humidity={}",
+                        temperature,
+                        humidity
+                    );
+                    
                     result_tuple = (temperature, humidity);
                 }
                 Err(e) => {
@@ -649,7 +663,7 @@ impl Dht {
                                 | AquariumSignal::AmbientTemperature => {
                                     let measurement = self.get_data();
                                     _ = tx_to_ambient.send(measurement);
-                                }
+                                },
                                 _ => {
                                     if !lock_error_invalid_signal {
                                         error!(
@@ -662,6 +676,11 @@ impl Dht {
                             }
                         }
                         InternalCommand::Quit => {
+                            #[cfg(feature = "debug_dht")]
+                            debug!(
+                                target: LOG_TARGET_DHT,
+                                "Received QUIT command"
+                            );
                             break;
                         }
                         _ => {

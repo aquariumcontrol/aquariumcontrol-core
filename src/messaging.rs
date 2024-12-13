@@ -381,6 +381,10 @@ impl Messaging {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
+                info!(
+                    target: LOG_TARGET_MESSAGING,
+                    "received QUIT command from messaging"
+                );
                 break;
             }
         }

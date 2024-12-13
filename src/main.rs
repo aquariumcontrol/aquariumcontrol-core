@@ -64,7 +64,11 @@ mod ventilation;
 mod version_information;
 mod water_injection;
 
-use log::{info, trace, warn, error};
+use log::{info, warn, error};
+
+#[cfg(feature = "debug_main")]            
+use log::debug;
+
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -116,7 +120,6 @@ use crate::water_injection::WaterInjection;
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
         use crate::dht::DhtError;
-        use crate::messaging::Messaging;
         use crate::i2c_interface::I2cError;
         use crate::i2c_interface::I2cInterface;
     }
@@ -1037,6 +1040,8 @@ fn main() {
                     rx_tcp_from_signal_handler,
                 );
             });
+            #[cfg(feature = "debug_main")]            
+            debug!(target: LOG_TARGET_MAIN, "TcpCommunication terminated.");
         };
 
         if config.controllino.use_simulator {
@@ -1057,7 +1062,11 @@ fn main() {
                     rx_controllino_from_signal_handler,
                     &mut ControllinoActuateSimulator,
                 );
+                
+                #[cfg(feature = "debug_main")]            
+                debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");            
             });
+            
         } else {
             scope.spawn(move || {
                 controllino.execute(
@@ -1076,8 +1085,12 @@ fn main() {
                     rx_controllino_from_signal_handler,
                     &mut ControllinoActuateHardware,
                 );
+        
+                #[cfg(feature = "debug_main")]            
+                debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
+                
             });
-            trace!(target: LOG_TARGET_MAIN, "Controllino terminated.");
+            
         }
 
         scope.spawn(move || {
@@ -1112,7 +1125,9 @@ fn main() {
                 tx_signal_handler_to_dht_opt,
                 tx_signal_handler_to_i2c_interface_opt,
             );
-            trace!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
         });
 
         scope.spawn(move || {
@@ -1128,7 +1143,9 @@ fn main() {
                 tx_schedule_check_to_signal_handler,
                 rx_schedule_check_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
         });
 
         scope.spawn(move || {
@@ -1146,26 +1163,34 @@ fn main() {
                 tx_atlas_scientific_to_signal_handler,
                 rx_atlas_scientific_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
         });
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface);
             let mut dht = dht_opt.expect("unwrapping of Dht failed");
+            
             scope.spawn(move || {
                 dht.execute(
                     tx_dht_to_ambient,
                     rx_dht_from_ambient, // channel is shared with signal handler
                 );
-                trace!(target: LOG_TARGET_MAIN, "Dht terminated.");
+                
+                #[cfg(feature = "debug_main")]
+                debug!(target: LOG_TARGET_MAIN, "Dht terminated.");
             });
+            
             scope.spawn(move || {
                 i2c_interface.execute(
                     tx_i2c_interface_to_atlas_scientific,
                     rx_i2c_interface_from_atlas_scientific,
                 );
-                trace!(target: LOG_TARGET_MAIN, "i2c_interface terminated.");
+                
+                #[cfg(feature = "debug_main")]
+                debug!(target: LOG_TARGET_MAIN, "i2c_interface terminated.");
             });
         }
 
@@ -1182,7 +1207,9 @@ fn main() {
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "Ambient terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
 
         scope.spawn(move || {
@@ -1204,7 +1231,9 @@ fn main() {
                 tx_data_logger_to_signal_handler,
                 rx_data_logger_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "Data logger terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Data logger terminated.");
         });
 
         scope.spawn(move || {
@@ -1220,7 +1249,9 @@ fn main() {
                 &tx_tank_level_switch_to_signal_handler,
                 &rx_tank_level_switch_from_signal_handler,
             );
-            trace!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
         });
 
         // Refill needs actuation of relay
@@ -1242,7 +1273,9 @@ fn main() {
                 rx_refill_from_messaging_opt,
                 &mut water_injection,
             );
-            trace!(target: LOG_TARGET_MAIN, "Refill terminated.");
+            
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Refill terminated.");
         });
 
         // Heating needs actuation of relay
@@ -1270,7 +1303,9 @@ fn main() {
                 rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
             );
-            trace!(target: LOG_TARGET_MAIN, "Heating terminated.");
+            
+            #[cfg(feature = "debug_main")]            
+            debug!(target: LOG_TARGET_MAIN, "Heating terminated.");
         });
 
         // Ventilation needs actuation of relay
@@ -1291,7 +1326,9 @@ fn main() {
                 rx_ventilation_from_schedule_check,
                 rx_ventilation_from_messaging_opt,
             );
-            trace!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
+
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
         });
 
         // Monitors needs communication with Controllino device
@@ -1306,7 +1343,9 @@ fn main() {
                 rx_monitors_from_signal_handler,
                 rx_monitors_from_messaging_opt,
             );
-            trace!(target: LOG_TARGET_MAIN, "Monitors terminated.");
+
+            #[cfg(feature = "debug_main")]            
+            debug!(target: LOG_TARGET_MAIN, "Monitors terminated.");
         });
 
         // Feed needs actuation of relay
@@ -1322,7 +1361,8 @@ fn main() {
                 rx_feed_from_messaging_opt,
                 &mut food_injection,
             );
-            trace!(target: LOG_TARGET_MAIN, "Feed terminated.");
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Feed terminated.");
         });
 
         // Balling dosing needs actuation of relays
@@ -1340,7 +1380,9 @@ fn main() {
                 rx_balling_from_messaging_opt,
                 &mut mineral_injection,
             );
-            trace!(target: LOG_TARGET_MAIN, "Balling terminated.");
+
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Balling terminated.");
         });
 
         // IPC via messages
@@ -1360,7 +1402,8 @@ fn main() {
             // remove PID from file
             publish_pid.erase_pid();
 
-            trace!(target: LOG_TARGET_MAIN, "Messaging terminated.");
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Messaging terminated.");
         });
     });
 }

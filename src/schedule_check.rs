@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martin
+/* Cuopyright 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -245,6 +245,13 @@ impl ScheduleCheck {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
+            
+                #[cfg(feature = "debug_schedule_check")]
+                debug!(
+                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    "received QUIT command"
+                );
+                
                 break;
             }
 
@@ -380,7 +387,13 @@ impl ScheduleCheck {
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
-            Ok(()) => {}
+            Ok(()) => {
+                #[cfg(feature = "debug_schedule_check")]
+                debug!(
+                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    "sent back confirmation to schedule checker"
+                );            
+            }
             Err(e) => {
                 error!(
                     target: Self::LOG_TARGET_SCHEDULE_CHECK,

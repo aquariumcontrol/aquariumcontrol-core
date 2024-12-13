@@ -21,6 +21,9 @@ cfg_if::cfg_if! {
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
 
         use crate::channel_content::InternalCommand;
+        
+        #[cfg(feature = "debug_i2c_interface")]
+        use log::debug;
     }
 }
 
@@ -486,6 +489,13 @@ impl I2cInterface {
                             }
                         }
                         InternalCommand::Quit => {
+                            
+                            #[cfg(feature = "debug_i2c_interface")]
+                            debug!(
+                                target: Self::LOG_TARGET_I2C_INTERFACE,
+                                "Received QUIT command"
+                            );
+
                             break;
                         }
                         _ => {

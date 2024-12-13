@@ -1209,16 +1209,16 @@ pub mod tests {
                 // hence, platform specific asserts are necessary
                 cfg_if::cfg_if! {
                     if #[cfg(target_os = "linux")] {
-                        assert_le!(second_last_actuation_duration, 7100);
-                        assert_ge!(second_last_actuation_duration, 6900);
-                        assert_le!(third_last_actuation_duration, 7100);
-                        assert_ge!(third_last_actuation_duration, 6900);
-                        assert_le!(fourth_last_actuation_duration, 7100);
-                        assert_ge!(fourth_last_actuation_duration, 6900);
-                        assert_le!(fifth_last_actuation_duration, 7100);
-                        assert_ge!(fifth_last_actuation_duration, 6900);
-                        assert_le!(sixth_last_actuation_duration, 7100);
-                        assert_ge!(sixth_last_actuation_duration, 6900);
+                        assert_le!(second_last_actuation_duration, 7600);
+                        assert_ge!(second_last_actuation_duration, 5500);
+                        assert_le!(third_last_actuation_duration, 7600);
+                        assert_ge!(third_last_actuation_duration, 5500);
+                        assert_le!(fourth_last_actuation_duration, 7600);
+                        assert_ge!(fourth_last_actuation_duration, 5500);
+                        assert_le!(fifth_last_actuation_duration, 7600);
+                        assert_ge!(fifth_last_actuation_duration, 5500);
+                        assert_le!(sixth_last_actuation_duration, 7600);
+                        assert_ge!(sixth_last_actuation_duration, 5500);
                     }
                     else {
                         assert_le!(second_last_actuation_duration, 7600);

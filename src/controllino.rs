@@ -7,7 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{debug, error};
+use log::error;
+
+#[cfg(feature = "debug_controllino")]
+use log::debug;
+
 use serde_derive::Deserialize;
 use serialport::ClearBuffer;
 use serialport::SerialPort;
@@ -400,6 +404,13 @@ impl Controllino {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
+                
+                #[cfg(feature = "debug_controllino")]
+                debug!(
+                    target: Self::LOG_TARGET_CONTROLLINO,
+                    "received QUIT command"
+                );
+                
                 break;
             }
 
@@ -739,6 +750,7 @@ impl Controllino {
             // **********************************
         }
 
+        #[cfg(feature = "debug_controllino")]
         debug!(
             target: Self::LOG_TARGET_CONTROLLINO,
             "exited loop, sending back confirmation to signal handler"
@@ -747,7 +759,14 @@ impl Controllino {
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
-            Ok(()) => {}
+            Ok(()) => {
+                
+                #[cfg(feature = "debug_controllino")]
+                debug!(
+                    target: Self::LOG_TARGET_CONTROLLINO,
+                    "sent back confirmation to signal handler"
+                );
+            }
             Err(e) => {
                 error!(target: Self::LOG_TARGET_CONTROLLINO,
                     "sending confirmation to signal handler ({e:?})"

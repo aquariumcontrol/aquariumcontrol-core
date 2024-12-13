@@ -84,6 +84,9 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for current value of tank level switch invalid
     output_file_name_tank_level_switch_invalid: String,
 
+    /// output file name (in ramdisk) for current value of tank level switch position stabilized
+    output_file_name_tank_level_switch_position_stabilized: String,
+
     /// output file name (in ramdisk) for current value of ventilation
     output_file_name_ventilation_is_on: String,
 
@@ -164,6 +167,9 @@ pub struct DataLogger {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
     lock_error_output_state_tank_level_switch_invalid: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position stabilized to disk
+    lock_error_output_state_tank_level_switch_position_stabilized: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
     lock_error_output_signal_water_temperature_filtered: bool,
 
@@ -218,6 +224,7 @@ impl DataLogger {
                     .output_file_name_tank_level_switch_position
                     .is_empty()
                 || config.output_file_name_tank_level_switch_invalid.is_empty()
+                || config.output_file_name_tank_level_switch_position_stabilized.is_empty()
                 || config.output_file_name_ventilation_is_on.is_empty()
                 || config.output_file_name_heating_is_on.is_empty()
                 || config.output_file_name_ambient_temperature.is_empty()
@@ -253,6 +260,9 @@ impl DataLogger {
                 fs::write(config.output_file_name_tank_level_switch_invalid.clone(), "").expect(
                     "DataLogger: Could not reset content of output file for tank level switch invalid."
                 );
+                fs::write(config.output_file_name_tank_level_switch_position_stabilized.clone(), "").expect(
+                    "DataLogger: Could not reset content of output file for tank level switch position stabilized."
+                );
                 fs::write(config.output_file_name_ventilation_is_on.clone(), "").expect(
                     "DataLogger: Could not reset content of output file for ventilation status.",
                 );
@@ -286,6 +296,7 @@ impl DataLogger {
             lock_error_output_signal_humidity: false,
             lock_error_output_state_tank_level_switch_position: false,
             lock_error_output_state_tank_level_switch_invalid: false,
+            lock_error_output_state_tank_level_switch_position_stabilized: false,
             lock_error_output_signal_water_temperature_filtered: false,
             lock_error_output_signal_pH_filtered: false,
             lock_error_output_signal_conductivity_filtered: false,
@@ -922,6 +933,44 @@ impl DataLogger {
                         tank_level_switch_channel_disconnected = true;
                     }
                 }
+
+                // send request for tank level switch stabilized position
+                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                    AquariumSignal::TankLevelSwitchPositionStabilized,
+                )) {
+                    Ok(_) => {
+                        // now listen for response
+                        match rx_from_tank_level_switch.recv() {
+                            Ok(c) => {
+                                self.lock_error_output_state_tank_level_switch_position_stabilized = self
+                                    .output_state(
+                                        c,
+                                        "HIGH",
+                                        "LOW",
+                                        &self.config.output_file_name_tank_level_switch_position_stabilized,
+                                        self.lock_error_output_state_tank_level_switch_position_stabilized,
+                                    );
+                                Some(c)
+                            }
+                            Err(e) => {
+                                error!(
+                                    target: LOG_TARGET_DATA_LOGGER,
+                                    "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
+                                );
+                                tank_level_switch_channel_disconnected = true;
+                                None
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_DATA_LOGGER,
+                            "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
+                        );
+                        tank_level_switch_channel_disconnected = true;
+                    }
+                }
+
                 #[cfg(feature = "debug_data_logger")]
                 {
                     let stop_time_tank_level_switch = SystemTime::now();
@@ -1175,6 +1224,7 @@ pub mod tests {
         target_refill_in_progress: bool,
         target_tank_level_switch_position: bool,
         target_tank_level_switch_invalid: bool,
+        target_tank_level_switch_position_stabilized: bool,
         target_surface_ventilation_status: bool,
         target_ambient_temperature: f32,
         target_ambient_humidity: f32,
@@ -1262,6 +1312,15 @@ pub mod tests {
             fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_invalid)
                 .expect("Could not read back tank level switch invalid from disk."),
             target_tank_level_switch_invalid_string,
+        );
+        let target_tank_level_switch_position_stabilized_string = match target_tank_level_switch_position_stabilized {
+            true => "HIGH".to_string(),
+            false => "LOW".to_string(),
+        };
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_position_stabilized)
+                .expect("Could not read back tank_level_switch_position from disk."),
+            target_tank_level_switch_position_stabilized_string,
         );
         let target_surface_ventilation_status_string = match target_surface_ventilation_status {
             true => "ON".to_string(),
@@ -1685,6 +1744,7 @@ pub mod tests {
                     true,                 // target_refill_in_progress
                     false,                // target_tank_level_switch_position
                     true,                 // target_tank_level_switch_invalid
+                    true,		  // target_tank_level_switch_position_stabilized
                     true,                 // target_surface_ventilation_status
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
