@@ -446,7 +446,8 @@ impl AtlasScientific {
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::Conductivity),
                     );
-                    self.conductivity = Self::get_response_from_simulator(
+                    
+                    self.pH = Self::get_response_from_simulator(
                         &tx_to_simulator,
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::pH),
