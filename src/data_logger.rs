@@ -224,7 +224,9 @@ impl DataLogger {
                     .output_file_name_tank_level_switch_position
                     .is_empty()
                 || config.output_file_name_tank_level_switch_invalid.is_empty()
-                || config.output_file_name_tank_level_switch_position_stabilized.is_empty()
+                || config
+                    .output_file_name_tank_level_switch_position_stabilized
+                    .is_empty()
                 || config.output_file_name_ventilation_is_on.is_empty()
                 || config.output_file_name_heating_is_on.is_empty()
                 || config.output_file_name_ambient_temperature.is_empty()
@@ -1313,13 +1315,16 @@ pub mod tests {
                 .expect("Could not read back tank level switch invalid from disk."),
             target_tank_level_switch_invalid_string,
         );
-        let target_tank_level_switch_position_stabilized_string = match target_tank_level_switch_position_stabilized {
-            true => "HIGH".to_string(),
-            false => "LOW".to_string(),
-        };
+        let target_tank_level_switch_position_stabilized_string =
+            match target_tank_level_switch_position_stabilized {
+                true => "HIGH".to_string(),
+                false => "LOW".to_string(),
+            };
         assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_tank_level_switch_position_stabilized)
-                .expect("Could not read back tank_level_switch_position from disk."),
+            fs::read_to_string(
+                &data_logger_config.output_file_name_tank_level_switch_position_stabilized
+            )
+            .expect("Could not read back tank_level_switch_position from disk."),
             target_tank_level_switch_position_stabilized_string,
         );
         let target_surface_ventilation_status_string = match target_surface_ventilation_status {
@@ -1737,14 +1742,14 @@ pub mod tests {
                     29.0,                 // target_water_temperature
                     28.6,                 // target_water_temperature_filtered
                     7.0,                  // target_water_ph
-                    7.04,                  // target_water_ph_filtered
+                    7.04,                 // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated
                     true,                 // target_refill_in_progress
                     false,                // target_tank_level_switch_position
                     true,                 // target_tank_level_switch_invalid
-                    true,		  // target_tank_level_switch_position_stabilized
+                    true,                 // target_tank_level_switch_position_stabilized
                     true,                 // target_surface_ventilation_status
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity

@@ -404,13 +404,12 @@ impl Controllino {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
-                
                 #[cfg(feature = "debug_controllino")]
                 debug!(
                     target: Self::LOG_TARGET_CONTROLLINO,
                     "received QUIT command"
                 );
-                
+
                 break;
             }
 
@@ -760,7 +759,6 @@ impl Controllino {
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {
-                
                 #[cfg(feature = "debug_controllino")]
                 debug!(
                     target: Self::LOG_TARGET_CONTROLLINO,

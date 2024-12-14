@@ -132,7 +132,7 @@ pub fn handle_signals(
     let sleep_interval_millis = 100;
     let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis);
     let term = Arc::new(AtomicBool::new(false));
-    
+
     for signal in signal_hook::consts::TERM_SIGNALS {
         match signal_hook::flag::register(*signal, Arc::clone(&term)) {
             Ok(c) => {
@@ -161,10 +161,9 @@ pub fn handle_signals(
     // first, let's shut down the refill control
     match tx_to_refill.send(InternalCommand::Quit) {
         Ok(_) => {
-        
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to refill");
-        
+
             match rx_from_refill.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -186,10 +185,9 @@ pub fn handle_signals(
     // second, let's shut down the heating control
     match tx_to_heating.send(InternalCommand::Quit) {
         Ok(_) => {
-        
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to heating");
-        
+
             match rx_from_heating.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -211,10 +209,9 @@ pub fn handle_signals(
     // next, let's shut down the ventilation control
     match tx_to_ventilation.send(InternalCommand::Quit) {
         Ok(_) => {
-        
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ventilation");
-        
+
             match rx_from_ventilation.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -236,10 +233,9 @@ pub fn handle_signals(
     // next, let's shut down the tank level switch calculation
     match tx_to_tank_level_switch.send(InternalCommand::Quit) {
         Ok(_) => {
-        
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to tank level switch");
-        
+
             match rx_from_tank_level_switch.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -261,10 +257,9 @@ pub fn handle_signals(
     // next, let's shut down the communication with Atlas Scientific sensor unit
     match tx_to_atlas_scientific.send(InternalCommand::Quit) {
         Ok(_) => {
-        
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to atlas_scientific");
-        
+
             match rx_from_atlas_scientific.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -288,7 +283,7 @@ pub fn handle_signals(
             match tx_to_i2c_interface.send(InternalCommand::Quit) {
                 Ok(_) => {
                     /* do nothing */
-                    
+
                     #[cfg(feature = "debug_signal_handler")]
                     debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to i2c_interface");
                 }
@@ -310,10 +305,9 @@ pub fn handle_signals(
     // next, let's shut down the communication with DHT sensor
     match tx_to_ambient.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ambient");
-            
+
             match rx_from_ambient.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -337,7 +331,7 @@ pub fn handle_signals(
             match tx_to_dht.send(InternalCommand::Quit) {
                 Ok(_) => {
                     /* do nothing */
-    
+
                     #[cfg(feature = "debug_signal_handler")]
                     debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to dht");
                 }
@@ -359,10 +353,9 @@ pub fn handle_signals(
     // next, let's shut down the monitors
     match tx_to_monitors.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to monitors");
-            
+
             match rx_from_monitors.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -384,10 +377,9 @@ pub fn handle_signals(
     // next, let's shut down the feed control
     match tx_to_feed.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to feed");
-            
+
             match rx_from_feed.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -409,10 +401,9 @@ pub fn handle_signals(
     // next, let's shut down Balling dosing control
     match tx_to_balling.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to balling");
-            
+
             match rx_from_balling.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -434,10 +425,9 @@ pub fn handle_signals(
     // next, let's shut down the schedule checker
     match tx_to_schedule_check.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to schedule_check");
-            
+
             match rx_from_schedule_check.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -459,10 +449,9 @@ pub fn handle_signals(
     // next, let's shut down the data logging
     match tx_to_data_logger.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to data_logger");
-            
+
             match rx_from_data_logger.recv() {
                 Ok(_) => {
                     #[cfg(feature = "debug_signal_handler")]
@@ -487,16 +476,13 @@ pub fn handle_signals(
     // next, let's shut down Controllino
     match tx_to_controllino.send(InternalCommand::Quit) {
         Ok(_) => {
-            
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to controllino");
-            
+
             match rx_from_controllino.recv() {
                 Ok(_) => {
-                
                     #[cfg(feature = "debug_signal_handler")]
                     debug!(target: LOG_TARGET_SIGNAL_HANDLER, "received response from controllino");
-                
                 }
                 Err(e) => {
                     error!(
@@ -519,10 +505,9 @@ pub fn handle_signals(
         Some(tx_to_tcp) => {
             match tx_to_tcp.send(InternalCommand::Quit) {
                 Ok(_) => {
-                    
                     #[cfg(feature = "debug_signal_handler")]
                     debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to tcp_communication");
-                    
+
                     match rx_from_tcp_opt {
                         Some(rx_from_tcp) => match rx_from_tcp.recv() {
                             Ok(_) => {}
@@ -554,10 +539,8 @@ pub fn handle_signals(
     // data logger thread has already ceased operation. It is now awaiting termination command.
     match tx_to_data_logger.send(InternalCommand::Terminate) {
         Ok(_) => {
-    
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to data_logger");
-
         }
         Err(e) => {
             error!(
@@ -570,10 +553,8 @@ pub fn handle_signals(
     // heating thread has already ceased operation. It is now awaiting termination command.
     match tx_to_heating.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to heating");
-
         }
         Err(e) => {
             error!(
@@ -586,10 +567,8 @@ pub fn handle_signals(
     // ventilation thread has already ceased operation. It is now awaiting termination command.
     match tx_to_ventilation.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ventilation");
-
         }
         Err(e) => {
             error!(
@@ -602,10 +581,8 @@ pub fn handle_signals(
     // Atlas Scientific thread has already ceased operation. It is now awaiting termination command.
     match tx_to_atlas_scientific.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to atlas_scientific");
-
         }
         Err(e) => {
             error!(
@@ -618,10 +595,8 @@ pub fn handle_signals(
     // Ambient thread has already ceased operation. It is now awaiting termination command.
     match tx_to_ambient.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ambient");
-
         }
         Err(e) => {
             error!(
@@ -634,10 +609,8 @@ pub fn handle_signals(
     // Feed control has already ceased operation. It is now awaiting termination command.
     match tx_to_feed.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to feed");
-
         }
         Err(e) => {
             error!(
@@ -650,10 +623,8 @@ pub fn handle_signals(
     // Balling control has already ceased operation. It is now awaiting termination command.
     match tx_to_balling.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to balling");
-
         }
         Err(e) => {
             error!(
@@ -666,10 +637,8 @@ pub fn handle_signals(
     // Monitors thread has already ceased operation. It is now awaiting termination command.
     match tx_to_monitors.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to monitors");
-
         }
         Err(e) => {
             error!(
@@ -682,10 +651,8 @@ pub fn handle_signals(
     // Refill thread has already ceased operation. It is now awaiting termination command.
     match tx_to_refill.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to refill");
-
         }
         Err(e) => {
             error!(
@@ -698,10 +665,8 @@ pub fn handle_signals(
     // TankLevelSwitch thread has already ceased operation. It is now awaiting termination command.
     match tx_to_tank_level_switch.send(InternalCommand::Terminate) {
         Ok(_) => {
-
             #[cfg(feature = "debug_signal_handler")]
             debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to tank level switch");
-
         }
         Err(e) => {
             error!(
@@ -715,10 +680,8 @@ pub fn handle_signals(
     match tx_to_messaging_opt {
         Some(tx_to_messaging) => match tx_to_messaging.send(InternalCommand::Quit) {
             Ok(_) => {
-
                 #[cfg(feature = "debug_signal_handler")]
                 debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");
-
             }
             Err(e) => {
                 error!(

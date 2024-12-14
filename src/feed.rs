@@ -343,7 +343,8 @@ impl Feed {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
-            ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+            ) = self
+                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }

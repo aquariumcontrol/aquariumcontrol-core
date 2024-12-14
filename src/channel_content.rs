@@ -130,7 +130,7 @@ impl AquariumSignal {
             AquariumSignal::MockInvalidSignal => "MockInvalid".to_string(),
             _ => signal.to_string(),
         }
-    }    
+    }
 }
 
 impl fmt::Display for AquariumSignal {

@@ -21,7 +21,7 @@ cfg_if::cfg_if! {
         use crate::channel_content::AquariumSignal;
 
         const LOG_TARGET_DHT: &str = "dht";
-        
+
         #[cfg(feature = "debug_dht")]
         use log::debug;
     }
@@ -602,7 +602,7 @@ impl Dht {
             match self.read(retry_counter == 0) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
-                    
+
                     #[cfg(feature = "debug_dht")]
                     debug!(
                         target: LOG_TARGET_DHT,
@@ -610,7 +610,7 @@ impl Dht {
                         temperature,
                         humidity
                     );
-                    
+
                     result_tuple = (temperature, humidity);
                 }
                 Err(e) => {
@@ -650,7 +650,7 @@ impl Dht {
         let mut lock_error_invalid_signal: bool = false;
         let mut lock_error_receive: bool = false;
         let mut lock_error_send: bool = false;
-        
+
         loop {
             match rx_from_ambient_or_signal_handler.recv() {
                 Ok(c) => {
@@ -670,18 +670,18 @@ impl Dht {
                                                 target: LOG_TARGET_DHT,
                                                 "sent data to Ambient via channel"
                                             );
-                                        },
+                                        }
                                         Err(e) => {
                                             if !lock_error_send {
                                                 error!(
                                                     target: LOG_TARGET_DHT,
-                                                    "Error occurred when sending data to Ambient ({e:?})"   
+                                                    "Error occurred when sending data to Ambient ({e:?})"
                                                 );
                                                 lock_error_send = true;
                                             }
                                         }
                                     }
-                                },
+                                }
                                 _ => {
                                     if !lock_error_invalid_signal {
                                         error!(

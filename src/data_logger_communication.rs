@@ -107,7 +107,7 @@ pub trait DataLoggerCommunicationTrait {
                 }
             }
         };
-    }    
+    }
 }
 
 impl DataLoggerCommunicationTrait for Refill {
@@ -116,8 +116,7 @@ impl DataLoggerCommunicationTrait for Refill {
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,
         refill_pump_status: bool,
-    )
-    {
+    ) {
         Self::communicate_with_data_logger_generic(
             tx_to_data_logger,
             rx_from_data_logger,
@@ -127,7 +126,7 @@ impl DataLoggerCommunicationTrait for Refill {
             &mut self.lock_error_invalid_signal_request_data_logger,
             &mut self.lock_error_send_to_data_logger,
         );
-    }   
+    }
 }
 
 impl DataLoggerCommunicationTrait for WaterInjection {
@@ -136,8 +135,7 @@ impl DataLoggerCommunicationTrait for WaterInjection {
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,
         refill_pump_status: bool,
-    )
-    {
+    ) {
         Self::communicate_with_data_logger_generic(
             tx_to_data_logger,
             rx_from_data_logger,
@@ -147,5 +145,5 @@ impl DataLoggerCommunicationTrait for WaterInjection {
             &mut self.lock_error_invalid_signal_request_data_logger,
             &mut self.lock_error_send_to_data_logger,
         );
-    }       
+    }
 }

@@ -245,13 +245,12 @@ impl ScheduleCheck {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
-            
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(
                     target: Self::LOG_TARGET_SCHEDULE_CHECK,
                     "received QUIT command"
                 );
-                
+
                 break;
             }
 
@@ -392,7 +391,7 @@ impl ScheduleCheck {
                 debug!(
                     target: Self::LOG_TARGET_SCHEDULE_CHECK,
                     "sent back confirmation to schedule checker"
-                );            
+                );
             }
             Err(e) => {
                 error!(

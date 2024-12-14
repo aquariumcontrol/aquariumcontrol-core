@@ -64,18 +64,18 @@ mod ventilation;
 mod version_information;
 mod water_injection;
 
-use log::{info, warn, error};
+use log::{error, info, warn};
 
-#[cfg(feature = "debug_main")]            
+#[cfg(feature = "debug_main")]
 use log::debug;
 
+use spin_sleep::SpinSleeper;
+use std::panic;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
-use std::panic;
 use std::time::Duration;
-use spin_sleep::SpinSleeper;
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -230,11 +230,11 @@ fn main() {
 
     // read configuration file for operating the control system
     let config = read_config_file("/config/aquarium_control.toml".to_string());
-    
+
     // publish the PID to a file so that client application can communicate with this appcliation
     let publish_pid = PublishPid::new(config.publish_pid);
     let publish_pid_clone = publish_pid.clone();
-    
+
     panic::set_hook(Box::new(move |panic_info| {
         // custom panic handler: resets the PID to zero before entering in panic
         // this allows subsequent runs of the application without needing to manually
@@ -245,10 +245,14 @@ fn main() {
 
         // Optionally, you can include more details like:
         if let Some(location) = panic_info.location() {
-            error!("Panic occurred in file '{}' at line {}", location.file(), location.line());
-        }                        
+            error!(
+                "Panic occurred in file '{}' at line {}",
+                location.file(),
+                location.line()
+            );
+        }
     }));
-        
+
     // calculate hash of executable
     let version_information = VersionInformation::new();
     info!(target: LOG_TARGET_MAIN,
@@ -313,7 +317,7 @@ fn main() {
         Err(e) => {
             if e == SqlInterfaceError::SingleVersionRequestMultipleResults {
                 warn!(
-                    target: LOG_TARGET_MAIN,                    
+                    target: LOG_TARGET_MAIN,
                     "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
                 panic!(
@@ -1042,7 +1046,7 @@ fn main() {
                     rx_tcp_from_signal_handler,
                 );
             });
-            #[cfg(feature = "debug_main")]            
+            #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "TcpCommunication terminated.");
         };
 
@@ -1064,11 +1068,10 @@ fn main() {
                     rx_controllino_from_signal_handler,
                     &mut ControllinoActuateSimulator,
                 );
-                
-                #[cfg(feature = "debug_main")]            
-                debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");            
+
+                #[cfg(feature = "debug_main")]
+                debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
-            
         } else {
             scope.spawn(move || {
                 controllino.execute(
@@ -1087,12 +1090,10 @@ fn main() {
                     rx_controllino_from_signal_handler,
                     &mut ControllinoActuateHardware,
                 );
-        
-                #[cfg(feature = "debug_main")]            
+
+                #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
-                
             });
-            
         }
 
         scope.spawn(move || {
@@ -1127,7 +1128,7 @@ fn main() {
                 tx_signal_handler_to_dht_opt,
                 tx_signal_handler_to_i2c_interface_opt,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
         });
@@ -1145,7 +1146,7 @@ fn main() {
                 tx_schedule_check_to_signal_handler,
                 rx_schedule_check_from_signal_handler,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
         });
@@ -1165,7 +1166,7 @@ fn main() {
                 tx_atlas_scientific_to_signal_handler,
                 rx_atlas_scientific_from_signal_handler,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
         });
@@ -1174,23 +1175,23 @@ fn main() {
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface);
             let mut dht = dht_opt.expect("unwrapping of Dht failed");
-            
+
             scope.spawn(move || {
                 dht.execute(
                     tx_dht_to_ambient,
                     rx_dht_from_ambient, // channel is shared with signal handler
                 );
-                
+
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Dht terminated.");
             });
-            
+
             scope.spawn(move || {
                 i2c_interface.execute(
                     tx_i2c_interface_to_atlas_scientific,
                     rx_i2c_interface_from_atlas_scientific,
                 );
-                
+
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "i2c_interface terminated.");
             });
@@ -1209,7 +1210,7 @@ fn main() {
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
@@ -1224,7 +1225,7 @@ fn main() {
         println!("trying to aquire data before starting control in 1 second...");
         spin_sleeper.sleep(duration_one_second);
         println!("starting control...");
-        
+
         scope.spawn(move || {
             data_logger.execute(
                 &mut data_injection,
@@ -1244,7 +1245,7 @@ fn main() {
                 tx_data_logger_to_signal_handler,
                 rx_data_logger_from_signal_handler,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Data logger terminated.");
         });
@@ -1262,7 +1263,7 @@ fn main() {
                 &tx_tank_level_switch_to_signal_handler,
                 &rx_tank_level_switch_from_signal_handler,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
         });
@@ -1286,7 +1287,7 @@ fn main() {
                 rx_refill_from_messaging_opt,
                 &mut water_injection,
             );
-            
+
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Refill terminated.");
         });
@@ -1316,8 +1317,8 @@ fn main() {
                 rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
             );
-            
-            #[cfg(feature = "debug_main")]            
+
+            #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Heating terminated.");
         });
 
@@ -1357,7 +1358,7 @@ fn main() {
                 rx_monitors_from_messaging_opt,
             );
 
-            #[cfg(feature = "debug_main")]            
+            #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Monitors terminated.");
         });
 

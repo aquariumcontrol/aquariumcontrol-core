@@ -21,10 +21,10 @@ use std::time::{Duration, SystemTime};
 
 use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
+use crate::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::water_injection::WaterInjectionTrait;
-use crate::data_logger_communication::DataLoggerCommunicationTrait;
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -881,14 +881,17 @@ impl Refill {
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval * 10 {
                 i += 1;
-                
+
                 self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
-                
+
                 (
                     quit_command_received,
                     start_command_received,
                     stop_command_received,
-                ) = self.process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+                ) = self.process_external_request(
+                    &rx_from_signal_handler,
+                    rx_from_messaging_opt.as_ref(),
+                );
                 refill_inhibited = self.calc_inhibition_flag(
                     refill_inhibited,
                     start_command_received,
@@ -980,7 +983,7 @@ impl Refill {
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
                                     // now we are given exclusive access to actuators
-                                    
+
                                     quit_command_received = water_injection.inject_water(
                                         &tx_to_controllino,
                                         &rx_from_controllino,
@@ -1030,9 +1033,13 @@ impl Refill {
                 i = 0;
                 while i < remaining_sleep_time_millis || cycle_time_exceeded {
                     i += 1;
-                    
-                    self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
-                    
+
+                    self.communicate_with_data_logger(
+                        &tx_to_data_logger,
+                        &rx_from_data_logger,
+                        false,
+                    );
+
                     (
                         quit_command_received,
                         start_command_received,

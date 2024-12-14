@@ -302,8 +302,9 @@ impl AtlasScientific {
         let sleep_duration_ten_millisec = Duration::from_millis(10);
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
+
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut request_sent_to_i2c_interface: bool = false;
+        let mut state_send_receive: bool = false;
 
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
@@ -347,7 +348,7 @@ impl AtlasScientific {
                         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
                             && rx_atlas_scientific_from_i2c_interface_opt.is_some()
                         {
-                            if !request_sent_to_i2c_interface {
+                            if !state_send_receive {
                                 let tx_to_i2c_interface =
                                     tx_atlas_scientific_to_i2c_interface_opt.as_ref().unwrap();
 
@@ -357,7 +358,7 @@ impl AtlasScientific {
                                 )) {
                                     Ok(()) => {
                                         self.lock_error_channel_send_i2c_interface = false;
-                                        request_sent_to_i2c_interface = true;
+                                        state_send_receive = true;
                                     }
                                     Err(e) => {
                                         if !self.lock_error_channel_send_i2c_interface {
@@ -384,7 +385,9 @@ impl AtlasScientific {
                                             self.pH_invalid = false;
                                             self.conductivity_invalid = false;
                                             self.lock_error_i2c_interface = false;
-                                            request_sent_to_i2c_interface = false; // allow for next request to be sent
+                                            state_send_receive = false;                
+                                            measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                                            // allow for next request to be sent
                                         }
                                         #[cfg(not(test))]
                                         Err(e) => {
@@ -446,14 +449,14 @@ impl AtlasScientific {
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::Conductivity),
                     );
-                    
+
                     self.pH = Self::get_response_from_simulator(
                         &tx_to_simulator,
                         &rx_from_simulator,
                         InternalCommand::RequestSignal(AquariumSignal::pH),
                     );
+                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
-                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
             }
 
             //*** communication to heating thread ****

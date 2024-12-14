@@ -8,17 +8,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error};
+use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
+use crate::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::refill::RefillConfig;
 use crate::refill::RefillErrors;
 use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
-use crate::data_logger_communication::DataLoggerCommunicationTrait;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
