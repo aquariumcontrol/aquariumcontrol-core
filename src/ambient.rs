@@ -333,6 +333,7 @@ impl Ambient {
     }
 
     /// request execution of measurement by Dht
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn send_request_to_dht(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
         match tx_to_dht.send(InternalCommand::RequestSignal(
             AquariumSignal::AmbientTemperature,
@@ -362,6 +363,7 @@ impl Ambient {
     }
 
     /// receive and process response from Dht
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_dht(
         &mut self,
         rx_from_dht: &Receiver<Result<(f32, f32), DhtError>>,
@@ -524,7 +526,7 @@ impl Ambient {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                 }
-                                
+
                                 #[cfg(feature = "debug_ambient")]
                                 {
                                     if receive_counter % 10 == 0 {
@@ -556,6 +558,7 @@ impl Ambient {
                 }
             }
 
+            // answer requests from outside using measured data
             self.communicate_with_heating(&tx_to_heating, &rx_from_heating);
             self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
@@ -674,7 +677,7 @@ pub mod tests {
                         panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
                     }
                 };
-                assert_eq!(result_temperature, 24.0);
+                assert_eq!(result_temperature, 20.0);
             });
 
             scope.spawn(move || {
@@ -740,7 +743,7 @@ pub mod tests {
                         panic!("Error occurred when mock data logger thread tried to send to test object: {e:?}");         
                     }
                 };
-                assert_eq!(result_temperature, 24.0);
+                assert_eq!(result_temperature, 20.0);
                 let result_humidity = match tx_data_logger_to_ambient.send(
                         InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)
                     ) {

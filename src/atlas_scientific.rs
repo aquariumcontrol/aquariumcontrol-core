@@ -270,6 +270,289 @@ impl AtlasScientific {
         };
     }
 
+    /// communication to ventilation thread via channel
+    fn communicate_with_ventilation(
+        &mut self,
+        tx_to_ventilation: &Sender<f32>,
+        rx_from_ventilation: &Receiver<InternalCommand>,
+    ) {
+        //*** communication to ventilation thread ****
+        let response_to_ventilation_opt = match rx_from_ventilation.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_ventilation = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_ventilation = false;
+                        match d {
+                            AquariumSignal::WaterTemperature => {
+                                self.lock_error_invalid_signal_request_ventilation = false;
+                                Some(self.water_temperature)
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_ventilation {
+                                    error!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "internal error: received request for invalid signal {}",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_ventilation = true;
+                                }
+                                Some(0.0) // default response to unknown signal request instead of panicking
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_ventilation {
+                            warn!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "ignoring inapplicable command from ventilation thread."
+                            );
+                            self.lock_warn_inapplicable_command_ventilation = true;
+                        }
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_ventilation = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_ventilation {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "receiving command from ventilation thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_ventilation = true;
+                        }
+                    }
+                }
+                None
+            }
+        };
+
+        match response_to_ventilation_opt {
+            Some(response_to_ventilation) => {
+                _ = match tx_to_ventilation.send(response_to_ventilation.into()) {
+                    Ok(()) => {
+                        self.lock_error_ventilation_response = false;
+                    }
+                    Err(e) => {
+                        if !self.lock_error_ventilation_response {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "responding back to ventilation thread failed ({e:?})"
+                            );
+                            self.lock_error_ventilation_response = true;
+                        }
+                    }
+                };
+            }
+            None => { /* do nothing */ }
+        }
+    }
+
+    /// communication to heating thread via channel
+    fn communicate_with_heating(
+        &mut self,
+        tx_to_heating: &Sender<f32>,
+        rx_from_heating: &Receiver<InternalCommand>,
+    ) {
+        //*** communication to heating thread ****
+        let response_to_heating_opt = match rx_from_heating.try_recv() {
+            Ok(c) => {
+                self.lock_error_channel_receive_heating = false;
+                match c {
+                    InternalCommand::RequestSignal(d) => {
+                        self.lock_warn_inapplicable_command_heating = false;
+                        match d {
+                            AquariumSignal::WaterTemperature => {
+                                self.lock_error_invalid_signal_request_heating = false;
+                                Some(self.water_temperature)
+                            }
+                            _ => {
+                                if !self.lock_error_invalid_signal_request_heating {
+                                    error!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "internal error: received request for invalid signal {}",
+                                        d
+                                    );
+                                    self.lock_error_invalid_signal_request_heating = true;
+                                }
+                                Some(0.0) // default response to unknown signal request instead of panicking
+                            }
+                        }
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_heating {
+                            warn!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "ignoring inapplicable command from heating thread."
+                            );
+                            self.lock_warn_inapplicable_command_heating = true;
+                        }
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_heating = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_heating {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "receiving command from heating thread failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_heating = true;
+                        }
+                    }
+                }
+                None
+            }
+        };
+
+        match response_to_heating_opt {
+            Some(response_to_heating) => {
+                _ = match tx_to_heating.send(response_to_heating.into()) {
+                    Ok(()) => {
+                        self.lock_error_heating_response = false;
+                    }
+                    Err(e) => {
+                        if !self.lock_error_heating_response {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "responding back to heating thread failed ({e:?})"
+                            );
+                            self.lock_error_heating_response = true;
+                        }
+                    }
+                };
+            }
+            None => { /* do nothing */ }
+        };
+    }
+
+    /// communication with simulator thread via channel
+    fn communicate_with_simulator(
+        &mut self,
+        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_from_tcp_opt: &Option<Receiver<f32>>,
+    ) {
+        // unwrap is safe, because tested above
+        let tx_to_simulator = tx_to_tcp_opt.as_ref().unwrap();
+        let rx_from_simulator = rx_from_tcp_opt.as_ref().unwrap();
+
+        self.water_temperature = Self::get_response_from_simulator(
+            &tx_to_simulator,
+            &rx_from_simulator,
+            InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
+        );
+
+        self.conductivity = Self::get_response_from_simulator(
+            &tx_to_simulator,
+            &rx_from_simulator,
+            InternalCommand::RequestSignal(AquariumSignal::Conductivity),
+        );
+
+        self.pH = Self::get_response_from_simulator(
+            &tx_to_simulator,
+            &rx_from_simulator,
+            InternalCommand::RequestSignal(AquariumSignal::pH),
+        );
+    }
+
+    /// request execution of measurement by I2cInterface
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    fn send_request_to_i2c_interface(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
+        match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
+            AquariumSignal::WaterTemperature,
+        )) {
+            Ok(()) => {
+                self.lock_error_channel_send_i2c_interface = false;
+                true
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_i2c_interface {
+                    error!(
+                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                        "sending request to I2cInterface thread failed. ({e:?})"
+                    );
+                    self.lock_error_channel_send_i2c_interface = true;
+                }
+                false
+            }
+        }
+    }
+
+    /// receive and process response from I2cInterface
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    fn receive_response_from_i2c_interface(
+        &mut self,
+        rx_from_dht: &Receiver<Result<(f32, f32, f32), I2cError>>,
+    ) -> bool {
+        match rx_from_i2c_interface.try_recv() {
+            Ok(response) => match response {
+                Ok((water_temperature, pH, conductivity)) => {
+                    self.water_temperature = water_temperature;
+                    self.pH = pH;
+                    self.conductivity = conductivity;
+                    self.water_temperature_invalid = false;
+                    self.pH_invalid = false;
+                    self.conductivity_invalid = false;
+                    self.lock_error_i2c_interface = false;
+                    state_send_receive = false;
+                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                    false // allow for next request to be sent
+                }
+                #[cfg(not(test))]
+                Err(e) => {
+                    self.water_temperature_invalid = true;
+                    self.pH_invalid = true;
+                    self.conductivity_invalid = true;
+                    #[cfg(not(test))]
+                    if !self.lock_error_i2c_interface {
+                        error!(
+                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                            "failure occurred when reading from I2cInterface ({e:?})"
+                        );
+                        self.lock_error_i2c_interface = true;
+                    }
+                    false // allow for next request to be sent
+                }
+                #[cfg(test)]
+                Err(_) => {
+                    self.water_temperature_invalid = true;
+                    self.pH_invalid = true;
+                    self.conductivity_invalid = true;
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        /* empty buffer - no action required */
+                        self.lock_error_channel_receive_i2c_interface = false;
+                    }
+                    TryRecvError::Disconnected => {
+                        if !self.lock_error_channel_receive_i2c_interface {
+                            error!(
+                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                "error occured when trying to receive response from I2cInterface ({e:?})"
+                            );
+                            self.lock_error_channel_receive_i2c_interface = true;
+                        }
+                    }
+                }
+                true // repeat receiving
+            }
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
@@ -352,268 +635,32 @@ impl AtlasScientific {
                                 let tx_to_i2c_interface =
                                     tx_atlas_scientific_to_i2c_interface_opt.as_ref().unwrap();
 
-                                // respond only after having received request:
-                                match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
-                                    AquariumSignal::WaterTemperature,
-                                )) {
-                                    Ok(()) => {
-                                        self.lock_error_channel_send_i2c_interface = false;
-                                        state_send_receive = true;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_channel_send_i2c_interface {
-                                            error!(
-                                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                                "sending request to I2cInterface thread failed. ({e:?})"
-                                            );
-                                            self.lock_error_channel_send_i2c_interface = true;
-                                        }
-                                    }
-                                };
+                                state_send_receive =
+                                    self.send_request_to_i2c_interface(&tx_to_i2c_interface);
                             } else {
                                 // read from channel if measurement result is available from I2cInterface thread
                                 let rx_from_i2c_interface =
                                     rx_atlas_scientific_from_i2c_interface_opt.as_ref().unwrap();
 
-                                match rx_from_i2c_interface.try_recv() {
-                                    Ok(response) => match response {
-                                        Ok((water_temperature, pH, conductivity)) => {
-                                            self.water_temperature = water_temperature;
-                                            self.pH = pH;
-                                            self.conductivity = conductivity;
-                                            self.water_temperature_invalid = false;
-                                            self.pH_invalid = false;
-                                            self.conductivity_invalid = false;
-                                            self.lock_error_i2c_interface = false;
-                                            state_send_receive = false;                
-                                            measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
-                                            // allow for next request to be sent
-                                        }
-                                        #[cfg(not(test))]
-                                        Err(e) => {
-                                            self.water_temperature_invalid = true;
-                                            self.pH_invalid = true;
-                                            self.conductivity_invalid = true;
-                                            #[cfg(not(test))]
-                                            if !self.lock_error_i2c_interface {
-                                                error!(
-                                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                                    "failure occurred when reading from I2cInterface ({e:?})"
-                                                );
-                                                self.lock_error_i2c_interface = true;
-                                            }
-                                        }
-                                        #[cfg(test)]
-                                        Err(_) => {
-                                            self.water_temperature_invalid = true;
-                                            self.pH_invalid = true;
-                                            self.conductivity_invalid = true;
-                                        }
-                                    },
-                                    Err(e) => {
-                                        match e {
-                                            TryRecvError::Empty => {
-                                                /* empty buffer - no action required */
-                                                self.lock_error_channel_receive_i2c_interface =
-                                                    false;
-                                            }
-                                            TryRecvError::Disconnected => {
-                                                if !self.lock_error_channel_receive_i2c_interface {
-                                                    error!(
-                                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                                        "error occured when trying to receive response from I2cInterface ({e:?})"
-                                                    );
-                                                    self.lock_error_channel_receive_i2c_interface =
-                                                        true;
-                                                }
-                                            }
-                                        }
-                                    }
+                                state_send_receive = self
+                                    .receive_response_from_i2c_interface(&rx_from_i2c_interface);
+
+                                if !state_send_receive {
+                                    // data could be received successfully
+                                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                 }
                             }
                         }
                     }
                 } else {
-                    // unwrap is safe, because tested above
-                    let tx_to_simulator = tx_to_tcp_opt.as_ref().unwrap();
-                    let rx_from_simulator = rx_from_tcp_opt.as_ref().unwrap();
-
-                    self.water_temperature = Self::get_response_from_simulator(
-                        &tx_to_simulator,
-                        &rx_from_simulator,
-                        InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
-                    );
-
-                    self.conductivity = Self::get_response_from_simulator(
-                        &tx_to_simulator,
-                        &rx_from_simulator,
-                        InternalCommand::RequestSignal(AquariumSignal::Conductivity),
-                    );
-
-                    self.pH = Self::get_response_from_simulator(
-                        &tx_to_simulator,
-                        &rx_from_simulator,
-                        InternalCommand::RequestSignal(AquariumSignal::pH),
-                    );
+                    self.communicate_with_simulator(&tx_to_tcp_opt, &rx_from_tcp_opt);
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
             }
 
-            //*** communication to heating thread ****
-            let response_to_heating_opt = match rx_from_heating.try_recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_heating = false;
-                    match c {
-                        InternalCommand::RequestSignal(d) => {
-                            self.lock_warn_inapplicable_command_heating = false;
-                            match d {
-                                AquariumSignal::WaterTemperature => {
-                                    self.lock_error_invalid_signal_request_heating = false;
-                                    Some(self.water_temperature)
-                                }
-                                _ => {
-                                    if !self.lock_error_invalid_signal_request_heating {
-                                        error!(
-                                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                            "internal error: received request for invalid signal {}",
-                                            d
-                                        );
-                                        self.lock_error_invalid_signal_request_heating = true;
-                                    }
-                                    Some(0.0) // default response to unknown signal request instead of panicking
-                                }
-                            }
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command_heating {
-                                warn!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "ignoring inapplicable command from heating thread."
-                                );
-                                self.lock_warn_inapplicable_command_heating = true;
-                            }
-                            None
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_heating = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_heating {
-                                error!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "receiving command from heating thread failed ({e:?})"
-                                );
-                                self.lock_error_channel_receive_heating = true;
-                            }
-                        }
-                    }
-                    None
-                }
-            };
-
-            match response_to_heating_opt {
-                Some(response_to_heating) => {
-                    _ = match tx_to_heating.send(response_to_heating.into()) {
-                        Ok(()) => {
-                            self.lock_error_heating_response = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_heating_response {
-                                error!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "responding back to heating thread failed ({e:?})"
-                                );
-                                self.lock_error_heating_response = true;
-                            }
-                        }
-                    };
-                }
-                None => { /* do nothing */ }
-            };
-
-            //*** communication to ventilation thread ****
-            let response_to_ventilation_opt = match rx_from_ventilation.try_recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_ventilation = false;
-                    match c {
-                        InternalCommand::RequestSignal(d) => {
-                            self.lock_warn_inapplicable_command_ventilation = false;
-                            match d {
-                                AquariumSignal::WaterTemperature => {
-                                    self.lock_error_invalid_signal_request_ventilation = false;
-                                    Some(self.water_temperature)
-                                }
-                                _ => {
-                                    if !self.lock_error_invalid_signal_request_ventilation {
-                                        error!(
-                                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                            "internal error: received request for invalid signal {}",
-                                            d
-                                        );
-                                        self.lock_error_invalid_signal_request_ventilation = true;
-                                    }
-                                    Some(0.0) // default response to unknown signal request instead of panicking
-                                }
-                            }
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command_ventilation {
-                                warn!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "ignoring inapplicable command from ventilation thread."
-                                );
-                                self.lock_warn_inapplicable_command_ventilation = true;
-                            }
-                            None
-                        }
-                    }
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => {
-                            /* empty buffer - no action required */
-                            self.lock_error_channel_receive_ventilation = false;
-                        }
-                        TryRecvError::Disconnected => {
-                            if !self.lock_error_channel_receive_ventilation {
-                                error!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "receiving command from ventilation thread failed ({e:?})"
-                                );
-                                self.lock_error_channel_receive_ventilation = true;
-                            }
-                        }
-                    }
-                    None
-                }
-            };
-
-            match response_to_ventilation_opt {
-                Some(response_to_ventilation) => {
-                    _ = match tx_to_ventilation.send(response_to_ventilation.into()) {
-                        Ok(()) => {
-                            self.lock_error_ventilation_response = false;
-                        }
-                        Err(e) => {
-                            if !self.lock_error_ventilation_response {
-                                error!(
-                                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                    "responding back to ventilation thread failed ({e:?})"
-                                );
-                                self.lock_error_ventilation_response = true;
-                            }
-                        }
-                    };
-                }
-                None => { /* do nothing */ }
-            }
-
-            //*** communication to data logger thread ***
+            // answer requests from outside using measured data
+            self.communicate_with_heating(&tx_to_heating, &rx_from_heating);
+            self.communicate_with_ventilation(&tx_to_ventilation, &rx_from_ventilation);
             self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
             spin_sleeper.sleep(sleep_duration_ten_millisec);
