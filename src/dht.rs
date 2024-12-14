@@ -649,7 +649,8 @@ impl Dht {
         let mut lock_error_invalid_command: bool = false;
         let mut lock_error_invalid_signal: bool = false;
         let mut lock_error_receive: bool = false;
-
+        let mut lock_error_send: bool = false;
+        
         loop {
             match rx_from_ambient_or_signal_handler.recv() {
                 Ok(c) => {
@@ -662,7 +663,24 @@ impl Dht {
                                 AquariumSignal::AmbientHumidity
                                 | AquariumSignal::AmbientTemperature => {
                                     let measurement = self.get_data();
-                                    _ = tx_to_ambient.send(measurement);
+                                    match tx_to_ambient.send(measurement) {
+                                        Ok(()) => {
+                                            #[cfg(feature = "debug_dht")]
+                                            debug!(
+                                                target: LOG_TARGET_DHT,
+                                                "sent data to Ambient via channel"
+                                            );
+                                        },
+                                        Err(e) => {
+                                            if !lock_error_send {
+                                                error!(
+                                                    target: LOG_TARGET_DHT,
+                                                    "Error occurred when sending data to Ambient ({e:?})"   
+                                                );
+                                                lock_error_send = true;
+                                            }
+                                        }
+                                    }
                                 },
                                 _ => {
                                     if !lock_error_invalid_signal {
