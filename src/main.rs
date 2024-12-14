@@ -74,6 +74,8 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 use std::panic;
+use std::time::Duration;
+use spin_sleep::SpinSleeper;
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -1212,6 +1214,17 @@ fn main() {
             debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
 
+        // give Ambient ant AtlasScientific some time so that they can aquire a first data set
+        let spin_sleeper = SpinSleeper::default();
+        let duration_one_second = Duration::from_secs(1);
+        println!("trying to aquire data before starting control in 3 seconds...");
+        spin_sleeper.sleep(duration_one_second);
+        println!("trying to aquire data before starting control in 2 seconds...");
+        spin_sleeper.sleep(duration_one_second);
+        println!("trying to aquire data before starting control in 1 second...");
+        spin_sleeper.sleep(duration_one_second);
+        println!("starting control...");
+        
         scope.spawn(move || {
             data_logger.execute(
                 &mut data_injection,
