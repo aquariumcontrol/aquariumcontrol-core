@@ -469,7 +469,7 @@ impl AtlasScientific {
 
     /// request execution of measurement by I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    fn send_request_to_i2c_interface(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
+    fn send_request_to_i2c_interface(&mut self, tx_to_i2c_interface: &Sender<InternalCommand>) -> bool {
         match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
             AquariumSignal::WaterTemperature,
         )) {
@@ -494,7 +494,7 @@ impl AtlasScientific {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_i2c_interface(
         &mut self,
-        rx_from_dht: &Receiver<Result<(f32, f32, f32), I2cError>>,
+        rx_from_i2c_interface: &Receiver<Result<(f32, f32, f32), I2cError>>,
     ) -> bool {
         match rx_from_i2c_interface.try_recv() {
             Ok(response) => match response {
@@ -506,8 +506,6 @@ impl AtlasScientific {
                     self.pH_invalid = false;
                     self.conductivity_invalid = false;
                     self.lock_error_i2c_interface = false;
-                    state_send_receive = false;
-                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                     false // allow for next request to be sent
                 }
                 #[cfg(not(test))]
