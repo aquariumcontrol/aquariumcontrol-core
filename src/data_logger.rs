@@ -15,6 +15,7 @@ use log::{error, warn};
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
+use mysql::PooledConn;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
@@ -417,9 +418,697 @@ impl DataLogger {
         }
     }
 
+    /// get information from refill/ventilation/heating thread
+    /// * `signal` - reference to variable for storing control status information of refill/ventilation/heating
+    /// * `signal_name` - enum indicating which signal shall be measured
+    /// * `tx_to_on_off_thread` - reference to sender part of channel for communication to refill/ventilation/heating
+    /// * `rx_from_on_off_thread` - reference to receiver part of channel for communication from refill/ventilation/heating
+    /// * `lock_error_output_state` - information if error has already occurred
+    fn update_on_off_signal(
+        &mut self,
+        signal: &mut bool,
+        refill_channel_disconnected: &mut bool,
+        signal_name: AquariumSignal,
+        tx_to_on_off_thread: &Sender<InternalCommand>,
+        rx_from_on_off_thread: &Receiver<bool>,
+        mut lock_error_output_state: bool,
+    ) -> bool {
+        if !*refill_channel_disconnected {
+            #[cfg(feature = "debug_data_logger")]
+            let start_time_refill = SystemTime::now();
+
+            match tx_to_on_off_thread.send(InternalCommand::RequestSignal(signal_name.clone())) {
+                Ok(_) => {
+                    // now listen for response
+                    match rx_from_on_off_thread.recv() {
+                        Ok(c) => {
+                            *signal = c;
+                            let output_file_name = match signal_name {
+                                AquariumSignal::RefillPumpStatus => {
+                                    &self.config.output_file_name_refill_in_progress
+                                }
+                                AquariumSignal::VentilationControlStatus => {
+                                    &self.config.output_file_name_ventilation_is_on
+                                }
+                                AquariumSignal::HeatingControlStatus => {
+                                    &self.config.output_file_name_heating_is_on
+                                }
+                                _ => {
+                                    // invalid signal parameter
+                                    return true;
+                                }
+                            };
+                            lock_error_output_state = self.output_state(
+                                c,
+                                "ON",
+                                "OFF",
+                                output_file_name,
+                                lock_error_output_state,
+                            );
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value for {} failed ({e:?})",
+                                signal
+                            );
+                            *refill_channel_disconnected = true;
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication for {} failed ({e:?})",
+                        signal
+                    );
+                    *refill_channel_disconnected = true;
+                }
+            }
+            #[cfg(feature = "debug_data_logger")]
+            {
+                let stop_time_refill = SystemTime::now();
+                let execution_duration_refill_millis = stop_time_refill
+                    .duration_since(start_time_refill)
+                    .unwrap()
+                    .as_millis() as u64;
+                debug!(
+                    target: LOG_TARGET_DATA_LOGGER,
+                    "communication for {} took {} ms.",
+                    signal_name,
+                    execution_duration_refill_millis
+                );
+            }
+        }
+        lock_error_output_state
+    }
+
+    /// get information from AtlasScientific thread
+    /// * `water_temperature` - reference to variable for storing signal
+    /// * `ph` - reference to variable for storing signal
+    /// * `conductivity` - reference to variable for storing signal
+    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `tx_to_atlas_scientific` - reference to sender part of channel for communication to Atlas Scientific
+    /// * `rx_from_atlas_scientific` - reference to receiver part of channel for communication from Atlas Scientific
+    fn update_atlas_scientific_signals(
+        &mut self,
+        water_temperature: &mut Option<f32>,
+        ph: &mut Option<f32>,
+        conductivity: &mut Option<f32>,
+        atlas_scientific_channel_disconnected: &mut bool,
+        tx_to_atlas_scientific: &Sender<InternalCommand>,
+        rx_from_atlas_scientific: &Receiver<f32>,
+    ) {
+        if !*atlas_scientific_channel_disconnected {
+            #[cfg(feature = "debug_data_logger")]
+            let start_time_atlas_scientific = SystemTime::now();
+
+            // send request for water temperature
+            match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
+                AquariumSignal::WaterTemperature,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    *water_temperature = match rx_from_atlas_scientific.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_signal_water_temperature = self.output_signal(
+                                c,
+                                AquariumSignal::WaterTemperature,
+                                &self.config.output_file_name_water_temperature,
+                                self.lock_error_output_signal_water_temperature,
+                            );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Atlas Scientific thread for water temperature failed ({e:?})"
+                            );
+                            *atlas_scientific_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
+                    );
+                    *atlas_scientific_channel_disconnected = true;
+                }
+            }
+
+            // send request for pH
+            match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(AquariumSignal::pH)) {
+                Ok(_) => {
+                    // now listen for response
+                    *ph = match rx_from_atlas_scientific.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_signal_pH = self.output_signal(
+                                c,
+                                AquariumSignal::pH,
+                                &self.config.output_file_name_pH,
+                                self.lock_error_output_signal_pH,
+                            );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Atlas Scientific thread for pH failed ({e:?})"
+                            );
+                            *atlas_scientific_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to Atlas Scientific thread when requesting pH failed ({e:?})"
+                    );
+                    *atlas_scientific_channel_disconnected = true;
+                }
+            }
+
+            // send request for conductivity
+            match tx_to_atlas_scientific
+                .send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
+            {
+                Ok(_) => {
+                    // now listen for response
+                    *conductivity = match rx_from_atlas_scientific.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_signal_conductivity = self.output_signal(
+                                c,
+                                AquariumSignal::Conductivity,
+                                &self.config.output_file_name_conductivity,
+                                self.lock_error_output_signal_conductivity,
+                            );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            *atlas_scientific_channel_disconnected = true;
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Atlas Scientific thread for conductivity failed ({e:?})"
+                            );
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to Atlas Scientific thread when requesting conductivity failed ({e:?})"
+                    );
+                    *atlas_scientific_channel_disconnected = true;
+                }
+            }
+            #[cfg(feature = "debug_data_logger")]
+            {
+                let stop_time_atlas_scientific = SystemTime::now();
+                let execution_duration_atlas_scientific_millis = stop_time_atlas_scientific
+                    .duration_since(start_time_atlas_scientific)
+                    .unwrap()
+                    .as_millis()
+                    as u64;
+                debug!(
+                    target: LOG_TARGET_DATA_LOGGER,
+                    "communication with atlas_scientific took {} ms.",
+                    execution_duration_atlas_scientific_millis
+                );
+            }
+        }
+    }
+
+    /// get information from Ambient thread
+    /// # Arguments
+    /// * `ambient_temperature` - reference to variable for storing signal
+    /// * `ambient_humidity` - reference to variable for storing signal
+    /// * `ambient_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `tx_to_ambient` - reference to sender part of channel for communication to Ambient
+    /// * `rx_from_ambient` - reference to receiver part of channel for communication from Ambient
+    fn update_ambient_signals(
+        &mut self,
+        ambient_temperature: &mut Option<f32>,
+        ambient_humidity: &mut Option<f32>,
+        ambient_channel_disconnected: &mut bool,
+        tx_to_ambient: &Sender<InternalCommand>,
+        rx_from_ambient: &Receiver<f32>,
+    ) {
+        if !*ambient_channel_disconnected {
+            #[cfg(feature = "debug_data_logger")]
+            let start_time_ambient = SystemTime::now();
+
+            // send request for ambient temperature
+            match tx_to_ambient.send(InternalCommand::RequestSignal(
+                AquariumSignal::AmbientTemperature,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    *ambient_temperature = match rx_from_ambient.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_signal_ambient_temperature = self.output_signal(
+                                c,
+                                AquariumSignal::AmbientTemperature,
+                                &self.config.output_file_name_ambient_temperature,
+                                self.lock_error_output_signal_ambient_temperature,
+                            );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Ambient thread for temperature failed ({e:?})"
+                            );
+                            *ambient_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to Ambient thread when requesting ambient temperature failed ({e:?})"
+                    );
+                    *ambient_channel_disconnected = true;
+                }
+            }
+
+            // send request for ambient humidity
+            match tx_to_ambient.send(InternalCommand::RequestSignal(
+                AquariumSignal::AmbientHumidity,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    *ambient_humidity = match rx_from_ambient.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_signal_humidity = self.output_signal(
+                                c,
+                                AquariumSignal::AmbientHumidity,
+                                &self.config.output_file_name_humidity,
+                                self.lock_error_output_signal_humidity,
+                            );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Ambient thread for humidity failed ({e:?})"
+                            );
+                            *ambient_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to Ambient thread when requesting ambient humidity failed ({e:?})"
+                    );
+                    *ambient_channel_disconnected = true;
+                }
+            }
+            #[cfg(feature = "debug_data_logger")]
+            {
+                let stop_time_ambient = SystemTime::now();
+                let execution_duration_ambient_millis = stop_time_ambient
+                    .duration_since(start_time_ambient)
+                    .unwrap()
+                    .as_millis() as u64;
+                debug!(
+                    target: LOG_TARGET_DATA_LOGGER,
+                    "communication with ambient took {} ms.",
+                    execution_duration_ambient_millis
+                );
+            }
+        }
+    }
+
+    /// get information from TankLevelSwitch thread
+    /// # Arguments
+    /// * `tank_level_switch_position` - reference to variable for storing signal
+    /// * `tank_level_switch_invalid` - reference to variable for storing signal
+    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `tx_to_tank_level_switch` - reference to sender part of channel for communication to Tank Level Switch
+    /// * `rx_from_tank_level_switch` - reference to receiver part of channel for communication from Tank Level Switch
+    fn update_tank_level_switch_signals(
+        &mut self,
+        tank_level_switch_position: &mut Option<bool>,
+        tank_level_switch_invalid: &mut Option<bool>,
+        tank_level_switch_channel_disconnected: &mut bool,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<bool>,
+    ) {
+        if !*tank_level_switch_channel_disconnected {
+            #[cfg(feature = "debug_data_logger")]
+            let start_time_tank_level_switch = SystemTime::now();
+
+            // send request for tank level switch position
+            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPosition,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    *tank_level_switch_position = match rx_from_tank_level_switch.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_state_tank_level_switch_position = self
+                                .output_state(
+                                    c,
+                                    "HIGH",
+                                    "LOW",
+                                    &self.config.output_file_name_tank_level_switch_position,
+                                    self.lock_error_output_state_tank_level_switch_position,
+                                );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Tank Level Switch thread for position failed ({e:?})"
+                            );
+                            *tank_level_switch_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to tank level switch thread failed when requesting tank level switch position ({e:?})"
+                    );
+                    *tank_level_switch_channel_disconnected = true;
+                }
+            }
+
+            // send request for tank level switch invalid
+            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchInvalid,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    *tank_level_switch_invalid = match rx_from_tank_level_switch.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_state_tank_level_switch_invalid = self
+                                .output_state(
+                                    c,
+                                    "INVALID",
+                                    "VALID",
+                                    &self.config.output_file_name_tank_level_switch_invalid,
+                                    self.lock_error_output_state_tank_level_switch_invalid,
+                                );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Tank Level Switch thread for validity failed ({e:?})"
+                            );
+                            *tank_level_switch_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to tank level switch thread failed when requesting tank level switch invalid  ({e:?})"
+                    );
+                    *tank_level_switch_channel_disconnected = true;
+                }
+            }
+
+            // send request for tank level switch stabilized position
+            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
+                AquariumSignal::TankLevelSwitchPositionStabilized,
+            )) {
+                Ok(_) => {
+                    // now listen for response
+                    match rx_from_tank_level_switch.recv() {
+                        Ok(c) => {
+                            self.lock_error_output_state_tank_level_switch_position_stabilized = self
+                                .output_state(
+                                    c,
+                                    "HIGH",
+                                    "LOW",
+                                    &self
+                                        .config
+                                        .output_file_name_tank_level_switch_position_stabilized,
+                                    self.lock_error_output_state_tank_level_switch_position_stabilized,
+                                );
+                            Some(c)
+                        }
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
+                            );
+                            *tank_level_switch_channel_disconnected = true;
+                            None
+                        }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_DATA_LOGGER,
+                        "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
+                    );
+                    *tank_level_switch_channel_disconnected = true;
+                }
+            }
+
+            #[cfg(feature = "debug_data_logger")]
+            {
+                let stop_time_tank_level_switch = SystemTime::now();
+                let execution_duration_tank_level_switch_millis = stop_time_tank_level_switch
+                    .duration_since(start_time_tank_level_switch)
+                    .unwrap()
+                    .as_millis()
+                    as u64;
+                debug!(
+                    target: LOG_TARGET_DATA_LOGGER,
+                    "communication with tank_level_switch took {} ms.",
+                    execution_duration_tank_level_switch_millis
+                );
+            }
+        }
+    }
+
+    /// Executes thread communication and filter calculation for all signals
+    /// # Arguments
+    /// * `tx_to_ambient` - reference to sender part of channel for communication to Ambient
+    /// * `rx_from_ambient` - reference to receiver part of channel for communication from Ambient
+    /// * `tx_to_atlas_scientific` - reference to sender part of channel for communication to Atlas Scientific
+    /// * `rx_from_atlas_scientific` - reference to receiver part of channel for communication from Atlas Scientific
+    /// * `tx_to_tank_level_switch` - reference to sender part of channel for communication to Tank Level Switch
+    /// * `rx_from_tank_level_switch` - reference to receiver part of channel for communication from Tank Level Switch
+    /// * `tx_to_refill` - reference to sender part of channel for communication to Refill
+    /// * `rx_from_refill` - reference to receiver part of channel for communication from Refill
+    /// * `rx_from_heating` - reference to sender part of channel for communication to Heating
+    /// * `rx_from_heating` - reference to receiver part of channel for communication from Heating
+    /// * `tx_to_ventilation` - reference to sender part of channel for communication to Ventilation
+    /// * `rx_from_ventilation` - reference to receiver part of channel for communication from Ventilation
+    /// * `refill_in_progress` - reference to variable for storing refill in progress information
+    /// * `refill_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `heater_is_on` - reference to variable for storing heating control status information
+    /// * `heating_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `ventilation_is_on` - reference to variable for storing ventilation control status information
+    /// * `ventilation_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `water_temperature` - reference to variable for storing signal
+    /// * `ph` - reference to variable for storing signal
+    /// * `conductivity` - reference to variable for storing signal
+    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `ambient_temperature` - reference to variable for storing signal
+    /// * `ambient_humidity` - reference to variable for storing signal
+    /// * `ambient_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `tank_level_switch_position` - reference to variable for storing signal
+    /// * `tank_level_switch_invalid` - reference to variable for storing signal
+    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of channel
+    fn update_signals(
+        &mut self,
+        tx_to_ambient: &Sender<InternalCommand>,
+        rx_from_ambient: &Receiver<f32>,
+        tx_to_atlas_scientific: &Sender<InternalCommand>,
+        rx_from_atlas_scientific: &Receiver<f32>,
+        tx_to_tank_level_switch: &Sender<InternalCommand>,
+        rx_from_tank_level_switch: &Receiver<bool>,
+        tx_to_refill: &Sender<InternalCommand>,
+        rx_from_refill: &Receiver<bool>,
+        tx_to_heating: &Sender<InternalCommand>,
+        rx_from_heating: &Receiver<bool>,
+        tx_to_ventilation: &Sender<InternalCommand>,
+        rx_from_ventilation: &Receiver<bool>,
+        refill_in_progress: &mut bool,
+        refill_channel_disconnected: &mut bool,
+        heater_is_on: &mut bool,
+        heating_channel_disconnected: &mut bool,
+        ventilation_is_on: &mut bool,
+        ventilation_channel_disconnected: &mut bool,
+        water_temperature: &mut Option<f32>,
+        ph: &mut Option<f32>,
+        conductivity: &mut Option<f32>,
+        atlas_scientific_channel_disconnected: &mut bool,
+        ambient_temperature: &mut Option<f32>,
+        ambient_humidity: &mut Option<f32>,
+        ambient_channel_disconnected: &mut bool,
+        tank_level_switch_position: &mut Option<bool>,
+        tank_level_switch_invalid: &mut Option<bool>,
+        tank_level_switch_channel_disconnected: &mut bool,
+    ) {
+        //*** communication with refill thread ***
+        self.lock_error_output_state_refill_in_progress = self.update_on_off_signal(
+            refill_in_progress,
+            refill_channel_disconnected,
+            AquariumSignal::RefillPumpStatus,
+            tx_to_refill,
+            rx_from_refill,
+            self.lock_error_output_state_refill_in_progress,
+        );
+
+        //*** communication with heating thread ***
+        self.lock_error_output_state_heating_is_on = self.update_on_off_signal(
+            heater_is_on,
+            heating_channel_disconnected,
+            AquariumSignal::HeatingControlStatus,
+            tx_to_heating,
+            rx_from_heating,
+            self.lock_error_output_state_heating_is_on,
+        );
+
+        //*** communication with ventilation thread ***
+        self.lock_error_output_state_ventilation_is_on = self.update_on_off_signal(
+            ventilation_is_on,
+            ventilation_channel_disconnected,
+            AquariumSignal::VentilationControlStatus,
+            tx_to_ventilation,
+            rx_from_ventilation,
+            self.lock_error_output_state_ventilation_is_on,
+        );
+
+        //*** communication with Atlas Scientific thread ***
+        self.update_atlas_scientific_signals(
+            water_temperature,
+            ph,
+            conductivity,
+            atlas_scientific_channel_disconnected,
+            tx_to_atlas_scientific,
+            rx_from_atlas_scientific,
+        );
+
+        //*** communication with Ambient thread ***
+        self.update_ambient_signals(
+            ambient_temperature,
+            ambient_humidity,
+            ambient_channel_disconnected,
+            tx_to_ambient,
+            rx_from_ambient,
+        );
+
+        //*** communication with Tank Level Switch thread ***
+        self.update_tank_level_switch_signals(
+            tank_level_switch_position,
+            tank_level_switch_invalid,
+            tank_level_switch_channel_disconnected,
+            tx_to_tank_level_switch,
+            rx_from_tank_level_switch,
+        );
+    }
+
+    /// calculate filtered values and output them to (RAM disk) files
+    /// # Arguments
+    /// * `water_temperature` - measured water temperature wrapped in Option
+    /// * `ph` - measured ph temperature wrapped in Option
+    /// * `conductivity` - measured conductivity temperature wrapped in Option
+    fn calculate_filtered_signals(
+        &mut self,
+        water_temperature: Option<f32>,
+        ph: Option<f32>,
+        conductivity: Option<f32>,
+    ) -> (Option<f32>, Option<f32>, Option<f32>) {
+        let water_temperature_filtered = match water_temperature {
+            Some(c) => {
+                let filtered_water_temperature =
+                    self.filter_water_temperature.get_filtered_value(c);
+                self.lock_error_output_signal_water_temperature_filtered = self.output_signal(
+                    filtered_water_temperature,
+                    AquariumSignal::WaterTemperature,
+                    &self.config.output_file_name_water_temperature_filtered,
+                    self.lock_error_output_signal_water_temperature_filtered,
+                );
+                Some(filtered_water_temperature)
+            }
+            None => None,
+        };
+
+        let pH_filtered = match ph {
+            Some(c) => {
+                let filtered_pH = self.filter_pH.get_filtered_value(c);
+                self.lock_error_output_signal_pH_filtered = self.output_signal(
+                    filtered_pH,
+                    AquariumSignal::pH,
+                    &self.config.output_file_name_pH_filtered,
+                    self.lock_error_output_signal_pH_filtered,
+                );
+                Some(filtered_pH)
+            }
+            None => None,
+        };
+
+        let conductivity_filtered = match conductivity {
+            Some(c) => {
+                let filtered_conductivity = self.filter_conductivity.get_filtered_value(c);
+                self.lock_error_output_signal_conductivity_filtered = self.output_signal(
+                    filtered_conductivity,
+                    AquariumSignal::Conductivity,
+                    &self.config.output_file_name_conductivity_filtered,
+                    self.lock_error_output_signal_conductivity_filtered,
+                );
+                Some(filtered_conductivity)
+            }
+            None => None,
+        };
+
+        (
+            water_temperature_filtered,
+            pH_filtered,
+            conductivity_filtered,
+        )
+    }
+
+    /// get timestampe either from SQL server or application-generated
+    /// * `conn` - connection to SQL database
+    fn update_timestamp(&mut self, conn: &mut PooledConn) -> NaiveDateTime {
+        match self.config.use_sql_timestamp {
+            true => match SqlInterface::get_current_timestamp(conn) {
+                Ok(c) => {
+                    self.lock_error_get_timestamp = false;
+                    self.lock_error_output_timestamp = self.output_timestamp(
+                        c,
+                        &self.config.output_file_name_timestamp,
+                        self.lock_error_output_timestamp,
+                    );
+                    c
+                }
+                Err(e) => {
+                    if !self.lock_error_get_timestamp {
+                        error!(
+                            target: LOG_TARGET_DATA_LOGGER,
+                            "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
+                        );
+                        self.lock_error_get_timestamp = true;
+                    }
+                    Local::now().naive_local()
+                }
+            },
+            false => Local::now().naive_local(),
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
-    /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
+    /// * `data_injection` - Trait method for transferring data to database or mock data structure
+    /// * `sql_interface_data` - Interface to SQL database for manipulation of data table
     /// * `tx_to_ambient` - Sender part of channel for communication to Ambient
     /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient
     /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific
@@ -453,7 +1142,7 @@ impl DataLogger {
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        let sleep_duration_ten_millisec = Duration::from_millis(10);
+        let sleep_duration_hundred_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut i;
 
@@ -479,585 +1168,41 @@ impl DataLogger {
         let mut lock_warn_cycle_time_exceeded = false;
 
         loop {
-            // get information if refill is in progress from refill thread
-            if !refill_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_refill = SystemTime::now();
+            self.update_signals(
+                &tx_to_ambient,
+                &rx_from_ambient,
+                &tx_to_atlas_scientific,
+                &rx_from_atlas_scientific,
+                &tx_to_tank_level_switch,
+                &rx_from_tank_level_switch,
+                &tx_to_refill,
+                &rx_from_refill,
+                &tx_to_heating,
+                &rx_from_heating,
+                &tx_to_ventilation,
+                &rx_from_ventilation,
+                &mut refill_in_progress,
+                &mut refill_channel_disconnected,
+                &mut heater_is_on,
+                &mut heating_channel_disconnected,
+                &mut ventilation_is_on,
+                &mut ventilation_channel_disconnected,
+                &mut water_temperature,
+                &mut ph,
+                &mut conductivity,
+                &mut atlas_scientific_channel_disconnected,
+                &mut ambient_temperature,
+                &mut ambient_humidity,
+                &mut ambient_channel_disconnected,
+                &mut tank_level_switch_position,
+                &mut tank_level_switch_invalid,
+                &mut tank_level_switch_channel_disconnected,
+            );
 
-                match tx_to_refill.send(InternalCommand::RequestSignal(
-                    AquariumSignal::RefillPumpStatus,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_refill.recv() {
-                            Ok(c) => {
-                                refill_in_progress = c;
-                                self.lock_error_output_state_refill_in_progress = self
-                                    .output_state(
-                                        c,
-                                        "ON",
-                                        "OFF",
-                                        &self.config.output_file_name_refill_in_progress,
-                                        self.lock_error_output_state_refill_in_progress,
-                                    );
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from refill thread failed ({e:?})"
-                                );
-                                refill_channel_disconnected = true;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Refill thread failed ({e:?})"
-                        );
-                        refill_channel_disconnected = true;
-                    }
-                }
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_refill = SystemTime::now();
-                    let execution_duration_refill_millis = stop_time_refill
-                        .duration_since(start_time_refill)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with refill took {} ms.",
-                        execution_duration_refill_millis
-                    );
-                }
-            }
+            let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
+                self.calculate_filtered_signals(water_temperature, ph, conductivity);
 
-            // get information if heater is on from heating thread
-            if !heating_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_heating = SystemTime::now();
-
-                match tx_to_heating.send(InternalCommand::RequestSignal(
-                    AquariumSignal::HeatingControlStatus,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_heating.recv() {
-                            Ok(c) => {
-                                heater_is_on = c;
-                                self.lock_error_output_state_heating_is_on = self.output_state(
-                                    c,
-                                    "ON",
-                                    "OFF",
-                                    &self.config.output_file_name_heating_is_on,
-                                    self.lock_error_output_state_heating_is_on,
-                                );
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from heating thread failed ({e:?})"
-                                );
-                                heating_channel_disconnected = true;
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Heating thread failed ({e:?})"
-                        );
-                        heating_channel_disconnected = true;
-                    }
-                }
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_heating = SystemTime::now();
-                    let execution_duration_heating_millis = stop_time_heating
-                        .duration_since(start_time_heating)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with heating took {} ms.",
-                        execution_duration_heating_millis
-                    );
-                }
-            }
-
-            // get information if ventilation is on from ventilation thread
-            if !ventilation_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_ventilation = SystemTime::now();
-
-                // send request for water temperature
-                match tx_to_ventilation.send(InternalCommand::RequestSignal(
-                    AquariumSignal::VentilationControlStatus,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_ventilation.recv() {
-                            Ok(c) => {
-                                ventilation_is_on = c;
-                                self.lock_error_output_state_ventilation_is_on = self.output_state(
-                                    c,
-                                    "ON",
-                                    "OFF",
-                                    &self.config.output_file_name_ventilation_is_on,
-                                    self.lock_error_output_state_ventilation_is_on,
-                                );
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from ventilation thread failed ({e:?})"
-                                );
-                                ventilation_channel_disconnected = true;
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Ventilation thread failed ({e:?})"
-                        );
-                        ventilation_channel_disconnected = true;
-                    }
-                }
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_ventilation = SystemTime::now();
-                    let execution_duration_ventilation_millis = stop_time_ventilation
-                        .duration_since(start_time_ventilation)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with ventilation took {} ms.",
-                        execution_duration_ventilation_millis
-                    );
-                }
-            }
-
-            if !atlas_scientific_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_atlas_scientific = SystemTime::now();
-
-                // send request for water temperature
-                match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
-                    AquariumSignal::WaterTemperature,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        water_temperature = match rx_from_atlas_scientific.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_signal_water_temperature = self
-                                    .output_signal(
-                                        c,
-                                        AquariumSignal::WaterTemperature,
-                                        &self.config.output_file_name_water_temperature,
-                                        self.lock_error_output_signal_water_temperature,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Atlas Scientific thread for water temperature failed ({e:?})"
-                                );
-                                ambient_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
-                        );
-                        atlas_scientific_channel_disconnected = true;
-                    }
-                }
-
-                // send request for pH
-                match tx_to_atlas_scientific
-                    .send(InternalCommand::RequestSignal(AquariumSignal::pH))
-                {
-                    Ok(_) => {
-                        // now listen for response
-                        ph = match rx_from_atlas_scientific.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_signal_pH = self.output_signal(
-                                    c,
-                                    AquariumSignal::pH,
-                                    &self.config.output_file_name_pH,
-                                    self.lock_error_output_signal_pH,
-                                );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Atlas Scientific thread for pH failed ({e:?})"
-                                );
-                                atlas_scientific_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Atlas Scientific thread when requesting pH failed ({e:?})"
-                        );
-                        atlas_scientific_channel_disconnected = true;
-                    }
-                }
-
-                // send request for conductivity
-                match tx_to_atlas_scientific
-                    .send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
-                {
-                    Ok(_) => {
-                        // now listen for response
-                        conductivity = match rx_from_atlas_scientific.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_signal_conductivity = self.output_signal(
-                                    c,
-                                    AquariumSignal::Conductivity,
-                                    &self.config.output_file_name_conductivity,
-                                    self.lock_error_output_signal_conductivity,
-                                );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                atlas_scientific_channel_disconnected = true;
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Atlas Scientific thread for conductivity failed ({e:?})"
-                                );
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Atlas Scientific thread when requesting conductivity failed ({e:?})"
-                        );
-                        atlas_scientific_channel_disconnected = true;
-                    }
-                }
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_atlas_scientific = SystemTime::now();
-                    let execution_duration_atlas_scientific_millis = stop_time_atlas_scientific
-                        .duration_since(start_time_atlas_scientific)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with atlas_scientific took {} ms.",
-                        execution_duration_atlas_scientific_millis
-                    );
-                }
-            }
-
-            if !ambient_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_ambient = SystemTime::now();
-
-                // send request for ambient temperature
-                match tx_to_ambient.send(InternalCommand::RequestSignal(
-                    AquariumSignal::AmbientTemperature,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        ambient_temperature = match rx_from_ambient.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_signal_ambient_temperature = self
-                                    .output_signal(
-                                        c,
-                                        AquariumSignal::AmbientTemperature,
-                                        &self.config.output_file_name_ambient_temperature,
-                                        self.lock_error_output_signal_ambient_temperature,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Ambient thread for temperature failed ({e:?})"
-                                );
-                                ambient_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Ambient thread when requesting ambient temperature failed ({e:?})"
-                        );
-                        ambient_channel_disconnected = true;
-                    }
-                }
-
-                // send request for ambient humidity
-                match tx_to_ambient.send(InternalCommand::RequestSignal(
-                    AquariumSignal::AmbientHumidity,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        ambient_humidity = match rx_from_ambient.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_signal_humidity = self.output_signal(
-                                    c,
-                                    AquariumSignal::AmbientHumidity,
-                                    &self.config.output_file_name_humidity,
-                                    self.lock_error_output_signal_humidity,
-                                );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Ambient thread for humidity failed ({e:?})"
-                                );
-                                ambient_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to Ambient thread when requesting ambient humidity failed ({e:?})"
-                        );
-                        ambient_channel_disconnected = true;
-                    }
-                }
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_ambient = SystemTime::now();
-                    let execution_duration_ambient_millis = stop_time_ambient
-                        .duration_since(start_time_ambient)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with ambient took {} ms.",
-                        execution_duration_ambient_millis
-                    );
-                }
-            }
-
-            if !tank_level_switch_channel_disconnected {
-                #[cfg(feature = "debug_data_logger")]
-                let start_time_tank_level_switch = SystemTime::now();
-
-                // send request for tank level switch position
-                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                    AquariumSignal::TankLevelSwitchPosition,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        tank_level_switch_position = match rx_from_tank_level_switch.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_position = self
-                                    .output_state(
-                                        c,
-                                        "HIGH",
-                                        "LOW",
-                                        &self.config.output_file_name_tank_level_switch_position,
-                                        self.lock_error_output_state_tank_level_switch_position,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Tank Level Switch thread for position failed ({e:?})"
-                                );
-                                tank_level_switch_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to tank level switch thread failed when requesting tank level switch position ({e:?})"
-                        );
-                        tank_level_switch_channel_disconnected = true;
-                    }
-                }
-
-                // send request for tank level switch invalid
-                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                    AquariumSignal::TankLevelSwitchInvalid,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        tank_level_switch_invalid = match rx_from_tank_level_switch.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_invalid = self
-                                    .output_state(
-                                        c,
-                                        "INVALID",
-                                        "VALID",
-                                        &self.config.output_file_name_tank_level_switch_invalid,
-                                        self.lock_error_output_state_tank_level_switch_invalid,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Tank Level Switch thread for validity failed ({e:?})"
-                                );
-                                tank_level_switch_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to tank level switch thread failed when requesting tank level switch invalid  ({e:?})"
-                        );
-                        tank_level_switch_channel_disconnected = true;
-                    }
-                }
-
-                // send request for tank level switch stabilized position
-                match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                    AquariumSignal::TankLevelSwitchPositionStabilized,
-                )) {
-                    Ok(_) => {
-                        // now listen for response
-                        match rx_from_tank_level_switch.recv() {
-                            Ok(c) => {
-                                self.lock_error_output_state_tank_level_switch_position_stabilized = self
-                                    .output_state(
-                                        c,
-                                        "HIGH",
-                                        "LOW",
-                                        &self.config.output_file_name_tank_level_switch_position_stabilized,
-                                        self.lock_error_output_state_tank_level_switch_position_stabilized,
-                                    );
-                                Some(c)
-                            }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DATA_LOGGER,
-                                    "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
-                                );
-                                tank_level_switch_channel_disconnected = true;
-                                None
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
-                        );
-                        tank_level_switch_channel_disconnected = true;
-                    }
-                }
-
-                #[cfg(feature = "debug_data_logger")]
-                {
-                    let stop_time_tank_level_switch = SystemTime::now();
-                    let execution_duration_tank_level_switch_millis = stop_time_tank_level_switch
-                        .duration_since(start_time_tank_level_switch)
-                        .unwrap()
-                        .as_millis()
-                        as u64;
-                    debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "communication with tank_level_switch took {} ms.",
-                        execution_duration_tank_level_switch_millis
-                    );
-                }
-            }
-
-            // calculate filtered values and output them to (RAM disk) files
-            let water_temperature_filtered = match water_temperature {
-                Some(c) => {
-                    let filtered_water_temperature =
-                        self.filter_water_temperature.get_filtered_value(c);
-                    self.lock_error_output_signal_water_temperature_filtered = self.output_signal(
-                        filtered_water_temperature,
-                        AquariumSignal::WaterTemperature,
-                        &self.config.output_file_name_water_temperature_filtered,
-                        self.lock_error_output_signal_water_temperature_filtered,
-                    );
-                    Some(filtered_water_temperature)
-                }
-                None => None,
-            };
-
-            let pH_filtered = match ph {
-                Some(c) => {
-                    let filtered_pH = self.filter_pH.get_filtered_value(c);
-                    self.lock_error_output_signal_pH_filtered = self.output_signal(
-                        filtered_pH,
-                        AquariumSignal::pH,
-                        &self.config.output_file_name_pH_filtered,
-                        self.lock_error_output_signal_pH_filtered,
-                    );
-                    Some(filtered_pH)
-                }
-                None => None,
-            };
-
-            let conductivity_filtered = match conductivity {
-                Some(c) => {
-                    let filtered_conductivity = self.filter_conductivity.get_filtered_value(c);
-                    self.lock_error_output_signal_conductivity_filtered = self.output_signal(
-                        filtered_conductivity,
-                        AquariumSignal::Conductivity,
-                        &self.config.output_file_name_conductivity_filtered,
-                        self.lock_error_output_signal_conductivity_filtered,
-                    );
-                    Some(filtered_conductivity)
-                }
-                None => None,
-            };
-
-            // get timestampe either from SQL server or application-generated
-            let current_timestamp = match self.config.use_sql_timestamp {
-                true => match SqlInterface::get_current_timestamp(&mut sql_interface_data.conn) {
-                    Ok(c) => {
-                        self.lock_error_get_timestamp = false;
-                        self.lock_error_output_timestamp = self.output_timestamp(
-                            c,
-                            &self.config.output_file_name_timestamp,
-                            self.lock_error_output_timestamp,
-                        );
-                        c
-                    }
-                    Err(e) => {
-                        if !self.lock_error_get_timestamp {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
-                            );
-                            self.lock_error_get_timestamp = true;
-                        }
-                        Local::now().naive_local()
-                    }
-                },
-                false => Local::now().naive_local(),
-            };
+            let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
 
             // all data received, let's construct a data frame
             let data_frame = DataFrame {
@@ -1112,8 +1257,8 @@ impl DataLogger {
             // wait the remaining time period to complete the target cycle time
             i = 0;
             while i < remaining_sleep_time_millis {
-                i += 10;
-                spin_sleeper.sleep(sleep_duration_ten_millisec);
+                i += 100;
+                spin_sleeper.sleep(sleep_duration_hundred_millisec);
                 (quit_command_received, _, _) =
                     self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
@@ -1123,6 +1268,40 @@ impl DataLogger {
                         "received QUIT command from signal handler"
                     );
                     break;
+                }
+
+                // once per second, retrieve signals and write them to RAM-disk
+                if i % 1000 == 0 {
+                    self.update_signals(
+                        &tx_to_ambient,
+                        &rx_from_ambient,
+                        &tx_to_atlas_scientific,
+                        &rx_from_atlas_scientific,
+                        &tx_to_tank_level_switch,
+                        &rx_from_tank_level_switch,
+                        &tx_to_refill,
+                        &rx_from_refill,
+                        &tx_to_heating,
+                        &rx_from_heating,
+                        &tx_to_ventilation,
+                        &rx_from_ventilation,
+                        &mut refill_in_progress,
+                        &mut refill_channel_disconnected,
+                        &mut heater_is_on,
+                        &mut heating_channel_disconnected,
+                        &mut ventilation_is_on,
+                        &mut ventilation_channel_disconnected,
+                        &mut water_temperature,
+                        &mut ph,
+                        &mut conductivity,
+                        &mut atlas_scientific_channel_disconnected,
+                        &mut ambient_temperature,
+                        &mut ambient_humidity,
+                        &mut ambient_channel_disconnected,
+                        &mut tank_level_switch_position,
+                        &mut tank_level_switch_invalid,
+                        &mut tank_level_switch_channel_disconnected,
+                    );
                 }
             }
             if quit_command_received {
@@ -1184,7 +1363,7 @@ impl DataLogger {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_ten_millisec);
+            spin_sleeper.sleep(sleep_duration_hundred_millisec);
         }
     }
 }
