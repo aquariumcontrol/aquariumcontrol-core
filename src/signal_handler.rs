@@ -21,6 +21,58 @@ use std::time::Duration;
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
+/// Sends the QUIT command to the thread and waits for confirmation
+/// # Arguments
+/// * `tx_to_thread` - reference to sender part of channel for communication to thread
+/// * `tx_to_refill` - reference to receiver part of channel for communication from thread
+/// * `thread_name` - name of thread (for debugging purposes)
+fn send_command(
+    command: InternalCommand,
+    tx_to_thread_opt: Option<&Sender<InternalCommand>>,
+    rx_from_thread_opt: Option<&Receiver<bool>>,
+    thread_name: &str,
+) {
+    match tx_to_thread_opt {
+        Some(tx_to_thread) => {
+            match tx_to_thread.send(command) {
+                Ok(_) => {
+                    #[cfg(feature = "debug_signal_handler")]
+                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to {}", thread_name);
+
+                    match rx_from_thread_opt {
+                        Some(rx_from_thread) => match rx_from_thread.recv() {
+                            Ok(_) => {
+                                #[cfg(feature = "debug_signal_handler")]
+                                debug!(target: LOG_TARGET_SIGNAL_HANDLER, "received acknowledgement from {}", thread_name);
+                            }
+                            Err(e) => {
+                                error!(
+                                    target: LOG_TARGET_SIGNAL_HANDLER,
+                                    "could not receive answer from {} thread {e:?}",
+                                    thread_name
+                                );
+                            }
+                        },
+                        None => { /* do nothing */ }
+                    };
+                }
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        "channel communication to {} thread failed when sending Quit command ({e:?})",
+                        thread_name
+                    );
+                }
+            }
+        }
+        None => {
+            /* do nothing */
+            #[cfg(feature = "debug_signal_handler")]
+            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "not sending QUIT to i2c_interface");
+        }
+    }
+}
+
 /// Handles the termination signal from operating system (SIGTERM).
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
@@ -158,538 +210,177 @@ pub fn handle_signals(
         "received termination signal from operating system",
     );
 
-    // first, let's shut down the refill control
-    match tx_to_refill.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to refill");
+    // phase 1: shut down highest level controls: data_logger and monitors
+    // data logger initiates communication to heating, refill, atlas_scientific, ambient
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_data_logger),
+        Some(&rx_from_data_logger),
+        "data_logger",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_monitors),
+        Some(&rx_from_monitors),
+        "monitors",
+    );
+    send_command(
+        InternalCommand::Quit,
+        tx_to_messaging_opt.as_ref(),
+        None,
+        "messaging",
+    );
 
-            match rx_from_refill.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from refill thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to refill control failed when sending Quit command ({e:?})"
-            );
-        }
-    }
+    // phase 2: shut down high level controls: heating, ventilation, feed, refill, balling
+    // these controls access the Controllino, Atlas Scientific and Dht
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_refill),
+        Some(&rx_from_refill),
+        "refill",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_heating),
+        Some(&rx_from_heating),
+        "heating",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_ventilation),
+        Some(&rx_from_ventilation),
+        "ventilation",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_feed),
+        Some(&rx_from_feed),
+        "feed",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_balling),
+        Some(&rx_from_balling),
+        "balling",
+    );
 
-    // second, let's shut down the heating control
-    match tx_to_heating.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to heating");
+    // phase 3: shut down medium level controls
+    // these controls receive commands from upper level controls and communicate to i2c_interface and dht
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_tank_level_switch),
+        Some(&rx_from_tank_level_switch),
+        "tank_level_switch",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_atlas_scientific),
+        Some(&rx_from_atlas_scientific),
+        "atlas_scientific",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_ambient),
+        Some(&rx_from_ambient),
+        "ambient",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_schedule_check),
+        Some(&rx_from_schedule_check),
+        "schedule_check",
+    );
 
-            match rx_from_heating.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from heating thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to heating control failed when sending Quit command ({e:?})"
-            );
-        }
-    }
+    // phase 4: shut down low level controls
+    send_command(
+        InternalCommand::Quit,
+        tx_to_i2c_interface_opt.as_ref(),
+        None,
+        "i2c_interface",
+    );
+    send_command(
+        InternalCommand::Quit,
+        tx_to_dht_opt.as_ref(),
+        None,
+        "dht",
+    );
 
-    // next, let's shut down the ventilation control
-    match tx_to_ventilation.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ventilation");
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_controllino),
+        Some(&rx_from_controllino),
+        "controllino",
+    );
+    send_command(
+        InternalCommand::Quit,
+        tx_to_tcp_opt.as_ref(),
+        rx_from_tcp_opt.as_ref(),
+        "tcp",
+    );
 
-            match rx_from_ventilation.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from ventilation control ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to ventilation control failed when sending Quit command ({e:?})"
-            );
-        }
-    }
+    // phase 5: send termination command to highest level controls
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_data_logger),
+        None,
+        "data_logger",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_monitors),
+        None,
+        "monitors",
+    );
 
-    // next, let's shut down the tank level switch calculation
-    match tx_to_tank_level_switch.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to tank level switch");
+    // phase 6: send termination command to high level controls
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_heating),
+        None,
+        "heating",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_ventilation),
+        None,
+        "ventilation",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_feed),
+        None,
+        "feed",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_refill),
+        None,
+        "refill",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_balling),
+        None,
+        "balling",
+    );
 
-            match rx_from_tank_level_switch.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from tank level switch thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to tank level switch calculation thread failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down the communication with Atlas Scientific sensor unit
-    match tx_to_atlas_scientific.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to atlas_scientific");
-
-            match rx_from_atlas_scientific.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from Atlas Scientific thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Atlas Scientific thread failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    match tx_to_i2c_interface_opt {
-        Some(tx_to_i2c_interface) => {
-            match tx_to_i2c_interface.send(InternalCommand::Quit) {
-                Ok(_) => {
-                    /* do nothing */
-
-                    #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to i2c_interface");
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "channel communication to I2C interface failed when sending Quit command ({e:?})"
-                    );
-                }
-            }
-        }
-        None => {
-            /* do nothing */
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "not sending QUIT to i2c_interface");
-        }
-    }
-
-    // next, let's shut down the communication with DHT sensor
-    match tx_to_ambient.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to ambient");
-
-            match rx_from_ambient.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from Ambient thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Ambient thread failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    match tx_to_dht_opt {
-        Some(tx_to_dht) => {
-            match tx_to_dht.send(InternalCommand::Quit) {
-                Ok(_) => {
-                    /* do nothing */
-
-                    #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to dht");
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "channel communication to DHT failed when sending Quit command ({e:?})"
-                    );
-                }
-            }
-        }
-        None => {
-            /* do nothing */
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "not sending QUIT to dht");
-        }
-    }
-
-    // next, let's shut down the monitors
-    match tx_to_monitors.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to monitors");
-
-            match rx_from_monitors.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from monitors thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to monitors thread failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down the feed control
-    match tx_to_feed.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to feed");
-
-            match rx_from_feed.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from feed control ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to feed control failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down Balling dosing control
-    match tx_to_balling.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to balling");
-
-            match rx_from_balling.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from Balling dosing control ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Balling dosing congtrol failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down the schedule checker
-    match tx_to_schedule_check.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to schedule_check");
-
-            match rx_from_schedule_check.recv() {
-                Ok(_) => {}
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from ScheduleCheck thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to ScheduleCheck failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down the data logging
-    match tx_to_data_logger.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to data_logger");
-
-            match rx_from_data_logger.recv() {
-                Ok(_) => {
-                    #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "received acknowledgement from data_logger");
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from data logger thread {e:?}"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "hannel communication to data logger thread failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // next, let's shut down Controllino
-    match tx_to_controllino.send(InternalCommand::Quit) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to controllino");
-
-            match rx_from_controllino.recv() {
-                Ok(_) => {
-                    #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "received response from controllino");
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "could not receive answer from Controllino thread ({e:?})"
-                    );
-                }
-            };
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Controllino failed when sending Quit command ({e:?})"
-            );
-        }
-    }
-
-    // finally, let's shut down TcpCommunication
-    match tx_to_tcp_opt {
-        Some(tx_to_tcp) => {
-            match tx_to_tcp.send(InternalCommand::Quit) {
-                Ok(_) => {
-                    #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to tcp_communication");
-
-                    match rx_from_tcp_opt {
-                        Some(rx_from_tcp) => match rx_from_tcp.recv() {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_SIGNAL_HANDLER,
-                                    "could not receive answer from TcpCommunication thread ({e:?})"
-                                );
-                            }
-                        },
-                        None => { /* do nothing */ }
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
-                        "channel communication to TcpCommunication failed when sending Quit command ({e:?})"
-                    );
-                }
-            }
-        }
-        None => {
-            /* do nothing */
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "Not sending Quit signal to tcp_communication");
-        }
-    }
-
-    // data logger thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_data_logger.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to data_logger");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to data logger failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // heating thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_heating.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to heating");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to heating control failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // ventilation thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_ventilation.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ventilation");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to ventilation control failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Atlas Scientific thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_atlas_scientific.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to atlas_scientific");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Atlas Scientific failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Ambient thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_ambient.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to ambient");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Ambient failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Feed control has already ceased operation. It is now awaiting termination command.
-    match tx_to_feed.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to feed");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to feed control failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Balling control has already ceased operation. It is now awaiting termination command.
-    match tx_to_balling.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to balling");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Balling dosing control failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Monitors thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_monitors.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to monitors");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to Monitors failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Refill thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_refill.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to refill");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to refill control failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // TankLevelSwitch thread has already ceased operation. It is now awaiting termination command.
-    match tx_to_tank_level_switch.send(InternalCommand::Terminate) {
-        Ok(_) => {
-            #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "TERMINATE sent to tank level switch");
-        }
-        Err(e) => {
-            error!(
-                target: LOG_TARGET_SIGNAL_HANDLER,
-                "channel communication to TankLevelSwitch failed when sending Terminate command ({e:?})"
-            );
-        }
-    }
-
-    // Messaging is checking for Quit signal periodically.
-    match tx_to_messaging_opt {
-        Some(tx_to_messaging) => match tx_to_messaging.send(InternalCommand::Quit) {
-            Ok(_) => {
-                #[cfg(feature = "debug_signal_handler")]
-                debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to messaging");
-            }
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_SIGNAL_HANDLER,
-                    "channel communication to Messaging failed when sending Quit  command ({e:?})"
-                );
-            }
-        },
-        None => { /* do nothing */ }
-    }
+    // phase 7: send termination command to medium level controls
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_atlas_scientific),
+        None,
+        "atlas_scientific",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_ambient),
+        None,
+        "ambient",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_tank_level_switch),
+        None,
+        "tank_level_switch",
+    );    
 }

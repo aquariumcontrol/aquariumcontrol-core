@@ -469,7 +469,10 @@ impl AtlasScientific {
 
     /// request execution of measurement by I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    fn send_request_to_i2c_interface(&mut self, tx_to_i2c_interface: &Sender<InternalCommand>) -> bool {
+    fn send_request_to_i2c_interface(
+        &mut self,
+        tx_to_i2c_interface: &Sender<InternalCommand>,
+    ) -> bool {
         match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
             AquariumSignal::WaterTemperature,
         )) {
