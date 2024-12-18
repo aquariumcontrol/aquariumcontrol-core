@@ -9,7 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
-        #[cfg(not(test))]
         use log::info;
 
         use log::{error, warn};
