@@ -298,12 +298,7 @@ pub fn handle_signals(
         None,
         "i2c_interface",
     );
-    send_command(
-        InternalCommand::Quit,
-        tx_to_dht_opt.as_ref(),
-        None,
-        "dht",
-    );
+    send_command(InternalCommand::Quit, tx_to_dht_opt.as_ref(), None, "dht");
 
     send_command(
         InternalCommand::Quit,
@@ -345,12 +340,7 @@ pub fn handle_signals(
         None,
         "ventilation",
     );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&tx_to_feed),
-        None,
-        "feed",
-    );
+    send_command(InternalCommand::Terminate, Some(&tx_to_feed), None, "feed");
     send_command(
         InternalCommand::Terminate,
         Some(&tx_to_refill),
@@ -382,5 +372,5 @@ pub fn handle_signals(
         Some(&tx_to_tank_level_switch),
         None,
         "tank_level_switch",
-    );    
+    );
 }

@@ -11,6 +11,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use log::{error, trace, warn};
+
+#[cfg(feature = "debug_feed")]
+use log::debug;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -264,6 +267,13 @@ impl Feed {
                                             let mut mutex_data =
                                                 mutex_device_scheduler_feed.lock().unwrap();
 
+                                            #[cfg(feature = "debug_feed")]
+                                            debug!(
+                                                target: LOG_TARGET_FEED,
+                                                "executing feed profile id #{}",
+                                                feed_schedule_entry.profile_id
+                                            );
+
                                             let (result, quit_command_received_during_feed) = self
                                                 .execute_feed(
                                                     feed_schedule_entry.profile_id,
@@ -354,6 +364,13 @@ impl Feed {
                     target: LOG_TARGET_FEED,
                     "received Stop command. Inhibiting feed."
                 );
+
+                #[cfg(feature = "debug_feed")]
+                debug!(
+                    target: LOG_TARGET_FEED,
+                    "received Stop command."
+                );
+
                 feed_inhibited = true;
             }
             if start_command_received {
@@ -362,12 +379,25 @@ impl Feed {
                     target: LOG_TARGET_FEED,
                     "received Start command. Restarting feed."
                 );
+
+                #[cfg(feature = "debug_feed")]
+                debug!(
+                    target: LOG_TARGET_FEED,
+                    "received Start command"
+                );
+
                 feed_inhibited = false;
             }
             if self.execute_command_received
                 && self.profile_id_requested >= 0
                 && !self.execution_blocked
             {
+                #[cfg(feature = "debug_feed")]
+                debug!(
+                    target: LOG_TARGET_FEED,
+                    "received execution command"
+                );
+
                 {
                     // scope to limit lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
@@ -479,6 +509,7 @@ pub mod tests {
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
     use crate::sql_interface_feed::FeedScheduleEntry;
     use crate::sql_interface_feed::SqlInterfaceFeed;
+    use crate::logger::setup_logger;
 
     use crate::mock::tests::MockSqlInterfaceFeed;
 
@@ -670,6 +701,8 @@ pub mod tests {
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
+        setup_logger();
+
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_feed_secondary.toml".to_string());
 
@@ -794,7 +827,6 @@ pub mod tests {
 
                 // wait for 2 seconds. If test object follows execute request,
                 // then food injection will happen in this period.
-                spin_sleeper.sleep(sleep_duration_2_secs);
                 spin_sleeper.sleep(sleep_duration_2_secs);
 
                 // get count of feed profiles executed
