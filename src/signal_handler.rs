@@ -143,6 +143,7 @@ fn send_command(
 /// ```
 
 pub fn handle_signals(
+    term: Arc<AtomicBool>,
     tx_to_messaging_opt: Option<Sender<InternalCommand>>,
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
@@ -183,14 +184,15 @@ pub fn handle_signals(
     let spin_sleeper = SpinSleeper::default();
     let sleep_interval_millis = 100;
     let sleep_duration_hundred_milli_sec = Duration::from_millis(sleep_interval_millis);
-    let term = Arc::new(AtomicBool::new(false));
 
     for signal in signal_hook::consts::TERM_SIGNALS {
         match signal_hook::flag::register(*signal, Arc::clone(&term)) {
-            Ok(c) => {
+            Ok(_) => {
+                #[cfg(feature = "debug_signal_handler")]
                 info!(
                     target: LOG_TARGET_SIGNAL_HANDLER,
-                    "registered hook for signal {c:?}"
+                    "registered hook for signal {}",
+                    signal
                 );
             }
             Err(e) => {
@@ -373,4 +375,422 @@ pub fn handle_signals(
         None,
         "tank_level_switch",
     );
+}
+
+#[cfg(test)]
+pub mod tests {
+    use spin_sleep::SpinSleeper;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    use crate::channel_content::InternalCommand;
+    use crate::handle_signals;
+
+    // helper function to send a signal to the application
+    fn send_signal(pid: u32, signal: i32) {
+        Command::new("kill")
+            .args(&[pid.to_string().as_str()])
+            .output()
+            .expect("Failed to send signal");
+        println!("Sent signal {} to {}", signal, pid);
+    }
+
+    // test if signal handler sends shutdown requests to all threads in the right order.
+    #[test]
+    fn test_signal_handling() {
+        let term = Arc::new(AtomicBool::new(false));
+
+        // *** signal handler <=> refill ***
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> heating ***
+        let (tx_signal_handler_to_heating, rx_heating_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_heating_to_signal_handler, rx_signal_handler_from_heating): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> feed ***
+        let (tx_signal_handler_to_feed, rx_feed_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_feed_to_signal_handler, rx_signal_handler_from_feed): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> balling ***
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> monitors ***
+        let (tx_signal_handler_to_monitors, rx_monitors_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_monitors_to_signal_handler, rx_signal_handler_from_monitors): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> ventilation ***
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> schedule_check ***
+        let (tx_signal_handler_to_schedule_check, rx_schedule_check_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_schedule_check_to_signal_handler, rx_signal_handler_from_schedule_check): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***********************************
+
+        // *** signal handler <=> gpio ***
+        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // *********************************
+
+        // *** signal handler <=> controllino ***
+        let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_controllino_to_signal_handler, rx_signal_handler_from_controllino): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // ***************************************
+
+        // *** signal handler <=> data_logger ***
+        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // **************************************
+
+        // *** signal handler <=> atlas_scientific ***
+        let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_atlas_scientific_to_signal_handler, rx_signal_handler_from_atlas_scientific): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // **************************************
+
+        // *** signal handler <=> ambient ***
+        let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        // **************************************
+
+        let (tx_signal_handler_to_tcp, rx_tcp_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let (tx_tcp_to_signal_handler, rx_signal_handler_from_tcp): (Sender<bool>, Receiver<bool>) =
+            mpsc::channel();
+
+        let use_simulator = true;
+
+        // wrapping sender/receiver for communication with TCP thread
+        let tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>> = match use_simulator {
+            true => Some(tx_signal_handler_to_tcp),
+            false => None,
+        };
+
+        let rx_signal_handler_from_tcp_opt: Option<Receiver<bool>> = match use_simulator {
+            true => Some(rx_signal_handler_from_tcp),
+            false => None,
+        };
+
+        // communication with messaging is simulated - so no OS dependency here
+        let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        let tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
+
+        let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        let tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>> =
+            Some(tx_signal_handler_to_dht);
+
+        let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+            Some(tx_signal_handler_to_i2c_interface);
+
+        let term_clone = Arc::clone(&term);
+
+        // start test object in separate thread
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                handle_signals(
+                    term_clone,
+                    tx_signal_handler_to_messaging_opt,
+                    tx_signal_handler_to_refill,
+                    rx_signal_handler_from_refill,
+                    tx_signal_handler_to_tank_level_switch,
+                    rx_signal_handler_from_tank_level_switch,
+                    tx_signal_handler_to_heating,
+                    rx_signal_handler_from_heating,
+                    tx_signal_handler_to_controllino,
+                    rx_signal_handler_from_controllino,
+                    tx_signal_handler_to_atlas_scientific,
+                    rx_signal_handler_from_atlas_scientific,
+                    tx_signal_handler_to_ambient,
+                    rx_signal_handler_from_ambient,
+                    tx_signal_handler_to_data_logger,
+                    rx_signal_handler_from_data_logger,
+                    tx_signal_handler_to_balling,
+                    rx_signal_handler_from_balling,
+                    tx_signal_handler_to_ventilation,
+                    rx_signal_handler_from_ventilation,
+                    tx_signal_handler_to_monitors,
+                    rx_signal_handler_from_monitors,
+                    tx_signal_handler_to_feed,
+                    rx_signal_handler_from_feed,
+                    tx_signal_handler_to_schedule_check,
+                    rx_signal_handler_from_schedule_check,
+                    tx_signal_handler_to_tcp_opt,
+                    rx_signal_handler_from_tcp_opt,
+                    tx_signal_handler_to_dht_opt,
+                    tx_signal_handler_to_i2c_interface_opt,
+                );
+            })
+            .unwrap();
+
+        // use pid of current process
+        let pid = std::process::id();
+
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_one_second = Duration::from_secs(1);
+
+        spin_sleeper.sleep(sleep_duration_one_second);
+
+        send_signal(pid, signal_hook::consts::signal::SIGABRT);
+
+        assert_eq!(
+            rx_data_logger_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_data_logger_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_monitors_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_monitors_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_messaging_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        // no response from messaging
+
+        assert_eq!(
+            rx_refill_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_refill_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_heating_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_heating_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_ventilation_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_ventilation_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_feed_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_feed_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_balling_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_balling_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_tank_level_switch_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_tank_level_switch_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_atlas_scientific_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_ambient_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_ambient_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_schedule_check_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_schedule_check_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_i2c_interface_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        // no response from i2c_interface
+
+        assert_eq!(
+            rx_dht_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        // no response from dht
+
+        assert_eq!(
+            rx_controllino_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_controllino_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_tcp_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_tcp_to_signal_handler.send(true);
+
+        assert_eq!(
+            rx_data_logger_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_monitors_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_heating_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_ventilation_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_feed_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_refill_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_balling_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_atlas_scientific_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_ambient_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_tank_level_switch_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+
+        assert!(term.load(Ordering::Acquire));
+    }
 }

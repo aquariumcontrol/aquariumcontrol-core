@@ -71,6 +71,7 @@ use log::debug;
 
 use spin_sleep::SpinSleeper;
 use std::panic;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -1097,7 +1098,9 @@ fn main() {
         }
 
         scope.spawn(move || {
+            let term = Arc::new(AtomicBool::new(false));
             handle_signals(
+                term,
                 tx_signal_handler_to_messaging_opt,
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,

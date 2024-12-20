@@ -505,11 +505,11 @@ pub mod tests {
     use crate::feed::LOG_TARGET_FEED;
     use crate::feedpattern::Feedpattern;
     use crate::food_injection::FoodInjectionTrait;
+    use crate::logger::setup_logger;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
     use crate::sql_interface_feed::FeedScheduleEntry;
     use crate::sql_interface_feed::SqlInterfaceFeed;
-    use crate::logger::setup_logger;
 
     use crate::mock::tests::MockSqlInterfaceFeed;
 
