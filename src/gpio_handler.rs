@@ -213,21 +213,20 @@ pub mod tests {
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 
-    mod ignored_tests {
-        use crate::gpio_handler::tests::ConfigData;
-        use crate::read_config_file;
-        use crate::GpioHandler;
-
+    mod commissioning_prep {
         cfg_if::cfg_if! {
-            if #[cfg(all(feature = "target_hw", target_os = "linux", test))] {
+            if #[cfg(all(feature = "commissioning_prep", feature = "target_hw", target_os = "linux", test))] {
+                use crate::config::ConfigData;
+                use crate::read_config_file;
+                use crate::GpioHandler;
+
                 use spin_sleep::SpinSleeper;
                 use std::time::Duration;
             }
         }
 
         #[test]
-        #[ignore = "because this is a test case to prepare the comissioning"]
-        #[cfg(all(feature = "target_hw", target_os = "linux"))]
+        #[cfg(all(feature = "commissioning_prep", feature = "target_hw", target_os = "linux", test))]
         // for development purposes, visualize the tank level switch pin state with 2 Hz
         pub fn test_show_tank_level_switch() {
             let config: ConfigData = read_config_file("/config/aquarium_control.toml".to_string());
