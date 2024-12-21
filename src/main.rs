@@ -369,6 +369,7 @@ fn main() {
 
     // create channels for communication between threads
     let tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>;
+    let rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>;
     let rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>;
     let rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>;
     let rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>;
@@ -385,6 +386,12 @@ fn main() {
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
             tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
+
+            let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging): (
+                Sender<bool>,
+                Receiver<bool>,
+            ) = mpsc::channel();
+            rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
 
             // *** messaging => refill ***
             let (tx_messaging_to_refill, rx_refill_from_messaging): (
@@ -431,6 +438,7 @@ fn main() {
         else {
             // replacement values for channels for non-linux specific code
             tx_signal_handler_to_messaging_opt = None;
+            rx_signal_handler_from_messaging_opt = None;
             rx_refill_from_messaging_opt = None;
             rx_ventilation_from_messaging_opt = None;
             rx_heating_from_messaging_opt = None;
@@ -978,6 +986,7 @@ fn main() {
             let tx_ambient_to_dht_opt = None;
             let rx_ambient_from_dht_opt = None;
             let tx_signal_handler_to_dht_opt = None;
+
             // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
             let tx_atlas_scientific_to_i2c_interface_opt = None;
             let rx_atlas_scientific_from_i2c_interface_opt = None;
@@ -1105,6 +1114,7 @@ fn main() {
             handle_signals(
                 term,
                 tx_signal_handler_to_messaging_opt,
+                rx_signal_handler_from_messaging_opt,
                 tx_signal_handler_to_refill,
                 rx_signal_handler_from_refill,
                 tx_signal_handler_to_tank_level_switch,
@@ -1410,6 +1420,7 @@ fn main() {
             // read/send messages
             #[cfg(target_os = "linux")]
             messaging.execute(
+                tx_messaging_to_signal_handler,
                 rx_messaging_from_signal_handler,
                 tx_messaging_to_refill,
                 tx_messaging_to_ventilation,

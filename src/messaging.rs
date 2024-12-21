@@ -9,12 +9,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "linux")] {
+        #[cfg(not(test))]
         use log::info;
 
         use log::{error, warn};
         use posixmq::PosixMq;
         use std::sync::mpsc::{Receiver, Sender};
         use std::time::Duration;
+        use spin_sleep::SpinSleeper;
     }
 }
 
@@ -234,6 +236,7 @@ impl Messaging {
     #[cfg(target_os = "linux")]
     pub fn execute(
         &mut self,
+        tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         tx_to_refill: Sender<InternalCommand>,
         tx_to_ventilation: Sender<InternalCommand>,
@@ -246,6 +249,9 @@ impl Messaging {
 
         let mut msgbuf = vec![0; self.mq_max_msg_len];
         let mut msg = Message::new();
+
+        let sleep_duration = Duration::from_millis(10);
+        let spin_sleeper = SpinSleeper::default();
 
         loop {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
@@ -380,12 +386,55 @@ impl Messaging {
             let (quit_command_received, _, _) =
                 self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
-                info!(
+                #[cfg(feature = "debug_messaging")]
+                debug!(
                     target: LOG_TARGET_MESSAGING,
-                    "received QUIT command from messaging"
+                    "received QUIT command from signal handler"
                 );
+
+                match tx_to_signal_handler.send(true) {
+                    Ok(_) => { /* do nothing */ }
+                    Err(e) => {
+                        error!(
+                            target: LOG_TARGET_MESSAGING,
+                            "Error occurred when responding to Quit command from signal handler ({e:?})"
+                        );
+                    }
+                }
                 break;
             }
+
+            spin_sleeper.sleep(sleep_duration);
+        }
+
+        // wait for Terminate command
+        let mut lock_error_invalid_command = false;
+
+        loop {
+            match rx_from_signal_handler.recv() {
+                Ok(command) => match command {
+                    InternalCommand::Terminate => {
+                        break;
+                    }
+                    _ => {
+                        if !lock_error_invalid_command {
+                            error!(
+                                target: LOG_TARGET_MESSAGING,
+                                "Received invalid command {} when waiting for Terminate command",
+                                command
+                            );
+                            lock_error_invalid_command = true;
+                        }
+                    }
+                },
+                Err(e) => {
+                    panic!(
+                        "{}: Receiving Terminate command from signal handler failed ({e:?}).",
+                        LOG_TARGET_MESSAGING,
+                    );
+                }
+            }
+            spin_sleeper.sleep(sleep_duration);
         }
     }
 }
@@ -441,6 +490,7 @@ pub mod tests {
         let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_ventilation = tx_messaging_to_ventilation.clone();
 
@@ -485,6 +535,11 @@ pub mod tests {
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -493,6 +548,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 messaging.execute(
+                    tx_messaging_to_signal_handler,
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
                     tx_messaging_to_ventilation,
@@ -548,6 +604,7 @@ pub mod tests {
         let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_heating = tx_messaging_to_heating.clone();
 
@@ -592,6 +649,11 @@ pub mod tests {
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -600,6 +662,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 messaging.execute(
+                    tx_messaging_to_signal_handler,
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
                     tx_messaging_to_ventilation,
@@ -659,6 +722,7 @@ pub mod tests {
         let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_refill = tx_messaging_to_refill.clone();
 
@@ -713,6 +777,11 @@ pub mod tests {
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -721,6 +790,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 messaging.execute(
+                    tx_messaging_to_signal_handler,
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
                     tx_messaging_to_ventilation,
@@ -781,6 +851,7 @@ pub mod tests {
         let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
         let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_feed = tx_messaging_to_feed.clone();
 
@@ -835,6 +906,11 @@ pub mod tests {
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -843,6 +919,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 messaging.execute(
+                    tx_messaging_to_signal_handler,
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
                     tx_messaging_to_ventilation,
@@ -898,6 +975,7 @@ pub mod tests {
         let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
         let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_balling = tx_messaging_to_balling.clone();
 
@@ -942,6 +1020,11 @@ pub mod tests {
 
                 // requesting messaging to quit
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
 
@@ -950,6 +1033,7 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 messaging.execute(
+                    tx_messaging_to_signal_handler,
                     rx_messaging_from_signal_handler,
                     tx_messaging_to_refill,
                     tx_messaging_to_ventilation,

@@ -226,7 +226,12 @@ pub mod tests {
         }
 
         #[test]
-        #[cfg(all(feature = "commissioning_prep", feature = "target_hw", target_os = "linux", test))]
+        #[cfg(all(
+            feature = "commissioning_prep",
+            feature = "target_hw",
+            target_os = "linux",
+            test
+        ))]
         // for development purposes, visualize the tank level switch pin state with 2 Hz
         pub fn test_show_tank_level_switch() {
             let config: ConfigData = read_config_file("/config/aquarium_control.toml".to_string());

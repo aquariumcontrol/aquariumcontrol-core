@@ -145,6 +145,7 @@ fn send_command(
 pub fn handle_signals(
     term: Arc<AtomicBool>,
     tx_to_messaging_opt: Option<Sender<InternalCommand>>,
+    rx_from_messaging_opt: Option<Receiver<bool>>,
     tx_to_refill: Sender<InternalCommand>,
     rx_from_refill: Receiver<bool>,
     tx_to_tank_level_switch: Sender<InternalCommand>,
@@ -229,7 +230,7 @@ pub fn handle_signals(
     send_command(
         InternalCommand::Quit,
         tx_to_messaging_opt.as_ref(),
-        None,
+        rx_from_messaging_opt.as_ref(),
         "messaging",
     );
 
@@ -374,6 +375,14 @@ pub fn handle_signals(
         Some(&tx_to_tank_level_switch),
         None,
         "tank_level_switch",
+    );
+
+    // phase 8: allow messaging thread to close
+    send_command(
+        InternalCommand::Terminate,
+        tx_to_messaging_opt.as_ref(),
+        None,
+        "messaging",
     );
 }
 
@@ -564,6 +573,12 @@ pub mod tests {
         ) = mpsc::channel();
         let tx_signal_handler_to_messaging_opt = Some(tx_signal_handler_to_messaging);
 
+        let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+        let rx_signal_handler_from_messaging_opt = Some(rx_signal_handler_from_messaging);
+
         let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
@@ -589,6 +604,7 @@ pub mod tests {
                 handle_signals(
                     term_clone,
                     tx_signal_handler_to_messaging_opt,
+                    rx_signal_handler_from_messaging_opt,
                     tx_signal_handler_to_refill,
                     rx_signal_handler_from_refill,
                     tx_signal_handler_to_tank_level_switch,
@@ -647,7 +663,7 @@ pub mod tests {
             rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
-        // no response from messaging
+        _ = tx_messaging_to_signal_handler.send(true);
 
         assert_eq!(
             rx_refill_from_signal_handler.recv().unwrap(),
@@ -783,6 +799,12 @@ pub mod tests {
 
         assert_eq!(
             rx_tank_level_switch_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
