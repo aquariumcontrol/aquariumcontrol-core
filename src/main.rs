@@ -226,6 +226,9 @@ const LOG_TARGET_MAIN: &str = "main";
 /// ```
 
 fn main() {
+    #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
+    compile_error!("Target hardware is only available with Linux operating system.");
+    
     // setup logging to write to log output file and stdout
     setup_logger();
 
