@@ -174,6 +174,8 @@ impl GpioHandler {
 }
 
 pub mod tests {
+    use spin_sleep::SpinSleeper;
+    use std::time::Duration;
 
     cfg_if::cfg_if! {
         if #[cfg(all(feature = "target_hw", target_os = "linux", test))] {
@@ -213,4 +215,37 @@ pub mod tests {
         );
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
+    
+    #[test]
+    #[ignore = "because this is a test case to prepare the comissioning"]
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    // for development purposes, visualize the tank level switch pin state with 2 Hz
+    pub fn test_show_tank_level_switch() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control.toml".to_string());
+        let (_, tank_level_switch_input_pin_opt, _dht_opt) = GpioHandler::new(config.gpio_handler, config.dht);
+        
+        let tank_level_switch_input_pin = match tank_level_switch_input_pin_opt {
+            Some(c) => c,
+            None => {
+                panic!("Could not initialize tank level switch input pin.");
+            }
+        };
+        
+        let sleep_time = Duration::from_millis(500);
+        let spin_sleeper = SpinSleeper::default();
+        
+        loop {
+            println!("Tank Level switch input pin is {}",
+                match tank_level_switch_input_pin.is_high() {
+                    true => "HIGH",
+                    false => "LOW",
+                }
+            );
+            
+            spin_sleeper.sleep(sleep_time);
+        }
+    }
+
+    
 }

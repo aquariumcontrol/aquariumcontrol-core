@@ -531,6 +531,7 @@ impl AtlasScientific {
                     self.water_temperature_invalid = true;
                     self.pH_invalid = true;
                     self.conductivity_invalid = true;
+                    true // do not allow for next request to be sent
                 }
             },
             Err(e) => {
