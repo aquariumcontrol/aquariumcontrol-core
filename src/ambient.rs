@@ -335,7 +335,7 @@ impl Ambient {
     /// request execution of measurement by Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn send_request_to_dht(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
-        match tx_to_dht.send(InternalCommand::RequestSignal(
+        match tx_to_dht.try_send(InternalCommand::RequestSignal(
             AquariumSignal::AmbientTemperature,
         )) {
             Ok(()) => {
