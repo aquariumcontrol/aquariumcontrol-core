@@ -77,7 +77,7 @@ impl FoodInjection {
         }
     }
 
-    fn switch_skimmer_pumps(
+    fn switch_skimmer_pumps_feeder(
         &mut self,
         target_skimmer_state: ActuatorState,
         target_main_pump1_state: ActuatorState,
@@ -350,7 +350,7 @@ impl FoodInjectionTrait for FoodInjection {
                     true => ActuatorState::On,
                     false => ActuatorState::Off,
                 };
-                self.switch_skimmer_pumps(
+                self.switch_skimmer_pumps_feeder(
                     target_skimmer_state,
                     target_main_pump1_state,
                     target_main_pump2_state,
@@ -399,7 +399,7 @@ impl FoodInjectionTrait for FoodInjection {
                     true => ActuatorState::On,
                     false => ActuatorState::Off,
                 };
-                self.switch_skimmer_pumps(
+                self.switch_skimmer_pumps_feeder(
                     target_skimmer_state,
                     target_main_pump1_state,
                     target_main_pump2_state,
@@ -427,13 +427,13 @@ impl FoodInjectionTrait for FoodInjection {
             }
         }
 
-        self.switch_skimmer_pumps(
+        self.switch_skimmer_pumps_feeder(
             ActuatorState::On,
             ActuatorState::On,
             ActuatorState::On,
             ActuatorState::On,
             ActuatorState::On,
-            ActuatorState::On,
+            ActuatorState::Off,
             tx_to_controllino,
             rx_from_controllino,
         );
@@ -462,13 +462,11 @@ pub mod tests {
         tx_controllino_to_feed: &Sender<bool>,
         rx_controllino_from_feed: &Receiver<InternalCommand>,
     ) -> InternalCommand {
-        let command: InternalCommand;
-
         // receive command from test object
-        match rx_controllino_from_feed.recv() {
+        let (command, device) = match rx_controllino_from_feed.recv() {
             Ok(c) => match c {
-                InternalCommand::SwitchOn(_) => command = c,
-                InternalCommand::SwitchOff(_) => command = c,
+                InternalCommand::SwitchOn(ref d) => (c.clone(), d.clone()),
+                InternalCommand::SwitchOff(ref d) => (c.clone(), d.clone()),
                 _ => {
                     panic!("FoodInjection: Received invalid command from test object:");
                 }
@@ -478,7 +476,9 @@ pub mod tests {
                     "FoodInjection: Error when receiving actuation command from test object: {e:?}"
                 );
             }
-        }
+        };
+        
+        println!("Received command {} for {} from test object", command, device);
 
         // send confirmation back
         match tx_controllino_to_feed.send(true) {
@@ -618,7 +618,7 @@ pub mod tests {
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
                 _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                for i in 0..2 {
+                for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
                     match test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_controllino_to_feed,
@@ -639,7 +639,7 @@ pub mod tests {
                     "counter_switch_on={} counter_switch_off={}",
                     counter_switch_on, counter_switch_off
                 );
-                assert_eq!(counter_switch_on, 6);
+                assert_eq!(counter_switch_on, 5);
                 assert_eq!(counter_switch_off, 1);
             });
 
@@ -686,7 +686,7 @@ pub mod tests {
                     execution_duration.as_millis()
                 );
 
-                assert_ge!(execution_duration.as_millis(), 1040);
+                assert_ge!(execution_duration.as_millis(), 850);
                 assert_le!(execution_duration.as_millis(), 1085);
             });
         });
