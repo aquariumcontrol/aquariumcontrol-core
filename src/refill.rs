@@ -1129,14 +1129,12 @@ impl Refill {
 #[cfg(test)]
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
-    use chrono::DateTime;
-    use chrono::Local;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime};
 
     use crate::channel_content::InternalCommand;
     use crate::config::read_config_file;
@@ -1156,23 +1154,7 @@ pub mod tests {
         MockWaterInjection, TestCommand,
     };
     use crate::refill::LOG_TARGET_REFILL;
-
-    trait Output {
-        fn output(&self) -> String;
-    }
-
-    impl Output for SystemTime {
-        fn output(&self) -> String {
-            let datetime: DateTime<Local> = (*self).into();
-            let duration_since_epoch = self
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards");
-            datetime.format("%d/%m/%Y %T").to_string()
-                + " "
-                + &duration_since_epoch.as_millis().to_string()
-        }
-    }
-
+   
     pub fn prepare_refill_tests(
         config_file_name: &str,
         refill_errors: Option<RefillErrors>,
