@@ -113,7 +113,7 @@ pub fn read_config_file(relative_path: String) -> ConfigData {
         Ok(c) => c,
         Err(_) => {
             error!(target: LOG_TARGET_CONFIG,
-                "could not read environment variable CARGO_MANIFEST_DIR. Using fallback path.");
+                "could not read environment variable CARGO_MANIFEST_DIR for reading configuration file. Using fallback path.");
             "/usr/local/src/aquarium_control".to_string()
         }
     };
