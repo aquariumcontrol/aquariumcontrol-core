@@ -190,7 +190,7 @@ fn check_argument_for_valid_config_file_name(
     match path.extension() {
         Some(extension) => {
             if extension == "toml" {
-                return Ok(String::from(config_file_name));
+                return Ok(String::from(relative_config_file_name));
             } else {
                 return Err(ConfigFileDefinitionError::SuffixIsNotToml(
                     "The provided argument for the configuration file does not have extension '.toml'."
