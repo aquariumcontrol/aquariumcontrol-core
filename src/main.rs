@@ -78,7 +78,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 use std::time::Duration;
-use std::fmt;
+use std::{fmt, env};
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -133,7 +133,6 @@ cfg_if::cfg_if! {
 const LOG_TARGET_MAIN: &str = "main";
 
 enum ConfigFileDefinitionError {
-    NotAbsolutePath(String),
     PathDoesNotExist(String),
     IsNotAFile(String),
     FileNameHasNoSuffix(String),
@@ -146,7 +145,6 @@ impl fmt::Display for ConfigFileDefinitionError {
     /// * `f` - configuration for formatting    
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConfigFileDefinitionError::NotAbsolutePath(c) => write!(f, "{}", c),
             ConfigFileDefinitionError::PathDoesNotExist(c) => write!(f, "{}", c),
             ConfigFileDefinitionError::IsNotAFile(c) => write!(f, "{}", c),
             ConfigFileDefinitionError::FileNameHasNoSuffix(c) => write!(f, "{}", c),
@@ -159,16 +157,21 @@ impl fmt::Display for ConfigFileDefinitionError {
 /// # Arguments    
 /// * `config_file_name` - reference to string provided by command line parameter
 fn check_argument_for_valid_config_file_name(
-    config_file_name: &str,
+    relative_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
-    let path = Path::new(config_file_name);
 
-    if !path.is_absolute() {
-        return Err(ConfigFileDefinitionError::NotAbsolutePath(
-            "The provided argument for the configuration file is not an absolute path. It does not start with '/'."
-            .to_string()
-        ));
-    }
+    let out_dir = match env::var("CARGO_MANIFEST_DIR") {
+        Ok(c) => c,
+        Err(_) => {
+            error!(target: LOG_TARGET_MAIN,
+                "could not read environment variable CARGO_MANIFEST_DIR for checking alternative configuration file. Using fallback path.");
+            "/usr/local/src/aquarium_control".to_string()
+        }
+    };
+
+    let config_file_name = out_dir + relative_config_file_name;
+
+    let path = Path::new(&config_file_name);
 
     if !path.exists() {
         return Err(ConfigFileDefinitionError::PathDoesNotExist(
