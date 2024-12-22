@@ -348,7 +348,8 @@ pub mod tests {
     use crate::mock::tests::TestCommand;
 
     #[test]
-    // this test case executes inject_water function and immediately sets the sensor signal to high
+    // This test case executes inject_water function and immediately sets the sensor signal to high
+    // Test case uses test database #40.
     pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -499,6 +500,7 @@ pub mod tests {
     // this test case executes inject_water function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
+    // Test case uses test database #41.    
     pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -644,10 +646,11 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes inject_water function and immediately
+    // This test case executes inject_water function and immediately
     // - sets the sensor signal to high
     // - sets the invalid bit.
-    // Water injection shall be aborted without adding further water
+    // Water injection shall be aborted without adding further water.
+    // Test case uses test database #42.    
     pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -794,7 +797,9 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes inject_water function and sets the sensor signal to high after some time has passed (happy case)
+    // This test case executes inject_water function and sets the sensor signal
+    // to high after some time has passed (happy case).
+    // Test case uses test database #43.
     pub fn test_water_injection_delayed_switch_high() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -959,7 +964,8 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes inject_water function with simulation of level switch stuck at low position
+    // this test case executes inject_water function with simulation of level switch stuck at low position.
+    // Test case uses test database #44.    
     pub fn test_water_injection_switch_stuck_low() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1109,7 +1115,9 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes inject_water function and sends Quit signal after some time when water level is still low
+    // This test case executes inject_water function and sends Quit signal
+    // after some time when water level is still low.
+    // Test case uses test database #45.
     pub fn test_water_injection_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();

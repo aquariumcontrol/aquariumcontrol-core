@@ -1527,6 +1527,10 @@ pub mod tests {
     }
 
     #[test]
+    // test case checks if DataLogger correctly processes all information:
+    // - storage in SQL database using mock implementation
+    // - writing output to filesystem
+    // Test case does not require any communication with database.
     pub fn test_data_log() {
         // channels for communication with test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();

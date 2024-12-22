@@ -842,7 +842,7 @@ impl Refill {
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
-    /// * `water_injection` - Struct implementing the WaterInjectionTrait    
+    /// * `water_injection` - Reference to struct implementing WaterInjectionTrait
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
@@ -1154,7 +1154,7 @@ pub mod tests {
         MockWaterInjection, TestCommand,
     };
     use crate::refill::LOG_TARGET_REFILL;
-   
+
     pub fn prepare_refill_tests(
         config_file_name: &str,
         refill_errors: Option<RefillErrors>,
@@ -1208,6 +1208,8 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks the implementation of ProcessExternalRequestTrait.
+    // The test case does not require any communication with SQL database.
     pub fn test_refill_process_external_request_empty_channel() {
         let refill_errors = RefillErrors {
             error_switch_stuck_high: false,
@@ -1234,15 +1236,15 @@ pub mod tests {
                 &rx_refill_from_signal_handler,
                 Some(&rx_refill_from_messaging),
             );
+
         assert_eq!(quit_command_received, false);
         assert_eq!(start_command_received, false);
         assert_eq!(stop_command_received, false);
-
-        println!("* [Refill] checking false result of processing of external request when channel is empty succeeded.");
     }
 
     #[test]
-    // this test case executes multiple iterations of the loop inside the .execute function with triggering a refill
+    // This test case executes multiple iterations of the loop inside the .execute function with triggering a refill.
+    // Test case uses test database #20.
     pub fn test_refill_trigger_water_injection() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -1422,7 +1424,8 @@ pub mod tests {
 
     #[test]
     // this test case executes one iteration of the loop inside the .execute function with triggering a refill
-    // it checks the timing of initial wait period and main control interval
+    // It checks the timing of initial wait period and main control interval.
+    // Test case uses test database #21.
     pub fn test_refill_initial_waiting_time() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -1606,6 +1609,7 @@ pub mod tests {
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_switch_stuck_low set
     // during the execution of the test case, the error is reset.
     // refill control shall resum operation upon having reset the error.
+    // Test case uses test database #22.
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -1812,8 +1816,9 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
-    // the refill control shall not initiate a refill operation
+    // This test case executes multiple iterations of the loop inside .execute function with error flag error_sql_update_failed
+    // The refill control shall not initiate a refill operation.
+    // Test case uses test database #23.
     pub fn test_refill_conditions_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -1995,8 +2000,10 @@ pub mod tests {
     }
 
     #[test]
-    // this test case checks the process_external_request implementation if it correctly processes the ResetAllErrors command
-    // the test case checks the struct attribute after having executed the function
+    // This test case checks the process_external_request implementation if it correctly
+    // processes the ResetAllErrors command.
+    // The test case checks the struct attribute after having executed the function.
+    // Test case uses test database #24.
     pub fn test_refill_process_external_request_reset_all_errors_command() {
         // set the errors
         let refill_errors = RefillErrors {
@@ -2189,6 +2196,7 @@ pub mod tests {
     #[test]
     // Executes loop of the .execute function manipulating the sensor signals only and giving a negative schedule check.
     // Checks if the test object correctly processes the negative schedule check result.
+    // Test case uses test database #25.
     pub fn test_refill_blocked_by_schedule() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -2366,8 +2374,10 @@ pub mod tests {
     }
 
     #[test]
-    // Executes loop of the .execute function manipulating the sensor signals only and giving a positive schedule check.
-    // Checks if the test object correctly processes the inhibition requested via channel.
+    // Test case executes loop of the .execute function manipulating the sensor signals only
+    // and giving a positive schedule check.
+    // Test case checks if the test object correctly processes the inhibition requested via channel.
+    // Test case uses test database #26.
     pub fn test_messaging_stops_starts_refill() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -2585,9 +2595,10 @@ pub mod tests {
     }
 
     #[test]
-    // this test case executes multiple iterations of the loop inside .execute function
+    // This test case executes multiple iterations of the loop inside .execute function
     // using mock version of SQL interface which returns only errors.
-    // the refill control shall not initiate a refill operation
+    // The refill control shall not initiate a refill operation.
+    // Test case uses test database #27.
     pub fn test_refill_conditions_error_get_historic_data_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();

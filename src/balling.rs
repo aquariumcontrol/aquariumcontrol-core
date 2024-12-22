@@ -262,6 +262,9 @@ impl Balling {
     /// # Arguments
     /// * `pump_id` - id of the pump to be actuated.
     /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
+    /// * `mineral_injection` - refence to struct implementing MineralInjectionTrait
+    /// * `tx_to_controllino` - sender part of channel communication to send command to Controllino
+    /// * `rx_from_controllino` - receiver part of channel communication to receive confirmation back from Controllino
     fn execute_dosing(
         &mut self,
         pump_id: u32,
@@ -322,12 +325,14 @@ impl Balling {
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
-    /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
+    /// * `tx_to_controllino` - sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
+    /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
+    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler                
+    /// * `tx_to_schedule_check` - sender part of channel for communication to schedule checker
+    /// * `rx_from_schedule_check` - receiver part of channel for communication from schedule checker
+    /// * `rx_from_messaging_opt` - receiver part of channel communication wrapped in Option from Messaging
+    /// * `mineral_injection`- reference to struct implementing MineralInjectionTrait
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
@@ -686,11 +691,13 @@ pub mod tests {
 
     #[test]
     #[should_panic]
+    // This test case checks if the configuration file contains a valid value for the dosing interval.
+    // It does not operate on any data from SQL database.
     pub fn test_balling_initialization_invalid_intervals() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_balling_panic.toml".to_string());
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
@@ -698,19 +705,14 @@ pub mod tests {
         };
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-        // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
-        }
-
         // create test object
         let _ = Balling::new(config.balling, sql_interface_balling);
     }
 
     #[test]
+    // When starting, the application checks when the last dosings took place by analyzing data from SQL database.
+    // As prerequisite for this test case, an empty empty dosing log is required.
+    // Test cases uses test database #01.
     pub fn test_balling_initialization_empty_dosing_log() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_balling_empty.toml".to_string());
@@ -741,6 +743,13 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
+    // helper function to prepare for test cases which require a filled dosing log
+    // This function inserts dosing events for each of the four pumps.
+    // The time of the dosing events is set to
+    // - 100 seconds in the past for pump #1
+    // - 200 seconds in the past for pump #2
+    // - 300 seconds in the past for pump #3
+    // - 400 seconds in the past for pump #4
     fn insert_past_dosing_events(
         sql_interface: &mut SqlInterface,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -785,6 +794,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the countdowns for each pump are calculated correctly using
+    // a dosing log in SQL database which has entries for all pumps.
+    // Test case uses test database #02.
     pub fn test_balling_initialization_full_dosing_log() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_balling_1.toml".to_string());
@@ -802,13 +814,16 @@ pub mod tests {
         // create test object
         let balling = Balling::new(config.balling, sql_interface_balling);
 
-        // check if the countdown calculation was correct
+        // check if the countdown calculation was correct:
+        // the countdown depends on the pump specific dosing interval and the timing of the last dosing event.
         assert_eq!(balling.countdown_dosing_pump1, 100);
         assert_eq!(balling.countdown_dosing_pump2, 0);
         assert_eq!(balling.countdown_dosing_pump3, 0);
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
+    // This function executes the test object and test environment in separate threads.
+    // The test case depends on the configuration and reference values provided for asserts.
     pub fn test_balling_dosing(
         config_file_name: &str,
         schedule_allows: bool,
@@ -924,6 +939,10 @@ pub mod tests {
     }
 
     #[test]
+    // The test case executes the test object with the following boundaries:
+    // - pump #1 is active
+    // - schedule checker is allowing operation
+    // Test case uses test database #03.
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_2.toml",
@@ -938,6 +957,10 @@ pub mod tests {
     }
 
     #[test]
+    // The test case executes the test object with the following boundaries:
+    // - all pumps are active
+    // - schedule checker is not allowing operation
+    // Test case uses test database #04.
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_3.toml",
@@ -952,6 +975,11 @@ pub mod tests {
     }
 
     #[test]
+    // The test case executes the test object with the following boundaries:
+    // - all pumps are active
+    // - schedule checker is allowing operation
+    // - dosing intervals are short so that lots of dosing events are triggered
+    // Test case uses test database #05.
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
@@ -966,6 +994,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the target dosing duration is calculated correctly
+    // considering only valid input values.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_target_dosing_duration_millis_happy_case() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -981,6 +1012,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the target dosing duration is calculated correctly
+    // using zero dosing speed as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_target_dosing_duration_millis_zero_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -996,6 +1030,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the target dosing duration is calculated correctly
+    // using negative dosing speed as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_target_dosing_duration_millis_negative_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1011,6 +1048,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the target dosing duration is calculated correctly
+    // using zero dosing volume as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_target_dosing_duration_millis_zero_dosing_volume() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1026,6 +1066,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the target dosing duration is calculated correctly
+    // using negative dosing volume as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_target_dosing_duration_millis_negative_dosing_volume() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1041,6 +1084,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the actual dosing duration is calculated correctly
+    // considering only valid input values.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_actual_dosing_volume_happy_case() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1056,6 +1102,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the actual dosing duration is calculated correctly
+    // using zero dosing speed as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_actual_dosing_volume_zero_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1071,6 +1120,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the actual dosing duration is calculated correctly
+    // using negative dosing speed as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_actual_dosing_volume_negative_dosing_speed() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1086,6 +1138,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the actual dosing duration is calculated correctly
+    // using zero actual dosing duration as input.
+    // The test case does not require any communication with SQL database.
     pub fn test_calc_actual_dosing_volume_zero_actual_dosing_duration() {
         let balling_setval = BallingSetVal {
             pump_id: 1,
@@ -1097,11 +1152,12 @@ pub mod tests {
         assert_eq!(Balling::calc_actual_dosing_volume(&balling_setval, 0), 0.0);
     }
 
+    #[test]
     // Test case runs Balling dosing control and triggers inhibition by sending stop message.
     // After verification that Balling dosing is stopped,
     // test case sends start message and verifies if Balling dosing control
     // resumes operation.
-    #[test]
+    // Test case uses test database #06.
     pub fn test_messaging_stops_starts_balling_dosing() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let sleep_duration_7_secs = Duration::from_secs(7);

@@ -744,6 +744,8 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly processes the bit information into a byte array
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_byte_array() {
         let stimuli: [bool; 40] = [
             false, // initial interrupt - to be ignored
@@ -772,6 +774,8 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates a valid checksum.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_checksum_valid() {
         setup_logger();
 
@@ -783,6 +787,8 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates an invalid checksum.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_checksum_error() {
         setup_logger();
 
@@ -794,6 +800,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates the signals from the byte array
+    // given valid input data.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_signals_valid() {
         setup_logger();
 
@@ -812,6 +821,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates the signals from the byte array
+    // given invalid input data for the humidity.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_signals_humidity_too_high() {
         setup_logger();
 
@@ -824,6 +836,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates the signals from the byte array
+    // given invalid input data for the temperature.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_calc_signals_temperature_too_high() {
         setup_logger();
 
@@ -837,6 +852,8 @@ pub mod tests {
 
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[test]
+    // Test case executes a read operation from real hardware.
+    // Test case does not require any communication with SQL database.
     pub fn test_dht_read() {
         setup_logger();
 
@@ -872,6 +889,9 @@ pub mod tests {
     }
 
     #[test]
+    // Test case checks if the implementation correctly calculates the bit array from
+    // a sample set of GPIO pin timings.
+    // Test case does not require any communication with SQL database.
     pub fn test_calc_data_bits() {
         let stimuli: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX] = [
             0, 23, 51, 25, 51, 25, 51, 25, 51, 25, 51, 25, 51, 71, 51, 26, 51, 71, 51, 71, 51, 71,

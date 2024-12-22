@@ -187,7 +187,10 @@ impl AtlasScientific {
         }
     }
 
-    /// check if data logger sent command and respond
+    /// communication to data logger thread via channel
+    /// # Arguments
+    /// * `tx_to_data_logger` - reference to sender part of channel for sending data to data logger
+    /// * `rx_from_data_logger` - reference to receiver part of channel for receiving command from data logger
     fn communicate_with_data_logger(
         &mut self,
         tx_to_data_logger: &Sender<f32>,
@@ -270,7 +273,10 @@ impl AtlasScientific {
         };
     }
 
-    /// communication to ventilation thread via channel
+    /// communication to heating thread via channel
+    /// # Arguments
+    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
+    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
     fn communicate_with_ventilation(
         &mut self,
         tx_to_ventilation: &Sender<f32>,
@@ -355,6 +361,9 @@ impl AtlasScientific {
     }
 
     /// communication to heating thread via channel
+    /// # Arguments
+    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
+    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
     fn communicate_with_heating(
         &mut self,
         tx_to_heating: &Sender<f32>,
@@ -439,6 +448,9 @@ impl AtlasScientific {
     }
 
     /// communication with simulator thread via channel
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - reference to sender part of channel wrapped in Option for sending command to TcpCommunication
+    /// * `rx_from_tcp_opt` - reference to receiver part of channel wrapped in Option for receiving data from TcpCommunication
     fn communicate_with_simulator(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -468,6 +480,8 @@ impl AtlasScientific {
     }
 
     /// request execution of measurement by I2cInterface
+    /// # Arguments
+    /// * `tx_to_i2c_interface` - reference to sender part of channel for sending command to I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn send_request_to_i2c_interface(
         &mut self,
@@ -494,6 +508,8 @@ impl AtlasScientific {
     }
 
     /// receive and process response from I2cInterface
+    /// # Arguments
+    /// * `rx_from_i2c_interface` - reference to receiver part of channel for receiving data from I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_i2c_interface(
         &mut self,
@@ -565,6 +581,8 @@ impl AtlasScientific {
     /// * `rx_from_ventilation` - Receiver part of channel for communication from ventilation control
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
     /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
+    /// * `tx_atlas_scientific_to_i2c_interface_opt` - Sender part of channel wrapped in Option for communication to I2cInterface
+    /// * `rx_atlas_scientific_from_i2c_interface_opt` - Receiver part of channel wrapped in Option for communication from I2cInterface
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     pub fn execute(
@@ -737,4 +755,6 @@ pub mod tests {
     use crate::config::ConfigData;
     use crate::proc_ext_req::ProcessExternalRequestTrait;
     */
+
+    // @todo: add test cases
 }

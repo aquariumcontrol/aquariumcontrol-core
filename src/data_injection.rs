@@ -23,6 +23,10 @@ pub trait DataInjectionTrait {
 pub struct DataInjection;
 
 impl DataInjectionTrait for DataInjection {
+    /// Transfers the data provided as parameter to SQL database
+    /// # Arguments
+    /// * `data_frame` - Data to be transferred to SQL database
+    /// * `sql_interface_data` - Interface to SQL database
     fn inject_data(&mut self, data_frame: DataFrame, sql_interface_data: &mut SqlInterfaceData) {
         match sql_interface_data.write_data_frame_to_database(&data_frame) {
             Ok(()) => { /* do nothing */ }

@@ -933,7 +933,10 @@ pub mod tests {
     use mysql::prelude::Queryable;
 
     #[test]
-    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
+    // This test case checks
+    // - if required tables are existing
+    // - if current timestamp is local timestamp
+    // Test case uses test database #28.
     pub fn test_sql_interface() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
@@ -995,7 +998,11 @@ pub mod tests {
         "INSERT into version(major, minor, build, hash) values(:major, :minor, :build, :hash);";
 
     #[test]
-    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
+    // This test case checks
+    // - error response when querying empty table
+    // - error response when version information does not match entry in database
+    // - check error response when hash is incorrect
+    // Test case uses test database #29.
     pub fn test_sql_interface_version() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());

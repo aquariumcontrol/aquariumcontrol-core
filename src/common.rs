@@ -9,6 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    // Function checks if a given value is exceeding previous maximum value or
+    // if the given value is below previous minimum.
+    // Depending on the result, either previous minimum/maximum values are returned
+    // or one of the threholds is updated with the given value.
     pub fn update_min_max_actuation_duration(
         min_actuation_duration: u128,
         max_actuation_duration: u128,

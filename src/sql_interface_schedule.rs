@@ -229,8 +229,10 @@ pub mod tests {
     };
 
     #[test]
-    // reads entries from SQL database. Since schedule data in SQL database is not modified by application,
+    // Test case reads entries from SQL database.
+    // Since schedule data in SQL database is not modified by application,
     // results are compared to fixed references.
+    // Test case uses test database #39.
     pub fn test_sql_interface_schedule() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());

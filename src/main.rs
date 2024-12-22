@@ -78,7 +78,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 use std::time::Duration;
-use std::{fmt, env};
+use std::{env, fmt};
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -140,7 +140,7 @@ enum ConfigFileDefinitionError {
 }
 
 impl fmt::Display for ConfigFileDefinitionError {
-    /// Function provides output of the error messages wrapped by enum values 
+    /// Function provides output of the error messages wrapped by enum values
     /// # Arguments
     /// * `f` - configuration for formatting    
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -159,7 +159,6 @@ impl fmt::Display for ConfigFileDefinitionError {
 fn check_argument_for_valid_config_file_name(
     relative_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
-
     let out_dir = match env::var("CARGO_MANIFEST_DIR") {
         Ok(c) => c,
         Err(_) => {
@@ -320,11 +319,7 @@ fn main() {
             Ok(valid_file_name) => valid_file_name,
             Err(error_message) => {
                 // if user provided an invalid filename, output error message and abort
-                panic!(
-                    "{}: {}",
-                    LOG_TARGET_MAIN,
-                    error_message
-                );
+                panic!("{}: {}", LOG_TARGET_MAIN, error_message);
             }
         }
     } else {

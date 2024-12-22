@@ -333,7 +333,7 @@ pub mod tests {
 
     #[cfg(feature = "controllino_hw")]
     #[test]
-    // Actuates on real hardware.
+    // Test case actuates on real hardware.
     // Execution of this test case requires serial port connection to Controllino device.
     pub fn test_controllino_switch_on_off_pulse() {
         let sleep_duration_500_millisec = Duration::from_millis(500);
@@ -698,7 +698,7 @@ pub mod tests {
     }
 
     #[test]
-    /// Tests if invalid command is rejected when preparing message for Controllino
+    /// Test case tests if invalid command is rejected when preparing message for Controllino.
     pub fn test_create_message_invalid_command() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
@@ -712,7 +712,7 @@ pub mod tests {
     }
 
     #[test]
-    // Tests the implementation of the relay logic.
+    // Test case tests the implementation of the relay logic.
     // During the creation of the message to Controllino the application considers
     // if relay needs to bet set or unset to switch on/off a device.
     pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {

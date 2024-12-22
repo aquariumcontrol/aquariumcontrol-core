@@ -677,7 +677,8 @@ pub mod tests {
     }
 
     #[test]
-    /// all test cases for this crate combined in one function to avoid problems with multithreading
+    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #32.
     pub fn test_sql_interface_data() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());

@@ -702,7 +702,8 @@ pub mod tests {
                 (:timestamp,:profile_id,:profile_name,0,:repeat_daily);";
 
     #[test]
-    /// all test cases for this crate/SQL table combined in one function to avoid problems with multithreading
+    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #33.
     pub fn test_sql_interface_feedpattern() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
@@ -891,7 +892,8 @@ pub mod tests {
     }
 
     #[test]
-    /// all test cases for this crate/SQL table combined in one function to avoid problems with multithreading
+    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #34.
     pub fn test_sql_interface_feedlog() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
@@ -947,7 +949,8 @@ pub mod tests {
     }
 
     #[test]
-    /// all test cases for this crate combined in one function to avoid problems with multithreading
+    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #35.
     pub fn test_sql_interface_feedschedule() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());

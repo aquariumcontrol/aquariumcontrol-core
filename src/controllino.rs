@@ -383,6 +383,7 @@ impl Controllino {
     /// * `rx_from_feed` - receiver part of channel for communication from feed thread
     /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
+    /// * `actuator` - struct implementing RelayActuationTrait    
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
@@ -822,7 +823,7 @@ pub mod tests {
     }
 
     #[test]
-    // test the channel communication of the .execute function of Controllino
+    // Test case tests the channel communication of the .execute function of Controllino.
     pub fn test_controllino_channel_communication() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),

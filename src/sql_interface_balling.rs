@@ -207,7 +207,8 @@ pub mod tests {
         "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) values(:pump_id, :dosing_speed, :dosing_volume, :label);";
 
     #[test]
-    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
+    /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #30.    
     pub fn test_sql_interface_balling_events() {
         let pump_id = 1;
         let config: ConfigData =
@@ -293,7 +294,8 @@ pub mod tests {
     }
 
     #[test]
-    /// all test cases for this crate/table combined in one function to avoid problems with multithreading
+    /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case uses test database #31.    
     pub fn test_sql_interface_balling_setvals() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());

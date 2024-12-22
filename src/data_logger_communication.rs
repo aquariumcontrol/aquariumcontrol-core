@@ -16,7 +16,7 @@ use crate::water_injection::WaterInjection;
 
 const LOG_TARGET_DATA_LOGGER_COMMUNICATION: &str = "data_logger_communication";
 
-/// Trait for the communication to data logger use by Refill and WaterInjection
+/// Trait for the communication to data logger used by Refill and WaterInjection
 pub trait DataLoggerCommunicationTrait {
     /// wrapper function implemented individually for Refill and WaterInjection
     /// to allow access to the struct variables.

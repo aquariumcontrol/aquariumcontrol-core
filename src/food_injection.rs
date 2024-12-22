@@ -477,8 +477,11 @@ pub mod tests {
                 );
             }
         };
-        
-        println!("Received command {} for {} from test object", command, device);
+
+        println!(
+            "Received command {} for {} from test object",
+            command, device
+        );
 
         // send confirmation back
         match tx_controllino_to_feed.send(true) {

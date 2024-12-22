@@ -30,11 +30,10 @@ const LOG_TARGET_AMBIENT: &str = "ambient";
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 60;
 
+#[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-
-#[derive(Deserialize, Debug)]
 pub struct AmbientConfig {
     /// flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
@@ -154,6 +153,9 @@ impl Ambient {
     }
 
     /// communication to data logger thread via channel
+    /// # Arguments
+    /// * `tx_to_data_logger` - reference to sender part of channel for sending data to data logger
+    /// * `rx_from_data_logger` - reference to receiver part of channel for receiving command from data logger
     fn communicate_with_data_logger(
         &mut self,
         tx_to_data_logger: &Sender<f32>,
@@ -234,6 +236,9 @@ impl Ambient {
     }
 
     /// communication to heating thread via channel
+    /// # Arguments
+    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
+    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
     fn communicate_with_heating(
         &mut self,
         tx_to_heating: &Sender<f32>,
@@ -311,6 +316,9 @@ impl Ambient {
     }
 
     /// communication with simulator thread via channel
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - reference to sender part of channel wrapped in Option for sending command to TcpCommunication
+    /// * `rx_from_tcp_opt` - reference to receiver part of channel wrapped in Option for receiving data from TcpCommunication
     fn communicate_with_simulator(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -333,6 +341,8 @@ impl Ambient {
     }
 
     /// request execution of measurement by Dht
+    /// # Arguments
+    /// * `tx_to_dht` - reference to sender part of channel for sending command to Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn send_request_to_dht(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
         match tx_to_dht.try_send(InternalCommand::RequestSignal(
@@ -363,6 +373,8 @@ impl Ambient {
     }
 
     /// receive and process response from Dht
+    /// # Arguments
+    /// * `rx_from_dht` - reference to receiver part of channel for receiving data from Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_dht(
         &mut self,
@@ -629,7 +641,7 @@ pub mod tests {
     use crate::config::ConfigData;
 
     #[test]
-    // test case verifies if the test object is processing the interfaces correctly
+    // Test case verifies if the test object is processing the interfaces correctly.
     pub fn ambient_interfaces() {
         // channels for communication with test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();

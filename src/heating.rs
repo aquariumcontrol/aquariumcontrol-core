@@ -1109,9 +1109,10 @@ pub mod tests {
         (config, Heating::new(heating_config, sql_interface_heating))
     }
 
+    #[test]
     // Check if the heater remains switched off with high temperature.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
-    #[test]
+    // Test case uses test database #11.
     pub fn test_heating_with_measured_temperature_high() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1318,10 +1319,11 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    #[test]
     // Check if the heater is switched on and is not switched off with low temperature.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Check if the heater is switched off after sending Quit command and before sending Terminate command.
-    #[test]
+    // Test case uses test database #12.
     pub fn test_heating_with_measured_temperature_low() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1533,10 +1535,11 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    #[test]
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
     // Duration of heater switched on shall equal duration of heater switched off (1% tolerance).
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
-    #[test]
+    // Test case uses test database #13.
     pub fn test_heating_with_measured_temperature_50_percent() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1868,9 +1871,10 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // checks if the Quit command is correctly processed
-    // - application shall switch off heater before exiting
     #[test]
+    // Test case checks if the Quit command is correctly processed
+    // - application shall switch off heater before exiting
+    // Test case uses test database #14.
     pub fn test_heating_with_pending_quit_terminate_command() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -2087,8 +2091,9 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
+    // Test case checks if waiting for midnight and statistical calculations are computed correctly.
+    // Test case uses test database #15.
     pub fn test_heating_wait_for_midnight_calc_stats_heater_on() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -2415,8 +2420,9 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // checks if waiting for midnight and statistical calculations are computed correctly
     #[test]
+    // Test case checks if waiting for midnight and statistical calculations are computed correctly
+    // Test case uses test database #16.
     pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -2743,8 +2749,9 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // Checks if negative schedule checker result is processed correctly
     #[test]
+    // Test case checks if negative schedule checker result is processed correctly.
+    // Test case uses test database #17.
     pub fn test_heating_blocked_by_schedule() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -2950,8 +2957,9 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // checks if component protection is executed
     #[test]
+    // Test case checks if component protection is executed.
+    // Test case uses test database #18.
     pub fn test_heating_component_protection_when_tank_level_low() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -3163,11 +3171,12 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    #[test]
     // Test case runs heating control and triggers inhibition by sending stop message via channel.
     // After verification that heating is stopped,
     // test case sends start message via channel and verifies if heating control
     // resumes operation.
-    #[test]
+    // Test case uses test database #19.
     pub fn test_messaging_stops_starts_heating() {
         let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600);
 
