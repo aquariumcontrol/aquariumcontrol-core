@@ -71,12 +71,14 @@ use log::debug;
 
 use spin_sleep::SpinSleeper;
 use std::panic;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::scope;
 use std::time::Duration;
+use std::fmt;
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -129,6 +131,78 @@ cfg_if::cfg_if! {
 }
 
 const LOG_TARGET_MAIN: &str = "main";
+
+enum ConfigFileDefinitionError {
+    NotAbsolutePath(String),
+    PathDoesNotExist(String),
+    IsNotAFile(String),
+    FileNameHasNoSuffix(String),
+    SuffixIsNotToml(String),
+}
+
+impl fmt::Display for ConfigFileDefinitionError {
+    /// Function provides output of the error messages wrapped by enum values 
+    /// # Arguments
+    /// * `f` - configuration for formatting    
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ConfigFileDefinitionError::NotAbsolutePath(c) => write!(f, "{}", c),
+            ConfigFileDefinitionError::PathDoesNotExist(c) => write!(f, "{}", c),
+            ConfigFileDefinitionError::IsNotAFile(c) => write!(f, "{}", c),
+            ConfigFileDefinitionError::FileNameHasNoSuffix(c) => write!(f, "{}", c),
+            ConfigFileDefinitionError::SuffixIsNotToml(c) => write!(f, "{}", c),
+        }
+    }
+}
+
+/// check if the string provided as contains a valid file name to be used as configuration file
+/// # Arguments    
+/// * `config_file_name` - reference to string provided by command line parameter
+fn check_argument_for_valid_config_file_name(
+    config_file_name: &str,
+) -> Result<String, ConfigFileDefinitionError> {
+    let path = Path::new(config_file_name);
+
+    if !path.is_absolute() {
+        return Err(ConfigFileDefinitionError::NotAbsolutePath(
+            "The provided argument for the configuration file is not an absolute path. It does not start with '/'."
+            .to_string()
+        ));
+    }
+
+    if !path.exists() {
+        return Err(ConfigFileDefinitionError::PathDoesNotExist(
+            "The provided argument for the configuration file is not an existing file system entry."
+            .to_string()
+        ));
+    }
+
+    if !path.is_file() {
+        return Err(ConfigFileDefinitionError::IsNotAFile(
+            "The provided argument for the configuration file is not pointing to a file."
+                .to_string(),
+        ));
+    }
+
+    match path.extension() {
+        Some(extension) => {
+            if extension == "toml" {
+                return Ok(String::from(config_file_name));
+            } else {
+                return Err(ConfigFileDefinitionError::SuffixIsNotToml(
+                    "The provided argument for the configuration file does not have extension '.toml'."
+                    .to_string()
+                ));
+            }
+        }
+        None => {
+            return Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
+                "The provided argument for the configuration file does not have any extension."
+                    .to_string(),
+            ));
+        }
+    }
+}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// creates the channels and sets up threads.
@@ -232,10 +306,32 @@ fn main() {
     // setup logging to write to log output file and stdout
     setup_logger();
 
-    // read configuration file for operating the control system
-    let config = read_config_file("/config/aquarium_control.toml".to_string());
+    // get command line parameters from OS
+    let args: Vec<String> = std::env::args().collect();
 
-    // publish the PID to a file so that client application can communicate with this appcliation
+    let config_file_name: String;
+
+    if args.len() > 1 {
+        // if first argument contains a path and file name, then let's use that
+        config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
+            Ok(valid_file_name) => valid_file_name,
+            Err(error_message) => {
+                // if user provided an invalid filename, output error message and abort
+                panic!(
+                    "{}: {}",
+                    LOG_TARGET_MAIN,
+                    error_message
+                );
+            }
+        }
+    } else {
+        // use standard file name
+        config_file_name = "/config/aquarium_control.toml".to_string();
+    }
+    // read configuration file for operating the control system
+    let config = read_config_file(config_file_name);
+
+    // publish the PID to a file so that client application can communicate with this application
     let publish_pid = PublishPid::new(config.publish_pid);
     let publish_pid_clone = publish_pid.clone();
 
@@ -314,7 +410,7 @@ fn main() {
             );
             if c != version_information.hash {
                 warn!(
-                    target: LOG_TARGET_MAIN,                
+                    target: LOG_TARGET_MAIN,
                     "hash value for version in database does not match hash version of executable. Proceed with caution.");
             }
         }
