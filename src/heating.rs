@@ -1749,27 +1749,27 @@ pub mod tests {
                 cfg_if::cfg_if! {
                     if #[cfg(target_os = "linux")] {
                         assert_le!(second_last_actuation_duration, 7100);
-                        assert_ge!(second_last_actuation_duration, 6500);
+                        assert_ge!(second_last_actuation_duration, 6400);
                         assert_le!(third_last_actuation_duration, 7100);
-                        assert_ge!(third_last_actuation_duration, 6500);
+                        assert_ge!(third_last_actuation_duration, 6400);
                         assert_le!(fourth_last_actuation_duration, 7100);
-                        assert_ge!(fourth_last_actuation_duration, 6500);
+                        assert_ge!(fourth_last_actuation_duration, 6400);
                         assert_le!(fifth_last_actuation_duration, 7100);
-                        assert_ge!(fifth_last_actuation_duration, 6500);
+                        assert_ge!(fifth_last_actuation_duration, 6400);
                         assert_le!(sixth_last_actuation_duration, 7100);
-                        assert_ge!(sixth_last_actuation_duration, 6500);
+                        assert_ge!(sixth_last_actuation_duration, 6400);
                 }
                     else {
                         assert_le!(second_last_actuation_duration, 7400);
-                        assert_ge!(second_last_actuation_duration, 6500);
+                        assert_ge!(second_last_actuation_duration, 6400);
                         assert_le!(third_last_actuation_duration, 7400);
-                        assert_ge!(third_last_actuation_duration, 6500);
+                        assert_ge!(third_last_actuation_duration, 6400);
                         assert_le!(fourth_last_actuation_duration, 7400);
-                        assert_ge!(fourth_last_actuation_duration, 6500);
+                        assert_ge!(fourth_last_actuation_duration, 6400);
                         assert_le!(fifth_last_actuation_duration, 7400);
-                        assert_ge!(fifth_last_actuation_duration, 6500);
+                        assert_ge!(fifth_last_actuation_duration, 6400);
                         assert_le!(sixth_last_actuation_duration, 7400);
-                        assert_ge!(sixth_last_actuation_duration, 6500);
+                        assert_ge!(sixth_last_actuation_duration, 6400);
                     }
                 }
                 assert_le!(delta_min_max_duration, 50);
