@@ -174,13 +174,12 @@ impl Feed {
                 }
             }
             Err(e) => {
-                
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_FEED,
                     "Error when reading feed pattern from database: {e:?}"
                 );
-                
+
                 Err(())
             }
         };
@@ -600,14 +599,13 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        
+
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
-        
+
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
-
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -729,11 +727,11 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        
+
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
-        
+
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
-        
+
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
@@ -1138,11 +1136,11 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        
+
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
-        
+
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
-        
+
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 
@@ -1267,11 +1265,11 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        
+
         let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
-        
+
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
-        
+
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(sql_interface_feed_unboxed);
 

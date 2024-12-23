@@ -397,20 +397,19 @@ impl Balling {
                 }
 
                 // debug information
-                #[cfg(feature = "debug_balling")] {
+                #[cfg(feature = "debug_balling")]
+                {
                     // output countdowns every 10 seconds
-                    if loop_counter % 100 == 0 {
-                        debug!(
-                            target: LOG_TARGET_BALLING,
-                            "countdown 1 = {}, countdown 2 = {}, countdown 3 = {}, countdown 4 = {}",
-                            self.countdown_dosing_pump1,    
-                            self.countdown_dosing_pump2,    
-                            self.countdown_dosing_pump3,    
-                            self.countdown_dosing_pump4,    
-                        );
-                    }
+                    debug!(
+                        target: LOG_TARGET_BALLING,
+                        "countdown 1 = {}, countdown 2 = {}, countdown 3 = {}, countdown 4 = {}",
+                        self.countdown_dosing_pump1,
+                        self.countdown_dosing_pump2,
+                        self.countdown_dosing_pump3,
+                        self.countdown_dosing_pump4,
+                    );
                 }
-                
+
                 //*** Peristaltic pump 1 ***
                 if self.countdown_dosing_pump1 <= 0 && self.config.pump1_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -434,7 +433,7 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump1 > 0 {
-                        self.countdown_dosing_pump1 -= 1;
+                        self.countdown_dosing_pump1 -= self.config.schedule_check_interval;
                     }
                 }
                 //*** Peristaltic pump 2 ***
@@ -460,7 +459,7 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
-                        self.countdown_dosing_pump2 -= 1;
+                        self.countdown_dosing_pump2 -= self.config.schedule_check_interval;
                     }
                 }
                 //*** Peristaltic pump 3 ***
@@ -486,7 +485,7 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump3 > 0 {
-                        self.countdown_dosing_pump3 -= 1;
+                        self.countdown_dosing_pump3 -= self.config.schedule_check_interval;
                     }
                 }
                 //*** Peristaltic pump 4 ***
@@ -512,7 +511,7 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump4 > 0 {
-                        self.countdown_dosing_pump4 -= 1;
+                        self.countdown_dosing_pump4 -= self.config.schedule_check_interval;
                     }
                 }
             }

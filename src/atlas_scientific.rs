@@ -487,7 +487,7 @@ impl AtlasScientific {
         &mut self,
         tx_to_i2c_interface: &Sender<InternalCommand>,
     ) -> bool {
-        match tx_to_i2c_interface.try_send(InternalCommand::RequestSignal(
+        match tx_to_i2c_interface.send(InternalCommand::RequestSignal(
             AquariumSignal::WaterTemperature,
         )) {
             Ok(()) => {
