@@ -456,7 +456,7 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
-                        self.countdown_dosing_pump2 = self.self.config.dosing_interval_pump2;
+                        self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                     }
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
