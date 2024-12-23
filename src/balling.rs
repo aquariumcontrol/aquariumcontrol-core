@@ -411,7 +411,7 @@ impl Balling {
                 }
 
                 //*** Peristaltic pump 1 ***
-                if self.countdown_dosing_pump1 <= 0 && self.config.pump1_active {
+                if self.countdown_dosing_pump1 == 0 && self.config.pump1_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -433,11 +433,12 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump1 > 0 {
-                        self.countdown_dosing_pump1 -= self.config.schedule_check_interval;
+                        self.countdown_dosing_pump1 = self.countdown_dosing_pump1.saturating_sub(
+                            self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 2 ***
-                if self.countdown_dosing_pump2 <= 0 && self.config.pump2_active {
+                if self.countdown_dosing_pump2 == 0 && self.config.pump2_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -455,7 +456,8 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
-                        self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
+                        self.countdown_dosing_pump2 = self.countdown_dosing_pump2.saturating_sub(
+                            self.config.dosing_interval_pump2);
                     }
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
@@ -463,7 +465,7 @@ impl Balling {
                     }
                 }
                 //*** Peristaltic pump 3 ***
-                if self.countdown_dosing_pump3 <= 0 && self.config.pump3_active {
+                if self.countdown_dosing_pump3 == 0 && self.config.pump3_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -485,11 +487,12 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump3 > 0 {
-                        self.countdown_dosing_pump3 -= self.config.schedule_check_interval;
+                        self.countdown_dosing_pump3 = self.countdown_dosing_pump3.saturating_sub(
+                            self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 4 ***
-                if self.countdown_dosing_pump4 <= 0 && self.config.pump4_active {
+                if self.countdown_dosing_pump4 == 0 && self.config.pump4_active {
                     if schedule_check_result && !dosing_inhibited {
                         // inner scope to limit lifetime of unlocked mutex
                         {
@@ -511,7 +514,8 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump4 > 0 {
-                        self.countdown_dosing_pump4 -= self.config.schedule_check_interval;
+                        self.countdown_dosing_pump4 = self.countdown_dosing_pump4.saturating_sub(
+                            self.config.schedule_check_interval);
                     }
                 }
             }
