@@ -30,6 +30,10 @@ const LOG_TARGET_AMBIENT: &str = "ambient";
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 60;
 
+// max loops for receiving when quit command has been received
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+const RECEIVE_COUNTER_MAX: u32 = 10;
+
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
@@ -463,11 +467,10 @@ impl Ambient {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        #[cfg(feature = "debug_ambient")]
-        let mut receive_counter: u32 = 0;
-
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut state_send_receive: bool = false;
+        #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut state_send_receive: bool = false;
+            let mut receive_counter: u32 = 0;
+        }
 
         // initialize signals with replacement values
         self.ambient_temperature = self.config.replacement_value_ambient_temperature;
@@ -503,8 +506,20 @@ impl Ambient {
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
-            if quit_command_received {
-                break;
+           
+            cfg_if::cfg_if! {
+                if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+                    if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
+                        // quit command has been received and there is no pending measurement
+                        // no further waiting for Dht is required
+                        break;
+                    }
+                }
+                else {
+                    if quit_command_received {
+                        break;
+                    }                            
+                }
             }
 
             if measurement_countdown > 0 {
@@ -537,19 +552,23 @@ impl Ambient {
                                 if !state_send_receive {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                                    receive_counter = 0;
+                                }
+                                else {
+                                    receive_counter += 1;                                    
                                 }
 
                                 #[cfg(feature = "debug_ambient")]
                                 {
-                                    if receive_counter % 10 == 0 {
+                                    if (receive_counter % 10 == 0) && state_send_receive {
                                         debug!(
                                             target: LOG_TARGET_AMBIENT,
                                             "tried to receive from Dht (counter={})",
                                             receive_counter
                                         );
                                     }
-                                    receive_counter += 1;
                                 }
+                                 
                             }
                         }
                     }

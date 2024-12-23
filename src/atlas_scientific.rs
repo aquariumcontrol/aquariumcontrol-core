@@ -26,6 +26,10 @@ const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 1;
 
+// max loops for receiving when quit command has been received
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+const RECEIVE_COUNTER_MAX: u32 = 10;
+
 /// Holds the configuration data for the Atlas Scientific sensor communication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -606,9 +610,11 @@ impl AtlasScientific {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut state_send_receive: bool = false;
-
+        #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut state_send_receive: bool = false;
+            let mut receive_counter: u32 = 0;
+        }
+        
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
             || rx_atlas_scientific_from_i2c_interface_opt.is_some()
@@ -638,8 +644,20 @@ impl AtlasScientific {
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
-            if quit_command_received {
-                break;
+            
+            cfg_if::cfg_if! {
+                if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+                    if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
+                        // quit command has been received and there is no pending measurement
+                        // no further waiting for Dht is required
+                        break;
+                    }
+                }
+                else {
+                    if quit_command_received {
+                        break;
+                    }                            
+                }
             }
 
             if measurement_countdown > 0 {
@@ -668,6 +686,10 @@ impl AtlasScientific {
                                 if !state_send_receive {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                                    receive_counter = 0;
+                                }
+                                else {
+                                    receive_counter += 1;                                    
                                 }
                             }
                         }
