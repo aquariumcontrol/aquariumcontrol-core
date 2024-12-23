@@ -66,6 +66,11 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_WRITE_BALLING_EVENT: &str =
         "INSERT into ballingdosinglog(Timestamp, pumpid, dosingvolume) values(:timestamp, :pump_id, :dosing_volume);";
 
+    #[cfg(test)]
+    /// Inserts a Balling pump configuration to the database.    
+    pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str =
+        "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) values(:pump_id, :dosing_speed, :dosing_volume, :label);";
+
     /// Provides the Balling dosing pump configuration for one of the pumps.
     pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
         "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
@@ -196,6 +201,56 @@ pub mod sql_query_strings {
     pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str =
         "INSERT into feedschedule (Timestamp, ProfileId, ProfileName, IsWeekly, IsDaily) \
          values(:timestamp, :profile_id, :profile_name, :is_weekly, :is_daily)";
+
+    /// This query is used for testing: It creates a first feed pattern.
+    #[cfg(test)]
+    pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST1: &str = "INSERT INTO feedpatterns VALUES \
+                (:profile_id,'test',\
+                0,1,0,0,0,0,\
+                1,0,1,0,0,0,\
+                2,0,0,1,0,0,\
+                3,0,0,0,1,0,\
+                4,0,0,0,0,1,\
+                5,1,1,0,0,0,\
+                6,1,0,1,0,0,\
+                7,1,0,0,1,0,\
+                8,1,0,0,0,1,\
+                9,1,1,1,0,0,\
+                10,1,1,0,1,0,\
+                11,1,1,0,0,1,\
+                12,1,1,1,1,0,\
+                13,1,1,1,0,1,\
+                14,1,1,1,1,1,\
+                15,1,1,1,1,0,\
+                16,1,1,1,0,0,\
+                17,1,1,0,0,0,\
+                18,1,0,0,0,0,\
+                19,0,0,0,0,0);";
+
+    /// This query is used for testing: It creates a second feed pattern.
+    #[cfg(test)]
+    pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST2: &str = "INSERT INTO feedpatterns VALUES \
+                (:profile_id,'second',\
+                1,1,1,1,1,1,\
+                1,1,1,1,1,1,\
+                2,2,2,2,2,2,\
+                2,2,2,2,2,2,\
+                3,3,3,3,3,3,\
+                3,3,3,3,3,3,\
+                4,4,4,4,4,4,\
+                4,4,4,4,4,4,\
+                5,5,5,5,5,5,\
+                5,5,5,5,5,5,\
+                6,6,6,6,6,6,\
+                6,6,6,6,6,6,\
+                7,7,7,7,7,7,\
+                7,7,7,7,7,7,\
+                8,8,8,8,8,8,\
+                8,8,8,8,8,8,\
+                9,9,9,9,9,9,\
+                9,9,9,9,9,9,\
+                1,1,1,1,1,1,\
+                1,1,1,1,1,1);";
 }
 
 /// This struct holds the configuration data for the SQL interface.
@@ -278,6 +333,8 @@ pub enum SqlInterfaceError {
     TruncateTableFailure(String),
     #[cfg(test)]
     MockError,
+    #[cfg(test)]
+    InsertBallingPumpConfigurationFailure(String),
 }
 
 /// Holds the configuration and the implementation of the SQL interface.
@@ -924,7 +981,7 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::config::read_config_file;
+    use crate::config::read_config_file_with_test_database;
     use crate::config::ConfigData;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::version_information::VersionInformation;
@@ -938,8 +995,10 @@ pub mod tests {
     // - if current timestamp is local timestamp
     // Test case uses test database #28.
     pub fn test_sql_interface() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            28,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let database_name_from_config = config.sql_interface.db_name.clone();
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
@@ -1004,8 +1063,10 @@ pub mod tests {
     // - check error response when hash is incorrect
     // Test case uses test database #29.
     pub fn test_sql_interface_version() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            29,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");

@@ -595,8 +595,7 @@ pub mod tests {
     use crate::balling::LOG_TARGET_BALLING;
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file, read_config_file_with_test_database, ConfigData};
     use crate::mineral_injection::MineralInjectionTrait;
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_balling::BallingSetVal;
@@ -714,8 +713,11 @@ pub mod tests {
     // As prerequisite for this test case, an empty empty dosing log is required.
     // Test cases uses test database #01.
     pub fn test_balling_initialization_empty_dosing_log() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling_empty.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_balling_empty.toml".to_string(),
+            1,
+        );
+
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -798,8 +800,11 @@ pub mod tests {
     // a dosing log in SQL database which has entries for all pumps.
     // Test case uses test database #02.
     pub fn test_balling_initialization_full_dosing_log() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling_1.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_balling_1.toml".to_string(),
+            2,
+        );
+
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -822,10 +827,77 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
+    // inserts a set of pump configurations to the database
+    fn insert_pump_configurations(
+        sql_interface: &mut SqlInterface,
+        sql_interface_balling: &mut SqlInterfaceBalling,
+        pump1: bool,
+        pump2: bool,
+        pump3: bool,
+        pump4: bool,
+    ) {
+        // empty the Balling pump configuration table
+        match SqlInterface::truncate_table(sql_interface, "ballingsetvals".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+        if pump1 {
+            match sql_interface_balling.insert_pump_configuration(1, 4.0, 1.0, "pump1".to_string())
+            {
+                Ok(()) => { /* do nothing */ }
+                Err(e) => {
+                    panic!(
+                        "{}: Could not insert pump 1 configuration ({e:?})",
+                        LOG_TARGET_BALLING,
+                    );
+                }
+            }
+        }
+        if pump2 {
+            match sql_interface_balling.insert_pump_configuration(2, 4.0, 1.0, "pump2".to_string())
+            {
+                Ok(()) => { /* do nothing */ }
+                Err(e) => {
+                    panic!(
+                        "{}: Could not insert pump 2 configuration ({e:?})",
+                        LOG_TARGET_BALLING,
+                    );
+                }
+            }
+        }
+        if pump3 {
+            match sql_interface_balling.insert_pump_configuration(3, 4.0, 1.0, "pump3".to_string())
+            {
+                Ok(()) => { /* do nothing */ }
+                Err(e) => {
+                    panic!(
+                        "{}: Could not insert pump 3 configuration ({e:?})",
+                        LOG_TARGET_BALLING,
+                    );
+                }
+            }
+        }
+        if pump4 {
+            match sql_interface_balling.insert_pump_configuration(4, 4.0, 1.0, "pump4".to_string())
+            {
+                Ok(()) => { /* do nothing */ }
+                Err(e) => {
+                    panic!(
+                        "{}: Could not insert pump 4 configuration ({e:?})",
+                        LOG_TARGET_BALLING,
+                    );
+                }
+            }
+        }
+    }
+
     // This function executes the test object and test environment in separate threads.
     // The test case depends on the configuration and reference values provided for asserts.
     pub fn test_balling_dosing(
         config_file_name: &str,
+        test_db_number: u32,
         schedule_allows: bool,
         execution_count_reference: i32,
         duration_millis: u64,
@@ -836,7 +908,9 @@ pub mod tests {
     ) {
         let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
         let spin_sleeper_test_environment = SpinSleeper::default();
-        let config: ConfigData = read_config_file(config_file_name.to_string());
+        let config: ConfigData =
+            read_config_file_with_test_database(config_file_name.to_string(), test_db_number);
+
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -846,6 +920,14 @@ pub mod tests {
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            pump1_engagement_durations_reference > 0,
+            pump2_engagement_durations_reference > 0,
+            pump3_engagement_durations_reference > 0,
+            pump4_engagement_durations_reference > 0,
+        );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
@@ -946,6 +1028,7 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_2.toml",
+            3,     // index for determining test data base
             true,  // schedule allows
             1,     // execution count
             10000, // maximum time in milliseconds for test execution
@@ -964,6 +1047,7 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_3.toml",
+            4,     // index for determining test data base
             false, // schedule does not allow
             0,     // execution count
             10000, // maximum time in milliseconds for test execution
@@ -983,6 +1067,7 @@ pub mod tests {
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
             "/config/aquarium_control_test_balling_multiple_dosings.toml",
+            5,     // index for determining test data base
             true,  // schedule allows
             14,    // execution count
             19000, // maximum time in milliseconds for test execution
@@ -1164,8 +1249,10 @@ pub mod tests {
         let sleep_duration_2_secs = Duration::from_secs(2);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling_4.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_balling_4.toml".to_string(),
+            6,
+        );
 
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1173,7 +1260,7 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // empty the Balling dosing log table
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
@@ -1182,6 +1269,16 @@ pub mod tests {
                 panic!("Could not prepare test case: {e:?}")
             }
         }
+
+        // insert a valid pump configuration for pump #1
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            false,
+            false,
+            false,
+        );
 
         // create test objects
         let mut balling = Balling::new(config.balling, sql_interface_balling);

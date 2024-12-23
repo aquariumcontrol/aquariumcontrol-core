@@ -131,6 +131,7 @@ impl Feed {
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
         // load feed pattern from database
+        #[allow(unused_variables)]
         let result = match self
             .sql_interface_feed
             .get_single_feedpattern_from_database(profile_id)
@@ -173,10 +174,13 @@ impl Feed {
                 }
             }
             Err(e) => {
+                
+                #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_FEED,
                     "Error when reading feed pattern from database: {e:?}"
                 );
+                
                 Err(())
             }
         };
@@ -502,8 +506,7 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file, read_config_file_with_test_database, ConfigData};
     use crate::feed::Feed;
     use crate::feed::LOG_TARGET_FEED;
     use crate::feedpattern::Feedpattern;
@@ -515,6 +518,7 @@ pub mod tests {
     use crate::sql_interface_feed::SqlInterfaceFeed;
 
     use crate::mock::tests::MockSqlInterfaceFeed;
+    use crate::sql_interface_feed::tests::insert_feed_patterns;
 
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,
@@ -585,8 +589,10 @@ pub mod tests {
 
         let mut mock_food_injection = MockFoodInjection::new();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_feed.toml".to_string(),
+            7,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -594,8 +600,14 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        
+        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+            Box::new(sql_interface_feed_unboxed);
+
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -706,8 +718,10 @@ pub mod tests {
 
         setup_logger();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed_secondary.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_feed_secondary.toml".to_string(),
+            8,
+        );
 
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -715,8 +729,13 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        
+        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+            Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -1108,8 +1127,10 @@ pub mod tests {
 
         let mut mock_food_injection = MockFoodInjection::new();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed_quaternary.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_feed_quaternary.toml".to_string(),
+            9,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1117,8 +1138,13 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        
+        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+            Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
@@ -1230,8 +1256,10 @@ pub mod tests {
 
         let mut mock_food_injection = MockFoodInjection::new();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed_quinary.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_feed_quinary.toml".to_string(),
+            10,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1239,8 +1267,13 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
+        
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        
+        insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
+        
         let mut sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-            Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+            Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {

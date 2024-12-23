@@ -242,8 +242,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
 pub mod tests {
     use mysql::prelude::Queryable;
 
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sql_interface_refill::SqlInterfaceRefill;
@@ -267,8 +266,10 @@ pub mod tests {
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.
     // Test case uses test database #37.
     pub fn test_sql_interface_refill() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            37,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");

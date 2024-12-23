@@ -221,8 +221,7 @@ impl SqlInterfaceSchedule {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_schedule::{
         ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
@@ -232,10 +231,12 @@ pub mod tests {
     // Test case reads entries from SQL database.
     // Since schedule data in SQL database is not modified by application,
     // results are compared to fixed references.
-    // Test case uses test database #39.
+    // Test case uses test database #38.
     pub fn test_sql_interface_schedule() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            38,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");

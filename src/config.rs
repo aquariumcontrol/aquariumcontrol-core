@@ -38,6 +38,8 @@ use crate::sql_interface::SqlInterfaceConfig;
 use crate::tcp_communication::TcpConnectionConfig;
 use crate::ventilation::VentilationConfig;
 
+const LOG_TARGET_CONFIG: &str = "config";
+
 /// Top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.
 #[derive(Deserialize)]
@@ -107,8 +109,6 @@ pub struct ConfigData {
 /// # Arguments:
 /// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 pub fn read_config_file(relative_path: String) -> ConfigData {
-    const LOG_TARGET_CONFIG: &str = "config";
-
     let out_dir = match env::var("CARGO_MANIFEST_DIR") {
         Ok(c) => c,
         Err(_) => {
@@ -154,4 +154,28 @@ pub fn read_config_file(relative_path: String) -> ConfigData {
             );
         }
     }
+}
+
+#[cfg(test)]
+pub fn read_config_file_with_test_database(
+    relative_path: String,
+    test_db_number: u32,
+) -> ConfigData {
+    if test_db_number == 0 || test_db_number > 99 {
+        panic!(
+            "{}: number for test database ({}) is out of bounds.",
+            LOG_TARGET_CONFIG, test_db_number
+        )
+    }
+
+    // assemble the test database name with prefix and index.
+    let test_db_name: String = "aquarium_test_".to_string() + &format!("{:02}", test_db_number);
+
+    let mut config = read_config_file(relative_path);
+
+    // replace data base name from configuration file with the test data base name
+    // required by the test case
+    config.sql_interface.db_name = test_db_name;
+
+    config
 }

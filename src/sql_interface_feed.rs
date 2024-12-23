@@ -652,12 +652,11 @@ pub mod tests {
     use mysql::params;
     use mysql::prelude::Queryable;
 
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-    use crate::sql_interface_feed::FeedScheduleEntry;
-    use crate::sql_interface_feed::SqlInterfaceFeed;
+    use crate::sql_interface_feed::{
+        DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed,
+    };
 
     pub struct SqlFeedEvent {
         timestamp: String,
@@ -673,40 +672,52 @@ pub mod tests {
         feed_profile_id: i32,
     }
 
-    /// This query is used for testing: It creates a feed pattern. It is used only by tests of this crate, therefore it resides here.
-    pub const SQL_QUERY_WRITE_FEEDPATTERN: &str = "INSERT INTO feedpatterns VALUES \
-                (:profile_id,'test',\
-                0,1,0,0,0,0,\
-                1,0,1,0,0,0,\
-                2,0,0,1,0,0,\
-                3,0,0,0,1,0,\
-                4,0,0,0,0,1,\
-                5,1,1,0,0,0,\
-                6,1,0,1,0,0,\
-                7,1,0,0,1,0,\
-                8,1,0,0,0,1,\
-                9,1,1,1,0,0,\
-                10,1,1,0,1,0,\
-                11,1,1,0,0,1,\
-                12,1,1,1,1,0,\
-                13,1,1,1,0,1,\
-                14,1,1,1,1,1,\
-                15,1,1,1,1,0,\
-                16,1,1,1,0,0,\
-                17,1,1,0,0,0,\
-                18,1,0,0,0,0,\
-                19,0,0,0,0,0);";
-
-    /// This query is used for testing: It creates a feed schedule entry. It is used only by tests of this crate, therefore it resides here.
-    pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str = "INSERT INTO feedschedule VALUES \
-                (:timestamp,:profile_id,:profile_name,0,:repeat_daily);";
+    // helper function to prepare test cases for feed
+    pub fn insert_feed_patterns(
+        sql_interface: &mut SqlInterface,
+        sql_interface_feed: &mut SqlInterfaceFeed,
+    ) {
+        // remove all feed patterns
+        match SqlInterface::truncate_table(sql_interface, "feedpatterns".to_string()) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        // insert test feed profile #1
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST1.to_string();
+        match sql_interface_feed.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "profile_id" => 1,
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting test feed pattern #1 into database: {e:?}");
+            }
+        };
+        // insert test feed profile #2
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST2.to_string();
+        match sql_interface_feed.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "profile_id" => 2,
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting test feed pattern #2 into database: {e:?}");
+            }
+        };
+    }
 
     #[test]
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.
     // Test case uses test database #33.
     pub fn test_sql_interface_feedpattern() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            33,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
@@ -737,7 +748,7 @@ pub mod tests {
 
         // *** check retrieving of existing feed pattern - FAIL *********************************
         // prepare database: insert feed profile
-        let sql_query_string = SQL_QUERY_WRITE_FEEDPATTERN.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST1.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -895,8 +906,10 @@ pub mod tests {
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.
     // Test case uses test database #34.
     pub fn test_sql_interface_feedlog() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            34,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
@@ -952,8 +965,10 @@ pub mod tests {
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.
     // Test case uses test database #35.
     pub fn test_sql_interface_feedschedule() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            35,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
@@ -980,14 +995,15 @@ pub mod tests {
         let profile_name_reference = "test";
         let repeat_daily_reference = true;
 
-        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
             "timestamp" => timestamp_reference,
             "profile_id" => profile_id_reference,
             "profile_name" => profile_name_reference,
-            "repeat_daily" => repeat_daily_reference,
+            "is_weekly" => false,
+            "is_daily" => repeat_daily_reference,
             },
         ) {
             Ok(_) => {}
@@ -1123,14 +1139,15 @@ pub mod tests {
         let profile_name_0 = "test0";
         let repeat_daily_0 = true;
 
-        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
                 "timestamp" => timestamp_0,
                 "profile_id" => profile_id_0,
                 "profile_name" => profile_name_0,
-                "repeat_daily" => repeat_daily_0,
+                "is_weekly" => false,
+                "is_daily" => repeat_daily_0,
             },
         ) {
             Ok(_) => {}
@@ -1144,14 +1161,15 @@ pub mod tests {
         let profile_name_1 = "test1";
         let repeat_daily_1 = true;
 
-        let sql_query_string = SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
                 "timestamp" => timestamp_1,
                 "profile_id" => profile_id_1,
                 "profile_name" => profile_name_1,
-                "repeat_daily" => repeat_daily_1,
+                "is_weekly" => false,
+                "is_daily" => repeat_daily_1,
             },
         ) {
             Ok(_) => {}

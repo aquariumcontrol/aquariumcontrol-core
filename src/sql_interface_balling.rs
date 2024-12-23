@@ -178,6 +178,37 @@ impl SqlInterfaceBalling {
         }
         Ok(single_balling_setval_array.remove(0))
     }
+
+    #[cfg(test)]
+    pub fn insert_pump_configuration(
+        &mut self,
+        pump_id: i64,
+        dosing_speed: f32,
+        dosing_volume: f32,
+        label: String,
+    ) -> Result<(), SqlInterfaceError> {
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+        match self.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "pump_id" => pump_id,
+            "dosing_speed" => dosing_speed,
+            "dosing_volume" => dosing_volume,
+            "label" => label,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!(
+                    target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
+                    "could not insert Balling pump configuration into database ({e:?})"
+                );
+                Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(
+                    "Error when inserting Balling pump configuration into database.".to_string(),
+                ))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -185,8 +216,7 @@ pub mod tests {
     use mysql::params;
     use mysql::prelude::Queryable;
 
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_balling::SqlInterfaceBalling;
     use chrono::NaiveDateTime;
@@ -208,11 +238,13 @@ pub mod tests {
 
     #[test]
     /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
-    // Test case uses test database #30.    
+    // Test case uses test database #30.
     pub fn test_sql_interface_balling_events() {
         let pump_id = 1;
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            30,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
@@ -295,10 +327,12 @@ pub mod tests {
 
     #[test]
     /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
-    // Test case uses test database #31.    
+    // Test case uses test database #31.
     pub fn test_sql_interface_balling_setvals() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            31,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");

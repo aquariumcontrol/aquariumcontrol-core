@@ -492,7 +492,7 @@ impl SqlInterfaceData {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::config::{read_config_file, ConfigData};
+    use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_data::{DataFrame, SqlInterfaceData};
     use chrono::NaiveDateTime;
@@ -680,8 +680,10 @@ pub mod tests {
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.
     // Test case uses test database #32.
     pub fn test_sql_interface_data() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_sql_interface.toml".to_string());
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            32,
+        );
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");

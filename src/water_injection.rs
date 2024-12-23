@@ -349,13 +349,13 @@ pub mod tests {
 
     #[test]
     // This test case executes inject_water function and immediately sets the sensor signal to high
-    // Test case uses test database #40.
+    // Test case uses test database #39.
     pub fn test_water_injection_immediate_switch_high_no_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None);
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None, Some(39));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -500,13 +500,13 @@ pub mod tests {
     // this test case executes inject_water function and immediately sets the sensor signal to high
     // Additionally, the Quit signal is sent.
     // Expected behavior: immediate stop of additional refill operation.
-    // Test case uses test database #41.    
+    // Test case uses test database #40.
     pub fn test_water_injection_immediate_switch_high_and_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None);
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None, Some(40));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -650,13 +650,13 @@ pub mod tests {
     // - sets the sensor signal to high
     // - sets the invalid bit.
     // Water injection shall be aborted without adding further water.
-    // Test case uses test database #42.    
+    // Test case uses test database #41.
     pub fn test_water_injection_immediate_switch_high_with_invalid_true() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None);
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None, Some(41));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -799,13 +799,13 @@ pub mod tests {
     #[test]
     // This test case executes inject_water function and sets the sensor signal
     // to high after some time has passed (happy case).
-    // Test case uses test database #43.
+    // Test case uses test database #42.
     pub fn test_water_injection_delayed_switch_high() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None);
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None, Some(42));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -965,13 +965,13 @@ pub mod tests {
 
     #[test]
     // this test case executes inject_water function with simulation of level switch stuck at low position.
-    // Test case uses test database #44.    
+    // Test case uses test database #43.
     pub fn test_water_injection_switch_stuck_low() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None);
+            prepare_refill_tests("/config/aquarium_control_test_refill.toml", None, Some(43));
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
@@ -1117,13 +1117,16 @@ pub mod tests {
     #[test]
     // This test case executes inject_water function and sends Quit signal
     // after some time when water level is still low.
-    // Test case uses test database #45.
+    // Test case uses test database #44.
     pub fn test_water_injection_quit_signal() {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) =
-            prepare_refill_tests("/config/aquarium_control_test_refill_tertiary.toml", None);
+        let (_, mut refill, _) = prepare_refill_tests(
+            "/config/aquarium_control_test_refill_tertiary.toml",
+            None,
+            Some(44),
+        );
         let mut water_injection = WaterInjection::new(&refill.config);
 
         let (tx_water_injection_to_tank_level_switch, rx_tank_level_switch_from_water_injection) =
