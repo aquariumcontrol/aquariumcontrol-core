@@ -456,12 +456,12 @@ impl Balling {
                         if quit_command_received {
                             break; // Quit command received during dosing
                         }
-                        self.countdown_dosing_pump2 = self.countdown_dosing_pump2.saturating_sub(
-                            self.config.dosing_interval_pump2);
+                        self.countdown_dosing_pump2 = self.self.config.dosing_interval_pump2;
                     }
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
-                        self.countdown_dosing_pump2 -= self.config.schedule_check_interval;
+                        self.countdown_dosing_pump2 = self.countdown_dosing_pump2.saturating_sub(
+                            self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 3 ***
