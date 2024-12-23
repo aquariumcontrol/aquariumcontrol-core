@@ -9,6 +9,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use chrono::Local;
 use log::{error, warn};
+
+#[cfg(feature = "debug_balling")]
+use log::debug;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -392,6 +396,21 @@ impl Balling {
                     }
                 }
 
+                // debug information
+                #[cfg(feature = "debug_balling")] {
+                    // output countdowns every 10 seconds
+                    if loop_counter % 100 == 0 {
+                        debug!(
+                            target: LOG_TARGET_BALLING,
+                            "countdown 1 = {}, countdown 2 = {}, countdown 3 = {}, countdown 4 = {}",
+                            self.countdown_dosing_pump1,    
+                            self.countdown_dosing_pump2,    
+                            self.countdown_dosing_pump3,    
+                            self.countdown_dosing_pump4,    
+                        );
+                    }
+                }
+                
                 //*** Peristaltic pump 1 ***
                 if self.countdown_dosing_pump1 <= 0 && self.config.pump1_active {
                     if schedule_check_result && !dosing_inhibited {

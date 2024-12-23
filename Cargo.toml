@@ -56,6 +56,7 @@ debug_controllino = []
 debug_ambient = []
 debug_feed = []
 debug_messaging = []
+debug_balling = []
 debug = ["debug_signal_handler", "debug_feed", "debug_ambient", "debug_controllino", "debug_i2c_interface", "debug_dht", "debug_main", "debug_signal_handler", "debug_data_logger", "debug_sawtooth_profile"]
 commissioning_prep = []
 
