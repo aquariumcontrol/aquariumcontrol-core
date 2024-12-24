@@ -14,8 +14,7 @@ use mysql::*;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterfaceError;
+use crate::sql_interface::{sql_query_strings, SqlInterfaceError};
 
 /// List of all modules which are subject to limitations by schedule.
 /// Background: This activities cause noise - user shall be able to inhibit these noises during nighttime.

@@ -13,8 +13,7 @@ use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
 
-use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterfaceError;
+use crate::sql_interface::{sql_query_strings, SqlInterfaceError};
 
 #[derive(Debug, PartialEq)]
 /// Contains the data to be logged wrapped into Option.

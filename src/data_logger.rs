@@ -8,8 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #![allow(non_snake_case)]
-use chrono::Local;
-use chrono::NaiveDateTime;
+use chrono::{Local, NaiveDateTime};
 use log::{error, warn};
 
 #[cfg(feature = "debug_data_logger")]
@@ -22,15 +21,12 @@ use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumSignal, InternalCommand};
 use crate::data_injection::DataInjectionTrait;
-use crate::iir_filter::IIRFilter;
-use crate::iir_filter::IIRFilterConfig;
+use crate::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface::SqlInterface;
-use crate::sql_interface_data::DataFrame;
-use crate::sql_interface_data::SqlInterfaceData;
+use crate::sql_interface_data::{DataFrame, SqlInterfaceData};
 
 const LOG_TARGET_DATA_LOGGER: &str = "data_logger";
 const MILLIS_PER_SEC: u64 = 1000;
@@ -1371,25 +1367,13 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::fs;
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
+    use std::{fs, sync::mpsc, thread, time::Duration};
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::data_logger::DataLogger;
-    use crate::data_logger::DataLoggerConfig;
-    use crate::mock::tests::mock_ambient;
-    use crate::mock::tests::mock_atlas_scientific;
-    use crate::mock::tests::mock_heating;
-    use crate::mock::tests::mock_refill;
-    use crate::mock::tests::mock_tank_level_switch;
-    use crate::mock::tests::mock_ventilation;
-    use crate::mock::tests::MockDataInjection;
-    use crate::mock::tests::MockSignal;
-    use crate::mock::tests::TestCommand;
+    use crate::config::{read_config_file, ConfigData};
+    use crate::data_logger::{DataLogger, DataLoggerConfig};
+    use crate::mock::tests::{mock_ambient, mock_atlas_scientific, mock_heating, mock_refill, mock_tank_level_switch, mock_ventilation};
+    use crate::mock::tests::{MockDataInjection, MockSignal, TestCommand};
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_data::SqlInterfaceData;
 

@@ -11,23 +11,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK: &str = "mock";
 
-    use chrono::NaiveDateTime;
-    use chrono::{DateTime, Utc};
+    use chrono::{NaiveDateTime, DateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::{Duration, SystemTime};
 
-    use crate::channel_content::AquariumSignal;
-    use crate::channel_content::InternalCommand;
+    use crate::channel_content::{AquariumSignal, InternalCommand};
     use crate::data_injection::DataInjectionTrait;
     use crate::feedpattern::Feedpattern;
     use crate::refill::RefillErrors;
     use crate::sql_interface::SqlInterfaceError;
-    use crate::sql_interface_data::DataFrame;
-    use crate::sql_interface_data::SqlInterfaceData;
-    use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-    use crate::sql_interface_feed::FeedScheduleEntry;
+    use crate::sql_interface_data::{DataFrame, SqlInterfaceData};
+    use crate::sql_interface_feed::{DatabaseInterfaceFeedTrait, FeedScheduleEntry};
     use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::water_injection::WaterInjectionTrait;
 

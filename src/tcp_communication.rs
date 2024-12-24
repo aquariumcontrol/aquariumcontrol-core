@@ -17,8 +17,7 @@ use std::{
     time::Duration,
 };
 
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 

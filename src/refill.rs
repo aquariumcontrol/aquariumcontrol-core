@@ -19,8 +19,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumSignal, InternalCommand};
 use crate::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
@@ -1130,19 +1129,15 @@ impl Refill {
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, SystemTime};
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::read_config_file_with_test_database;
-    use crate::config::ConfigData;
+    use crate::config::{ConfigData, read_config_file, read_config_file_with_test_database};
     use crate::proc_ext_req::ProcessExternalRequestTrait;
-    use crate::refill::Refill;
-    use crate::refill::RefillErrors;
+    use crate::refill::{Refill, RefillErrors};
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_refill::SqlInterfaceRefill;
 

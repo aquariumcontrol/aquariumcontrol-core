@@ -981,8 +981,7 @@ impl SqlInterface {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::config::read_config_file_with_test_database;
-    use crate::config::ConfigData;
+    use crate::config::{ConfigData, read_config_file_with_test_database};
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::version_information::VersionInformation;
     use chrono::{DateTime, Local, SubsecRound, TimeZone};

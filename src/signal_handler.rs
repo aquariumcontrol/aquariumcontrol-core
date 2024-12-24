@@ -16,8 +16,7 @@ use log::debug;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
@@ -389,12 +388,9 @@ pub fn handle_signals(
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::process::Command;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::sync::Arc;
-    use std::thread;
+    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::{thread, process::Command,sync::Arc}; 
     use std::time::Duration;
 
     use crate::channel_content::InternalCommand;

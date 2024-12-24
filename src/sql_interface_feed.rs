@@ -649,8 +649,7 @@ impl SqlInterfaceFeed {
 #[cfg(test)]
 pub mod tests {
     use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
-    use mysql::params;
-    use mysql::prelude::Queryable;
+    use mysql::{params, prelude::Queryable};
 
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};

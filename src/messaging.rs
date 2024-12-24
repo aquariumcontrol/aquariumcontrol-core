@@ -443,18 +443,11 @@ impl Messaging {
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
+    use std::{sync::mpsc, thread, time::Duration};
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::messaging::messaging_commands;
-    use crate::messaging::messaging_domains;
-    use crate::messaging::Message;
-    use crate::messaging::Messaging;
-    use crate::messaging::LOG_TARGET_MESSAGING;
+    use crate::config::{read_config_file, ConfigData};
+    use crate::messaging::{messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING};
     use crate::mock::tests::mock_message_command_receiver;
 
     #[cfg(target_os = "linux")]

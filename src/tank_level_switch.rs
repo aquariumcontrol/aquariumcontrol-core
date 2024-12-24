@@ -13,8 +13,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, SystemTime};
 
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumSignal, InternalCommand};
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -695,14 +694,9 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::mock::tests::mock_data_logger;
-    use crate::mock::tests::mock_heating;
-    use crate::mock::tests::mock_refill;
-    use crate::mock::tests::mock_tcp;
-    use crate::mock::tests::MockSignal;
-    use crate::mock::tests::TestCommand;
+    use crate::config::{read_config_file, ConfigData};
+    use crate::mock::tests::{mock_data_logger, mock_heating, mock_refill, mock_tcp};
+    use crate::mock::tests::{MockSignal, TestCommand};
     use crate::tank_level_switch::TankLevelSwitch;
 
     #[test]

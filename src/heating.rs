@@ -1000,23 +1000,15 @@ pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use chrono::Local;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
     use std::time::{Duration, SystemTime};
 
-    use crate::channel_content::AquariumDevice;
-    use crate::channel_content::InternalCommand;
+    use crate::channel_content::{AquariumDevice, InternalCommand};
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::{read_config_file_with_test_database, ConfigData};
-    use crate::heating::LOG_TARGET_HEATING;
-    use crate::heating::{Heating, HeatingStatsDataTransferTrait};
-    use crate::mock::tests::mock_ambient;
-    use crate::mock::tests::mock_atlas_scientific;
-    use crate::mock::tests::mock_controllino;
-    use crate::mock::tests::mock_data_logger;
-    use crate::mock::tests::mock_schedule_check;
-    use crate::mock::tests::mock_tank_level_switch;
+    use crate::heating::{LOG_TARGET_HEATING, Heating, HeatingStatsDataTransferTrait};
+    use crate::mock::tests::{mock_ambient, mock_atlas_scientific, mock_controllino, mock_data_logger, mock_schedule_check, mock_tank_level_switch};
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,

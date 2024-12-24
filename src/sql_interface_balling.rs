@@ -12,9 +12,7 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterface;
-use crate::sql_interface::SqlInterfaceError;
+use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
@@ -213,13 +211,12 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
-    use mysql::params;
-    use mysql::prelude::Queryable;
+    use mysql::{params, prelude::Queryable};
+    use chrono::NaiveDateTime;
 
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
     use crate::sql_interface_balling::SqlInterfaceBalling;
-    use chrono::NaiveDateTime;
 
     pub struct SqlBallingEvent {
         timestamp: String,

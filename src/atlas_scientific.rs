@@ -12,8 +12,7 @@ use crate::channel_content::AquariumSignal;
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{TryRecvError, Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;

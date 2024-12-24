@@ -10,12 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::{sync::mpsc::Sender, time::Duration};
 
 use crate::channel_content::InternalCommand;
-use crate::controllino::ControllinoConfig;
-use crate::controllino::ControllinoError;
+use crate::controllino::{ControllinoConfig, ControllinoError};
 use crate::controllino::RelayActuationTrait;
 use crate::device_relay_logic::get_relay_command;
 

@@ -13,8 +13,7 @@ use log::error;
 use log::info;
 
 use serde_derive::Deserialize;
-use std::env;
-use std::fs;
+use std::{env, fs};
 
 use crate::ambient::AmbientConfig;
 use crate::atlas_scientific::AtlasScientificConfig;

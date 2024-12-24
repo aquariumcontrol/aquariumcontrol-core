@@ -19,12 +19,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::channel_content::AquariumDevice;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{AquariumDevice, InternalCommand};
 use crate::mineral_injection::MineralInjectionTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sql_interface_balling::BallingSetVal;
-use crate::sql_interface_balling::SqlInterfaceBalling;
+use crate::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 
 const LOG_TARGET_BALLING: &str = "balling";
 
@@ -608,20 +606,17 @@ impl Balling {
 pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::fmt;
-    use std::sync::mpsc::{Receiver, Sender};
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::balling::Balling;
-    use crate::balling::LOG_TARGET_BALLING;
-    use crate::channel_content::AquariumDevice;
-    use crate::channel_content::InternalCommand;
+    use crate::balling::{Balling, LOG_TARGET_BALLING};
+    use crate::channel_content::{AquariumDevice, InternalCommand};
     use crate::config::{read_config_file, read_config_file_with_test_database, ConfigData};
     use crate::mineral_injection::MineralInjectionTrait;
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_balling::BallingSetVal;
-    use crate::sql_interface_balling::SqlInterfaceBalling;
+    use crate::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 
     use crate::mock::tests::mock_schedule_check;
 

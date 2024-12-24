@@ -13,12 +13,10 @@ use log::error;
 use log::debug;
 
 use serde_derive::Deserialize;
-use serialport::ClearBuffer;
-use serialport::SerialPort;
+use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
-use std::fmt;
+use std::{fmt, time::Duration};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::time::Duration;
 
 use crate::channel_content::{AquariumDevice, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
@@ -779,19 +777,13 @@ impl Controllino {
 pub mod tests {
     use serialport::SerialPort;
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::Sender;
-    use std::thread::scope;
-    use std::time::Duration;
+    use std::sync::mpsc::{self, Sender};
+    use std::{thread::scope, time::Duration};
 
     use crate::channel_content::AquariumDevice;
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::controllino::Controllino;
-    use crate::controllino::ControllinoConfig;
-    use crate::controllino::ControllinoError;
-    use crate::controllino::RelayActuationTrait;
+    use crate::config::{read_config_file, ConfigData};
+    use crate::controllino::{Controllino, ControllinoConfig, ControllinoError, RelayActuationTrait};
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ControllinoActuateVoid {

@@ -6,9 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
 #![allow(non_snake_case)]
-use crate::channel_content::AquariumSignal;
+
 use log::{error, warn};
 
 #[cfg(feature = "debug_ambient")]
@@ -16,14 +15,14 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::TryRecvError;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{TryRecvError, Receiver, Sender};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
 use crate::dht::DhtError;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
+use crate::channel_content::AquariumSignal;
 
 const LOG_TARGET_AMBIENT: &str = "ambient";
 
@@ -648,16 +647,13 @@ impl Ambient {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::TryRecvError;
+    use std::sync::mpsc::{self, TryRecvError};
     use std::thread::scope;
     use std::time::Duration;
 
     use crate::ambient::Ambient;
-    use crate::channel_content::AquariumSignal;
-    use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
+    use crate::channel_content::{AquariumSignal, InternalCommand};
+    use crate::config::{read_config_file, ConfigData};
 
     #[test]
     // Test case verifies if the test object is processing the interfaces correctly.

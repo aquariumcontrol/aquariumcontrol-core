@@ -9,8 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::str;
-use std::time::Duration;
+use std::{str, time::Duration};
 
 use crate::channel_content::AquariumSignal;
 
@@ -526,9 +525,7 @@ impl I2cInterface {
 pub mod tests {
     use assert_float_eq::*;
 
-    use crate::i2c_interface::atlas_scientific_constants;
-    use crate::i2c_interface::AtlasScientificError;
-    use crate::i2c_interface::I2cInterface;
+    use crate::i2c_interface::{atlas_scientific_constants, AtlasScientificError, I2cInterface};
 
     // feature-specific imports
     cfg_if::cfg_if! {

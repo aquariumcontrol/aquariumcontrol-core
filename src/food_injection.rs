@@ -445,17 +445,14 @@ impl FoodInjectionTrait for FoodInjection {
 #[cfg(test)]
 pub mod tests {
     use all_asserts::{assert_ge, assert_le};
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::{self, Receiver, Sender};
     use std::thread::scope;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::channel_content::InternalCommand;
     use crate::config::ConfigData;
-    use crate::feedpattern::FeedPhase;
-    use crate::feedpattern::Feedpattern;
-    use crate::food_injection::FoodInjection;
-    use crate::food_injection::FoodInjectionTrait;
+    use crate::feedpattern::{FeedPhase, Feedpattern};
+    use crate::food_injection::{FoodInjection, FoodInjectionTrait};
     use crate::read_config_file;
 
     fn test_food_injection_receive_actuation_command_send_confirmation(

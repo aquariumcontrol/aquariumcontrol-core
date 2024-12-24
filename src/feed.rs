@@ -23,8 +23,7 @@ use std::time::Duration;
 use crate::channel_content::InternalCommand;
 use crate::food_injection::FoodInjectionTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-use crate::sql_interface_feed::FeedScheduleEntry;
+use crate::sql_interface_feed::{DatabaseInterfaceFeedTrait, FeedScheduleEntry};
 
 const LOG_TARGET_FEED: &str = "feed";
 
@@ -497,8 +496,7 @@ impl Feed {
 pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::fmt;
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::{self, Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::thread::scope;
@@ -506,15 +504,12 @@ pub mod tests {
 
     use crate::channel_content::InternalCommand;
     use crate::config::{read_config_file, read_config_file_with_test_database, ConfigData};
-    use crate::feed::Feed;
-    use crate::feed::LOG_TARGET_FEED;
+    use crate::feed::{Feed, LOG_TARGET_FEED};
     use crate::feedpattern::Feedpattern;
     use crate::food_injection::FoodInjectionTrait;
     use crate::logger::setup_logger;
     use crate::sql_interface::SqlInterface;
-    use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-    use crate::sql_interface_feed::FeedScheduleEntry;
-    use crate::sql_interface_feed::SqlInterfaceFeed;
+    use crate::sql_interface_feed::{DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed};
 
     use crate::mock::tests::MockSqlInterfaceFeed;
     use crate::sql_interface_feed::tests::insert_feed_patterns;

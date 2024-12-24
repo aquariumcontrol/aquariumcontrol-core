@@ -70,15 +70,9 @@ use log::{error, info, warn};
 use log::debug;
 
 use spin_sleep::SpinSleeper;
-use std::panic;
-use std::path::Path;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread::scope;
-use std::time::Duration;
-use std::{env, fmt};
+use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;
@@ -109,12 +103,9 @@ use crate::signal_handler::handle_signals;
 use crate::sql_interface::{SqlInterface, SqlInterfaceError};
 use crate::sql_interface_balling::SqlInterfaceBalling;
 use crate::sql_interface_data::SqlInterfaceData;
-use crate::sql_interface_feed::DatabaseInterfaceFeedTrait;
-use crate::sql_interface_feed::SqlInterfaceFeed;
-use crate::sql_interface_heating::SqlInterfaceHeating;
-use crate::sql_interface_heating::SqlInterfaceHeatingMidnightCalculator;
-use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
-use crate::sql_interface_refill::SqlInterfaceRefill;
+use crate::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
+use crate::sql_interface_heating::{SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator};
+use crate::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::tank_level_switch::TankLevelSwitch;
 use crate::tcp_communication::TcpCommunication;
@@ -125,8 +116,7 @@ use crate::water_injection::WaterInjection;
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
         use crate::dht::DhtError;
-        use crate::i2c_interface::I2cError;
-        use crate::i2c_interface::I2cInterface;
+        use crate::i2c_interface::{I2cError, I2cInterface};
     }
 }
 

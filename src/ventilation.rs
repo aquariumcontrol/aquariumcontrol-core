@@ -18,13 +18,9 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::channel_content::ActuatorState;
-use crate::channel_content::AquariumDevice;
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{ActuatorState, AquariumDevice, AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sawtooth_profile::SawToothProfile;
-use crate::sawtooth_profile::SawToothProfileConfig;
+use crate::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 

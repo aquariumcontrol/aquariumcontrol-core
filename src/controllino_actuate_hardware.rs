@@ -10,15 +10,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
-use std::fmt;
-use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::{fmt, sync::mpsc::Sender, time::Duration};
 
 use crate::channel_content::InternalCommand;
-use crate::controllino::controllino_constants;
-use crate::controllino::ControllinoConfig;
-use crate::controllino::ControllinoError;
-use crate::controllino::RelayActuationTrait;
+use crate::controllino::{controllino_constants, ControllinoConfig, ControllinoError, RelayActuationTrait};
 use crate::device_relay_logic::get_relay_command;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
@@ -315,10 +310,8 @@ pub mod tests {
     };
 
     use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::controllino::controllino_constants;
-    use crate::controllino::ControllinoError;
+    use crate::config::{read_config_file, ConfigData};
+    use crate::controllino::{controllino_constants, ControllinoError};
     use crate::controllino_actuate_hardware::create_command_message;
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]

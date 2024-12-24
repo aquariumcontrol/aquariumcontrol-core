@@ -144,18 +144,14 @@ impl MineralInjectionTrait for MineralInjection {
 
 #[cfg(test)]
 pub mod tests {
-    use all_asserts::assert_ge;
-    use all_asserts::assert_le;
+    use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::{self, Receiver, Sender};
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::channel_content::AquariumDevice;
-    use crate::channel_content::InternalCommand;
-    use crate::mineral_injection::MineralInjection;
-    use crate::mineral_injection::MineralInjectionTrait;
+    use crate::channel_content::{AquariumDevice, InternalCommand};
+    use crate::mineral_injection::{MineralInjection, MineralInjectionTrait};
 
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
         tx_controllino_to_mineral_injection: &Sender<bool>,

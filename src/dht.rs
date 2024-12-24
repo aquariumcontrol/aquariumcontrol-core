@@ -13,8 +13,7 @@ cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use log::error;
         use rppal::gpio::{Gpio, Level, Trigger};
-        use std::thread;
-        use std::thread::sleep;
+        use std::thread::{self, sleep};
         use std::time::Duration;
         use crate::InternalCommand;
         use std::sync::mpsc::{Sender, Receiver};
@@ -730,9 +729,7 @@ impl Dht {
 pub mod tests {
     use assert_float_eq::*;
 
-    use crate::dht::dht22_constants;
-    use crate::dht::Dht;
-    use crate::dht::DhtError;
+    use crate::dht::{dht22_constants, Dht, DhtError};
     use crate::logger::setup_logger;
 
     // feature-specific imports

@@ -8,8 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use log::info;
 use serde_derive::Deserialize;
-use std::fs;
-use std::process;
+use std::{fs, process};
 
 /// Holds the configuration data for the PID publication.
 /// The configuration is loaded from the .toml configuration file.

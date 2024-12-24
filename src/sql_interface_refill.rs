@@ -12,9 +12,7 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::sql_interface::sql_query_strings;
-use crate::sql_interface::SqlInterface;
-use crate::sql_interface::SqlInterfaceError;
+use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
 
 /// Trait for interfacing between refill and SQL database
 /// This trait is prerequiste to use mock implementation for testing
@@ -244,8 +242,7 @@ pub mod tests {
 
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
-    use crate::sql_interface_refill::DatabaseInterfaceRefillTrait;
-    use crate::sql_interface_refill::SqlInterfaceRefill;
+    use crate::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
     use chrono::{NaiveDateTime, SubsecRound};
 
     pub struct SqlRefillEvent {
