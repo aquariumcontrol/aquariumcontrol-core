@@ -13,8 +13,8 @@ use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
 
 use crate::channel_content::InternalCommand;
-use crate::controllino::{ControllinoConfig, ControllinoError};
 use crate::controllino::RelayActuationTrait;
+use crate::controllino::{ControllinoConfig, ControllinoError};
 use crate::device_relay_logic::get_relay_command;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";

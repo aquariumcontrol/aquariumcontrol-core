@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK: &str = "mock";
 
-    use chrono::{NaiveDateTime, DateTime, Utc};
+    use chrono::{DateTime, NaiveDateTime, Utc};
     use spin_sleep::SpinSleeper;
     use std::fmt;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};

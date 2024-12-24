@@ -12,7 +12,7 @@ use crate::channel_content::AquariumSignal;
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{TryRecvError, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 use crate::channel_content::InternalCommand;
@@ -609,11 +609,12 @@ impl AtlasScientific {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        {
             let mut state_send_receive: bool = false;
             let mut receive_counter: u32 = 0;
         }
-        
+
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
             || rx_atlas_scientific_from_i2c_interface_opt.is_some()
@@ -643,7 +644,7 @@ impl AtlasScientific {
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
-            
+
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
                     if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
@@ -655,7 +656,7 @@ impl AtlasScientific {
                 else {
                     if quit_command_received {
                         break;
-                    }                            
+                    }
                 }
             }
 
@@ -686,9 +687,8 @@ impl AtlasScientific {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                     receive_counter = 0;
-                                }
-                                else {
-                                    receive_counter += 1;                                    
+                                } else {
+                                    receive_counter += 1;
                                 }
                             }
                         }

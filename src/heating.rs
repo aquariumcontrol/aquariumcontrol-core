@@ -1007,8 +1007,11 @@ pub mod tests {
     use crate::channel_content::{AquariumDevice, InternalCommand};
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::{read_config_file_with_test_database, ConfigData};
-    use crate::heating::{LOG_TARGET_HEATING, Heating, HeatingStatsDataTransferTrait};
-    use crate::mock::tests::{mock_ambient, mock_atlas_scientific, mock_controllino, mock_data_logger, mock_schedule_check, mock_tank_level_switch};
+    use crate::heating::{Heating, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
+    use crate::mock::tests::{
+        mock_ambient, mock_atlas_scientific, mock_controllino, mock_data_logger,
+        mock_schedule_check, mock_tank_level_switch,
+    };
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,

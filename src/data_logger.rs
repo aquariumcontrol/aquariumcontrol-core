@@ -1372,7 +1372,10 @@ pub mod tests {
     use crate::channel_content::InternalCommand;
     use crate::config::{read_config_file, ConfigData};
     use crate::data_logger::{DataLogger, DataLoggerConfig};
-    use crate::mock::tests::{mock_ambient, mock_atlas_scientific, mock_heating, mock_refill, mock_tank_level_switch, mock_ventilation};
+    use crate::mock::tests::{
+        mock_ambient, mock_atlas_scientific, mock_heating, mock_refill, mock_tank_level_switch,
+        mock_ventilation,
+    };
     use crate::mock::tests::{MockDataInjection, MockSignal, TestCommand};
     use crate::sql_interface::SqlInterface;
     use crate::sql_interface_data::SqlInterfaceData;

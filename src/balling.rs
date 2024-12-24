@@ -431,8 +431,9 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump1 > 0 {
-                        self.countdown_dosing_pump1 = self.countdown_dosing_pump1.saturating_sub(
-                            self.config.schedule_check_interval);
+                        self.countdown_dosing_pump1 = self
+                            .countdown_dosing_pump1
+                            .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 2 ***
@@ -458,8 +459,9 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump2 > 0 {
-                        self.countdown_dosing_pump2 = self.countdown_dosing_pump2.saturating_sub(
-                            self.config.schedule_check_interval);
+                        self.countdown_dosing_pump2 = self
+                            .countdown_dosing_pump2
+                            .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 3 ***
@@ -485,8 +487,9 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump3 > 0 {
-                        self.countdown_dosing_pump3 = self.countdown_dosing_pump3.saturating_sub(
-                            self.config.schedule_check_interval);
+                        self.countdown_dosing_pump3 = self
+                            .countdown_dosing_pump3
+                            .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
                 //*** Peristaltic pump 4 ***
@@ -512,8 +515,9 @@ impl Balling {
                     }
                 } else {
                     if self.countdown_dosing_pump4 > 0 {
-                        self.countdown_dosing_pump4 = self.countdown_dosing_pump4.saturating_sub(
-                            self.config.schedule_check_interval);
+                        self.countdown_dosing_pump4 = self
+                            .countdown_dosing_pump4
+                            .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
             }

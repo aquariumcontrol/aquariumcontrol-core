@@ -390,8 +390,8 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{self, Receiver, Sender};
-    use std::{thread, process::Command,sync::Arc}; 
     use std::time::Duration;
+    use std::{process::Command, sync::Arc, thread};
 
     use crate::channel_content::InternalCommand;
     use crate::handle_signals;

@@ -13,7 +13,9 @@ use spin_sleep::SpinSleeper;
 use std::{fmt, sync::mpsc::Sender, time::Duration};
 
 use crate::channel_content::InternalCommand;
-use crate::controllino::{controllino_constants, ControllinoConfig, ControllinoError, RelayActuationTrait};
+use crate::controllino::{
+    controllino_constants, ControllinoConfig, ControllinoError, RelayActuationTrait,
+};
 use crate::device_relay_logic::get_relay_command;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";

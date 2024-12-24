@@ -15,14 +15,14 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{TryRecvError, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
+use crate::channel_content::AquariumSignal;
 use crate::channel_content::InternalCommand;
 use crate::dht::DhtError;
 use crate::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::channel_content::AquariumSignal;
 
 const LOG_TARGET_AMBIENT: &str = "ambient";
 
@@ -466,7 +466,8 @@ impl Ambient {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        {
             let mut state_send_receive: bool = false;
             let mut receive_counter: u32 = 0;
         }
@@ -505,7 +506,7 @@ impl Ambient {
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
-           
+
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
                     if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
@@ -517,7 +518,7 @@ impl Ambient {
                 else {
                     if quit_command_received {
                         break;
-                    }                            
+                    }
                 }
             }
 
@@ -552,9 +553,8 @@ impl Ambient {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                     receive_counter = 0;
-                                }
-                                else {
-                                    receive_counter += 1;                                    
+                                } else {
+                                    receive_counter += 1;
                                 }
 
                                 #[cfg(feature = "debug_ambient")]
@@ -567,7 +567,6 @@ impl Ambient {
                                         );
                                     }
                                 }
-                                 
                             }
                         }
                     }

@@ -1135,7 +1135,7 @@ pub mod tests {
     use std::time::{Duration, SystemTime};
 
     use crate::channel_content::InternalCommand;
-    use crate::config::{ConfigData, read_config_file, read_config_file_with_test_database};
+    use crate::config::{read_config_file, read_config_file_with_test_database, ConfigData};
     use crate::proc_ext_req::ProcessExternalRequestTrait;
     use crate::refill::{Refill, RefillErrors};
     use crate::sql_interface::SqlInterface;

@@ -70,9 +70,9 @@ use log::{error, info, warn};
 use log::debug;
 
 use spin_sleep::SpinSleeper;
-use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 
 use crate::ambient::Ambient;
 use crate::atlas_scientific::AtlasScientific;

@@ -211,8 +211,8 @@ impl SqlInterfaceBalling {
 
 #[cfg(test)]
 pub mod tests {
-    use mysql::{params, prelude::Queryable};
     use chrono::NaiveDateTime;
+    use mysql::{params, prelude::Queryable};
 
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};

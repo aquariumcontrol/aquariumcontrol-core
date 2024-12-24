@@ -447,7 +447,9 @@ pub mod tests {
 
     use crate::channel_content::InternalCommand;
     use crate::config::{read_config_file, ConfigData};
-    use crate::messaging::{messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING};
+    use crate::messaging::{
+        messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING,
+    };
     use crate::mock::tests::mock_message_command_receiver;
 
     #[cfg(target_os = "linux")]

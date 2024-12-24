@@ -125,6 +125,10 @@ pub mod dht22_constants {
     // distinguish between true and false
     #[allow(unused)]
     pub const DHT22_BIT_TIMING_LIMIT: u64 = 50;
+
+    // maximum number of allowed retries to get a valid data set
+    #[allow(unused)]
+    pub const DHT22_MAX_RETRIES: u64 = 5;
 }
 
 #[derive(Debug, PartialEq)]
@@ -597,8 +601,9 @@ impl Dht {
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
 
         while !measurement_successful {
-            //todo: limit number of retries
-            match self.read(retry_counter == 0) {
+            match self.read(
+                retry_counter == 0, /* reset power supply for first read attempt */
+            ) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
 
@@ -615,7 +620,7 @@ impl Dht {
                 Err(e) => {
                     if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
                         retry_counter += 1;
-                        if retry_counter > 3 {
+                        if retry_counter > DHT22_MAX_RETRIES {
                             #[cfg(not(test))]
                             error!(
                                 target: LOG_TARGET_DHT,
@@ -635,7 +640,9 @@ impl Dht {
                 }
             }
         }
-        Ok(result_tuple)
+        if measurement_successful {
+            Ok(result_tuple)
+        }
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
