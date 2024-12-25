@@ -466,11 +466,12 @@ impl Ambient {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        //#[cfg(feature = "target_hw")]
-        //{
-            let mut state_send_receive: bool = false;
-            let mut receive_counter: u32 = 0;
-        //}
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+                let mut state_send_receive: bool = false;
+                let mut receive_counter: u32 = 0;
+            }
+        }
 
         // initialize signals with replacement values
         self.ambient_temperature = self.config.replacement_value_ambient_temperature;

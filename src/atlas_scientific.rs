@@ -609,11 +609,12 @@ impl AtlasScientific {
         let sleep_duration_one_millisec = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        //#[cfg(feature = "target_hw")]
-        //{
-            let mut state_send_receive: bool = false;
-            let mut receive_counter: u32 = 0;
-        //}
+        cfg_if::cfg_if! {
+            if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+                let mut state_send_receive: bool = false;
+                let mut receive_counter: u32 = 0;
+            }
+        }
 
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         if tx_atlas_scientific_to_i2c_interface_opt.is_some()
