@@ -1134,7 +1134,7 @@ pub mod tests {
             5,                  // index for determining test data base
             true,               // schedule allows
             14,                 // execution count
-            35000,              // maximum time in milliseconds for test execution
+            34000,              // maximum time in milliseconds for test execution
             5,                  // number of dosings for pump #1
             4,                  // number of dosings for pump #2
             3,                  // number of dosings for pump #3

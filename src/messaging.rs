@@ -456,8 +456,10 @@ pub mod tests {
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_ventilation() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.messaging.mq_filename = "/aquarium_control.5UXp".to_string();
+
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -570,8 +572,10 @@ pub mod tests {
     // Test case checks if messages for heating control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_heating() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
+        
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -684,8 +688,10 @@ pub mod tests {
     // Test case checks if messages for refill control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_refill() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.messaging.mq_filename = "/aquarium_control.7UXp".to_string();
+        
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -812,8 +818,10 @@ pub mod tests {
     // Test case checks if messages for feed control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_feed() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.messaging.mq_filename = "/aquarium_control.8UXp".to_string();
+        
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -941,8 +949,10 @@ pub mod tests {
     // Test case checks if messages for feed control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_balling() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
+        
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
