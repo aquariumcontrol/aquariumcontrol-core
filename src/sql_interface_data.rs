@@ -680,7 +680,7 @@ pub mod tests {
     // Test case uses test database #32.
     pub fn test_sql_interface_data() {
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             32,
         );
         println!("Testing with database {}", config.sql_interface.db_name);

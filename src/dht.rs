@@ -862,7 +862,7 @@ pub mod tests {
         setup_logger();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_gpio.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
         // open interface to GPIO library
         let gpio = match Gpio::new() {

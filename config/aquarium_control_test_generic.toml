@@ -166,4 +166,4 @@ mq_filename = "/aquarium_control.4UXp"                  # filename for message q
 timeout_millis = 250                                    # timeout to check for shutdown requests
 
 [publish_pid]
-pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID
+pid_filename = "/var/local/aquarium-ctrl-test.pid"      # filename for publishing PID

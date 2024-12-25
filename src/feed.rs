@@ -1005,7 +1005,7 @@ pub mod tests {
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_none() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
 
         // mock interface will be used in operation of test object

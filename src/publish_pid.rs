@@ -6,7 +6,10 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+#[cfg(not(test))]
 use log::info;
+
 use serde_derive::Deserialize;
 use std::{fs, process};
 
@@ -44,11 +47,14 @@ impl PublishPid {
             let process_id_read: u32 = match file_data_trimmed.parse() {
                 Ok(c) => c,
                 Err(e) => {
+                    
+                    #[cfg(not(test))]
                     info!(
                         target: Self::LOG_TARGET_PUBLISH_PID,
                         "PID file ({}) contains invalid content: {e:?}",
                         config.pid_filename
                     );
+                    
                     panic!(
                         "{}: PID file ({}) contains invalid content: {e:?}",
                         Self::LOG_TARGET_PUBLISH_PID,
@@ -57,11 +63,14 @@ impl PublishPid {
                 }
             };
             if process_id_read > 0 {
+                
+                #[cfg(not(test))]
                 info!(
                     target: Self::LOG_TARGET_PUBLISH_PID,
                     "PID file ({}) already contains published PID.",
                     config.pid_filename
                 );
+                
                 panic!(
                     "{}: PID file ({}) already contains published PID.",
                     Self::LOG_TARGET_PUBLISH_PID,
@@ -95,7 +104,7 @@ pub mod tests {
     #[test]
     pub fn test_publish_pid() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let pid_filename = config.publish_pid.pid_filename.clone();
         fs::write(pid_filename.clone(), "0".to_string())
             .expect("test_publish_PID: Could not erase PID.");
@@ -121,7 +130,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_non_existent_pid_file() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.publish_pid.pid_filename = "/var/local/aquarium-ctrl-non-existent.pid".to_string();
         _ = PublishPid::new(config.publish_pid);
     }
@@ -130,7 +139,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_publish_pid_invalid_content_pid_file() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.publish_pid.pid_filename =
             "/var/local/aquarium-ctrl-invalid-content.pid".to_string();
         _ = PublishPid::new(config.publish_pid);

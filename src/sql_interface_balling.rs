@@ -239,7 +239,7 @@ pub mod tests {
     pub fn test_sql_interface_balling_events() {
         let pump_id = 1;
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             30,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -327,7 +327,7 @@ pub mod tests {
     // Test case uses test database #31.
     pub fn test_sql_interface_balling_setvals() {
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             31,
         );
         println!("Testing with database {}", config.sql_interface.db_name);

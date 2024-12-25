@@ -714,7 +714,7 @@ pub mod tests {
     // Test case uses test database #33.
     pub fn test_sql_interface_feedpattern() {
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             33,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -906,7 +906,7 @@ pub mod tests {
     // Test case uses test database #34.
     pub fn test_sql_interface_feedlog() {
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             34,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -965,7 +965,7 @@ pub mod tests {
     // Test case uses test database #35.
     pub fn test_sql_interface_feedschedule() {
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_sql_interface.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             35,
         );
         println!("Testing with database {}", config.sql_interface.db_name);

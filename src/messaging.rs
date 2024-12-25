@@ -457,7 +457,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_ventilation() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -571,7 +571,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_heating() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_heating.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -685,7 +685,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_refill() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -813,7 +813,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_feed() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -942,7 +942,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_balling() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {

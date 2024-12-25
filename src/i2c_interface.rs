@@ -694,7 +694,7 @@ pub mod tests {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn test_i2c_interface_read_sensors() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_i2c_interface.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut i2c_interface = I2cInterface::new(config.i2c_interface);
 
         let result = i2c_interface.get_response_from_i2c(AquariumSignal::pH);
