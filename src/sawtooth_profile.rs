@@ -37,7 +37,12 @@ pub struct SawToothProfileConfig {
 
 impl SawToothProfileConfig {
     #[cfg(test)]
-    pub fn new(phase1_length: u32, phase2_length: u32, phase3_length: u32, phase4_length: u32) -> SawToothProfileConfig {
+    pub fn new(
+        phase1_length: u32,
+        phase2_length: u32,
+        phase3_length: u32,
+        phase4_length: u32,
+    ) -> SawToothProfileConfig {
         SawToothProfileConfig {
             phase1_length: phase1_length,
             phase2_length: phase2_length,

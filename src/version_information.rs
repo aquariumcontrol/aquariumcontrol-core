@@ -44,13 +44,12 @@ impl VersionInformation {
         // get fully qualified path and file name
         let pathfilename = match env::current_exe() {
             Ok(exe_path) => {
-                
                 #[cfg(not(test))]
                 info!(
                     target: Self::LOG_TARGET_VERSION_INFORMATION,
                     "path of this executable is: {}", exe_path.display()
                 );
-                
+
                 exe_path
             }
             Err(e) => {

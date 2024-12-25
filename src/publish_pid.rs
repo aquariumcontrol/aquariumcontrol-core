@@ -47,14 +47,13 @@ impl PublishPid {
             let process_id_read: u32 = match file_data_trimmed.parse() {
                 Ok(c) => c,
                 Err(e) => {
-                    
                     #[cfg(not(test))]
                     info!(
                         target: Self::LOG_TARGET_PUBLISH_PID,
                         "PID file ({}) contains invalid content: {e:?}",
                         config.pid_filename
                     );
-                    
+
                     panic!(
                         "{}: PID file ({}) contains invalid content: {e:?}",
                         Self::LOG_TARGET_PUBLISH_PID,
@@ -63,14 +62,13 @@ impl PublishPid {
                 }
             };
             if process_id_read > 0 {
-                
                 #[cfg(not(test))]
                 info!(
                     target: Self::LOG_TARGET_PUBLISH_PID,
                     "PID file ({}) already contains published PID.",
                     config.pid_filename
                 );
-                
+
                 panic!(
                     "{}: PID file ({}) already contains published PID.",
                     Self::LOG_TARGET_PUBLISH_PID,

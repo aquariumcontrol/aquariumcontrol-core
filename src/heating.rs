@@ -1001,11 +1001,11 @@ pub mod tests {
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::heating::{Heating, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
-    use crate::sawtooth_profile::SawToothProfileConfig;
     use crate::mock::tests::{
         mock_ambient, mock_atlas_scientific, mock_controllino, mock_data_logger,
         mock_schedule_check, mock_tank_level_switch,
     };
+    use crate::sawtooth_profile::SawToothProfileConfig;
     use crate::sql_interface::{SqlInterface, SqlInterfaceError};
     use crate::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
@@ -1062,7 +1062,7 @@ pub mod tests {
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
         test_db_number: u32,
-        saw_tooth_profile_config_opt: Option<SawToothProfileConfig>
+        saw_tooth_profile_config_opt: Option<SawToothProfileConfig>,
     ) -> (ConfigData, Heating) {
         // prepare struct Heating for subsequent tests
         let mut config: ConfigData = read_config_file_with_test_database(
@@ -1070,11 +1070,11 @@ pub mod tests {
             test_db_number,
         );
         config.heating.stop_on_refill_error_delay = 2;
-        
+
         match saw_tooth_profile_config_opt {
             Some(saw_tooth_profile_config) => {
                 config.heating.saw_tooth_profile_config = saw_tooth_profile_config;
-            },
+            }
             None => { /* do nothing */ }
         }
 
@@ -1546,11 +1546,11 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(
-                                            3600,
-                                            13,
-                                            Some(SawToothProfileConfig::new(6, 1, 6, 1))
-                                        );
-        
+            3600,
+            13,
+            Some(SawToothProfileConfig::new(6, 1, 6, 1)),
+        );
+
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
         let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();

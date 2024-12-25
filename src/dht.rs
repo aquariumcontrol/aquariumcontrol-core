@@ -644,8 +644,7 @@ impl Dht {
         }
         if measurement_successful {
             Ok(result_tuple)
-        }
-        else {
+        } else {
             Err(dht_error)
         }
     }

@@ -273,7 +273,7 @@ impl TankLevelSwitch {
                     {
                         // do not change the signal if counter is not exceeded
                         self.tank_level_switch_position_low_stabilization_counter += 1;
-                        
+
                         #[cfg(feature = "debug_tank_level_switch")]
                         debug!(
                             "calc_tank_level_switch_position_stabilized: tank_level_switch_position_low_stabilization_counter = {}, tank_level_switch_position_stabilized={}",
@@ -896,7 +896,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.refill.initial_wait_interval = 2;
         config.refill.check_interval = 60;
-        
+
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
 

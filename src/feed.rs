@@ -113,6 +113,19 @@ impl Feed {
         }
     }
 
+    //#[cfg(feature = "debug_feed")]
+    /// Helper function to visualize a vector of feed schedule entries.
+    /// # Arguments:
+    /// * `feedschedule_entries` - reference to vector of feed schedule entries    
+    fn feedschedule_entries_to_string(feedschedule_entries: Vec<FeedScheduleEntry>) -> String {
+        let mut output: String = "Vec<FeedscheduleEntry>=".to_string();
+        for (i, s) in feedschedule_entries.iter().enumerate() {
+            output +=
+                &(" #".to_owned() + &format!("{}: ID= {} ", i, s.profile_id) + &s.profile_name);
+        }
+        output
+    }
+
     /// Loads and executes a given feed profile.
     /// # Arguments
     /// * `profile_id` - ID of feed profile to be executed
@@ -259,11 +272,25 @@ impl Feed {
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entries) => {
+                            //#[cfg(feature = "debug_feed")]
+                            println!(
+                                //target: LOG_TARGET_FEED,
+                                "Discovered following feed schedule entries in the past: {}",
+                                Self::feedschedule_entries_to_string(feed_schedule_entries.clone())
+                            );
+
                             let feed_schedule_entry_opt = self
                                 .select_feed_schedule_entry_for_execution(&feed_schedule_entries);
 
                             match feed_schedule_entry_opt {
                                 Some(feed_schedule_entry) => {
+                                    //#[cfg(feature = "debug_feed")]
+                                    println!(
+                                        //target: LOG_TARGET_FEED,
+                                        "Selected following feed schedule entry for execution: {}",
+                                        feed_schedule_entry
+                                    );
+
                                     self.lock_error_get_feedschedule_entry = false;
 
                                     if !self.execution_blocked {

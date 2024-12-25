@@ -575,7 +575,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
-        
+
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -691,7 +691,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.7UXp".to_string();
-        
+
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -821,7 +821,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.8UXp".to_string();
-        
+
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {
@@ -952,7 +952,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
-        
+
         let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
             Ok(c) => c,
             Err(e) => {

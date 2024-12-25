@@ -348,7 +348,8 @@ impl Balling {
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce frequency of channel polling
-        let sleep_duration_pump_switch = Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps
+        let sleep_duration_pump_switch =
+            Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0; // used to reduce the frequency of DB requests
         let mut quit_command_received: bool; // request to end the application has been received
@@ -437,9 +438,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
-                
+
                 spin_sleeper.sleep(sleep_duration_pump_switch);
-                
+
                 //*** Peristaltic pump 2 ***
                 if self.countdown_dosing_pump2 == 0 && self.config.pump2_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -468,9 +469,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
-                
+
                 spin_sleeper.sleep(sleep_duration_pump_switch);
-                
+
                 //*** Peristaltic pump 3 ***
                 if self.countdown_dosing_pump3 == 0 && self.config.pump3_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -499,9 +500,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
-                
-                spin_sleeper.sleep(sleep_duration_pump_switch);                
-                
+
+                spin_sleeper.sleep(sleep_duration_pump_switch);
+
                 //*** Peristaltic pump 4 ***
                 if self.countdown_dosing_pump4 == 0 && self.config.pump4_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -694,7 +695,7 @@ pub mod tests {
     fn read_balling_config_with_database(db_number: u32) -> ConfigData {
         read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
-            db_number            
+            db_number,
         )
     }
 
@@ -950,8 +951,7 @@ pub mod tests {
     ) {
         let sleep_duration_test_environment = Duration::from_millis(duration_millis);
         let spin_sleeper_test_environment = SpinSleeper::default();
-        let mut config: ConfigData =
-            read_balling_config_with_database(test_db_number);
+        let mut config: ConfigData = read_balling_config_with_database(test_db_number);
 
         config.balling.pump1_active = pump1_engagement_durations_reference > 0;
         config.balling.pump2_active = pump2_engagement_durations_reference > 0;
