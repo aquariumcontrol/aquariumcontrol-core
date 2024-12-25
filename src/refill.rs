@@ -1030,7 +1030,7 @@ impl Refill {
                 // wait for configured time period before rechecking the sensor signal
                 // check for external requests while waiting
                 i = 0;
-                while i < remaining_sleep_time_millis || cycle_time_exceeded {
+                while (i < remaining_sleep_time_millis) && !cycle_time_exceeded {
                     i += 1;
 
                     self.communicate_with_data_logger(
