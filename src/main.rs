@@ -1129,7 +1129,15 @@ fn main() {
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
-            let mut tcp_connection = TcpCommunication::new(&config.tcp_connection).unwrap();
+            let mut tcp_connection = match TcpCommunication::new(&config.tcp_connection) {
+                Ok(c) => c,
+                Err(e) => {
+                    panic!(
+                        "{}: Error occurred when trying to open TCP connection to test server ({e:?}).",
+                        LOG_TARGET_MAIN,
+                    )
+                }
+            };
             scope.spawn(move || {
                 tcp_connection.execute(
                     rx_tcp_from_controllino_opt,

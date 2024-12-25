@@ -27,9 +27,6 @@ const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct GpioHandlerConfig {
-    /// Flag to deactivate functionality for testing purposes
-    pub active: bool,
-
     /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 

@@ -81,9 +81,6 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
 pub struct HeatingConfig {
-    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator    
-    pub use_simulator: bool,
-
     /// Control will only be active when the flag is set to true.
     active: bool,
 

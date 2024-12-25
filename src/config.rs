@@ -20,10 +20,14 @@ use crate::atlas_scientific::AtlasScientificConfig;
 use crate::balling::BallingConfig;
 use crate::controllino::ControllinoConfig;
 use crate::data_logger::DataLoggerConfig;
+
+#[cfg(feature = "target_hw")]
 use crate::dht::DhtConfig;
 use crate::feed::FeedConfig;
 use crate::gpio_handler::GpioHandlerConfig;
 use crate::heating::HeatingConfig;
+
+#[cfg(feature = "target_hw")]
 use crate::i2c_interface::I2cInterfaceConfig;
 use crate::tank_level_switch::TankLevelSwitchConfig;
 
@@ -61,6 +65,7 @@ pub struct ConfigData {
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,
 
+    #[cfg(feature = "target_hw")]
     /// configuration of DHT driver
     pub dht: DhtConfig,
 
@@ -91,6 +96,7 @@ pub struct ConfigData {
     /// configuration for schedule check
     pub schedule_check: ScheduleCheckConfig,
 
+    #[cfg(feature = "target_hw")]
     /// configuration of I2C interface
     pub i2c_interface: I2cInterfaceConfig,
 

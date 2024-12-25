@@ -74,7 +74,6 @@ tank_level_switch_position_high_stabilization_count = 5 # number of seconds befo
 
 [heating]
 active = true
-use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 22.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 28.0                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
@@ -93,7 +92,6 @@ strategy_multiple_schedule_entries_in_past = 0          # strategy to apply when
 
 [ventilation]
 active = true
-use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 28.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 22.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_when_terminating = true           		# behavior when terminating the application
@@ -112,7 +110,7 @@ dosing_interval_pump1 = 200                             # inject Balling mineral
 dosing_interval_pump2 = 200                             # inject Balling minerals with pump 2 after each period
 dosing_interval_pump3 = 100                             # inject Balling minerals with pump 3 after each period
 dosing_interval_pump4 = 50                              # inject Balling minerals with pump 4 after each period
-pump_switch_delay_millis = 500                          # waiting period between usage of different pumps
+pump_switch_delay_millis = 250                          # waiting period between usage of different pumps
 
 [monitors]
 active = true
@@ -129,7 +127,6 @@ replacement_value_ph = 8.0                              # replacement value for 
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
 
 [gpio_handler]
-active = true
 use_simulator = true                                    # if true, then do not use real HW
 gpio_pin_number_tank_level = 20                         # GPIO pin number where tank level sensor is connected
 gpio_pin_number_dht22_io = 11                           # GPIO pin number where DHT sensor is connected

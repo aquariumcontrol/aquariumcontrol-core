@@ -674,7 +674,7 @@ pub mod tests {
     fn prepare_ventilation_tests() -> Ventilation {
         // prepare struct Ventilation for subsequent tests
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         Ventilation::new(config.ventilation)
     }
 

@@ -348,6 +348,7 @@ impl Balling {
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce frequency of channel polling
+        let sleep_duration_pump_switch = Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0; // used to reduce the frequency of DB requests
         let mut quit_command_received: bool; // request to end the application has been received
@@ -436,6 +437,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
+                
+                spin_sleeper.sleep(sleep_duration_pump_switch);
+                
                 //*** Peristaltic pump 2 ***
                 if self.countdown_dosing_pump2 == 0 && self.config.pump2_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -464,6 +468,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
+                
+                spin_sleeper.sleep(sleep_duration_pump_switch);
+                
                 //*** Peristaltic pump 3 ***
                 if self.countdown_dosing_pump3 == 0 && self.config.pump3_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -492,6 +499,9 @@ impl Balling {
                             .saturating_sub(self.config.schedule_check_interval);
                     }
                 }
+                
+                spin_sleeper.sleep(sleep_duration_pump_switch);                
+                
                 //*** Peristaltic pump 4 ***
                 if self.countdown_dosing_pump4 == 0 && self.config.pump4_active {
                     if schedule_check_result && !dosing_inhibited {
@@ -938,7 +948,7 @@ pub mod tests {
         schedule_check_interval: u32,
         dosing_intervals: Option<(u32, u32, u32, u32)>,
     ) {
-        let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
+        let sleep_duration_test_environment = Duration::from_millis(duration_millis);
         let spin_sleeper_test_environment = SpinSleeper::default();
         let mut config: ConfigData =
             read_balling_config_with_database(test_db_number);
@@ -1012,7 +1022,7 @@ pub mod tests {
             // thread for rest of test environment
             scope.spawn(move || {
                 let execution_count: i32;
-                spin_sleeper_test_environment.sleep(sleep_duration_10_seconds);
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
 
                 // internal scope to for releasing mutex after read
                 {
@@ -1124,7 +1134,7 @@ pub mod tests {
             5,                  // index for determining test data base
             true,               // schedule allows
             14,                 // execution count
-            19000,              // maximum time in milliseconds for test execution
+            35000,              // maximum time in milliseconds for test execution
             5,                  // number of dosings for pump #1
             4,                  // number of dosings for pump #2
             3,                  // number of dosings for pump #3
@@ -1373,8 +1383,8 @@ pub mod tests {
 
             // thread IPC messaging - this scope controls execution of the test case
             scope.spawn(move || {
-                // wait for 1 second to make sure test object can receive message
-                for _ in 0..10 {
+                // wait for 2 seconds to make sure test object can receive message
+                for _ in 0..20 {
                     spin_sleeper.sleep(sleep_duration_100_millisec);
                 }
 

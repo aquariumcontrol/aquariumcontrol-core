@@ -108,6 +108,7 @@ pub struct TcpConnectionConfig {
 #[derive(Debug)]
 pub enum TcpCommunicationError {
     /// value indicates that error has occurred during TCP communication
+    #[allow(unused)]
     ConnectionFailed(io::Error),
     //ReadMessageFailed(io::Error),
 }

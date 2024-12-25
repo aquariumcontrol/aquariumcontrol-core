@@ -37,6 +37,7 @@ pub struct IIRFilterConfig<T: FilterDefault> {
 
     /// value which is used to initialize the filter
     #[serde(default = "T::filter_default")]
+    #[allow(unused)]
     pub initial_value: T,
 }
 
