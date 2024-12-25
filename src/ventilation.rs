@@ -671,16 +671,10 @@ pub mod tests {
     use crate::mock::tests::mock_data_logger;
     use crate::mock::tests::mock_schedule_check;
 
-    fn prepare_ventilation_tests(short_ramp: bool) -> Ventilation {
+    fn prepare_ventilation_tests() -> Ventilation {
         // prepare struct Ventilation for subsequent tests
-        let config: ConfigData;
-        if short_ramp {
-            config = read_config_file(
-                "/config/aquarium_control_test_ventilation_secondary.toml".to_string(),
-            );
-        } else {
-            config = read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
-        }
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
         Ventilation::new(config.ventilation)
     }
 
@@ -691,7 +685,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests(false);
+        let mut ventilation = prepare_ventilation_tests();
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
@@ -853,7 +847,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests(false);
+        let mut ventilation = prepare_ventilation_tests();
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
@@ -1020,7 +1014,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests(true);
+        let mut ventilation = prepare_ventilation_tests();
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
@@ -1312,7 +1306,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests(false);
+        let mut ventilation = prepare_ventilation_tests();
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
@@ -1484,7 +1478,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_stops_starts_ventilation() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_ventilation.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut ventilation = Ventilation::new(config.ventilation);
 
         let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =

@@ -671,7 +671,7 @@ pub mod tests {
 
         // re-use configuration previously create for different component
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_data_logger.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
         let mut ambient = Ambient::new(config.ambient);
 

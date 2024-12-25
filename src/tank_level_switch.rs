@@ -723,7 +723,7 @@ pub mod tests {
             mpsc::channel();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let duration_test_case_secs = config
             .tank_level_switch
             .tank_level_switch_position_high_stabilization_count
@@ -889,10 +889,14 @@ pub mod tests {
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.refill.initial_wait_interval = 2;
+        config.refill.check_interval = 60;
+        
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
+
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false, None);
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
@@ -1064,7 +1068,7 @@ pub mod tests {
             mpsc::channel();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1238,7 +1242,7 @@ pub mod tests {
             mpsc::channel();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_refill.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let duration_test_case_part: u64 = 2; // two seconds with level switch before toggling
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]

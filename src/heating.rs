@@ -18,13 +18,9 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::channel_content::ActuatorState;
-use crate::channel_content::AquariumDevice;
-use crate::channel_content::AquariumSignal;
-use crate::channel_content::InternalCommand;
+use crate::channel_content::{ActuatorState, AquariumDevice, AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
-use crate::sawtooth_profile::SawToothProfile;
-use crate::sawtooth_profile::SawToothProfileConfig;
+use crate::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 
@@ -1008,6 +1004,7 @@ pub mod tests {
     use crate::common::tests::update_min_max_actuation_duration;
     use crate::config::{read_config_file_with_test_database, ConfigData};
     use crate::heating::{Heating, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
+    use crate::sawtooth_profile::SawToothProfileConfig;
     use crate::mock::tests::{
         mock_ambient, mock_atlas_scientific, mock_controllino, mock_data_logger,
         mock_schedule_check, mock_tank_level_switch,
@@ -1068,12 +1065,22 @@ pub mod tests {
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
         test_db_number: u32,
+        saw_tooth_profile_config_opt: Option<SawToothProfileConfig>
     ) -> (ConfigData, Heating) {
         // prepare struct Heating for subsequent tests
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_heating.toml".to_string(),
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
             test_db_number,
         );
+        config.heating.stop_on_refill_error_delay = 2;
+        
+        match saw_tooth_profile_config_opt {
+            Some(saw_tooth_profile_config) => {
+                config.heating.saw_tooth_profile_config = saw_tooth_profile_config;
+            },
+            None => { /* do nothing */ }
+        }
+
         println!("Testing with database {}", config.sql_interface.db_name);
 
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
@@ -1114,7 +1121,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 11);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 11, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -1325,7 +1332,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 12);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -1541,8 +1548,12 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 13);
-
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(
+                                            3600,
+                                            13,
+                                            Some(SawToothProfileConfig::new(6, 1, 6, 1))
+                                        );
+        
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
         let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
@@ -1876,7 +1887,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 14);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 14, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2095,7 +2106,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 15);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 15, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2424,7 +2435,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 16);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 16, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2753,7 +2764,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 17);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -2961,7 +2972,7 @@ pub mod tests {
         let sleep_duration_100_millisec = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 18);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3, 18, None);
 
         // channels for the test object. test environment only uses one of the channels
         let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
@@ -3175,7 +3186,7 @@ pub mod tests {
     // resumes operation.
     // Test case uses test database #19.
     pub fn test_messaging_stops_starts_heating() {
-        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 19);
+        let (_, mut heating) = prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
 
         let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating) = mpsc::channel();
         let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific) = mpsc::channel();

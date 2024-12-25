@@ -586,10 +586,10 @@ pub mod tests {
         let mut mock_food_injection = MockFoodInjection::new();
 
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_feed.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             7,
         );
-        println!("Testing with database {}", config.sql_interface.db_name);
+
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
@@ -714,7 +714,7 @@ pub mod tests {
         setup_logger();
 
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_feed_secondary.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             8,
         );
 
@@ -901,7 +901,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed_tertiary.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
         // mock interface will be used in operation of test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
@@ -1030,7 +1030,7 @@ pub mod tests {
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_first() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
 
         // mock interface will be used in operation of test object
@@ -1057,7 +1057,7 @@ pub mod tests {
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
 
         // mock interface will be used in operation of test object
@@ -1084,7 +1084,7 @@ pub mod tests {
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_last() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 99;
 
         // mock interface will be used in operation of test object
@@ -1123,10 +1123,10 @@ pub mod tests {
         let mut mock_food_injection = MockFoodInjection::new();
 
         let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_feed_quaternary.toml".to_string(),
+            "/config/aquarium_control_test_generic.toml".to_string(),
             9,
         );
-        println!("Testing with database {}", config.sql_interface.db_name);
+
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
@@ -1251,11 +1251,13 @@ pub mod tests {
 
         let mut mock_food_injection = MockFoodInjection::new();
 
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_feed_quinary.toml".to_string(),
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
             10,
         );
-        println!("Testing with database {}", config.sql_interface.db_name);
+
+        config.feed.strategy_multiple_schedule_entries_in_past = 99;
+
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {

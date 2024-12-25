@@ -677,6 +677,17 @@ pub mod tests {
         }
     }
 
+    fn read_balling_config() -> ConfigData {
+        read_config_file("/config/aquarium_control_test_generic.toml".to_string())
+    }
+
+    fn read_balling_config_with_database(db_number: u32) -> ConfigData {
+        read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            db_number            
+        )
+    }
+
     fn output_vector(id: u32, v: &Vec<u32>) -> String {
         let mut output: String = "Pump #".into();
         if v.is_empty() {
@@ -714,8 +725,13 @@ pub mod tests {
     // This test case checks if the configuration file contains a valid value for the dosing interval.
     // It does not operate on any data from SQL database.
     pub fn test_balling_initialization_invalid_intervals() {
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_balling_panic.toml".to_string());
+        let mut config: ConfigData = read_balling_config();
+
+        config.balling.dosing_interval_pump1 = 0;
+        config.balling.dosing_interval_pump2 = 0;
+        config.balling.dosing_interval_pump3 = 0;
+        config.balling.dosing_interval_pump4 = 0;
+
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -734,10 +750,7 @@ pub mod tests {
     // As prerequisite for this test case, an empty empty dosing log is required.
     // Test cases uses test database #01.
     pub fn test_balling_initialization_empty_dosing_log() {
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_balling_empty.toml".to_string(),
-            1,
-        );
+        let config: ConfigData = read_balling_config_with_database(1);
 
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
@@ -821,10 +834,7 @@ pub mod tests {
     // a dosing log in SQL database which has entries for all pumps.
     // Test case uses test database #02.
     pub fn test_balling_initialization_full_dosing_log() {
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_balling_1.toml".to_string(),
-            2,
-        );
+        let config: ConfigData = read_balling_config_with_database(2);
 
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
@@ -917,7 +927,6 @@ pub mod tests {
     // This function executes the test object and test environment in separate threads.
     // The test case depends on the configuration and reference values provided for asserts.
     pub fn test_balling_dosing(
-        config_file_name: &str,
         test_db_number: u32,
         schedule_allows: bool,
         execution_count_reference: i32,
@@ -926,11 +935,34 @@ pub mod tests {
         pump2_engagement_durations_reference: usize,
         pump3_engagement_durations_reference: usize,
         pump4_engagement_durations_reference: usize,
+        schedule_check_interval: u32,
+        dosing_intervals: Option<(u32, u32, u32, u32)>,
     ) {
         let sleep_duration_10_seconds = Duration::from_millis(duration_millis);
         let spin_sleeper_test_environment = SpinSleeper::default();
-        let config: ConfigData =
-            read_config_file_with_test_database(config_file_name.to_string(), test_db_number);
+        let mut config: ConfigData =
+            read_balling_config_with_database(test_db_number);
+
+        config.balling.pump1_active = pump1_engagement_durations_reference > 0;
+        config.balling.pump2_active = pump2_engagement_durations_reference > 0;
+        config.balling.pump3_active = pump3_engagement_durations_reference > 0;
+        config.balling.pump4_active = pump4_engagement_durations_reference > 0;
+        config.balling.schedule_check_interval = schedule_check_interval;
+
+        match dosing_intervals {
+            Some((
+                dosing_interval_pump1,
+                dosing_interval_pump2,
+                dosing_interval_pump3,
+                dosing_interval_pump4,
+            )) => {
+                config.balling.dosing_interval_pump1 = dosing_interval_pump1;
+                config.balling.dosing_interval_pump2 = dosing_interval_pump2;
+                config.balling.dosing_interval_pump3 = dosing_interval_pump3;
+                config.balling.dosing_interval_pump4 = dosing_interval_pump4;
+            }
+            None => { /* do nothing */ }
+        }
 
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
@@ -1048,15 +1080,16 @@ pub mod tests {
     // Test case uses test database #03.
     pub fn test_balling_dosing_schedule_allows_single_dosing() {
         test_balling_dosing(
-            "/config/aquarium_control_test_balling_2.toml",
-            3,     // index for determining test data base
-            true,  // schedule allows
-            1,     // execution count
-            10000, // maximum time in milliseconds for test execution
-            1,     // number of dosings for pump #1
-            0,     // number of dosings for pump #2
-            0,     // number of dosings for pump #3
-            0,     // number of dosings for pump #4
+            3,                        // index for determining test data base
+            true,                     // schedule allows
+            1,                        // execution count
+            10000,                    // maximum time in milliseconds for test execution
+            1,                        // number of dosings for pump #1
+            0,                        // number of dosings for pump #2
+            0,                        // number of dosings for pump #3
+            0,                        // number of dosings for pump #4
+            60,                       // schedule check interval
+            Some((50, 200, 100, 50)), // dosing intervals
         );
     }
 
@@ -1067,7 +1100,6 @@ pub mod tests {
     // Test case uses test database #04.
     pub fn test_balling_dosing_schedule_forbids() {
         test_balling_dosing(
-            "/config/aquarium_control_test_balling_3.toml",
             4,     // index for determining test data base
             false, // schedule does not allow
             0,     // execution count
@@ -1076,6 +1108,8 @@ pub mod tests {
             0,     // number of dosings for pump #2
             0,     // number of dosings for pump #3
             0,     // number of dosings for pump #4
+            60,    // schedule check interval
+            None,
         );
     }
 
@@ -1087,15 +1121,16 @@ pub mod tests {
     // Test case uses test database #05.
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
-            "/config/aquarium_control_test_balling_multiple_dosings.toml",
-            5,     // index for determining test data base
-            true,  // schedule allows
-            14,    // execution count
-            19000, // maximum time in milliseconds for test execution
-            5,     // number of dosings for pump #1
-            4,     // number of dosings for pump #2
-            3,     // number of dosings for pump #3
-            2,     // number of dosings for pump #4
+            5,                  // index for determining test data base
+            true,               // schedule allows
+            14,                 // execution count
+            19000,              // maximum time in milliseconds for test execution
+            5,                  // number of dosings for pump #1
+            4,                  // number of dosings for pump #2
+            3,                  // number of dosings for pump #3
+            2,                  // number of dosings for pump #4
+            1,                  // schedule check interval
+            Some((3, 5, 7, 9)), // dosing intervals
         );
     }
 
@@ -1270,10 +1305,13 @@ pub mod tests {
         let sleep_duration_2_secs = Duration::from_secs(2);
         let spin_sleeper = SpinSleeper::default();
 
-        let config: ConfigData = read_config_file_with_test_database(
-            "/config/aquarium_control_test_balling_4.toml".to_string(),
-            6,
-        );
+        let mut config: ConfigData = read_balling_config_with_database(6);
+
+        config.balling.pump2_active = false;
+        config.balling.pump3_active = false;
+        config.balling.pump4_active = false;
+        config.balling.schedule_check_interval = 1;
+        config.balling.dosing_interval_pump1 = 5;
 
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,

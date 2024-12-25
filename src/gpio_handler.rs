@@ -189,7 +189,7 @@ pub mod tests {
         setup_logger();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_gpio_handler_valid.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 
@@ -197,9 +197,11 @@ pub mod tests {
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[should_panic]
     pub fn test_invalid_gpio_config_low() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_gpio_handler_invalid_low.toml".to_string(),
-        );
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.gpio.gpio_pin_number_tank_level = 40;
+
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 
@@ -207,9 +209,11 @@ pub mod tests {
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[should_panic]
     pub fn test_invalid_gpio_config_high() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_gpio_handler_invalid_high.toml".to_string(),
-        );
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.gpio.gpio_pin_number_tank_level = 40;
+
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
 

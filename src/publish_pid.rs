@@ -120,18 +120,19 @@ pub mod tests {
     #[test]
     #[should_panic]
     pub fn test_non_existent_pid_file() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_publish_pid_non_existent_pid_file.toml".to_string(),
-        );
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
+        config.publish_pid.pid_filename = "/var/local/aquarium-ctrl-non-existent.pid".to_string();
         _ = PublishPid::new(config.publish_pid);
     }
 
     #[test]
     #[should_panic]
     pub fn test_publish_pid_invalid_content_pid_file() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_publish_pid_invalid_content_pid_file.toml".to_string(),
-        );
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_publish_pid.toml".to_string());
+        config.publish_pid.pid_filename =
+            "/var/local/aquarium-ctrl-invalid-content.pid".to_string();
         _ = PublishPid::new(config.publish_pid);
     }
 }

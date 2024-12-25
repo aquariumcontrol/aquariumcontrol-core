@@ -495,7 +495,7 @@ pub mod tests {
     // this test cases executes the food injection without interruption from signal handler
     pub fn test_food_injection_uninterrupted() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut food_injection = FoodInjection::new(&config.feed);
 
         let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
@@ -586,7 +586,7 @@ pub mod tests {
     // this test cases executes the food injection with interruption from signal handler
     pub fn test_food_injection_interrupted() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_feed.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut food_injection = FoodInjection::new(&config.feed);
 
         let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();

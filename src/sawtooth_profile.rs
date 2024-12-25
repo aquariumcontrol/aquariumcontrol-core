@@ -35,6 +35,18 @@ pub struct SawToothProfileConfig {
     phase4_length: u32,
 }
 
+impl SawToothProfileConfig {
+    #[cfg(test)]
+    pub fn new(phase1_length: u32, phase2_length: u32, phase3_length: u32, phase4_length: u32) -> SawToothProfileConfig {
+        SawToothProfileConfig {
+            phase1_length: phase1_length,
+            phase2_length: phase2_length,
+            phase3_length: phase3_length,
+            phase4_length: phase4_length,
+        }
+    }
+}
+
 /// Contains the profile configuration and the implementation for the saw tooth profile.
 pub struct SawToothProfile {
     /// This variable counts the number of iterations executed and is reset to zero when reaching the end of the profile.

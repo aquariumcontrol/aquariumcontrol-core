@@ -34,10 +34,10 @@ pub struct RefillConfig {
     active: bool,
 
     /// time interval in seconds which need to pass after initialization of the application before refill control is becoming active
-    initial_wait_interval: u64,
+    pub initial_wait_interval: u64,
 
     /// interval for the main control in seconds    
-    check_interval: u64,
+    pub check_interval: u64,
 
     /// maximum number of permitted refill operations within last 24h
     /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
@@ -1152,17 +1152,23 @@ pub mod tests {
     use crate::refill::LOG_TARGET_REFILL;
 
     pub fn prepare_refill_tests(
-        config_file_name: &str,
         refill_errors: Option<RefillErrors>,
+        initial_wait_interval: u64,
+        check_interval: u64,
         test_db_number_opt: Option<u32>,
     ) -> (ConfigData, Refill, SqlInterface) {
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+
         // prepare struct Refill for subsequent tests
-        let config: ConfigData = match test_db_number_opt {
+        let mut config: ConfigData = match test_db_number_opt {
             Some(test_db_number) => {
                 read_config_file_with_test_database(config_file_name.to_string(), test_db_number)
             }
             None => read_config_file(config_file_name.to_string()),
         };
+
+        config.refill.initial_wait_interval = initial_wait_interval;
+        config.refill.check_interval = check_interval;
 
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
@@ -1188,13 +1194,19 @@ pub mod tests {
     }
 
     pub fn prepare_refill_tests_with_mock_database_interface(
-        config_file_name: &str,
         refill_errors: Option<RefillErrors>,
+        initial_wait_interval: u64,
+        check_interval: u64,
         test_db_number: u32,
     ) -> (ConfigData, Refill) {
+        let config_file_name = "/config/aquarium_control_test_generic.toml";
+
         // prepare struct Refill for subsequent tests
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file_with_test_database(config_file_name.to_string(), test_db_number);
+
+        config.refill.initial_wait_interval = initial_wait_interval;
+        config.refill.check_interval = check_interval;
 
         let sql_interface_refill = MockSqlInterfaceRefill {};
 
@@ -1223,11 +1235,7 @@ pub mod tests {
             error_sql_update_failed: false,
             error_sql_get_historic_data_failed: false,
         };
-        let (_, mut refill, _) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill.toml",
-            Some(refill_errors),
-            None,
-        );
+        let (_, mut refill, _) = prepare_refill_tests(Some(refill_errors), 2, 60, None);
 
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
@@ -1255,11 +1263,7 @@ pub mod tests {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_secondary.toml",
-            None,
-            Some(20),
-        );
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(20));
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
@@ -1439,11 +1443,7 @@ pub mod tests {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (config, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_quinary.toml",
-            None,
-            Some(21),
-        );
+        let (config, mut refill, mut sql_interface) = prepare_refill_tests(None, 2, 60, Some(21));
 
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
@@ -1625,11 +1625,7 @@ pub mod tests {
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_secondary.toml",
-            None,
-            Some(22),
-        );
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(22));
 
         // set the error
         refill.refill_errors.error_switch_stuck_low = true;
@@ -1837,11 +1833,7 @@ pub mod tests {
     pub fn test_refill_conditions_error_sql_update_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_secondary.toml",
-            None,
-            Some(23),
-        );
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(23));
 
         // set the error
         refill.refill_errors.error_sql_update_failed = true;
@@ -2032,11 +2024,8 @@ pub mod tests {
             error_sql_get_historic_data_failed: true,
         };
 
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill.toml",
-            Some(refill_errors),
-            Some(24),
-        );
+        let (_, mut refill, mut sql_interface) =
+            prepare_refill_tests(Some(refill_errors), 2, 60, Some(24));
 
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
@@ -2219,11 +2208,7 @@ pub mod tests {
     pub fn test_refill_blocked_by_schedule() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_secondary.toml",
-            None,
-            Some(25),
-        );
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(25));
 
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
@@ -2403,11 +2388,7 @@ pub mod tests {
     pub fn test_messaging_stops_starts_refill() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill, mut sql_interface) = prepare_refill_tests(
-            "/config/aquarium_control_test_refill_quaternary.toml",
-            None,
-            Some(26),
-        );
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 10, 60, Some(26));
 
         let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
             mpsc::channel::<InternalCommand>();
@@ -2627,11 +2608,7 @@ pub mod tests {
     pub fn test_refill_conditions_error_get_historic_data_failed() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
-        let (_, mut refill) = prepare_refill_tests_with_mock_database_interface(
-            "/config/aquarium_control_test_refill_secondary.toml",
-            None,
-            27,
-        );
+        let (_, mut refill) = prepare_refill_tests_with_mock_database_interface(None, 1, 1, 27);
         // this test case does not use the SQL database, so no conflict arises
         // when concurrently executing other test cases on the same DB.
 

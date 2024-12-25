@@ -1560,10 +1560,12 @@ pub mod tests {
 
         let mut mock_data_injection = MockDataInjection::new();
 
-        let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_data_logger.toml".to_string());
-        let config2: ConfigData =
-            read_config_file("/config/aquarium_control_test_data_logger.toml".to_string());
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.data_logger.logging_interval = 1;
+        let mut config2: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config2.data_logger.logging_interval = 1;
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {

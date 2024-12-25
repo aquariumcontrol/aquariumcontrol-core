@@ -61,4 +61,4 @@ debug = ["debug_signal_handler", "debug_feed", "debug_ambient", "debug_controlli
 commissioning_prep = []
 
 [profile.test]
-test-threads = 16
+test-threads = 16  # Or any number of threads you want
