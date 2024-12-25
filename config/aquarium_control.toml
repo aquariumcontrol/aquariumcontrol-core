@@ -66,7 +66,7 @@ min_interval_last_refill = 600                          # min. required time int
 max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
 refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
 max_refill_volume = 1.0                                 # maximum allowed refill volume in one refill operation
-additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
+additional_refill_volume = 0.1                          # additional refill volume as hysteresis to avoid triggering refill too often
 
 [tank_level_switch]
 use_simulator = false                                   # if true, then do not use real HW

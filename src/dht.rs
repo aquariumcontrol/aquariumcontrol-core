@@ -599,6 +599,7 @@ impl Dht {
         let mut retry_counter = 0;
 
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
+        let mut dht_error = DhtError::Timeout; // to avoid compiler error. Value will be overwritten in error case.
 
         while !measurement_successful {
             match self.read(
@@ -620,14 +621,15 @@ impl Dht {
                 Err(e) => {
                     if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
                         retry_counter += 1;
-                        if retry_counter > DHT22_MAX_RETRIES {
+                        if retry_counter > dht22_constants::DHT22_MAX_RETRIES {
                             #[cfg(not(test))]
                             error!(
                                 target: LOG_TARGET_DHT,
                                 "failed to read from DHT sensor (after {} retries, {e:?}",
                                 retry_counter,
                             );
-                            return Err(e);
+                            dht_error = e;
+                            break;
                         }
                     } else {
                         #[cfg(not(test))]
@@ -642,6 +644,9 @@ impl Dht {
         }
         if measurement_successful {
             Ok(result_tuple)
+        }
+        else {
+            Err(dht_error)
         }
     }
 
