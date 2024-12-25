@@ -70,7 +70,7 @@ additional_refill_volume = 0.2                          # additional refill volu
 
 [tank_level_switch]
 use_simulator = true                                   # if true, then do not use real HW
-tank_level_switch_position_high_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
+tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [heating]
 active = true

@@ -29,7 +29,7 @@ pub struct TankLevelSwitchConfig {
     pub use_simulator: bool,
 
     /// number of seconds which need to indicate a low level before the refill control assumes that the water level is low
-    tank_level_switch_position_high_stabilization_count: u32,
+    tank_level_switch_position_low_stabilization_count: u32,
 }
 
 const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
@@ -72,7 +72,7 @@ pub struct TankLevelSwitch {
     tank_level_switch_invalid: bool,
 
     /// time counter to determine if positition is stabilized
-    tank_level_switch_position_high_stabilization_counter: u32,
+    tank_level_switch_position_low_stabilization_counter: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from signal handler
     lock_warn_inapplicable_command_signal_handler: bool,
@@ -144,7 +144,7 @@ impl TankLevelSwitch {
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
             tank_level_switch_position_stabilized: initial_position_stabilized,
-            tank_level_switch_position_high_stabilization_counter: 0,
+            tank_level_switch_position_low_stabilization_counter: 0,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_error_invalid_signal_request_refill: false,
@@ -185,7 +185,7 @@ impl TankLevelSwitch {
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
             tank_level_switch_position_stabilized: initial_position_stabilized,
-            tank_level_switch_position_high_stabilization_counter: 0,
+            tank_level_switch_position_low_stabilization_counter: 0,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_error_invalid_signal_request_refill: false,
@@ -255,30 +255,32 @@ impl TankLevelSwitch {
     /// signal to true indicating high water level.
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
-            // goto safe position if input signal is invalid
+            // go to safe position if input signal is invalid
             self.tank_level_switch_position_stabilized = true;
         } else {
             // consider asymmetric delay for calculation
             self.tank_level_switch_position_stabilized = match self.tank_level_switch_position {
                 true => {
-                    self.tank_level_switch_position_high_stabilization_counter = 0;
-                    true // set stabilized to true without delay
+                    self.tank_level_switch_position_low_stabilization_counter = 0;
+                    true // set stabilized signal to true (high) without delay
                 }
                 false => {
-                    if self.tank_level_switch_position_high_stabilization_counter
+                    if self.tank_level_switch_position_low_stabilization_counter
                         < self
                             .config
-                            .tank_level_switch_position_high_stabilization_count
+                            .tank_level_switch_position_low_stabilization_count
                             * 10
                     {
                         // do not change the signal if counter is not exceeded
-                        self.tank_level_switch_position_high_stabilization_counter += 1;
-                        //println!(
-                        //    "calc_tank_level_switch_position_stabilized: tank_level_switch_position_high_stabilization_counter = {}, tank_level_switch_position_stabilized={}",
-                        //     self.tank_level_switch_position_high_stabilization_counter,
-                        //     self.tank_level_switch_position_stabilized
-                        //);
-                        self.tank_level_switch_position_stabilized
+                        self.tank_level_switch_position_low_stabilization_counter += 1;
+                        
+                        #[cfg(feature = "debug_tank_level_switch")]
+                        debug!(
+                            "calc_tank_level_switch_position_stabilized: tank_level_switch_position_low_stabilization_counter = {}, tank_level_switch_position_stabilized={}",
+                             self.tank_level_switch_position_low_stabilization_counter,
+                             self.tank_level_switch_position_stabilized
+                        );
+                        self.tank_level_switch_position_stabilized //
                     } else {
                         false
                     }
@@ -630,6 +632,7 @@ impl TankLevelSwitch {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS - execution_duration_millis;
             }
+            // sleep time does not need to be split up because cycle time is 100 milliseconds only
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
@@ -726,7 +729,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let duration_test_case_secs = config
             .tank_level_switch
-            .tank_level_switch_position_high_stabilization_count
+            .tank_level_switch_position_low_stabilization_count
             + 1;
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
