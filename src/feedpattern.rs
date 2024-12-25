@@ -10,6 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Holds the configuration data of one feed pattern.
 pub struct Feedpattern {
     /// numeric ID of the feed profile
+    /// Data is not used in the implementation. Therefore is tagged as unused.
+    #[allow(unused)]
     pub profile_id: i32,
 
     /// name of the feed profile

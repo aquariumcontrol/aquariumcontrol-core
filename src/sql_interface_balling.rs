@@ -24,6 +24,8 @@ pub struct SqlInterfaceBalling {
 pub struct BallingSetVal {
     /// ID of the pump
     /// Attribute is public becaused access from within test cases.
+    /// Data is not used in the implementation. Therefore, it is tagged as unused.
+    #[allow(unused)]
     pub pump_id: i32,
 
     /// flow rate of the pump in ml/sec
@@ -34,6 +36,8 @@ pub struct BallingSetVal {
 
     /// label which describes the fluid that the pump is delivering
     /// Attribute is public becaused access from within test cases.
+    /// Data is not used in the implementation. Therefore, it is tagged as unused.
+    #[allow(unused)]
     pub label: String,
 }
 
