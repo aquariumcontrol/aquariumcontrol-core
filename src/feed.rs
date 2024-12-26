@@ -12,8 +12,9 @@ use log::info;
 
 use log::{error, warn};
 
-#[cfg(feature = "debug_feed")]
+#[cfg(all(feature = "debug_feed", not(test)))]
 use log::debug;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -113,7 +114,7 @@ impl Feed {
         }
     }
 
-    #[cfg(feature = "debug_feed")]
+    #[cfg(all(feature = "debug_feed", not(test)))]
     /// Helper function to visualize a vector of feed schedule entries.
     /// # Arguments:
     /// * `feedschedule_entries` - reference to vector of feed schedule entries    
@@ -250,7 +251,7 @@ impl Feed {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> bool {
-        #[cfg(feature = "debug_feed")]
+        #[cfg(all(feature = "debug_feed", not(test)))]
         debug!(
             target: LOG_TARGET_FEED,
             "executing feed profile id #{}",
@@ -329,13 +330,19 @@ impl Feed {
                 && !feed_inhibited
                 && (loop_counter % (self.config.schedule_check_interval * 10) == 0)
             {
+                #[cfg(all(feature = "debug_feed", not(test)))]
+                debug!(
+                    target: LOG_TARGET_FEED,
+                    "Starting feed control cycle"
+                );
+
                 match self
                     .sql_interface_feed
                     .get_past_feedschedule_entries_from_database()
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entries) => {
-                            #[cfg(feature = "debug_feed")]
+                            #[cfg(all(feature = "debug_feed", not(test)))]
                             debug!(
                                 target: LOG_TARGET_FEED,
                                 "Discovered following feed schedule entries in the past: {}",
@@ -347,9 +354,9 @@ impl Feed {
 
                             match feed_schedule_entry_opt {
                                 Some(feed_schedule_entry) => {
-                                    #[cfg(feature = "debug_feed")]
-                                    println!(
-                                        //target: LOG_TARGET_FEED,
+                                    #[cfg(all(feature = "debug_feed", not(test)))]
+                                    debug!(
+                                        target: LOG_TARGET_FEED,
                                         "Selected following feed schedule entry for execution: {}",
                                         feed_schedule_entry
                                     );
@@ -398,6 +405,7 @@ impl Feed {
                     }
                 };
             }
+            
             // exit loop right after feed execution if quit command has been received meanwhile
             if quit_command_received {
                 break;
@@ -420,7 +428,7 @@ impl Feed {
                     "received Stop command. Inhibiting feed."
                 );
 
-                #[cfg(feature = "debug_feed")]
+                #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
                     target: LOG_TARGET_FEED,
                     "received Stop command."
@@ -435,7 +443,7 @@ impl Feed {
                     "received Start command. Restarting feed."
                 );
 
-                #[cfg(feature = "debug_feed")]
+                #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
                     target: LOG_TARGET_FEED,
                     "received Start command"
@@ -447,7 +455,7 @@ impl Feed {
                 && self.profile_id_requested >= 0
                 && !self.execution_blocked
             {
-                #[cfg(feature = "debug_feed")]
+                #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
                     target: LOG_TARGET_FEED,
                     "received execution command"
@@ -486,7 +494,7 @@ impl Feed {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        #[cfg(feature = "debug_signal_handler")]
+        #[cfg(all(feature = "debug_signal_handler", not(test)))]
         debug!(
             target: LOG_TARGET_FEED,
             "Sending Quit confirmation to signal handler."
