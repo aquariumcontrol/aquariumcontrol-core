@@ -73,7 +73,7 @@ use_simulator = false                                   # if true, then do not u
 tank_level_switch_position_low_stabilization_count = 5 # number of seconds before stabilized tank level switch turns low
 
 [feed]
-active = false
+active = true
 schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
 device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 strategy_multiple_schedule_entries_in_past = 0          # strategy to apply when finding more than one feed schedule entry in the past
@@ -129,7 +129,6 @@ replacement_value_ph = 8.0                              # replacement value for 
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
 
 [gpio_handler]
-active = true						                    # used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
 gpio_pin_number_tank_level = 20                         # GPIO pin number where tank level sensor is connected
 gpio_pin_number_dht22_io = 11                           # GPIO pin number where DHT sensor is connected
