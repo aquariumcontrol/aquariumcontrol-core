@@ -832,6 +832,48 @@ impl Refill {
         )
     }
 
+    /// Communicate with schedule checker to see if actuation is allowed.
+    /// # Arguments
+    /// * `tx_to_schedule_check` - Reference to sender part of channel for communication to schedule checker
+    /// * `rx_from_schedule_check` - Reference to receiver part of channel for communication from schedule checker               
+    fn check_schedule(
+        &mut self,
+        tx_to_schedule_check: &Sender<InternalCommand>,
+        rx_from_schedule_check: &Receiver<bool>,
+    ) -> bool {
+        match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+            Ok(_) => {
+                self.lock_error_channel_send_schedule_check = false;
+                match rx_from_schedule_check.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_schedule_check = false;
+                        c
+                    }
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_schedule_check {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "reading channel content for schedule check failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_schedule_check = false;
+                        }
+                        true // assume we are allowed to actuate when communication is not successful
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_schedule_check {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "channel communication to schedule check failed ({e:?})"
+                    );
+                    self.lock_error_channel_send_schedule_check = true;
+                }
+                true // assume we are allowed to actuate when communication is not successful
+            }
+        }
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
@@ -865,15 +907,21 @@ impl Refill {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
-        let mut schedule_check_result: bool = false;
+
+        let mut schedule_check_result: bool;
+        #[cfg(feature = "debug_refill")] {
+            schedule_check_result = false;
+        }
+
         let mut tank_level_switch_invalid: bool;
         let mut tank_level_switch_position_stabilized: bool;
 
-        #[cfg(feature = "debug_refill")] {
+        #[cfg(feature = "debug_refill")]
+        {
             tank_level_switch_invalid = false;
             tank_level_switch_position_stabilized = true;
         }
-        
+
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut cycle_time_exceeded: bool = false; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
@@ -921,7 +969,6 @@ impl Refill {
 
         // main control loop for refill
         loop {
-            
             // check if either during main control loop or during refill execution termination requests has been received
             if quit_command_received {
                 break; // exit outer loop
@@ -951,44 +998,22 @@ impl Refill {
                             && !self.refill_errors.error_sql_update_failed
                             && !self.refill_errors.error_sql_get_historic_data_failed
                         {
-                            // schedule check to see if actuation is allowed
-                            match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
-                                Ok(_) => {
-                                    // now listen for response
-                                    schedule_check_result = match rx_from_schedule_check.recv() {
-                                        Ok(c) => {
-                                            self.lock_error_channel_receive_schedule_check = false;
-                                            c
-                                        }
-                                        Err(e) => {
-                                            if !self.lock_error_channel_receive_schedule_check {
-                                                error!(
-                                                    target: LOG_TARGET_REFILL,
-                                                    "reading channel content for schedule check failed ({e:?})"
-                                                );
-                                                self.lock_error_channel_receive_schedule_check =
-                                                    false;
-                                            }
-                                            true // assume we are allowed to actuate when communication is not successful
-                                        }
-                                    };
-                                    self.lock_error_channel_send_schedule_check = false;
-                                }
-                                Err(e) => {
-                                    if !self.lock_error_channel_send_schedule_check {
-                                        error!(
-                                            target: LOG_TARGET_REFILL,
-                                            "channel communication to schedule check failed ({e:?})"
-                                        );
-                                        self.lock_error_channel_send_schedule_check = true;
-                                    }
-                                }
-                            }
+                            schedule_check_result = self.check_schedule(
+                                &tx_to_schedule_check,
+                                &rx_from_schedule_check,
+                            );
 
                             if schedule_check_result {
                                 if !tank_level_switch_position_stabilized
                                     && !tank_level_switch_invalid
                                 {
+                                    
+                                    #[cfg(feature = "debug_refill")]
+                                    debug!(
+                                        target: LOG_TARGET_REFILL,
+                                        "aquiring semaphore..."
+                                    );
+
                                     // conditions for allowing refill operation are given
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
@@ -1012,6 +1037,19 @@ impl Refill {
                     }
                 }
             }
+            
+            #[cfg(feature = "debug_refill")]
+            debug!(
+                target: LOG_TARGET_REFILL,
+                "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
+                refill_inhibited,
+                self.refill_errors.error_switch_stuck_low,
+                self.refill_errors.error_sql_update_failed,
+                self.refill_errors.error_sql_get_historic_data_failed,
+                schedule_check_result,
+                tank_level_switch_position_stabilized,
+                tank_level_switch_invalid
+            );            
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
@@ -1035,6 +1073,14 @@ impl Refill {
             } else {
                 remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
             }
+            
+            #[cfg(feature = "debug_refill")]
+            debug!(
+                target: LOG_TARGET_REFILL,
+                "execution duration = {}, cycle time = {}",
+                execution_duration_millis,
+                self.config.check_interval * MILLIS_PER_SEC
+            );
 
             // skip further waiting if quit command has been received during refilling
             if !quit_command_received {
@@ -1077,19 +1123,6 @@ impl Refill {
 
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;
-              
-            #[cfg(feature = "debug_refill")]
-            debug!(
-                target: LOG_TARGET_REFILL,
-                "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
-                refill_inhibited,
-                self.refill_errors.error_switch_stuck_low,
-                self.refill_errors.error_sql_update_failed,
-                self.refill_errors.error_sql_get_historic_data_failed,
-                schedule_check_result,
-                tank_level_switch_position_stabilized,
-                tank_level_switch_invalid
-            );
         }
 
         // application received request to terminate, that is why the loop was left.
