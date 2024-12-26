@@ -236,15 +236,6 @@ impl Dht {
             if ticks[i] > dht22_constants::DHT22_BIT_TIMING_LIMIT {
                 data_bits[count_data_bits] = true;
             }
-            /*println!(
-                "data_bit_len[{}] = {} => {}",
-                count_data_bits,
-                ticks[i],
-                match data_bits[count_data_bits] {
-                    true => "TRUE",
-                    false => "FALSE",
-                }
-            );*/
             count_data_bits += 1;
             if count_data_bits > dht22_constants::DHT22_BYTE4_STOP_IDX {
                 break;
@@ -520,11 +511,6 @@ impl Dht {
                     duration_after = event.timestamp;
                 }
                 None => {
-                    /*warn!(
-                        target: LOG_TARGET_DHT,
-                        "empty interrupt event for bit #{}",
-                        i
-                    );*/
                     duration_after = duration_before;
                 }
             }
@@ -553,16 +539,10 @@ impl Dht {
         }
 
         if timeout_occurred {
-            /*for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
-                println!("ticks[{}] = {}", i, ticks[i]);
-            }*/
             return Err(DhtError::Timeout);
         }
 
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
-            /*for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
-                println!("ticks[{}] = {}", i, ticks[i]);
-            }*/
             error!(
                 target: LOG_TARGET_DHT,
                 "incorrect number of balid ticks received: target={}, measured={}",
@@ -576,10 +556,6 @@ impl Dht {
         let data_bits = Self::calc_data_bits(ticks, valid_ticks_received);
 
         let byte_vals = Self::calc_byte_array(data_bits);
-
-        /*for i in 0..dht22_constants::DHT22_DATA_LEN {
-            println!("byte_vals[{}] = {}", i, byte_vals[i]);
-        }*/
 
         // checksum calculation
         match Self::calc_checksum(byte_vals) {

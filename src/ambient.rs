@@ -524,7 +524,7 @@ impl Ambient {
             }
 
             if measurement_countdown > 0 {
-                measurement_countdown -= 1;
+                measurement_countdown = measurement_countdown.saturating_sub(1);
             } else {
                 if !self.config.use_simulator {
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -555,7 +555,7 @@ impl Ambient {
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                     receive_counter = 0;
                                 } else {
-                                    receive_counter += 1;
+                                    receive_counter = receive_counter.saturating_add(1);
                                 }
 
                                 #[cfg(feature = "debug_ambient")]

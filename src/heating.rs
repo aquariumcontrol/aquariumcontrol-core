@@ -156,7 +156,7 @@ fn switch_on_heater(
             }
         }
 
-        *mutex_data += 1;
+        *mutex_data = mutex_data.saturating_add(1);
     }
 }
 
@@ -194,7 +194,7 @@ fn switch_off_heater(
                 );
             }
         }
-        *mutex_data += 1;
+        *mutex_data = mutex_data.saturating_add(1);
     }
 }
 
@@ -836,7 +836,7 @@ impl Heating {
                 // update of midnight counter only runs every second
                 if loop_counter % CYCLE_TIME_HEATING_DIVISOR == 0 {
                     // one second closer to midnight
-                    duration_until_midnight -= 1;
+                    duration_until_midnight = duration_until_midnight.saturating_sub(1);
                     match heating_stats_opt {
                         Some(ref mut heating_stats) => {
                             // wrap temperatures depending on the status bits
@@ -884,6 +884,11 @@ impl Heating {
             );
 
             loop_counter += 1;
+
+            // avoid overflow
+            if loop_counter == 1_000_000 {
+                loop_counter = 0;
+            }
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =

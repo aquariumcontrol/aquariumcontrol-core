@@ -274,7 +274,9 @@ impl TankLevelSwitch {
                             * 10
                     {
                         // do not change the signal if counter is not exceeded
-                        self.tank_level_switch_position_low_stabilization_counter += 1;
+                        self.tank_level_switch_position_low_stabilization_counter = self
+                            .tank_level_switch_position_low_stabilization_counter
+                            .saturating_add(1);
 
                         #[cfg(feature = "debug_tank_level_switch")]
                         debug!(

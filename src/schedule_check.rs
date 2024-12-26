@@ -381,6 +381,11 @@ impl ScheduleCheck {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             loop_counter += 1;
+
+            // avoid overflow
+            if loop_counter == 1_000_000 {
+                loop_counter = 0;
+            }
         }
 
         // Application received request to terminate, that is why the loop was left.

@@ -113,7 +113,7 @@ impl MineralInjectionTrait for MineralInjection {
             if dosing_counter >= dosing_duration_millis {
                 break; // stop dosing
             } else {
-                dosing_counter += sleep_interval_millis;
+                dosing_counter = dosing_counter.saturating_add(sleep_interval_millis);
             }
         }
 

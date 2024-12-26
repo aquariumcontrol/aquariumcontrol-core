@@ -214,7 +214,9 @@ impl Feed {
         &self,
         feedschedule_entries: &Vec<FeedScheduleEntry>,
     ) -> Option<FeedScheduleEntry> {
-        if self.config.strategy_multiple_schedule_entries_in_past >= 0 {
+        if (self.config.strategy_multiple_schedule_entries_in_past >= 0)
+            && (feedschedule_entries.len() > 0)
+        {
             // user chose strategy to select one element
             if (self.config.strategy_multiple_schedule_entries_in_past as usize + 1)
                 > feedschedule_entries.len()
@@ -379,7 +381,7 @@ impl Feed {
                                                     &mut feed_schedule_entries,
                                                 );
 
-                                            *mutex_data += 1;
+                                            *mutex_data = mutex_data.saturating_add(1);
                                         }
                                     }
                                 }
@@ -405,7 +407,7 @@ impl Feed {
                     }
                 };
             }
-            
+
             // exit loop right after feed execution if quit command has been received meanwhile
             if quit_command_received {
                 break;
@@ -480,7 +482,7 @@ impl Feed {
                         }
                     }
                     quit_command_received = quit_command_received_during_requested_feed;
-                    *mutex_data += 1;
+                    *mutex_data = mutex_data.saturating_add(1);
                 }
             }
             if quit_command_received {
@@ -490,6 +492,11 @@ impl Feed {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             loop_counter += 1;
+
+            // avoid overflow
+            if loop_counter == 1_000_000 {
+                loop_counter = 0;
+            }
         }
 
         // application received request to terminate, that is why the loop was left.

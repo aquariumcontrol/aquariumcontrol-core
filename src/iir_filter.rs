@@ -73,21 +73,6 @@ impl IIRFilter {
         }
     }
 
-    /*
-    /// returns a variable of type IIRFilter where the initial value is contained in the filter configuration
-    ///
-    /// # Arguments:
-    ///
-    /// * `filter_config` - reference to configuration of filter
-    /// * `time_step` - delta time used in simulation: if faster than real time, then this value is used to correct the filter factor
-    pub fn new_initial_supplied(filter_config: &IIRFilterConfig<f32>, time_step: f32) -> Self {
-        Self {
-            filter_coefficient: filter_config.filter_coefficient * 1.0 / time_step,
-            old_value: filter_config.initial_value,
-        }
-    }
-    */
-
     /// Returns the filtered value.
     /// # Arguments:
     /// * `new_value` - unfiltered input value

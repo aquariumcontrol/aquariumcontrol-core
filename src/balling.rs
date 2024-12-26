@@ -424,7 +424,7 @@ impl Balling {
                                 &tx_to_controllino,
                                 &rx_from_controllino,
                             );
-                            *mutex_data += 1;
+                            *mutex_data = mutex_data.saturating_add(1);
                         }
                         if quit_command_received {
                             break; // Quit command received during dosing
@@ -455,7 +455,7 @@ impl Balling {
                                 &tx_to_controllino,
                                 &rx_from_controllino,
                             );
-                            *mutex_data += 1;
+                            *mutex_data = mutex_data.saturating_add(1);
                         }
                         if quit_command_received {
                             break; // Quit command received during dosing
@@ -486,7 +486,7 @@ impl Balling {
                                 &tx_to_controllino,
                                 &rx_from_controllino,
                             );
-                            *mutex_data += 1;
+                            *mutex_data = mutex_data.saturating_add(1);
                         }
                         if quit_command_received {
                             break; // Quit command received during dosing
@@ -566,6 +566,11 @@ impl Balling {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
 
             loop_counter += 1;
+
+            // avoid overflow
+            if loop_counter == 1_000_000 {
+                loop_counter = 0;
+            }
         }
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.

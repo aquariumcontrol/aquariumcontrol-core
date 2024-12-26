@@ -406,8 +406,9 @@ impl Refill {
         match self.sql_interface_refill.check_empty() {
             Ok(0) => {
                 self.lock_error_check_empty = false;
+                refill_sql_data.duration_since_last_refill = self.config.min_interval_last_refill;
                 refill_sql_data.duration_since_last_refill =
-                    self.config.min_interval_last_refill + 1;
+                    refill_sql_data.duration_since_last_refill.saturating_add(1);
             }
             Ok(_) => {
                 self.lock_error_check_empty = false;
@@ -938,7 +939,13 @@ impl Refill {
         // initial waiting time
         if self.config.initial_wait_interval > 0 {
             while i < self.config.initial_wait_interval * 10 {
-                i += 1;
+                match i.checked_add(1) {
+                    Some(c) => i = c,
+                    None => {
+                        // overflow
+                        break;
+                    }
+                }
 
                 self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
 
@@ -963,8 +970,9 @@ impl Refill {
         }
 
         // frequent update required for calculation of error condition switch stuck high
-        sql_refill_data.duration_since_last_refill =
-            sql_refill_data.duration_since_last_refill + self.config.initial_wait_interval;
+        sql_refill_data.duration_since_last_refill = sql_refill_data
+            .duration_since_last_refill
+            .saturating_add(self.config.initial_wait_interval);
 
         let mut start_time = SystemTime::now();
 
@@ -1028,7 +1036,7 @@ impl Refill {
                                         &mut self.refill_errors,
                                         &mut self.sql_interface_refill,
                                     );
-                                    *mutex_data += 1;
+                                    *mutex_data = mutex_data.saturating_add(1);
                                 }
                             }
                         }
@@ -1070,6 +1078,7 @@ impl Refill {
                 cycle_time_exceeded = true;
             } else {
                 // execution duration is smaller than cycle time in this branch
+                // no risk of underflow
                 remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
             }
 
@@ -1087,7 +1096,13 @@ impl Refill {
                 // check for external requests while waiting
                 i = 0;
                 while (i < remaining_sleep_time_millis) && !cycle_time_exceeded {
-                    i += 100;
+                    match i.checked_add(100) {
+                        Some(c) => i = c,
+                        None => {
+                            // overflow
+                            break;
+                        }
+                    }
 
                     self.communicate_with_data_logger(
                         &tx_to_data_logger,
@@ -1120,8 +1135,9 @@ impl Refill {
 
             start_time = SystemTime::now();
 
-            sql_refill_data.duration_since_last_refill =
-                sql_refill_data.duration_since_last_refill + self.config.check_interval;
+            sql_refill_data.duration_since_last_refill = sql_refill_data
+                .duration_since_last_refill
+                .saturating_add(self.config.check_interval);
         }
 
         // application received request to terminate, that is why the loop was left.

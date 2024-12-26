@@ -1239,6 +1239,7 @@ impl DataLogger {
                 }
                 remaining_sleep_time_millis = 0;
             } else {
+                // underflow cannot happen because else statement require that first operand is higher than second
                 remaining_sleep_time_millis =
                     self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
             }
