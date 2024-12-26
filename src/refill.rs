@@ -909,7 +909,8 @@ impl Refill {
         let spin_sleeper = SpinSleeper::default();
 
         let mut schedule_check_result: bool;
-        #[cfg(feature = "debug_refill")] {
+        #[cfg(feature = "debug_refill")]
+        {
             schedule_check_result = false;
         }
 
@@ -998,16 +999,13 @@ impl Refill {
                             && !self.refill_errors.error_sql_update_failed
                             && !self.refill_errors.error_sql_get_historic_data_failed
                         {
-                            schedule_check_result = self.check_schedule(
-                                &tx_to_schedule_check,
-                                &rx_from_schedule_check,
-                            );
+                            schedule_check_result =
+                                self.check_schedule(&tx_to_schedule_check, &rx_from_schedule_check);
 
                             if schedule_check_result {
                                 if !tank_level_switch_position_stabilized
                                     && !tank_level_switch_invalid
                                 {
-                                    
                                     #[cfg(feature = "debug_refill")]
                                     debug!(
                                         target: LOG_TARGET_REFILL,
@@ -1037,7 +1035,7 @@ impl Refill {
                     }
                 }
             }
-            
+
             #[cfg(feature = "debug_refill")]
             debug!(
                 target: LOG_TARGET_REFILL,
@@ -1049,7 +1047,7 @@ impl Refill {
                 schedule_check_result,
                 tank_level_switch_position_stabilized,
                 tank_level_switch_invalid
-            );            
+            );
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
@@ -1074,7 +1072,7 @@ impl Refill {
                 // execution duration is smaller than cycle time in this branch
                 remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
             }
-            
+
             #[cfg(feature = "debug_refill")]
             debug!(
                 target: LOG_TARGET_REFILL,

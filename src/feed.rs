@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(not(test))]
 use log::info;
 
-use log::{error, trace, warn};
+use log::{error, warn};
 
 #[cfg(feature = "debug_feed")]
 use log::debug;
@@ -113,7 +113,7 @@ impl Feed {
         }
     }
 
-    //#[cfg(feature = "debug_feed")]
+    #[cfg(feature = "debug_feed")]
     /// Helper function to visualize a vector of feed schedule entries.
     /// # Arguments:
     /// * `feedschedule_entries` - reference to vector of feed schedule entries    
@@ -234,6 +234,69 @@ impl Feed {
         }
     }
 
+    /// Execute the feed profile and update the SQL database.
+    /// # Arguments
+    /// * `profile_id` - Numeric ID of the feed profile to be executed
+    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
+    /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
+    /// * `food_injection` - Trait method for actuation to execute the feed profile  
+    fn execute_profile_update_database(
+        &mut self,
+        profile_id: i32,
+        food_injection: &mut impl FoodInjectionTrait,
+        tx_to_controllino: &Sender<InternalCommand>,
+        rx_from_controllino: &Receiver<bool>,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
+    ) -> bool {
+        #[cfg(feature = "debug_feed")]
+        debug!(
+            target: LOG_TARGET_FEED,
+            "executing feed profile id #{}",
+            profile_id
+        );
+
+        let (result, quit_command_received_during_feed) = self.execute_feed(
+            profile_id,
+            food_injection,
+            &tx_to_controllino,
+            &rx_from_controllino,
+            &rx_from_signal_handler,
+        );
+
+        match result {
+            Ok(_) => { /* do nothing */ }
+            Err(_) => {
+                // error occurred. Block subsequent executions
+                self.execution_blocked = true;
+            }
+        }
+
+        //*** update schedule ***
+        match self
+            .sql_interface_feed
+            .update_feedschedule_entries_in_database(feed_schedule_entries)
+        {
+            Ok(()) => {
+                // do nothing
+            }
+            #[cfg(not(test))]
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_FEED,
+                    "updating feed schedule entry failed ({e:?})"
+                );
+                self.execution_blocked = true;
+            }
+            #[cfg(test)]
+            Err(_) => {
+                self.execution_blocked = true;
+            }
+        }
+        quit_command_received_during_feed
+    }
+
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
@@ -272,9 +335,9 @@ impl Feed {
                 {
                     Ok(c) => match c {
                         Some(mut feed_schedule_entries) => {
-                            //#[cfg(feature = "debug_feed")]
-                            println!(
-                                //target: LOG_TARGET_FEED,
+                            #[cfg(feature = "debug_feed")]
+                            debug!(
+                                target: LOG_TARGET_FEED,
                                 "Discovered following feed schedule entries in the past: {}",
                                 Self::feedschedule_entries_to_string(feed_schedule_entries.clone())
                             );
@@ -284,7 +347,7 @@ impl Feed {
 
                             match feed_schedule_entry_opt {
                                 Some(feed_schedule_entry) => {
-                                    //#[cfg(feature = "debug_feed")]
+                                    #[cfg(feature = "debug_feed")]
                                     println!(
                                         //target: LOG_TARGET_FEED,
                                         "Selected following feed schedule entry for execution: {}",
@@ -299,57 +362,17 @@ impl Feed {
                                             let mut mutex_data =
                                                 mutex_device_scheduler_feed.lock().unwrap();
 
-                                            #[cfg(feature = "debug_feed")]
-                                            debug!(
-                                                target: LOG_TARGET_FEED,
-                                                "executing feed profile id #{}",
-                                                feed_schedule_entry.profile_id
-                                            );
-
-                                            let (result, quit_command_received_during_feed) = self
-                                                .execute_feed(
+                                            quit_command_received = self
+                                                .execute_profile_update_database(
                                                     feed_schedule_entry.profile_id,
                                                     food_injection,
                                                     &tx_to_controllino,
                                                     &rx_from_controllino,
                                                     &rx_from_signal_handler,
+                                                    &mut feed_schedule_entries,
                                                 );
 
-                                            quit_command_received =
-                                                quit_command_received_during_feed;
-
-                                            match result {
-                                                Ok(_) => { /* do nothing */ }
-                                                Err(_) => {
-                                                    // error occurred. Block subsequent executions
-                                                    self.execution_blocked = true;
-                                                }
-                                            }
-
                                             *mutex_data += 1;
-
-                                            //*** update schedule ***
-                                            match self
-                                                .sql_interface_feed
-                                                .update_feedschedule_entries_in_database(
-                                                    &mut feed_schedule_entries,
-                                                ) {
-                                                Ok(()) => {
-                                                    // do nothing
-                                                }
-                                                #[cfg(not(test))]
-                                                Err(e) => {
-                                                    error!(
-                                                        target: LOG_TARGET_FEED,
-                                                        "updating feed schedule entry failed ({e:?})"
-                                                    );
-                                                    self.execution_blocked = true;
-                                                }
-                                                #[cfg(test)]
-                                                Err(_) => {
-                                                    self.execution_blocked = true;
-                                                }
-                                            }
                                         }
                                     }
                                 }
@@ -463,10 +486,12 @@ impl Feed {
 
         // application received request to terminate, that is why the loop was left.
         // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        trace!(
+        #[cfg(feature = "debug_signal_handler")]
+        debug!(
             target: LOG_TARGET_FEED,
             "Sending Quit confirmation to signal handler."
         );
+
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -927,6 +952,8 @@ pub mod tests {
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
+        setup_logger();
+
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
@@ -1031,6 +1058,7 @@ pub mod tests {
     // This test case tests the strategy to select none of them.
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_none() {
+        setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
@@ -1056,6 +1084,7 @@ pub mod tests {
     // This test case tests the strategy to select the first one.
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_first() {
+        setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
@@ -1083,6 +1112,7 @@ pub mod tests {
     // This test case tests the strategy to select a middle one.
     // This test case does not require any communication with SQL database.
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
+        setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
@@ -1146,6 +1176,8 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+
+        setup_logger();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -1275,6 +1307,8 @@ pub mod tests {
         let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
+
+        setup_logger();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
