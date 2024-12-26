@@ -1071,6 +1071,7 @@ impl Refill {
                 remaining_sleep_time_millis = 0;
                 cycle_time_exceeded = true;
             } else {
+                // execution duration is smaller than cycle time in this branch
                 remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
             }
             
@@ -1088,7 +1089,7 @@ impl Refill {
                 // check for external requests while waiting
                 i = 0;
                 while (i < remaining_sleep_time_millis) && !cycle_time_exceeded {
-                    i += 1;
+                    i += 100;
 
                     self.communicate_with_data_logger(
                         &tx_to_data_logger,
