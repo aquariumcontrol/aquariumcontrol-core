@@ -398,6 +398,8 @@ impl Refill {
     /// - number of refill operations in last 24h
     /// - volume refilled in the last hour
     /// - number of refill operations in the last hour
+    /// # Arguments
+    /// * `refill_sql_data` - mutable reference to container for historic refill data
     fn get_sql_refill_data(&mut self, refill_sql_data: &mut RefillSqlData) {
         match self.sql_interface_refill.check_empty() {
             Ok(0) => {
@@ -911,6 +913,19 @@ impl Refill {
 
         // main control loop for refill
         loop {
+            #[cfg(feature = "debug_refill")]
+            debug!(
+                target: LOG_TARGET_REFILL,
+                "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
+                refill_inhibited,
+                self.refill_errors.error_switch_stuck_low,
+                self.refill_errors.error_sql_update_failed,
+                self.refill_errors.error_sql_get_historic_data_failed,
+                schedule_check_result,
+                tank_level_switch_position_stabilized,
+                tank_level_switch_invalid
+            );
+            
             // check if either during main control loop or during refill execution termination requests has been received
             if quit_command_received {
                 break; // exit outer loop
