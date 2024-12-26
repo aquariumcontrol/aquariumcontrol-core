@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(feature = "debug_refill")]
+use log::debug;
 
 use log::{error, warn};
 
@@ -866,6 +868,12 @@ impl Refill {
         let mut schedule_check_result: bool = false;
         let mut tank_level_switch_invalid: bool;
         let mut tank_level_switch_position_stabilized: bool;
+
+        #[cfg(feature = "debug_refill")] {
+            tank_level_switch_invalid = false;
+            tank_level_switch_position_stabilized = true;
+        }
+        
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut cycle_time_exceeded: bool = false; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
@@ -913,18 +921,6 @@ impl Refill {
 
         // main control loop for refill
         loop {
-            #[cfg(feature = "debug_refill")]
-            debug!(
-                target: LOG_TARGET_REFILL,
-                "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
-                refill_inhibited,
-                self.refill_errors.error_switch_stuck_low,
-                self.refill_errors.error_sql_update_failed,
-                self.refill_errors.error_sql_get_historic_data_failed,
-                schedule_check_result,
-                tank_level_switch_position_stabilized,
-                tank_level_switch_invalid
-            );
             
             // check if either during main control loop or during refill execution termination requests has been received
             if quit_command_received {
@@ -1081,6 +1077,19 @@ impl Refill {
 
             sql_refill_data.duration_since_last_refill =
                 sql_refill_data.duration_since_last_refill + self.config.check_interval;
+              
+            #[cfg(feature = "debug_refill")]
+            debug!(
+                target: LOG_TARGET_REFILL,
+                "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
+                refill_inhibited,
+                self.refill_errors.error_switch_stuck_low,
+                self.refill_errors.error_sql_update_failed,
+                self.refill_errors.error_sql_get_historic_data_failed,
+                schedule_check_result,
+                tank_level_switch_position_stabilized,
+                tank_level_switch_invalid
+            );
         }
 
         // application received request to terminate, that is why the loop was left.
