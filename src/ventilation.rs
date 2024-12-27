@@ -21,6 +21,7 @@ use std::time::{Duration, SystemTime};
 use crate::channel_content::{ActuatorState, AquariumDevice, AquariumSignal, InternalCommand};
 use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
+use crate::common::check_if_mutex_is_blocked;
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
@@ -68,7 +69,11 @@ fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-) {
+    mutex_blocked_during_actuation: &mut bool,
+) {    
+    // reduce probability of wrong warning
+    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
+        
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
@@ -104,7 +109,11 @@ fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
-) {
+    mutex_blocked_during_actuation: &mut bool,
+) {    
+    // reduce probability of wrong warning
+    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
+    
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
@@ -333,6 +342,7 @@ impl Ventilation {
         let mut ventilation_inhibited = false; // state of ventilation control determined by if start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = SystemTime::now();
+        let mut mutex_blocked_during_actuation: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -445,6 +455,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
+                                    &mut mutex_blocked_during_actuation
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -455,6 +466,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
+                                    &mut mutex_blocked_during_actuation
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -468,6 +480,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
+                                    &mut mutex_blocked_during_actuation
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -479,6 +492,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
+                                    &mut mutex_blocked_during_actuation
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -495,6 +509,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -506,6 +521,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -521,6 +537,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -532,6 +549,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -555,7 +573,7 @@ impl Ventilation {
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_VENTILATION_MILLIS {
-                if !lock_warn_cycle_time_exceeded {
+                if !lock_warn_cycle_time_exceeded && ! !mutex_blocked_during_actuation {
                     warn!(target: LOG_TARGET_VENTILATION,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
@@ -569,6 +587,8 @@ impl Ventilation {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_VENTILATION_MILLIS - execution_duration_millis;
             }
+            mutex_blocked_during_actuation = false; // reset for next cycle
+            
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
@@ -582,6 +602,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
+                    &mut mutex_blocked_during_actuation
                 );
             }
         } else {
@@ -591,6 +612,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
+                    &mut mutex_blocked_during_actuation
                 );
             }
         }

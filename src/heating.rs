@@ -23,6 +23,7 @@ use crate::proc_ext_req::ProcessExternalRequestTrait;
 use crate::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 use crate::sql_interface::SqlInterface;
 use crate::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::common::check_if_mutex_is_blocked;
 
 const LOG_TARGET_HEATING: &str = "heating";
 
@@ -131,8 +132,12 @@ fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
+    mutex_blocked_during_actuation: &mut bool,
 ) {
     {
+        // reduce probability of wrong warning
+        *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_heating);
+        
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
         match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
@@ -170,8 +175,12 @@ fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
+    mutex_blocked_during_actuation: &mut bool,
 ) {
     {
+        // reduce probability of wrong warning
+        *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_heating);
+
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
         match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
@@ -468,6 +477,7 @@ impl Heating {
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if start/stop command has been received
         let mut lock_warn_cycle_time_exceeded: bool = false;
+        let mut mutex_blocked_during_actuation: bool = false;
 
         let mut heating_stats_opt = match self
             .sql_interface_heating
@@ -712,6 +722,7 @@ impl Heating {
                             &mutex_device_scheduler_heating,
                             &tx_to_controllino,
                             &rx_from_controllino,
+                            &mut mutex_blocked_during_actuation
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -735,6 +746,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -745,6 +757,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -758,6 +771,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -769,6 +783,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
+                                        &mut mutex_blocked_during_actuation
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -785,6 +800,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
+                                            &mut mutex_blocked_during_actuation
                                         );
                                         heater_state = ActuatorState::On;
                                     }
@@ -796,6 +812,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
+                                            &mut mutex_blocked_during_actuation
                                         );
                                         heater_state = ActuatorState::Off;
                                     }
@@ -811,6 +828,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
+                                            &mut mutex_blocked_during_actuation
                                         );
                                         heater_state = ActuatorState::On;
                                     }
@@ -822,6 +840,7 @@ impl Heating {
                                             &mutex_device_scheduler_heating,
                                             &tx_to_controllino,
                                             &rx_from_controllino,
+                                            &mut mutex_blocked_during_actuation
                                         );
                                         heater_state = ActuatorState::Off;
                                     }
@@ -896,7 +915,7 @@ impl Heating {
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_HEATING_MILLIS {
-                if !lock_warn_cycle_time_exceeded {
+                if !lock_warn_cycle_time_exceeded && !mutex_blocked_during_actuation {
                     warn!(target: LOG_TARGET_HEATING,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
@@ -909,6 +928,8 @@ impl Heating {
             } else {
                 remaining_sleep_time_millis = CYCLE_TIME_HEATING_MILLIS - execution_duration_millis;
             }
+            mutex_blocked_during_actuation = false; // reset for next cycle
+            
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
@@ -921,6 +942,7 @@ impl Heating {
                 &mutex_device_scheduler_heating,
                 &tx_to_controllino,
                 &rx_from_controllino,
+                &mut mutex_blocked_during_actuation
             );
         }
 

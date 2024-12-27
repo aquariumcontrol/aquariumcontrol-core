@@ -293,7 +293,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on aux feeder failed ({e:?})"
+                        "channel communication to Controllino when switching on feeder failed ({e:?})"
                     );
                 }
             }

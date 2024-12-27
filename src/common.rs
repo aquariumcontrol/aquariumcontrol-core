@@ -6,6 +6,24 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use std::sync::{Arc, Mutex};
+
+/// Function checks if a mutex is already blocked.
+/// The result of this function is used to reduce probability of false triggering a thread timing warning.
+/// # Arguments
+/// * `mutex` - reference to the mutex for avoiding parallel device actuation.
+pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
+    match mutex.try_lock() {
+        Ok(_) => {
+            // The mutex is not blocked.
+            false
+        },
+        Err(_) => {
+            // The mutex is blocked.
+            true
+        }
+    }
+}
 
 #[cfg(test)]
 pub mod tests {
