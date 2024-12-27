@@ -20,7 +20,7 @@ use crate::recorder::data_logger::DataLogger;
 use crate::food::{feed::Feed, food_injection::FoodInjection};
 
 #[cfg(target_os = "linux")]
-use crate::messaging::Messaging;
+use crate::dispatch::messaging::Messaging;
 
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;

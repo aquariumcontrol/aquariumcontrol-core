@@ -86,8 +86,8 @@ use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use crate::dht::DhtError;
-        use crate::i2c_interface::{I2cError, I2cInterface};
+        use crate::sensors::dht::DhtError;
+        use crate::sensors::i2c_interface::{I2cError, I2cInterface};
     }
 }
 
