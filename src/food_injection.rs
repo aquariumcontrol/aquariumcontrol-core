@@ -508,7 +508,7 @@ pub mod tests {
                 let mut counter_switch_on: i32 = 0;
                 let mut counter_switch_off: i32 = 0;
 
-                for i in 0..125 {
+                for i in 0..126 {
                     println!("test_food_injection: loop #{}", i);
                     match test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_controllino_to_feed,
@@ -530,7 +530,7 @@ pub mod tests {
                     counter_switch_on, counter_switch_off
                 );
                 assert_eq!(counter_switch_on, 65);
-                assert_eq!(counter_switch_off, 60);
+                assert_eq!(counter_switch_off, 61);
             });
 
             // this scope is executing the test object
