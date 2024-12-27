@@ -17,52 +17,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Automatic feeding
 //! - Balling mineral dosing
 
-mod ambient;
-mod atlas_scientific;
-mod balling;
-mod channel_content;
-mod common;
-mod config;
-mod controllino;
-mod controllino_actuate_hardware;
-mod controllino_actuate_simulator;
-mod data_injection;
-mod data_logger;
-mod data_logger_communication;
-mod device_relay_logic;
-mod dht;
-mod feed;
-mod feedpattern;
-mod food_injection;
-mod get_resp_sim;
-mod gpio_handler;
-mod heating;
-mod i2c_interface;
-mod iir_filter;
-mod logger;
+mod database;
+
 #[cfg(target_os = "linux")]
-mod messaging;
-mod mineral_injection;
-mod mock;
-mod monitors;
-mod proc_ext_req;
-mod publish_pid;
-mod refill;
-mod sawtooth_profile;
-mod schedule_check;
-mod signal_handler;
-mod sql_interface;
-mod sql_interface_balling;
-mod sql_interface_data;
-mod sql_interface_feed;
-mod sql_interface_heating;
-mod sql_interface_refill;
-mod sql_interface_schedule;
-mod tank_level_switch;
-mod tcp_communication;
-mod ventilation;
-mod version_information;
-mod water_injection;
+mod dispatch;
+
+mod food;
+mod mineral;
+mod permission;
+mod recorder;
+mod relays;
+mod sensors;
+mod simulator;
+mod stubs;
+mod thermal;
+mod utilities;
+mod watchmen;
+mod water;
 
 use log::{error, info, warn};
 
@@ -74,44 +45,44 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 
-use crate::ambient::Ambient;
-use crate::atlas_scientific::AtlasScientific;
-use crate::balling::Balling;
-use crate::channel_content::InternalCommand;
-use crate::config::read_config_file;
-use crate::controllino::Controllino;
-use crate::controllino_actuate_hardware::ControllinoActuateHardware;
-use crate::controllino_actuate_simulator::ControllinoActuateSimulator;
-use crate::data_injection::DataInjection;
-use crate::data_logger::DataLogger;
-use crate::feed::Feed;
-use crate::food_injection::FoodInjection;
-use crate::gpio_handler::GpioHandler;
-use crate::heating::Heating;
-use crate::heating::HeatingStatsDataTransfer;
-use crate::logger::setup_logger;
+use crate::sensors::ambient::Ambient;
+use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::mineral::balling::Balling;
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::config::read_config_file;
+use crate::relays::controllino::Controllino;
+use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
+use crate::relays::controllino_actuate_simulator::ControllinoActuateSimulator;
+use crate::recorder::data_injection::DataInjection;
+use crate::recorder::data_logger::DataLogger;
+use crate::food::feed::Feed;
+use crate::food::food_injection::FoodInjection;
+use crate::sensors::gpio_handler::GpioHandler;
+use crate::thermal::heating::Heating;
+use crate::thermal::heating::HeatingStatsDataTransfer;
+use crate::utilities::logger::setup_logger;
 
 #[cfg(target_os = "linux")]
-use crate::messaging::Messaging;
+use crate::dispatch::messaging::Messaging;
 
-use crate::mineral_injection::MineralInjection;
-use crate::monitors::Monitors;
-use crate::publish_pid::PublishPid;
-use crate::refill::Refill;
-use crate::schedule_check::ScheduleCheck;
-use crate::signal_handler::handle_signals;
-use crate::sql_interface::{SqlInterface, SqlInterfaceError};
-use crate::sql_interface_balling::SqlInterfaceBalling;
-use crate::sql_interface_data::SqlInterfaceData;
-use crate::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-use crate::sql_interface_heating::{SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator};
-use crate::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
-use crate::sql_interface_schedule::SqlInterfaceSchedule;
-use crate::tank_level_switch::TankLevelSwitch;
-use crate::tcp_communication::TcpCommunication;
-use crate::ventilation::Ventilation;
-use crate::version_information::VersionInformation;
-use crate::water_injection::WaterInjection;
+use crate::mineral::mineral_injection::MineralInjection;
+use crate::watchmen::monitors::Monitors;
+use crate::utilities::publish_pid::PublishPid;
+use crate::water::refill::Refill;
+use crate::permission::schedule_check::ScheduleCheck;
+use crate::utilities::signal_handler::handle_signals;
+use crate::database::sql_interface::{SqlInterface, SqlInterfaceError};
+use crate::database::sql_interface_balling::SqlInterfaceBalling;
+use crate::database::sql_interface_data::SqlInterfaceData;
+use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
+use crate::database::sql_interface_heating::{SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator};
+use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
+use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::sensors::tank_level_switch::TankLevelSwitch;
+use crate::simulator::tcp_communication::TcpCommunication;
+use crate::thermal::ventilation::Ventilation;
+use crate::utilities::version_information::VersionInformation;
+use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
