@@ -21,7 +21,7 @@ cfg_if::cfg_if! {
 
         #[cfg(feature = "debug_i2c_interface")]
         use log::debug;
-        
+
         use crate::utilities::channel_content::InternalCommand;
     }
 }
@@ -525,7 +525,9 @@ impl I2cInterface {
 pub mod tests {
     use assert_float_eq::*;
 
-    use crate::sensors::i2c_interface::{atlas_scientific_constants, AtlasScientificError, I2cInterface};
+    use crate::sensors::i2c_interface::{
+        atlas_scientific_constants, AtlasScientificError, I2cInterface,
+    };
 
     // feature-specific imports
     cfg_if::cfg_if! {

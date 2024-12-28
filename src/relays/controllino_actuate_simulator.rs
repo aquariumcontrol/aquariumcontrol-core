@@ -12,9 +12,9 @@ use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
 
-use crate::utilities::channel_content::InternalCommand;
-use crate::relays::controllino::{RelayActuationTrait, ControllinoConfig, ControllinoError};
+use crate::relays::controllino::{ControllinoConfig, ControllinoError, RelayActuationTrait};
 use crate::relays::device_relay_logic::get_relay_command;
+use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";
 

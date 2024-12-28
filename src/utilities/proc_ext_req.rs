@@ -14,10 +14,10 @@ use log::{error, info};
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-use crate::utilities::channel_content::InternalCommand;
-use crate::relays::controllino::Controllino;
-use crate::recorder::data_logger::DataLogger;
 use crate::food::{feed::Feed, food_injection::FoodInjection};
+use crate::recorder::data_logger::DataLogger;
+use crate::relays::controllino::Controllino;
+use crate::utilities::channel_content::InternalCommand;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
@@ -25,7 +25,7 @@ use crate::dispatch::messaging::Messaging;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::simulator::tcp_communication::TcpCommunication;
-use crate::water::{water_injection::WaterInjection, refill::Refill};
+use crate::water::{refill::Refill, water_injection::WaterInjection};
 
 const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
 

@@ -780,11 +780,11 @@ pub mod tests {
     use std::sync::mpsc::{self, Sender};
     use std::{thread::scope, time::Duration};
 
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
-    use crate::utilities::config::{read_config_file, ConfigData};
     use crate::relays::controllino::{
         Controllino, ControllinoConfig, ControllinoError, RelayActuationTrait,
     };
+    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::utilities::config::{read_config_file, ConfigData};
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ControllinoActuateVoid {

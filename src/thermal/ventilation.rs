@@ -18,10 +18,12 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::utilities::channel_content::{ActuatorState, AquariumDevice, AquariumSignal, InternalCommand};
+use crate::utilities::channel_content::{
+    ActuatorState, AquariumDevice, AquariumSignal, InternalCommand,
+};
+use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
-use crate::utilities::common::check_if_mutex_is_blocked;
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
@@ -70,10 +72,11 @@ fn switch_on_ventilation(
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
-) {    
+) {
     // reduce probability of wrong warning
-    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
-        
+    *mutex_blocked_during_actuation |=
+        check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
+
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
@@ -110,10 +113,11 @@ fn switch_off_ventilation(
     tx_to_controllino: &Sender<InternalCommand>,
     rx_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
-) {    
+) {
     // reduce probability of wrong warning
-    *mutex_blocked_during_actuation |= check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
-    
+    *mutex_blocked_during_actuation |=
+        check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
+
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
@@ -455,7 +459,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation
+                                    &mut mutex_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -466,7 +470,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation
+                                    &mut mutex_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -480,7 +484,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation
+                                    &mut mutex_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -492,7 +496,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &tx_to_controllino,
                                     &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation
+                                    &mut mutex_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -509,7 +513,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation
+                                        &mut mutex_blocked_during_actuation,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -521,7 +525,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation
+                                        &mut mutex_blocked_during_actuation,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -537,7 +541,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation
+                                        &mut mutex_blocked_during_actuation,
                                     );
                                     ventilation_state = ActuatorState::On;
                                 }
@@ -549,7 +553,7 @@ impl Ventilation {
                                         &mutex_device_scheduler_ventilation,
                                         &tx_to_controllino,
                                         &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation
+                                        &mut mutex_blocked_during_actuation,
                                     );
                                     ventilation_state = ActuatorState::Off;
                                 }
@@ -573,7 +577,7 @@ impl Ventilation {
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_VENTILATION_MILLIS {
-                if !lock_warn_cycle_time_exceeded && ! !mutex_blocked_during_actuation {
+                if !lock_warn_cycle_time_exceeded && !!mutex_blocked_during_actuation {
                     warn!(target: LOG_TARGET_VENTILATION,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
@@ -588,7 +592,7 @@ impl Ventilation {
                     CYCLE_TIME_VENTILATION_MILLIS - execution_duration_millis;
             }
             mutex_blocked_during_actuation = false; // reset for next cycle
-            
+
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
@@ -602,7 +606,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &mut mutex_blocked_during_actuation
+                    &mut mutex_blocked_during_actuation,
                 );
             }
         } else {
@@ -612,7 +616,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &tx_to_controllino,
                     &rx_from_controllino,
-                    &mut mutex_blocked_during_actuation
+                    &mut mutex_blocked_during_actuation,
                 );
             }
         }
@@ -680,13 +684,16 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use crate::thermal::ventilation::{Ventilation, LOG_TARGET_VENTILATION};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::thermal::ventilation::{Ventilation, LOG_TARGET_VENTILATION};
 
-    use crate::stubs::mock::tests::{mock_atlas_scientific, mock_controllino, mock_data_logger, mock_schedule_check};
-
+    use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
+    use crate::stubs::mock_controllino::tests::mock_controllino; 
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    
     fn prepare_ventilation_tests() -> Ventilation {
         // prepare struct Ventilation for subsequent tests
         let config: ConfigData =

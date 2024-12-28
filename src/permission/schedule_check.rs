@@ -6,6 +6,8 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(feature = "debug_schedule_check")]
+use log::debug;
 
 use log::{error, warn};
 use serde_derive::Deserialize;
@@ -13,9 +15,9 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
+use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 
 /// Holds the configuration data for the schedule checker.
 /// The configuration is loaded from the .toml configuration file.

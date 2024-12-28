@@ -18,9 +18,9 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::sensors::dht::DhtError;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 const LOG_TARGET_AMBIENT: &str = "ambient";

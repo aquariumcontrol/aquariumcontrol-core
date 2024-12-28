@@ -8,5 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 pub mod feed;
+pub mod feed_pattern;
 pub mod food_injection;
-pub mod feedpattern;
+pub mod feed_schedule_entry;

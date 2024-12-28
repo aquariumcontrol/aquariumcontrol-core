@@ -21,7 +21,7 @@ cfg_if::cfg_if! {
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
-        
+
         use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     }
 }

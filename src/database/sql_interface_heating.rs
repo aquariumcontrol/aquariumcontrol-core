@@ -12,7 +12,9 @@ use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
 
-use crate::database::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
+use crate::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+};
 
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from SQL query which is then updated by the control application.
@@ -390,12 +392,12 @@ impl SqlInterfaceHeating {
 #[cfg(test)]
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-    
-    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
-    use crate::database::sql_interface::{SqlInterface, SqlInterfaceError};
+
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::database::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
     };
+    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
     // Test case includes all checks for this table combined in one function to limit amount of additional databases.

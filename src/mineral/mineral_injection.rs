@@ -150,8 +150,8 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
+    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
         tx_controllino_to_mineral_injection: &Sender<bool>,

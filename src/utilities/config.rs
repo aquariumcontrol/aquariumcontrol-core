@@ -15,11 +15,11 @@ use log::info;
 use serde_derive::Deserialize;
 use std::{env, fs};
 
+use crate::mineral::balling::BallingConfig;
+use crate::recorder::data_logger::DataLoggerConfig;
+use crate::relays::controllino::ControllinoConfig;
 use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
-use crate::mineral::balling::BallingConfig;
-use crate::relays::controllino::ControllinoConfig;
-use crate::recorder::data_logger::DataLoggerConfig;
 
 #[cfg(feature = "target_hw")]
 use crate::sensors::dht::DhtConfig;
@@ -36,13 +36,13 @@ use crate::sensors::tank_level_switch::TankLevelSwitchConfig;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::MessagingConfig;
 
-use crate::watchmen::monitors::MonitorsConfig;
-use crate::utilities::publish_pid::PublishPidConfig;
-use crate::water::refill::RefillConfig;
-use crate::permission::schedule_check::ScheduleCheckConfig;
 use crate::database::sql_interface::SqlInterfaceConfig;
+use crate::permission::schedule_check::ScheduleCheckConfig;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
+use crate::utilities::publish_pid::PublishPidConfig;
+use crate::watchmen::monitors::MonitorsConfig;
+use crate::water::refill::RefillConfig;
 
 const LOG_TARGET_CONFIG: &str = "config";
 

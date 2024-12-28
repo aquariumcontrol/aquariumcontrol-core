@@ -13,11 +13,12 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-use crate::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
-use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::water::refill::{RefillConfig, RefillErrors};
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
+use crate::utilities::channel_content::{AquariumDevice, AquariumSignal, InternalCommand};
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::water::refill::RefillConfig;
+use crate::water::refill_errors::RefillErrors;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
@@ -337,8 +338,11 @@ pub mod tests {
     use crate::water::refill::tests::prepare_refill_tests;
     use crate::water::water_injection::{WaterInjection, WaterInjectionTrait};
 
-    use crate::stubs::mock::tests::{mock_controllino, mock_data_logger, mock_tank_level_switch};
-    use crate::stubs::mock::tests::{MockSignal, TestCommand};
+    use crate::stubs::mock_controllino::tests::mock_controllino;
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
+    use crate::stubs::mock_signal::tests::MockSignal;
+    use crate::stubs::test_command::tests::TestCommand;
 
     #[test]
     // This test case executes inject_water function and immediately sets the sensor signal to high

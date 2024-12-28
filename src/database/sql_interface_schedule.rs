@@ -14,7 +14,7 @@ use mysql::*;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::database::sql_interface::{sql_query_strings, SqlInterfaceError};
+use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 
 /// List of all modules which are subject to limitations by schedule.
 /// Background: This activities cause noise - user shall be able to inhibit these noises during nighttime.
@@ -220,11 +220,11 @@ impl SqlInterfaceSchedule {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_schedule::{
         ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
     };
+    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
     // Test case reads entries from SQL database.

@@ -7,13 +7,16 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/// This container module features all functionality which could not be assigned to any other container module.
+
+
 pub mod channel_content;
-pub mod logger;
-pub mod config;
-pub mod publish_pid;
-pub mod signal_handler;
 pub mod common;
+pub mod config;
 pub mod iir_filter;
+pub mod logger;
 pub mod proc_ext_req;
+pub mod publish_pid;
 pub mod sawtooth_profile;
+pub mod signal_handler;
 pub mod version_information;

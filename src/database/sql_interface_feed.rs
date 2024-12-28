@@ -11,10 +11,12 @@ use chrono::NaiveDateTime;
 use log::error;
 use mysql::prelude::*;
 use mysql::*;
-use std::fmt;
 
-use crate::food::feedpattern::{FeedPhase, Feedpattern};
-use crate::database::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
+use crate::database::{
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+};
+use crate::food::feed_pattern::{FeedPhase, Feedpattern};
+use crate::food::feed_schedule_entry::{FeedScheduleEntry};
 
 const LOG_TARGET_SQL_INTERFACE_FEED: &'static str = "sql_interface_feed";
 
@@ -73,75 +75,6 @@ pub struct SqlFeedScheduleEntry {
     pub profile_id: i32,
     pub profile_name: String,
     pub repeat_daily: i16,
-}
-
-/// Holds the data of a feed schedule entry derived from data read from SQL data base.
-#[derive(Debug, PartialEq, Clone)]
-pub struct FeedScheduleEntry {
-    pub timestamp: NaiveDateTime,
-    pub profile_id: i32,
-    pub profile_name: String,
-    pub repeat_daily: bool,
-}
-
-impl FeedScheduleEntry {
-    pub fn new(
-        sql_feed_schedule_entry: &SqlFeedScheduleEntry,
-    ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
-        let timestamp = match NaiveDateTime::parse_from_str(
-            sql_feed_schedule_entry.timestamp.as_str(),
-            "%Y-%m-%d %H:%M:%S",
-        ) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not get feed schedule entry from database ({e:?})"
-                );
-                return Err(
-                    SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
-                        "Could not convert timestamp string read from SQL database".to_string(),
-                    ),
-                );
-            }
-        };
-
-        Ok(FeedScheduleEntry {
-            timestamp: timestamp,
-            profile_id: sql_feed_schedule_entry.profile_id,
-            profile_name: sql_feed_schedule_entry.profile_name.clone(),
-            repeat_daily: sql_feed_schedule_entry.repeat_daily != 0,
-        })
-    }
-
-    #[cfg(test)]
-    pub fn new_for_test(
-        timestamp_string: &str,
-        profile_id: i32,
-        profile_name: &str,
-        repeat_daily: bool,
-    ) -> FeedScheduleEntry {
-        FeedScheduleEntry {
-            timestamp: NaiveDateTime::parse_from_str(timestamp_string, "%Y-%m-%d %H:%M:%S")
-                .unwrap(),
-            profile_id: profile_id,
-            profile_name: profile_name.to_string(),
-            repeat_daily: repeat_daily,
-        }
-    }
-}
-
-impl fmt::Display for FeedScheduleEntry {
-    /// Function provides output of the struct for development purposes
-    /// # Arguments
-    /// * `f` - configuration for formatting
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "timestamp={}, profile_id={}, profile_name={}, repeat_daily={}",
-            self.timestamp, self.profile_id, self.profile_name, self.repeat_daily,
-        )
-    }
 }
 
 /// Trait for interfacing between feed and SQL database
@@ -651,11 +584,12 @@ pub mod tests {
     use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
     use mysql::{params, prelude::Queryable};
 
-    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
-    use crate::database::sql_interface::{sql_query_strings, SqlInterface, SqlInterfaceError};
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::database::sql_interface_feed::{
         DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed,
     };
+    use crate::database::sql_query_strings;
+    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     pub struct SqlFeedEvent {
         timestamp: String,

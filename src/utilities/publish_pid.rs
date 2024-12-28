@@ -95,8 +95,8 @@ impl PublishPid {
 pub mod tests {
     use std::fs;
     use std::process;
-    
-    use crate::utilities::config::{ConfigData, read_config_file};
+
+    use crate::utilities::config::{read_config_file, ConfigData};
     use crate::utilities::publish_pid::PublishPid;
 
     #[test]

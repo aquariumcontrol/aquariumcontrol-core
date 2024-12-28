@@ -18,10 +18,9 @@ use std::time::{Duration, SystemTime};
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use rppal::gpio::InputPin;
 
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-
 
 /// Holds the configuration data for the tank level switch calculation.
 /// The configuration is loaded from the .toml configuration file.
@@ -701,10 +700,15 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use crate::sensors::tank_level_switch::TankLevelSwitch;
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_heating::tests::mock_heating;
+    use crate::stubs::mock_refill::tests::mock_refill;
+    use crate::stubs::mock_tcp::tests::mock_tcp;
+    use crate::stubs::mock_signal::tests::MockSignal;
+    use crate::stubs::test_command::tests::TestCommand;    
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::stubs::mock::tests::{mock_data_logger, mock_heating, mock_refill, mock_tcp, MockSignal, TestCommand};
-    use crate::sensors::tank_level_switch::TankLevelSwitch;
 
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {

@@ -21,12 +21,13 @@ use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::recorder::recorder_data_frame::RecorderDataFrame;
+use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::database::sql_interface::SqlInterface;
-use crate::database::sql_interface_data::{DataFrame, SqlInterfaceData};
 
 const LOG_TARGET_DATA_LOGGER: &str = "data_logger";
 const MILLIS_PER_SEC: u64 = 1000;
@@ -1201,7 +1202,7 @@ impl DataLogger {
             let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
 
             // all data received, let's construct a data frame
-            let data_frame = DataFrame {
+            let data_frame = RecorderDataFrame {
                 timestamp: current_timestamp,
                 water_temperature: water_temperature,
                 water_temperature_filtered: water_temperature_filtered,
@@ -1370,14 +1371,19 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{fs, sync::mpsc, thread, time::Duration};
 
+    use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
+    use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
+    use crate::stubs::mock_ambient::tests::mock_ambient;
+    use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
+    use crate::stubs::mock_heating::tests::mock_heating;
+    use crate::stubs::mock_refill::tests::mock_refill;
+    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
+    use crate::stubs::mock_ventilation::tests::mock_ventilation;
+    use crate::stubs::mock_data_injection::tests::MockDataInjection;
+    use crate::stubs::mock_signal::tests::MockSignal;
+    use crate::stubs::test_command::tests::TestCommand;        
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
-    use crate::stubs::mock::tests::{
-        mock_ambient, mock_atlas_scientific, mock_heating, mock_refill, mock_tank_level_switch,
-        mock_ventilation, MockDataInjection, MockSignal, TestCommand
-    };
-    use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
 
     fn assert_output_file_contents(
         data_logger_config: &DataLoggerConfig,

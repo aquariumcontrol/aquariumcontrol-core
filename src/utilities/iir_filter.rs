@@ -86,7 +86,7 @@ impl IIRFilter {
 #[cfg(test)]
 pub mod tests {
     use assert_float_eq::*;
-    
+
     use crate::utilities::iir_filter::IIRFilter;
 
     #[test]

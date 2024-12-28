@@ -12,8 +12,8 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
+use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
-use crate::food::{feed::FeedConfig, feedpattern::Feedpattern};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Trait for the execution of the feed pattern.
@@ -448,10 +448,10 @@ pub mod tests {
     use std::thread::scope;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{ConfigData, read_config_file};
-    use crate::food::feedpattern::{FeedPhase, Feedpattern};
+    use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
+    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::config::{read_config_file, ConfigData};
 
     fn test_food_injection_receive_actuation_command_send_confirmation(
         tx_controllino_to_feed: &Sender<bool>,

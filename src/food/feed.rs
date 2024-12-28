@@ -21,10 +21,11 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::utilities::channel_content::InternalCommand;
+use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait};
 use crate::food::food_injection::FoodInjectionTrait;
+use crate::food::feed_schedule_entry::FeedScheduleEntry;
+use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, FeedScheduleEntry};
 
 const LOG_TARGET_FEED: &str = "feed";
 
@@ -569,19 +570,22 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
-    use crate::food::feed::{Feed, LOG_TARGET_FEED};
-    use crate::food::feedpattern::Feedpattern;
-    use crate::food::food_injection::FoodInjectionTrait;
-    use crate::utilities::logger::setup_logger;
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::{
-        DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed,
+        DatabaseInterfaceFeedTrait, SqlInterfaceFeed,
     };
+    use crate::food::feed_schedule_entry::FeedScheduleEntry;
+    use crate::food::feed::{Feed, LOG_TARGET_FEED};
+    use crate::food::feed_pattern::Feedpattern;
+    use crate::food::food_injection::FoodInjectionTrait;
+    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::config::{
+        read_config_file, read_config_file_with_test_database, ConfigData,
+    };
+    use crate::utilities::logger::setup_logger;
 
-    use crate::stubs::mock::tests::MockSqlInterfaceFeed;
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
+    use crate::stubs::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,

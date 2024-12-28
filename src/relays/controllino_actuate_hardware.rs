@@ -12,11 +12,11 @@ use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::{fmt, sync::mpsc::Sender, time::Duration};
 
-use crate::utilities::channel_content::InternalCommand;
 use crate::relays::controllino::{
     controllino_constants, ControllinoConfig, ControllinoError, RelayActuationTrait,
 };
 use crate::relays::device_relay_logic::get_relay_command;
+use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
 
@@ -311,10 +311,10 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
-    use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{read_config_file, ConfigData};
     use crate::relays::controllino::{controllino_constants, ControllinoError};
     use crate::relays::controllino_actuate_hardware::create_command_message;
+    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::config::{read_config_file, ConfigData};
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
     fn get_platform_specific_configuration_file() -> String {

@@ -16,16 +16,17 @@ use log::info;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::fmt;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use std::fmt;
 
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
-use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::water_injection::WaterInjectionTrait;
+use crate::water::refill_errors::RefillErrors;
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -79,50 +80,7 @@ const LOG_TARGET_REFILL: &str = "refill";
 
 const MILLIS_PER_SEC: u64 = 1000;
 
-/// Contains the error flags for the refill component.
-pub struct RefillErrors {
-    pub error_switch_stuck_high: bool,
-    pub error_switch_stuck_low: bool,
-    pub error_receive_tank_level_switch_position: bool,
-    pub error_sql_update_failed: bool,
-    pub error_sql_get_historic_data_failed: bool,
-}
 
-impl RefillErrors {
-    /// Resets all error bits of the struct.
-    pub fn reset_all_errors(&mut self) {
-        self.error_switch_stuck_high = false;
-        self.error_switch_stuck_low = false;
-        self.error_receive_tank_level_switch_position = false;
-        self.error_sql_update_failed = false;
-        self.error_sql_get_historic_data_failed = false;
-    }
-
-    #[cfg(test)]
-    pub fn has_error(&mut self) -> bool {
-        self.error_switch_stuck_high
-            || self.error_switch_stuck_low
-            || self.error_receive_tank_level_switch_position
-            || self.error_sql_update_failed
-            || self.error_sql_get_historic_data_failed
-    }
-}
-
-impl fmt::Display for RefillErrors {
-    /// Function provides output of RefillErrors for development purposes
-    /// # Arguments
-    /// * `f` - configuration for formatting
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-            "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}",
-            self.error_switch_stuck_high,
-            self.error_switch_stuck_low,
-            self.error_receive_tank_level_switch_position,
-            self.error_sql_update_failed,
-            self.error_sql_get_historic_data_failed,
-        )
-    }
-}
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -1206,20 +1164,25 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime};
 
+    use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
     use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
+    use crate::utilities::config::{
+        read_config_file, read_config_file_with_test_database, ConfigData,
+    };
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::{Refill, RefillErrors};
-    use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
 
-    use crate::stubs::mock::tests::MockSignal::{
+    use crate::stubs::mock_signal::tests::MockSignal::{
         TankLevelSwitchPosition, TankLevelSwitchPositionStabilized,
     };
-    use crate::stubs::mock::tests::MockSqlInterfaceRefill;
-    use crate::stubs::mock::tests::{
-        mock_data_logger, mock_schedule_check, mock_tank_level_switch, MockSignal,
-        MockWaterInjection, TestCommand,
-    };
+    use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
+    use crate::stubs::mock_signal::tests::MockSignal;
+    use crate::stubs::mock_water_injection::tests::MockWaterInjection;
+    use crate::stubs::test_command::tests::TestCommand;
+
     use crate::water::refill::LOG_TARGET_REFILL;
 
     pub fn prepare_refill_tests(

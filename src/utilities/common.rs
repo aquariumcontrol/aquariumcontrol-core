@@ -17,7 +17,7 @@ pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
         Ok(_) => {
             // The mutex is not blocked.
             false
-        },
+        }
         Err(_) => {
             // The mutex is blocked.
             true

@@ -19,10 +19,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
-use crate::mineral::mineral_injection::MineralInjectionTrait;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
+use crate::mineral::mineral_injection::MineralInjectionTrait;
+use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 const LOG_TARGET_BALLING: &str = "balling";
 
@@ -631,14 +631,16 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
+    use crate::database::sql_interface::SqlInterface;
+    use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::mineral::balling::{Balling, LOG_TARGET_BALLING};
     use crate::mineral::mineral_injection::MineralInjectionTrait;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
-    use crate::utilities::config::{read_config_file, read_config_file_with_test_database, ConfigData};
-    use crate::database::sql_interface::SqlInterface;
-    use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
+    use crate::utilities::config::{
+        read_config_file, read_config_file_with_test_database, ConfigData,
+    };
 
-    use crate::stubs::mock::tests::mock_schedule_check;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
 
     pub struct MockMineralInjection {
         pump1_engagement_durations: Vec<u32>,

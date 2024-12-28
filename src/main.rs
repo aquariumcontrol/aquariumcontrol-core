@@ -45,43 +45,46 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 
-use crate::sensors::ambient::Ambient;
-use crate::sensors::atlas_scientific::AtlasScientific;
+use crate::food::feed::Feed;
+use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::Balling;
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::config::read_config_file;
+use crate::recorder::data_injection::DataInjection;
+use crate::recorder::data_logger::DataLogger;
 use crate::relays::controllino::Controllino;
 use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::relays::controllino_actuate_simulator::ControllinoActuateSimulator;
-use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::DataLogger;
-use crate::food::feed::Feed;
-use crate::food::food_injection::FoodInjection;
+use crate::sensors::ambient::Ambient;
+use crate::sensors::atlas_scientific::AtlasScientific;
 use crate::sensors::gpio_handler::GpioHandler;
 use crate::thermal::heating::Heating;
 use crate::thermal::heating::HeatingStatsDataTransfer;
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 
-use crate::mineral::mineral_injection::MineralInjection;
-use crate::watchmen::monitors::Monitors;
-use crate::utilities::publish_pid::PublishPid;
-use crate::water::refill::Refill;
-use crate::permission::schedule_check::ScheduleCheck;
-use crate::utilities::signal_handler::handle_signals;
-use crate::database::sql_interface::{SqlInterface, SqlInterfaceError};
+use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
+use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-use crate::database::sql_interface_heating::{SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator};
+use crate::database::sql_interface_heating::{
+    SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
+};
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::mineral::mineral_injection::MineralInjection;
+use crate::permission::schedule_check::ScheduleCheck;
 use crate::sensors::tank_level_switch::TankLevelSwitch;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::ventilation::Ventilation;
+use crate::utilities::publish_pid::PublishPid;
+use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::VersionInformation;
+use crate::watchmen::monitors::Monitors;
+use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
