@@ -1258,7 +1258,7 @@ pub mod tests {
 
     #[test]
     // Test case checks the implementation of ProcessExternalRequestTrait.
-    // The test case does not require any communication with SQL database.
+    // The test case uses test database #46.
     pub fn test_refill_process_external_request_empty_channel() {
         let refill_errors = RefillErrors {
             error_switch_stuck_high: false,
@@ -1267,7 +1267,7 @@ pub mod tests {
             error_sql_update_failed: false,
             error_sql_get_historic_data_failed: false,
         };
-        let (_, mut refill, _) = prepare_refill_tests(Some(refill_errors), 2, 60, None);
+        let (_, mut refill, _) = prepare_refill_tests(Some(refill_errors), 2, 60, Some(46));
 
         let (_, rx_refill_from_signal_handler): (
             Sender<InternalCommand>,
