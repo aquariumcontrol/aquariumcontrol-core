@@ -15,10 +15,10 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
-    use crate::stubs::test_command::tests::TestCommand;
     use crate::stubs::mock_signal::tests::MockSignal;
-        
+    use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+
     pub fn mock_ventilation(
         tx_ventilation_to_data_logger: &Sender<bool>,
         rx_ventilation_from_data_logger: &Receiver<InternalCommand>,

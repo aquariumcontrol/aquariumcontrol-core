@@ -279,9 +279,9 @@ pub mod tests {
     use chrono::NaiveDateTime;
     use mysql::{prelude::Queryable, PooledConn, Row, Value};
 
+    use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
-    use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     /// This struct contains the first part of one row from table 'data'

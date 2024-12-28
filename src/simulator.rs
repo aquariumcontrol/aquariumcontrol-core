@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features all functionality to commiunicate with the test server via TCP.
-
 pub mod get_resp_sim;
 pub mod tcp_communication;
 pub mod tcp_data;

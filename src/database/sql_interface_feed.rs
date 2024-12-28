@@ -16,7 +16,7 @@ use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
-use crate::food::feed_schedule_entry::{FeedScheduleEntry};
+use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
 const LOG_TARGET_SQL_INTERFACE_FEED: &'static str = "sql_interface_feed";
 
@@ -584,11 +584,11 @@ pub mod tests {
     use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
     use mysql::{params, prelude::Queryable};
 
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::database::sql_interface_feed::{
         DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed,
     };
     use crate::database::sql_query_strings;
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     pub struct SqlFeedEvent {

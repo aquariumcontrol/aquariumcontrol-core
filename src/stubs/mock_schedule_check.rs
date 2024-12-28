@@ -15,9 +15,9 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::utilities::channel_content::InternalCommand;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::InternalCommand;
 
     // send via channel a value to the test object to indicate if actuation is permitted.
     pub fn mock_schedule_check(
@@ -44,7 +44,10 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!("{}: test object sent invalid command.", LOG_TARGET_MOCK_SCHEDULE_CHECK);
+                            panic!(
+                                "{}: test object sent invalid command.",
+                                LOG_TARGET_MOCK_SCHEDULE_CHECK
+                            );
                         }
                     }
                 }

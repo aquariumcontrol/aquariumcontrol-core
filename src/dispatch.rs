@@ -12,5 +12,4 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// The communication is always initiated externally.
 /// The module processes the input and forwards it to the respective thread via channel.
 /// The control application does not respond to any request sent to the message queue.
-
 pub mod messaging;

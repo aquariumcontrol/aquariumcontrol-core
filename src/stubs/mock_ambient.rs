@@ -15,9 +15,9 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_ambient(
         tx_ambient_to_test_object: &Sender<f32>,
@@ -40,7 +40,10 @@ pub mod tests {
                             AquariumSignal::AmbientTemperature => stimuli_ambient_temperature,
                             AquariumSignal::AmbientHumidity => stimuli_ambient_humidity,
                             _ => {
-                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK_AMBIENT, d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK_AMBIENT, d
+                                );
                             }
                         },
                         InternalCommand::Quit => {

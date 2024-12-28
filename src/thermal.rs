@@ -11,6 +11,5 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// - cool the water using ventilation
 /// - heat the water using a heater
 /// Both threads run independently.
-
 pub mod heating;
 pub mod ventilation;

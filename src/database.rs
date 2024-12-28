@@ -12,7 +12,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// - preparing SQL queries
 /// - executing the queries
 /// - processing of query results
-
 pub mod sql_interface;
 pub mod sql_interface_balling;
 pub mod sql_interface_data;

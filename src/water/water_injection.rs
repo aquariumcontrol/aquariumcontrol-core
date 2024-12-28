@@ -340,8 +340,8 @@ pub mod tests {
 
     use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
-    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::stubs::mock_signal::tests::MockSignal;
+    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
 
     #[test]

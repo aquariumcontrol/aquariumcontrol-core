@@ -393,10 +393,10 @@ impl SqlInterfaceHeating {
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::database::sql_interface_heating::{
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
     };
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]

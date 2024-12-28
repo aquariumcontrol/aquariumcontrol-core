@@ -16,17 +16,17 @@ use log::info;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+use std::fmt;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use std::fmt;
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::water::water_injection::WaterInjectionTrait;
 use crate::water::refill_errors::RefillErrors;
+use crate::water::water_injection::WaterInjectionTrait;
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -79,8 +79,6 @@ pub struct RefillConfig {
 const LOG_TARGET_REFILL: &str = "refill";
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -1172,14 +1170,14 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::{Refill, RefillErrors};
 
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_signal::tests::MockSignal::{
         TankLevelSwitchPosition, TankLevelSwitchPositionStabilized,
     };
     use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
-    use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_water_injection::tests::MockWaterInjection;
     use crate::stubs::test_command::tests::TestCommand;
 

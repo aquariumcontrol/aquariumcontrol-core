@@ -12,7 +12,7 @@ pub mod tests {
     use std::fmt;
 
     use crate::stubs::mock_signal::tests::MockSignal;
-    
+
     /// Enum is used for internal thread messaging.
     /// Note: Relay state and device state do not necessarily correlate.
     #[derive(Clone, Debug, PartialEq)]

@@ -18,9 +18,9 @@ use std::{
     time::Duration,
 };
 
+use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::simulator::tcp_data::{*};
 
 /// Holds the configuration data for the TCP connection.
 /// The configuration is loaded from the .toml configuration file.

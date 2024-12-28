@@ -15,9 +15,9 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::time::{Duration, SystemTime};
 
-    use crate::utilities::channel_content::InternalCommand;
     use crate::stubs::actuation_event::tests::ActuationEvent;
-    
+    use crate::utilities::channel_content::InternalCommand;
+
     pub fn mock_controllino(
         tx_controllino_to_test_object: &Sender<bool>,
         rx_controllino_from_test_object: &Receiver<InternalCommand>,

@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features all functionality to actuate the relays which control the actuators.
-
 pub mod controllino;
 pub mod controllino_actuate_hardware;
 pub mod controllino_actuate_simulator;

@@ -13,11 +13,11 @@ pub mod tests {
 
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::{Duration};
+    use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_tcp(
         tx_tcp_to_test_object: &Sender<f32>,
@@ -38,14 +38,20 @@ pub mod tests {
                             AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
                             AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
                             _ => {
-                                panic!("{}: unknown signal request to mock TCP", LOG_TARGET_MOCK_TCP);
+                                panic!(
+                                    "{}: unknown signal request to mock TCP",
+                                    LOG_TARGET_MOCK_TCP
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("{}: invalid command to mock TCP handler", LOG_TARGET_MOCK_TCP);
+                            panic!(
+                                "{}: invalid command to mock TCP handler",
+                                LOG_TARGET_MOCK_TCP
+                            );
                         }
                     };
                     match tx_tcp_to_test_object.send(response_value) {

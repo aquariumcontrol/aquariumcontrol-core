@@ -1032,13 +1032,13 @@ pub mod tests {
         HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::stubs::mock_ambient::tests::mock_ambient;
     use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
-    use crate::stubs::mock_controllino::tests::mock_controllino; 
+    use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
-    use crate::stubs::mock_ambient::tests::mock_ambient;
-    
+
     use crate::thermal::heating::{Heating, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;

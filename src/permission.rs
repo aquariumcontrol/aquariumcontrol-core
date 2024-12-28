@@ -11,5 +11,4 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Schedule checker centralizes all communication to the database in regards to permission to run.
 /// The implementation polls the database and answers requests from the threads with the
 /// information retrieved from the database.
-
 pub mod schedule_check;

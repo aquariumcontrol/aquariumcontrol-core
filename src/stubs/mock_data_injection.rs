@@ -10,7 +10,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
-    use crate::recorder::{data_injection::DataInjectionTrait, recorder_data_frame::RecorderDataFrame};
+    use crate::recorder::{
+        data_injection::DataInjectionTrait, recorder_data_frame::RecorderDataFrame,
+    };
 
     pub struct MockDataInjection {
         pub data_frames: Vec<RecorderDataFrame>,

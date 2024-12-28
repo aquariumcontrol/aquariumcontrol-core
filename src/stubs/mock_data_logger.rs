@@ -16,7 +16,7 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::utilities::channel_content::InternalCommand;
-    
+
     pub fn mock_data_logger(
         _tx_data_logger_to_test_object: &Sender<InternalCommand>,
         rx_data_logger_from_test_object: &Receiver<bool>,

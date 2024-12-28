@@ -15,10 +15,10 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
-    
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+
     pub fn mock_atlas_scientific(
         tx_atlas_scientific_to_test_object: &Sender<f32>,
         rx_atlas_scientific_from_test_object: &Receiver<InternalCommand>,
@@ -42,14 +42,20 @@ pub mod tests {
                             AquariumSignal::Conductivity => stimuli_conductivity,
                             AquariumSignal::pH => stimuli_ph,
                             _ => {
-                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK_ATLAS_SCIENTIFIC, d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK_ATLAS_SCIENTIFIC, d
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK_ATLAS_SCIENTIFIC);
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK_ATLAS_SCIENTIFIC
+                            );
                         }
                     };
                     match tx_atlas_scientific_to_test_object.send(response_value) {

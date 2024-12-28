@@ -12,9 +12,9 @@ pub mod tests {
     use chrono::NaiveDateTime;
 
     use crate::database::sql_interface_error::SqlInterfaceError;
-    use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait};
-    use crate::food::feed_schedule_entry::FeedScheduleEntry;
+    use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
     use crate::food::feed_pattern::Feedpattern;
+    use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
     /// Contains the configuration and the implementation of the mock SQL interface for Feed.
     /// This mock version only returns errors instead of any data.

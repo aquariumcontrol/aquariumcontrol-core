@@ -21,10 +21,10 @@ use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 
-use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
+use crate::recorder::recorder_data_frame::RecorderDataFrame;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -1375,15 +1375,15 @@ pub mod tests {
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
     use crate::stubs::mock_ambient::tests::mock_ambient;
     use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
+    use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
     use crate::stubs::mock_refill::tests::mock_refill;
+    use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::stubs::mock_ventilation::tests::mock_ventilation;
-    use crate::stubs::mock_data_injection::tests::MockDataInjection;
-    use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::test_command::tests::TestCommand;        
+    use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     fn assert_output_file_contents(
         data_logger_config: &DataLoggerConfig,
@@ -1522,7 +1522,7 @@ pub mod tests {
     // test case checks if DataLogger correctly processes all information:
     // - storage in SQL database using mock implementation
     // - writing output to filesystem
-    // Test case does not require any communication with database.
+    // Test case uses test database #45.
     pub fn test_data_log() {
         // channels for communication with test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
@@ -1565,12 +1565,18 @@ pub mod tests {
 
         let mut mock_data_injection = MockDataInjection::new();
 
-        let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            45,
+        );
         config.data_logger.logging_interval = 1;
-        let mut config2: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        let mut config2: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            45,
+        );
         config2.data_logger.logging_interval = 1;
+
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {

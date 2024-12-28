@@ -14,10 +14,10 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
-    
-    use crate::utilities::channel_content::{InternalCommand, AquariumSignal};
+
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_refill(
         tx_refill_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,

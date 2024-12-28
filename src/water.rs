@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features all functionality to replace the evaporated water with fresh water.
-
 pub mod refill;
-pub mod water_injection;
 pub mod refill_errors;
+pub mod water_injection;

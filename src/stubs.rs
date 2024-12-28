@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features a set of mock functionality used by test cases.
-
 pub mod actuation_event;
 pub mod mock_ambient;
 pub mod mock_atlas_scientific;

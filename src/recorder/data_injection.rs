@@ -17,7 +17,11 @@ pub trait DataInjectionTrait {
     /// # Arguments
     /// * `data_frame` - Data to be transferred to SQL database
     /// * `sql_interface_data` - Interface to SQL database
-    fn inject_data(&mut self, data_frame: RecorderDataFrame, sql_interface_data: &mut SqlInterfaceData);
+    fn inject_data(
+        &mut self,
+        data_frame: RecorderDataFrame,
+        sql_interface_data: &mut SqlInterfaceData,
+    );
 }
 
 pub struct DataInjection;
@@ -27,7 +31,11 @@ impl DataInjectionTrait for DataInjection {
     /// # Arguments
     /// * `data_frame` - Data to be transferred to SQL database
     /// * `sql_interface_data` - Interface to SQL database
-    fn inject_data(&mut self, data_frame: RecorderDataFrame, sql_interface_data: &mut SqlInterfaceData) {
+    fn inject_data(
+        &mut self,
+        data_frame: RecorderDataFrame,
+        sql_interface_data: &mut SqlInterfaceData,
+    ) {
         match sql_interface_data.write_data_frame_to_database(&data_frame) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {

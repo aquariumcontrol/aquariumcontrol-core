@@ -12,7 +12,7 @@ use mysql::*;
 use std::fmt;
 
 use crate::database::{
-    sql_interface_feed::SqlFeedScheduleEntry, sql_interface_error::SqlInterfaceError,
+    sql_interface_error::SqlInterfaceError, sql_interface_feed::SqlFeedScheduleEntry,
 };
 
 const LOG_TARGET_FEED_SCHEDULE_ENTRY: &str = "feed_schedule_entry";

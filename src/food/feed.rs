@@ -21,9 +21,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait};
-use crate::food::food_injection::FoodInjectionTrait;
+use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
+use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
@@ -571,12 +571,10 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::database::sql_interface::SqlInterface;
-    use crate::database::sql_interface_feed::{
-        DatabaseInterfaceFeedTrait, SqlInterfaceFeed,
-    };
-    use crate::food::feed_schedule_entry::FeedScheduleEntry;
+    use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
     use crate::food::feed::{Feed, LOG_TARGET_FEED};
     use crate::food::feed_pattern::Feedpattern;
+    use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::food::food_injection::FoodInjectionTrait;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{

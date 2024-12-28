@@ -220,8 +220,10 @@ pub mod tests {
     use chrono::NaiveDateTime;
     use mysql::{params, prelude::Queryable};
 
-    use crate::database::{sql_query_strings, sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::database::sql_interface_balling::SqlInterfaceBalling;
+    use crate::database::{
+        sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+    };
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     pub struct SqlBallingEvent {

@@ -15,9 +15,9 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
+    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_tank_level_switch(
         tx_tank_level_switch_to_test_object: &Sender<bool>,
@@ -47,14 +47,20 @@ pub mod tests {
                                 stimuli_position_stabilized
                             }
                             _ => {
-                                panic!("{}: inapplicable signal request {}", LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, d);
+                                panic!(
+                                    "{}: inapplicable signal request {}",
+                                    LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, d
+                                );
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK_TANK_LEVEL_SWITCH);
+                            panic!(
+                                "{}: Received invalid command.",
+                                LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                            );
                         }
                     };
                     match tx_tank_level_switch_to_test_object.send(response_value) {
@@ -173,7 +179,10 @@ pub mod tests {
                                 }
                             }
                             _ => {
-                                panic!("{}: received invalid command {}", LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, c);
+                                panic!(
+                                    "{}: received invalid command {}",
+                                    LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, c
+                                );
                             }
                         },
                         Err(e) => {

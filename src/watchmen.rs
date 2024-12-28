@@ -9,5 +9,4 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 /// This container module features all functionality to monitor the control system.
 /// As of 2024, this module only contains an empty hull without implementation.
-
 pub mod monitors;

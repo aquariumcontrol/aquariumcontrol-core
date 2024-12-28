@@ -8,8 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features all functionality which could not be assigned to any other container module.
-
-
 pub mod channel_content;
 pub mod common;
 pub mod config;

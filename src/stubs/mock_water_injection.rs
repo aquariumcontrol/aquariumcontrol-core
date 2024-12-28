@@ -13,11 +13,11 @@ pub mod tests {
     use std::time::SystemTime;
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::water::refill_errors::RefillErrors;
     use crate::water::water_injection::WaterInjectionTrait;
-    use crate::stubs::test_command::tests::TestCommand;
-    
+
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
 

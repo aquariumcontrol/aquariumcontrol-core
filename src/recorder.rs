@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// This container module contains all functionality to periodically store signals either
 /// - in one table of the SQL database
 /// - or in specific text files stored in RAM-disk
-
 pub mod data_injection;
 pub mod data_logger;
 pub mod data_logger_communication;

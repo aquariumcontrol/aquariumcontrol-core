@@ -704,9 +704,9 @@ pub mod tests {
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_heating::tests::mock_heating;
     use crate::stubs::mock_refill::tests::mock_refill;
-    use crate::stubs::mock_tcp::tests::mock_tcp;
     use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::test_command::tests::TestCommand;    
+    use crate::stubs::mock_tcp::tests::mock_tcp;
+    use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 

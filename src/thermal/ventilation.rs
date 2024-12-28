@@ -690,10 +690,10 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
 
     use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
-    use crate::stubs::mock_controllino::tests::mock_controllino; 
+    use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-    
+
     fn prepare_ventilation_tests() -> Ventilation {
         // prepare struct Ventilation for subsequent tests
         let config: ConfigData =

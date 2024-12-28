@@ -447,12 +447,12 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{sync::mpsc, thread, time::Duration};
 
-    use crate::channel_content::InternalCommand;
-    use crate::config::{read_config_file, ConfigData};
-    use crate::messaging::{
+    use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING,
     };
-    use crate::mock::tests::mock_message_command_receiver;
+    use crate::stubs::mock_message_command_receiver::tests::mock_message_command_receiver;
+    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::config::{read_config_file, ConfigData};
 
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication

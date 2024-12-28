@@ -8,7 +8,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// This container module features all functionality to read and postprocess sensor data.
-
 pub mod ambient;
 pub mod atlas_scientific;
 pub mod dht;
