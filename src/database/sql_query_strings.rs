@@ -160,7 +160,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
 // Deletes the content of a specific table.
-// This query is used for testing by multiple crates, therefore it resides here and not in the test module.
+// This query is used for testing by multiple modules, therefore it resides here and not in the test module.
 #[cfg(test)]
 pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 

@@ -979,7 +979,7 @@ impl Heating {
 
         // this thread has channel connection to underlying threads (Controllino, AtlasScientific, TankLevelSwitch).
         // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler crate.
+        // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
