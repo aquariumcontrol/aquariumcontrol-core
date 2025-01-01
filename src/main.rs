@@ -17,22 +17,47 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Automatic feeding
 //! - Balling mineral dosing
 
+/// This is the container module for the database communication.
+/// Communicating with SQL data base includes preparing SQL queries, executing the queries and processing of query results.
 mod database;
 
 #[cfg(target_os = "linux")]
 mod dispatch;
 
+/// This container module features all functionality to execute the automatic feeding.
 mod food;
+
+/// This container module features all functionality to execute the Balling mineral dosing.
 mod mineral;
+
+/// The container module contains the schedule checker.
 mod permission;
+
+/// This container module contains all functionality to periodically store signals either in one table of the SQL databaseor in specific text files stored in RAM-disk
 mod recorder;
+
+/// This container module features all functionality to actuate the relays which control the actuators.
 mod relays;
+
+/// This container module features all functionality to read and postprocess sensor data.
 mod sensors;
+
+/// This container module features all functionality to commiunicate with the test server via TCP.
 mod simulator;
+
+/// This container module features a set of mock functionality used by test cases.
 mod stubs;
+
+/// This container module features all functionality to either cool the water using ventilation heat the water using a heater.
 mod thermal;
+
+/// This container module features all functionality which could not be assigned to any other container module.
 mod utilities;
+
+/// This container module features all functionality to monitor the control system.
 mod watchmen;
+
+/// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 
 use log::{error, info, warn};

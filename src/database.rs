@@ -7,17 +7,25 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// This is the container module for the database communication.
-/// Communicating with SQL data base includes
-/// - preparing SQL queries
-/// - executing the queries
-/// - processing of query results
+/// Contains functions for execution of basic queries used by the other modules
 pub mod sql_interface;
+
+/// Contains functions for execution of all queries relevant for Balling mineral dosing
 pub mod sql_interface_balling;
+
+/// Contains functions for execution of all queries relevant for time-data recording (recorder)
 pub mod sql_interface_data;
+
+/// Contains functions for execution of all queries relevant for feed (food)
 pub mod sql_interface_feed;
+
+/// Contains functions for execution of all queries relevant for heating (thermal)
 pub mod sql_interface_heating;
+
+/// Contains functions for execution of all queries relevant for refill (water)
 pub mod sql_interface_refill;
+
+/// Contains functions for execution of all queries relevant for schedule (permission)
 pub mod sql_interface_schedule;
 
 /// Contains enum with error definitions
