@@ -22,6 +22,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 mod database;
 
 #[cfg(target_os = "linux")]
+/// Communication with terminal user or webserver using POSIX message queues.
 mod dispatch;
 
 /// This container module features all functionality to execute the automatic feeding.
