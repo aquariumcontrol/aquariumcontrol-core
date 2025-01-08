@@ -1087,4 +1087,154 @@ pub mod tests {
             Err(ControllinoError::PulseNotAllowedForDevice(Feeder))
         );
     }
+    
+    #[cfg(feature = "controllino_hw")]
+    #[test]
+    // Test case actuates on real hardware.
+    // Execution of this test case requires serial port connection to Controllino device.
+    pub fn test_controllino_simulate_feed_profile() {
+        let sleep_duration_500_millisec = Duration::from_millis(500);
+        let sleep_duration_8_secs = Duration::from_secs(8);
+        let sleep_duration_6_secs = Duration::from_secs(6);
+        let spin_sleeper = SpinSleeper::default();
+
+        let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
+        let controllino = Controllino::new(config.controllino);
+
+        let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
+
+        let serial_port: Box<dyn SerialPort>;
+        serial_port = match controllino.serial_port_opt.as_ref().unwrap().try_clone() {
+            Ok(c) => c,
+            Err(_) => {
+                panic!("Controllino: Error occured when trying to clone serial port.");
+            }
+        };
+
+        let mut actuator = ControllinoActuateHardware;
+
+        let expect_info =
+            "Controllino test_switch_on_off_pulse failed cloning serial port interface.";
+
+        // Request Controllino to switch on and off all relays sequentially
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOff(MainPump1),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOff(MainPump2),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOff(AuxPump1),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_8_secs);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOn(Feeder),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_6_secs);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOff(Feeder),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_8_secs);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOn(Feeder),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_6_secs);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOff(Feeder),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_8_secs);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOn(MainPump1),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOn(MainPump2),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millisec);
+        assert_eq!(
+            actuator.actuate(
+                InternalCommand::SwitchOn(AuxPump1),
+                None,
+                &mut Some(serial_port.try_clone().expect(expect_info)),
+                &controllino.spin_sleeper_opt,
+                &controllino.controllino_processing_duration_opt,
+                &config2.controllino
+            ),
+            Ok(())
+        );
+    }    
 }
