@@ -22,7 +22,7 @@ use crate::utilities::channel_content::InternalCommand;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 
-use crate::mineral::mineral_injection::MineralInjection;
+use crate::mineral::{mineral_injection::MineralInjection, balling::Balling};
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
@@ -30,8 +30,8 @@ use crate::water::{refill::Refill, water_injection::WaterInjection};
 const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
 
 /// The trait implements processing of repeated patterns of channel communication from signal handler and from messaging.
-/// Default implementation is used by Balling dosing control, heating control, ventilation control and monitors.
-/// The following modules use specific implementations of this trait: Refill control, Data logger,
+/// Default implementation is used by heating control, ventilation control and monitors.
+/// The following modules use specific implementations of this trait: Refill control, Data logger, Balling,
 /// Food injection, Water injection, Mineral injection, Schedule check, Controllino, Gpio handler,
 /// Feed, Messaging, TCP communication.
 pub trait ProcessExternalRequestTrait {
@@ -50,7 +50,7 @@ pub trait ProcessExternalRequestTrait {
                 _ => {
                     warn!(
                         target: LOG_TARGET_PROC_EXT_REQ,
-                        "ProcessExternalRequestTrait: ignoring not applicable command from signal handler."
+                        "ProcessExternalRequestTrait: ignoring inapplicable command from signal handler."
                     );
                     false
                 }
@@ -79,7 +79,7 @@ pub trait ProcessExternalRequestTrait {
                         _ => {
                             warn!(
                                 target: LOG_TARGET_PROC_EXT_REQ,
-                                "ProcessExternalRequestTrait: ignoring not applicable command from messaging."
+                                "ProcessExternalRequestTrait: ignoring inapplicable command from messaging."
                             );
                             (false, false)
                         }
@@ -128,7 +128,7 @@ impl ProcessExternalRequestTrait for Refill {
                 _ => {
                     warn!(
                         target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring not applicable command from signal handler."
+                        "ignoring inapplicable command from signal handler."
                     );
                     false
                 }
@@ -166,7 +166,7 @@ impl ProcessExternalRequestTrait for Refill {
                         _ => {
                             warn!(
                                 target: LOG_TARGET_PROC_EXT_REQ,
-                                "ignoring not applicable command from messaging."
+                                "ignoring inapplicable command from messaging."
                             );
                             (false, false)
                         }
@@ -209,7 +209,7 @@ fn process_external_request_without_messaging(
             _ => {
                 warn!(
                     target: LOG_TARGET_PROC_EXT_REQ,
-                    "ignoring not applicable command from signal handler."
+                    "ignoring inapplicable command from signal handler."
                 );
                 false
             }
@@ -370,7 +370,7 @@ impl ProcessExternalRequestTrait for Feed {
                 _ => {
                     warn!(
                         target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring not applicable command {} from signal handler.",
+                        "ignoring inapplicable command {} from signal handler.",
                         c
                     );
                     false
@@ -413,7 +413,7 @@ impl ProcessExternalRequestTrait for Feed {
                             _ => {
                                 warn!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
-                                    "ignoring not applicable command {} from messaging.",
+                                    "ignoring inapplicable command {} from messaging.",
                                     c
                                 );
                                 (false, false, false, 0)
@@ -439,6 +439,92 @@ impl ProcessExternalRequestTrait for Feed {
 
         self.execute_command_received = execute_command_received;
         self.profile_id_requested = profile_id;
+
+        (
+            quit_command_received,
+            start_command_received,
+            stop_command_received,
+        )
+    }
+}
+
+impl ProcessExternalRequestTrait for Balling {
+    /// Checks if there are new messages in the channels.
+    /// Implementation for Balling
+    /// # Arguments
+    /// * `rx_from_signal_handler` - reference to receiver part of channel    
+    /// * `rx_from_messaging_opt` - reference to receiver part of channel wrapped in Option
+    fn process_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+    ) -> (bool, bool, bool) {
+        let quit_command_received = match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Quit => true,
+                _ => {
+                    warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ignoring inapplicable command {} from signal handler.",
+                        c
+                    );
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        #[cfg(not(test))]
+                        error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
+                        );
+                    }
+                }
+                false
+            }
+        };
+
+        self.execute_command_received = false;
+        self.pump_id_requested = -1;
+        let (start_command_received, stop_command_received, execute_command_received, pump_id) =
+            match rx_from_messaging_opt {
+                Some(rx_from_messaging) => {
+                    match rx_from_messaging.try_recv() {
+                        Ok(c) => match c {
+                            InternalCommand::Start => (true, false, false, 0),
+                            InternalCommand::Stop => (false, true, false, 0),
+                            InternalCommand::Execute(c) => (false, false, true, c),
+                            _ => {
+                                warn!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "ignoring inapplicable command {} from messaging.",
+                                    c
+                                );
+                                (false, false, false, 0)
+                            }
+                        },
+                        Err(e) => {
+                            match e {
+                                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                                TryRecvError::Disconnected => {
+                                    #[cfg(not(test))]
+                                    error!(
+                                        target: LOG_TARGET_PROC_EXT_REQ,
+                                        "receiving command from messaging failed ({e:?})"
+                                    );
+                                }
+                            }
+                            (false, false, false, 0)
+                        }
+                    }
+                }
+                None => (false, false, false, 0),
+            };
+
+        self.execute_command_received = execute_command_received;
+        self.pump_id_requested = pump_id;
 
         (
             quit_command_received,

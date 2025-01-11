@@ -1087,7 +1087,7 @@ pub mod tests {
             Err(ControllinoError::PulseNotAllowedForDevice(Feeder))
         );
     }
-    
+
     #[cfg(feature = "controllino_hw")]
     #[test]
     // Test case actuates on real hardware.
@@ -1236,5 +1236,5 @@ pub mod tests {
             ),
             Ok(())
         );
-    }    
+    }
 }

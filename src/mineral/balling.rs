@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, warn};
+use log::{error, warn, info};
 
 #[cfg(feature = "debug_balling")]
 use log::debug;
@@ -114,9 +114,13 @@ pub struct Balling {
 
     /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from schedule check
     lock_error_channel_receive_schedule_check: bool,
-}
 
-impl ProcessExternalRequestTrait for Balling {}
+    /// communication from trait implementation: request to execute a certain Balling mineral dosing has been received
+    pub execute_command_received: bool,
+
+    /// communication from trait implementation: id of pump to be executed requested externally
+    pub pump_id_requested: i32,
+}
 
 impl Balling {
     /// Provides a struct of type Balling.
@@ -151,6 +155,8 @@ impl Balling {
             lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
+            execute_command_received: false,
+            pump_id_requested: 0,
         }
     }
 
@@ -322,6 +328,19 @@ impl Balling {
             }
         }
         quit_command_received
+    }
+
+    /// Select the pump from the ID received externally
+    /// # Arguments
+    /// * `pump_id` - ID of pump to be actuated as i32
+    pub fn get_pump_from_id(pump_id: i32) -> Option<(u32, AquariumDevice)> {
+        match pump_id {
+            1 => Some((1, AquariumDevice::PeristalticPump1)),
+            2 => Some((2, AquariumDevice::PeristalticPump2)),
+            3 => Some((3, AquariumDevice::PeristalticPump3)),
+            4 => Some((4, AquariumDevice::PeristalticPump4)),
+            _ => None,
+        }
     }
 
     /// Executes the main control in a loop until signal handler commands quitting and termination.
@@ -539,6 +558,40 @@ impl Balling {
                 stop_command_received,
             ) = self
                 .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+
+            if self.execute_command_received {
+                let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
+                match pump_device_opt {
+                    Some((pump_id, pump_device)) => {
+                        info!(
+                            target: LOG_TARGET_BALLING,
+                            "executing external request for actuation of pump #{}",
+                            self.pump_id_requested
+                        );
+                        // inner scope to limit lifetime of unlocked mutex
+                        {
+                            let mut mutex_data = mutex_device_scheduler_balling.lock().unwrap();
+                            quit_command_received = self.execute_dosing(
+                                pump_id,
+                                pump_device,
+                                mineral_injection,
+                                &rx_from_signal_handler,
+                                &tx_to_controllino,
+                                &rx_from_controllino,
+                            );
+                            *mutex_data += 1;
+                        }
+                    }
+                    None => {
+                        info!(
+                            target: LOG_TARGET_BALLING,
+                            "ignoring external request for actuation of pump #{}",
+                            self.pump_id_requested
+                        );
+                    }
+                }
+            }
+
             if quit_command_received {
                 #[cfg(test)]
                 println!("{}: received Quit command. Exiting...", LOG_TARGET_BALLING);
