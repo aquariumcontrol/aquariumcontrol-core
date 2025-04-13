@@ -22,7 +22,7 @@ use crate::utilities::channel_content::InternalCommand;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::Messaging;
 
-use crate::mineral::{mineral_injection::MineralInjection, balling::Balling};
+use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::water::{refill::Refill, water_injection::WaterInjection};

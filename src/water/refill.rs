@@ -887,7 +887,7 @@ impl Refill {
         let mut sql_refill_data = RefillSqlData::new();
         self.get_sql_refill_data(&mut sql_refill_data);
 
-        let mut refill_inhibited = false;
+        let mut refill_inhibited = false; // flag indicating external request to inhibit refill from injecting water
         let mut quit_command_received = false; // request to end the application has been received
         let mut start_command_received; // request to (re-)start feed has been received
         let mut stop_command_received; // request to (temporarily) stop feed has been received
@@ -973,13 +973,20 @@ impl Refill {
                                     #[cfg(feature = "debug_refill")]
                                     debug!(
                                         target: LOG_TARGET_REFILL,
-                                        "aquiring semaphore..."
+                                        "aquiring semaphore...",
                                     );
 
                                     // conditions for allowing refill operation are given
                                     let mut mutex_data =
                                         mutex_device_scheduler_refill.lock().unwrap();
                                     // now we are given exclusive access to actuators
+
+                                    #[cfg(feature = "debug_refill")]
+                                    debug!(
+                                        target: LOG_TARGET_REFILL,
+                                        "mutex_data = {}",
+                                        mutex_data
+                                    );
 
                                     quit_command_received = water_injection.inject_water(
                                         &tx_to_controllino,
@@ -993,6 +1000,12 @@ impl Refill {
                                         &mut self.sql_interface_refill,
                                     );
                                     *mutex_data = mutex_data.saturating_add(1);
+
+                                    #[cfg(feature = "debug_refill")]
+                                    debug!(
+                                        target: LOG_TARGET_REFILL,
+                                        "releasing semaphore..."
+                                    );
                                 }
                             }
                         }
@@ -1183,6 +1196,8 @@ pub mod tests {
 
     use crate::water::refill::LOG_TARGET_REFILL;
 
+    use crate::utilities::logger::setup_logger;
+
     pub fn prepare_refill_tests(
         refill_errors: Option<RefillErrors>,
         initial_wait_interval: u64,
@@ -1331,8 +1346,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1468,6 +1491,202 @@ pub mod tests {
     }
 
     #[test]
+    // This test case executes multiple iterations of the loop inside the .execute function with triggering a refill and simulation of switch stuck low scenario.
+    // Test case uses test database #47.
+    pub fn test_refill_trigger_water_injection_switch_stuck_high() {
+        let sleep_duration_50_millisec = Duration::from_millis(50);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(47));
+        let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
+        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch) =
+            mpsc::channel::<bool>();
+        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel::<InternalCommand>();
+        let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
+        let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
+            mpsc::channel::<InternalCommand>();
+        // not used in this test case
+        //let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
+        //    mpsc::channel();
+        let (
+            tx_mock_water_injection_to_test_environment,
+            rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+
+        // this test case shall output debug! macros
+        setup_logger();
+
+        // empty the refill table
+        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: true,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_refill,
+                    &rx_schedule_check_from_refill,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // thread for mock TankLevelSwitch
+        let join_handle_mock_tank_level_switch = thread::Builder::new()
+            .name("mock_tank_level_switch".to_string())
+            .spawn(move || {
+                mock_tank_level_switch(
+                    &tx_tank_level_switch_to_refill,
+                    &rx_tank_level_switch_from_refill,
+                    None /* Not used in this test case: Some(&rx_tank_level_switch_from_test_environment)*/,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_refill,
+                    &rx_data_logger_from_refill,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_secs = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                // wait for test object to trigger water injection
+                let _ = rx_test_environment_from_mock_water_injection
+                    .recv()
+                    .unwrap();
+
+                // do not request update of tank level position signals to mock tank level switch
+                //let _ = tx_test_environment_to_tank_level_switch
+                //    .send(TestCommand::UpdateSignal(TankLevelSwitchPosition(true)));
+                //let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
+                //    TankLevelSwitchPositionStabilized(true),
+                //));
+
+                let start_time = SystemTime::now();
+                spin_sleeper.sleep(sleep_duration_two_secs);
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                rx_signal_handler_from_refill.recv().unwrap();
+
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let finish_time = SystemTime::now();
+                let finalization_duration_millis =
+                    finish_time.duration_since(start_time).unwrap().as_millis();
+
+                println!(
+                    "finalization_duration_millis = {}",
+                    finalization_duration_millis
+                );
+
+                assert_ge!(finalization_duration_millis, 2000 as u128);
+                assert_le!(finalization_duration_millis, 2150 as u128);
+
+                // wait for test object to finish so that mock threads receive
+                // termination request before end of this (test environment) thread
+                spin_sleeper.sleep(sleep_duration_two_secs);
+            })
+            .unwrap();
+
+        // give the test environment a little time to trigger the receive call for signal update
+        spin_sleeper.sleep(sleep_duration_50_millisec);
+
+        // thread for test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let tx_refill_to_schedule_check_for_test_case_finish =
+                    tx_refill_to_schedule_check.clone();
+                let tx_refill_to_tank_level_switch_for_test_case_finish =
+                    tx_refill_to_tank_level_switch.clone();
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    tx_refill_to_tank_level_switch,
+                    rx_refill_from_tank_level_switch,
+                    tx_refill_to_controllino,
+                    rx_refill_from_controllino,
+                    tx_refill_to_signal_handler,
+                    rx_refill_from_signal_handler,
+                    tx_refill_to_schedule_check,
+                    rx_refill_from_schedule_check,
+                    tx_refill_to_data_logger,
+                    rx_refill_from_data_logger,
+                    None,
+                    &mut mock_water_injection,
+                );
+
+                // send Quit signal to mock threads because test object has terminated
+                let _ =
+                    tx_refill_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_refill_to_tank_level_switch_for_test_case_finish.send(InternalCommand::Quit);
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_tank_level_switch
+            .join()
+            .expect("Mock tank level switch did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+
+    #[test]
     // this test case executes one iteration of the loop inside the .execute function with triggering a refill
     // It checks the timing of initial wait period and main control interval.
     // Test case uses test database #21.
@@ -1511,8 +1730,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1652,7 +1879,7 @@ pub mod tests {
     #[test]
     // this test case executes multiple iterations of the loop of the .execute function with error flag error_switch_stuck_low set
     // during the execution of the test case, the error is reset.
-    // refill control shall resum operation upon having reset the error.
+    // refill control shall resume operation upon having reset the error.
     // Test case uses test database #22.
     pub fn test_refill_conditions_historic_data_error_switch_stuck_low() {
         let sleep_duration_50_millisec = Duration::from_millis(50);
@@ -1698,8 +1925,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1905,8 +2140,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },            
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2098,8 +2341,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2277,8 +2528,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2458,8 +2717,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2671,8 +2938,16 @@ pub mod tests {
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
-        let mut mock_water_injection =
-            MockWaterInjection::new(Some(tx_mock_water_injection_to_test_environment));
+        let mut mock_water_injection = MockWaterInjection::new(
+            Some(tx_mock_water_injection_to_test_environment),
+            RefillErrors {
+                error_switch_stuck_high: false,
+                error_switch_stuck_low: false,
+                error_receive_tank_level_switch_position: false,
+                error_sql_update_failed: false,
+                error_sql_get_historic_data_failed: false,
+            },
+        );
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()

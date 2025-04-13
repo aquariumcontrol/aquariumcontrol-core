@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use chrono::Local;
-use log::{error, warn, info};
+use log::{error, info, warn};
 
 #[cfg(feature = "debug_balling")]
 use log::debug;

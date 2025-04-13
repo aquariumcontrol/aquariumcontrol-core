@@ -22,16 +22,20 @@ pub mod tests {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
 
         pub injection_recorder: Vec<SystemTime>,
+
+        stimuli_refill_errors: RefillErrors,
     }
 
     impl MockWaterInjection {
         pub fn new(
             tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
+            refill_errors: RefillErrors,
         ) -> MockWaterInjection {
             MockWaterInjection {
                 tx_water_injection_to_test_environment_opt:
                     tx_water_injection_to_test_environment_opt,
                 injection_recorder: Vec::new(),
+                stimuli_refill_errors: refill_errors,
             }
         }
     }
@@ -46,7 +50,7 @@ pub mod tests {
             _rx_from_signal_handler: &Receiver<InternalCommand>,
             _tx_to_data_logger: &Sender<bool>,
             _rx_from_data_logger: &Receiver<InternalCommand>,
-            _refill_errors: &mut RefillErrors,
+            refill_errors: &mut RefillErrors,
             _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         ) -> bool {
             if self.tx_water_injection_to_test_environment_opt.is_some() {
@@ -54,6 +58,21 @@ pub mod tests {
                     .tx_water_injection_to_test_environment_opt
                     .clone()
                     .unwrap();
+
+                // copy refill errors from stimuli to mutable reference given as parameter
+                refill_errors.error_switch_stuck_high =
+                    self.stimuli_refill_errors.error_switch_stuck_high;
+                refill_errors.error_switch_stuck_low =
+                    self.stimuli_refill_errors.error_switch_stuck_low;
+                refill_errors.error_receive_tank_level_switch_position = self
+                    .stimuli_refill_errors
+                    .error_receive_tank_level_switch_position;
+                refill_errors.error_sql_update_failed =
+                    self.stimuli_refill_errors.error_sql_update_failed;
+                refill_errors.error_sql_get_historic_data_failed = self
+                    .stimuli_refill_errors
+                    .error_sql_get_historic_data_failed;
+
                 let _ = tx_water_injection_to_test_environment
                     .send(TestCommand::InformWaterInjectionEvent);
             }
