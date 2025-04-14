@@ -1163,6 +1163,7 @@ impl DataLogger {
         let mut ambient_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
+        let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
         loop {
             self.update_signals(
@@ -1239,10 +1240,12 @@ impl DataLogger {
                     lock_warn_cycle_time_exceeded = false;
                 }
                 remaining_sleep_time_millis = 0;
+                cycle_time_exceeded = true;
             } else {
                 // underflow cannot happen because else statement require that first operand is higher than second
                 remaining_sleep_time_millis =
                     self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
+                cycle_time_exceeded = false;
             }
 
             #[cfg(feature = "debug_data_logger")]
@@ -1254,7 +1257,7 @@ impl DataLogger {
 
             // wait the remaining time period to complete the target cycle time
             i = 0;
-            while i < remaining_sleep_time_millis {
+            while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millisec);
                 (quit_command_received, _, _) =
@@ -1301,6 +1304,7 @@ impl DataLogger {
                         &mut tank_level_switch_channel_disconnected,
                     );
                 }
+                cycle_time_exceeded = false;
             }
             if quit_command_received {
                 break;

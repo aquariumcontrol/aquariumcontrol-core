@@ -15,6 +15,9 @@ use log::{error, warn};
 #[cfg(all(feature = "debug_feed", not(test)))]
 use log::debug;
 
+#[cfg(all(feature = "debug_signal_handler", not(test)))]
+use log::debug;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};

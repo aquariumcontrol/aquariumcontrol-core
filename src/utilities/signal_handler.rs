@@ -16,7 +16,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
-
 use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
@@ -233,7 +232,12 @@ pub fn handle_signals(
         rx_from_messaging_opt.as_ref(),
         "messaging",
     );
-
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 1 of termination concluded",
+    );
+    
     // phase 2: shut down high level controls: heating, ventilation, feed, refill, balling
     // these controls access the Controllino, Atlas Scientific and Dht
     send_command(
@@ -266,6 +270,11 @@ pub fn handle_signals(
         Some(&rx_from_balling),
         "balling",
     );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 2 of termination concluded",
+    );
 
     // phase 3: shut down medium level controls
     // these controls receive commands from upper level controls and communicate to i2c_interface and dht
@@ -293,6 +302,11 @@ pub fn handle_signals(
         Some(&rx_from_schedule_check),
         "schedule_check",
     );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 3 of termination concluded",
+    );
 
     // phase 4: shut down low level controls
     send_command(
@@ -302,7 +316,6 @@ pub fn handle_signals(
         "i2c_interface",
     );
     send_command(InternalCommand::Quit, tx_to_dht_opt.as_ref(), None, "dht");
-
     send_command(
         InternalCommand::Quit,
         Some(&tx_to_controllino),
@@ -314,6 +327,11 @@ pub fn handle_signals(
         tx_to_tcp_opt.as_ref(),
         rx_from_tcp_opt.as_ref(),
         "tcp",
+    );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 4 of termination concluded",
     );
 
     // phase 5: send termination command to highest level controls
@@ -328,6 +346,11 @@ pub fn handle_signals(
         Some(&tx_to_monitors),
         None,
         "monitors",
+    );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 5 of termination concluded",
     );
 
     // phase 6: send termination command to high level controls
@@ -356,6 +379,11 @@ pub fn handle_signals(
         None,
         "balling",
     );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 6 of termination concluded",
+    );
 
     // phase 7: send termination command to medium level controls
     send_command(
@@ -375,6 +403,11 @@ pub fn handle_signals(
         Some(&tx_to_tank_level_switch),
         None,
         "tank_level_switch",
+    );
+    #[cfg(feature = "debug_signal_handler")]
+    debug!(
+        target: LOG_TARGET_SIGNAL_HANDLER,
+        "phase 7 of termination concluded",
     );
 
     // phase 8: allow messaging thread to close

@@ -567,6 +567,11 @@ impl Refill {
     /// # Arguments
     /// * `sql_refill_data` - reference to data retrieved from SQL database    
     fn check_volume_count_time_limits(&mut self, sql_refill_data: &RefillSqlData) -> bool {
+        #[cfg(feature = "debug_refill")]
+        debug!(
+            target: LOG_TARGET_REFILL,
+            "check_volume_count_time_limits called.",
+        );
         let refill_check_volume_last_24h =
             sql_refill_data.refill_volume_last_24h > self.config.max_refill_volume_24h;
 
@@ -881,7 +886,7 @@ impl Refill {
         }
 
         let mut lock_warn_cycle_time_exceeded: bool = false;
-        let mut cycle_time_exceeded: bool = false; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
+        let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
         // retrieving data from SQL data base
         let mut sql_refill_data = RefillSqlData::new();
@@ -1049,22 +1054,25 @@ impl Refill {
                 // execution duration is smaller than cycle time in this branch
                 // no risk of underflow
                 remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
+                cycle_time_exceeded = false;
+                lock_warn_cycle_time_exceeded = false;
             }
 
             #[cfg(feature = "debug_refill")]
             debug!(
                 target: LOG_TARGET_REFILL,
-                "execution duration = {}, cycle time = {}",
+                "execution duration = {}, cycle time = {}, remaining_sleep_time_millis = {}",
                 execution_duration_millis,
-                self.config.check_interval * MILLIS_PER_SEC
+                self.config.check_interval * MILLIS_PER_SEC,
+                remaining_sleep_time_millis
             );
-
+           
             // skip further waiting if quit command has been received during refilling
             if !quit_command_received {
                 // wait for configured time period before rechecking the sensor signal
                 // check for external requests while waiting
                 i = 0;
-                while (i < remaining_sleep_time_millis) && !cycle_time_exceeded {
+                while (i < remaining_sleep_time_millis) || cycle_time_exceeded {
                     match i.checked_add(100) {
                         Some(c) => i = c,
                         None => {
@@ -1095,9 +1103,8 @@ impl Refill {
                     if quit_command_received {
                         break;
                     }
-                    if !cycle_time_exceeded {
-                        spin_sleeper.sleep(sleep_duration_hundred_millis);
-                    }
+                    spin_sleeper.sleep(sleep_duration_hundred_millis);
+                
                     cycle_time_exceeded = false;
                 }
             }
@@ -1129,6 +1136,11 @@ impl Refill {
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
+            self.communicate_with_data_logger(
+                        &tx_to_data_logger,
+                        &rx_from_data_logger,
+                        false,
+                    );
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_command = false;
@@ -2148,7 +2160,7 @@ pub mod tests {
                 error_receive_tank_level_switch_position: false,
                 error_sql_update_failed: false,
                 error_sql_get_historic_data_failed: false,
-            },            
+            },
         );
 
         // thread for mock schedule check
