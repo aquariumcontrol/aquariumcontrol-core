@@ -42,6 +42,7 @@ use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
 use crate::utilities::publish_pid::PublishPidConfig;
 use crate::watchmen::monitors::MonitorsConfig;
+use crate::watchmen::watchdog::WatchdogConfig;
 use crate::water::refill::RefillConfig;
 
 const LOG_TARGET_CONFIG: &str = "config";
@@ -109,6 +110,9 @@ pub struct ConfigData {
 
     /// configuration of PID publication
     pub publish_pid: PublishPidConfig,
+
+    /// configuration of Watchdog communication
+    pub watchdog: WatchdogConfig,
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.

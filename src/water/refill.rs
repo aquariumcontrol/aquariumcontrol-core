@@ -1066,7 +1066,7 @@ impl Refill {
                 self.config.check_interval * MILLIS_PER_SEC,
                 remaining_sleep_time_millis
             );
-           
+
             // skip further waiting if quit command has been received during refilling
             if !quit_command_received {
                 // wait for configured time period before rechecking the sensor signal
@@ -1104,7 +1104,7 @@ impl Refill {
                         break;
                     }
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
-                
+
                     cycle_time_exceeded = false;
                 }
             }
@@ -1136,11 +1136,7 @@ impl Refill {
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            self.communicate_with_data_logger(
-                        &tx_to_data_logger,
-                        &rx_from_data_logger,
-                        false,
-                    );
+            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_command = false;

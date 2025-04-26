@@ -169,3 +169,9 @@ timeout_millis = 250                                    # timeout to check for s
 
 [publish_pid]
 pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID
+
+[watchdog]
+active = true
+watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
+watchdog_heartbeat = "1"                                # content to be written to watchdog file
+heartbeat_duration_millis = 1000                         # duration between two hearbeats in milliseconds

@@ -12,11 +12,11 @@ use log::{error, info};
 #[cfg(feature = "debug_signal_handler")]
 use log::debug;
 
+use crate::utilities::channel_content::InternalCommand;
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
-use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
@@ -105,6 +105,7 @@ fn send_command(
 /// * `rx_from_tcp_opt` - receiver part of channel for communication to TCPCommunication wrapped in Option
 /// * `tx_to_dht_opt` - sender part of channel for communication to Dht wrapped in Option
 /// * `tx_to_i2c_interface_opt` - sender part of channel for communication to I2C interface wrapped in Option
+/// * `tx_to_watchdog` - sender part of channel for communication to watchdog
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Thread communication is as follows:
@@ -139,6 +140,8 @@ fn send_command(
 ///     tcp_communication --> signal_handler
 ///     signal_handler --> dht[Dht]
 ///     signal_handler --> i2c_interface[I2C interface]
+///     signal_handler --> watchdog[Watchdog]
+///     watchdog --> signal_handler
 /// ```
 
 pub fn handle_signals(
@@ -173,6 +176,7 @@ pub fn handle_signals(
     rx_from_tcp_opt: Option<Receiver<bool>>,
     tx_to_dht_opt: Option<Sender<InternalCommand>>,
     tx_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
+    tx_to_watchdog: Sender<InternalCommand>,
 ) {
     if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
         panic!(
@@ -237,7 +241,7 @@ pub fn handle_signals(
         target: LOG_TARGET_SIGNAL_HANDLER,
         "phase 1 of termination concluded",
     );
-    
+
     // phase 2: shut down high level controls: heating, ventilation, feed, refill, balling
     // these controls access the Controllino, Atlas Scientific and Dht
     send_command(
@@ -410,13 +414,19 @@ pub fn handle_signals(
         "phase 7 of termination concluded",
     );
 
-    // phase 8: allow messaging thread to close
+    // phase 8: allow messaging thread and watchdog to close
     send_command(
         InternalCommand::Terminate,
         tx_to_messaging_opt.as_ref(),
         None,
         "messaging",
     );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&tx_to_watchdog),
+        None,
+        "watchdog",
+    )
 }
 
 #[cfg(test)]
@@ -625,9 +635,14 @@ pub mod tests {
         let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
             Some(tx_signal_handler_to_i2c_interface);
 
+        let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
         let term_clone = Arc::clone(&term);
 
-        // start test object in separate thread
+        // start the test object in separate thread
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -663,6 +678,7 @@ pub mod tests {
                     rx_signal_handler_from_tcp_opt,
                     tx_signal_handler_to_dht_opt,
                     tx_signal_handler_to_i2c_interface_opt,
+                    tx_signal_handler_to_watchdog,
                 );
             })
             .unwrap();
@@ -835,6 +851,12 @@ pub mod tests {
 
         assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+
+        assert_eq!(
+            rx_watchdog_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request

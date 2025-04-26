@@ -110,6 +110,7 @@ use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::Monitors;
+use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
 
@@ -274,8 +275,9 @@ fn check_argument_for_valid_config_file_name(
 ///     schedule_check --> balling
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
-///	signal_handler --> messaging[Messaging]
+///	    signal_handler --> messaging[Messaging]
 ///     signal_handler --> ambient
+///     signal_handler --> watchdog
 ///     ambient --> signal_handler
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific --> signal_handler
@@ -289,6 +291,7 @@ fn check_argument_for_valid_config_file_name(
 ///	    messaging --> balling
 ///	    messaging --> feed
 ///	    messaging --> monitors
+///     messaging --> watchdog
 /// ```
 
 fn main() {
@@ -460,6 +463,7 @@ fn main() {
     let rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>;
     let rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>;
     let rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>;
+    let rx_watchdog_from_messaging_opt: Option<Receiver<InternalCommand>>;
 
     cfg_if::cfg_if! {
         if #[cfg(target_os = "linux")] {
@@ -518,6 +522,13 @@ fn main() {
                 Receiver<InternalCommand>,
             ) = mpsc::channel();
             rx_monitors_from_messaging_opt = Some(rx_monitors_from_messaging);
+
+            // *** messaging => monitors ***
+            let (tx_messaging_to_watchdog, rx_watchdog_from_messaging): (
+                Sender<InternalCommand>,
+                Receiver<InternalCommand>,
+            ) = mpsc::channel();
+            rx_watchdog_from_messaging_opt = Some(rx_watchdog_from_messaging);
         }
         else {
             // replacement values for channels for non-linux specific code
@@ -529,6 +540,7 @@ fn main() {
             rx_feed_from_messaging_opt = None;
             rx_balling_from_messaging_opt = None;
             rx_monitors_from_messaging_opt = None;
+            rx_watchdog_from_messaging_opt = None;
         }
     }
 
@@ -867,6 +879,13 @@ fn main() {
     ) = mpsc::channel();
     // **************************************
 
+    // *** signal handler => watchdog ***
+    let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // **************************************
+
     // *** signal handler <=> ambient ***
     let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
         Sender<InternalCommand>,
@@ -1123,6 +1142,7 @@ fn main() {
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
+    let mut watchdog = Watchdog::new(config.watchdog);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -1235,6 +1255,7 @@ fn main() {
                 rx_signal_handler_from_tcp_opt,
                 tx_signal_handler_to_dht_opt,
                 tx_signal_handler_to_i2c_interface_opt,
+                tx_signal_handler_to_watchdog,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1527,6 +1548,17 @@ fn main() {
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Messaging terminated.");
+        });
+
+        // Watchdog communication
+        scope.spawn(move || {
+            watchdog.execute(
+                rx_watchdog_from_signal_handler,
+                rx_watchdog_from_messaging_opt,
+            );
+
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Watchdog terminated.");
         });
     });
 }

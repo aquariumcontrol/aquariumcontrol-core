@@ -25,6 +25,7 @@ use crate::dispatch::messaging::Messaging;
 use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::simulator::tcp_communication::TcpCommunication;
+use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
 
 const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
@@ -525,6 +526,85 @@ impl ProcessExternalRequestTrait for Balling {
 
         self.execute_command_received = execute_command_received;
         self.pump_id_requested = pump_id;
+
+        (
+            quit_command_received,
+            start_command_received,
+            stop_command_received,
+        )
+    }
+}
+
+impl ProcessExternalRequestTrait for Watchdog {
+    /// Checks if there are new messages in the channels
+    /// Implementation for Watchdog
+    /// # Arguments
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
+    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
+    fn process_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
+    ) -> (bool, bool, bool) {
+        let quit_command_received = match rx_from_signal_handler.try_recv() {
+            Ok(c) => match c {
+                InternalCommand::Terminate => true,
+                _ => {
+                    warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ignoring inapplicable command {} from signal handler.",
+                        c
+                    );
+                    false
+                }
+            },
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => { /* empty buffer - no action required */ }
+                    TryRecvError::Disconnected => {
+                        #[cfg(not(test))]
+                        error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
+                        );
+                    }
+                }
+                false
+            }
+        };
+
+        let (start_command_received, stop_command_received) = match rx_from_messaging_opt {
+            Some(rx_from_messaging) => {
+                match rx_from_messaging.try_recv() {
+                    Ok(c) => match c {
+                        InternalCommand::Start => (true, false),
+                        InternalCommand::Stop => (false, true),
+                        _ => {
+                            warn!(
+                                target: LOG_TARGET_PROC_EXT_REQ,
+                                "ignoring inapplicable command {} from messaging.",
+                                c
+                            );
+                            (false, false)
+                        }
+                    },
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                #[cfg(not(test))]
+                                error!(
+                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    "receiving command from messaging failed ({e:?})"
+                                );
+                            }
+                        }
+                        (false, false)
+                    }
+                }
+            }
+            None => (false, false),
+        };
 
         (
             quit_command_received,

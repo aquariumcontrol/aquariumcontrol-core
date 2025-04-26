@@ -16,10 +16,10 @@ use std::env;
 pub const VERSION_MAJOR: i32 = 0;
 
 /// Minor version number
-pub const VERSION_MINOR: i32 = 1;
+pub const VERSION_MINOR: i32 = 2;
 
 /// Build number
-pub const VERSION_BUILD: i32 = 1;
+pub const VERSION_BUILD: i32 = 0;
 
 /// Holds the data structure and implementation for retrieving and storing version information of the application.
 pub struct VersionInformation {
