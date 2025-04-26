@@ -1539,6 +1539,7 @@ fn main() {
                 tx_messaging_to_feed,
                 tx_messaging_to_balling,
                 tx_messaging_to_monitors,
+                tx_messaging_to_watchdog,
             );
 
             // remove PID from file

@@ -173,3 +173,4 @@ active = true
 watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
 heartbeat_duration_millis = 1000                         # duration between two hearbeats in milliseconds
+watchdog_deactivation = "V"                             # deactivation code for system's watchdog functionality

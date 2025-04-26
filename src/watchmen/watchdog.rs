@@ -27,11 +27,14 @@ pub struct WatchdogConfig {
     /// filename for sending heartbeat to system watchdog
     watchdog_filename: String,
 
-    /// content to be written to watchdog file
+    /// heartbeat to be written to watchdog file
     watchdog_heartbeat: String,
 
-    /// duration between two hearbeats in milliseconds
+    /// duration between two heartbeats in milliseconds
     heartbeat_duration_millis: u64,
+
+    /// deactivation code to be written to watchdog file upon termination of the application
+    watchdog_deactivation: String,
 }
 
 /// Contains the configuration and the implementation for the Watchdog communication
@@ -98,8 +101,16 @@ impl Watchdog {
                 .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
 
             if quit_command_received {
+                // Deactivate the watchdog functionality
+                let _ = std::fs::write(
+                    &self.config.watchdog_filename,
+                    &self.config.watchdog_deactivation,
+                );
                 break;
             }
+            
+            // For testing purposes, allow deactivation of the watchdog communication.
+            // This will trigger a reset of the system. 
             if start_command_received {
                 inhibited = false;
             }
