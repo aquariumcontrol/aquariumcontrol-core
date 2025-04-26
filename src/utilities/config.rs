@@ -121,16 +121,13 @@ pub struct ConfigData {
 /// # Arguments:
 /// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 pub fn read_config_file(relative_path: String) -> ConfigData {
-    let out_dir = match env::var("CARGO_MANIFEST_DIR") {
-        Ok(c) => c,
-        Err(_) => {
-            error!(target: LOG_TARGET_CONFIG,
+    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+        error!(target: LOG_TARGET_CONFIG,
                 "could not read environment variable CARGO_MANIFEST_DIR for reading configuration file. Using fallback path.");
-            "/usr/local/src/aquarium_control".to_string()
-        }
-    };
+        "/usr/local/src/aquarium_control".to_string()
+    });
 
-    let filename = out_dir + &relative_path;
+    let filename = out_dir + "/" + &relative_path;
 
     #[cfg(not(test))]
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
@@ -140,7 +137,7 @@ pub fn read_config_file(relative_path: String) -> ConfigData {
     // to return the `data: Ok(c)` as a `String`
     // or handle any `errors: Err(_)`.
     let contents = match fs::read_to_string(filename.clone()) {
-        // If successful return the files text as `contents`.
+        // If successful, return the file's text as `contents`.
         // `c` is a local variable.
         Ok(c) => c,
         // Handle the `error` case.
