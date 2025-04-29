@@ -14,7 +14,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mysql = "25.0.0"
+mysql = "25.0.1"
 chrono = { version = "0.4.31", features = ["serde"] }
 serde = "1.0.136"
 serde_derive = "1.0.136"
@@ -24,19 +24,18 @@ sha256 = "1.0.3"
 signal-hook = "0.3.17"
 aquamarine = "0.5.0"
 serialport = "4.3.0"
-msg = "0.1.1"
 log = "0.4"
-env_logger = "0.9"
-fern = "0.6.2"
+fern = "0.7.1"
 humantime = "2.1.0"
 cfg-if = "1.0.0"
 loc = "0.5.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rppal = "0.19.0"
+rppal = "0.22.1"
 signal-hook = "0.3.17"
-aquamarine = "0.5.0"
+aquamarine = "0.6.0"
 posixmq = "1.0.0"
+ds18b20 = "0.1.1"
 
 [dev-dependencies]
 assert_float_eq = "1"
@@ -52,6 +51,7 @@ debug_data_logger = []
 debug_sawtooth_profile = []
 debug_main = []
 debug_dht = []
+debug_ds18b20 = []
 debug_i2c_interface = []
 debug_controllino = []
 debug_ambient = []

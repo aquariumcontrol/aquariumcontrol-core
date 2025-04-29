@@ -22,5 +22,8 @@ pub mod gpio_handler;
 /// Contains communication with Atlas Scientific sensor via I2C interface
 pub mod i2c_interface;
 
+/// Contains the functionality for reading from DS18B20 sensor
+pub mod ds18b20;
+
 /// Contains the functionality for reading and postprocessing tank level switch position by reading GPIO pin state
 pub mod tank_level_switch;

@@ -20,10 +20,10 @@ use std::{sync::Arc, time::Duration};
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
-/// Sends the QUIT command to the thread and waits for confirmation
+/// Sends the QUIT command to the thread and waits for confirmation.
 /// # Arguments
-/// * `tx_to_thread` - reference to sender part of channel for communication to thread
-/// * `tx_to_refill` - reference to receiver part of channel for communication from thread
+/// * `tx_to_thread` - reference to sender part of the channel for communication to thread
+/// * `tx_to_refill` - reference to receiver part of the channel for communication from thread
 /// * `thread_name` - name of thread (for debugging purposes)
 fn send_command(
     command: InternalCommand,
@@ -72,7 +72,7 @@ fn send_command(
     }
 }
 
-/// Handles the termination signal from operating system (SIGTERM).
+/// Handles the termination signal from the operating system (SIGTERM).
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
 /// # Arguments
@@ -177,6 +177,7 @@ pub fn handle_signals(
     tx_to_dht_opt: Option<Sender<InternalCommand>>,
     tx_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
     tx_to_watchdog: Sender<InternalCommand>,
+    tx_to_ds18b20: Sender<InternalCommand>,
 ) {
     if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
         panic!(
@@ -242,7 +243,7 @@ pub fn handle_signals(
         "phase 1 of termination concluded",
     );
 
-    // phase 2: shut down high level controls: heating, ventilation, feed, refill, balling
+    // phase 2: shut down high-level controls: heating, ventilation, feed, refill, balling
     // these controls access the Controllino, Atlas Scientific and Dht
     send_command(
         InternalCommand::Quit,
@@ -312,7 +313,7 @@ pub fn handle_signals(
         "phase 3 of termination concluded",
     );
 
-    // phase 4: shut down low level controls
+    // phase 4: shut down low-level controls
     send_command(
         InternalCommand::Quit,
         tx_to_i2c_interface_opt.as_ref(),
@@ -338,7 +339,7 @@ pub fn handle_signals(
         "phase 4 of termination concluded",
     );
 
-    // phase 5: send termination command to highest level controls
+    // phase 5: send termination command to the highest level controls
     send_command(
         InternalCommand::Terminate,
         Some(&tx_to_data_logger),
@@ -357,7 +358,7 @@ pub fn handle_signals(
         "phase 5 of termination concluded",
     );
 
-    // phase 6: send termination command to high level controls
+    // phase 6: send termination command to high-level controls
     send_command(
         InternalCommand::Terminate,
         Some(&tx_to_heating),
@@ -389,7 +390,13 @@ pub fn handle_signals(
         "phase 6 of termination concluded",
     );
 
-    // phase 7: send termination command to medium level controls
+    // phase 7: send quit/termination command to medium level controls
+    send_command(
+        InternalCommand::Quit,
+        Some(&tx_to_ds18b20),
+        None,
+        "ds18b20",
+    );
     send_command(
         InternalCommand::Terminate,
         Some(&tx_to_atlas_scientific),
@@ -426,7 +433,9 @@ pub fn handle_signals(
         Some(&tx_to_watchdog),
         None,
         "watchdog",
-    )
+    );
+
+    println!("Termination of application completed");
 }
 
 #[cfg(test)]
@@ -449,7 +458,7 @@ pub mod tests {
         println!("Sent signal {} to {}", signal, pid);
     }
 
-    // test if signal handler sends shutdown requests to all threads in the right order.
+    // test if the signal handler sends shutdown requests to all threads in the right order.
     #[test]
     fn test_signal_handling() {
         let term = Arc::new(AtomicBool::new(false));
@@ -564,6 +573,13 @@ pub mod tests {
         ) = mpsc::channel();
         // **************************************
 
+        // *** signal handler => ds18b20 ***
+        let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+        // **************************************
+
         // *** signal handler <=> atlas_scientific ***
         let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
             Sender<InternalCommand>,
@@ -642,7 +658,7 @@ pub mod tests {
 
         let term_clone = Arc::clone(&term);
 
-        // start the test object in separate thread
+        // start the test object in a separate thread
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -679,11 +695,12 @@ pub mod tests {
                     tx_signal_handler_to_dht_opt,
                     tx_signal_handler_to_i2c_interface_opt,
                     tx_signal_handler_to_watchdog,
+                    tx_signal_handler_to_ds18b20,
                 );
             })
             .unwrap();
 
-        // use pid of current process
+        // use pid of the current process
         let pid = std::process::id();
 
         let spin_sleeper = SpinSleeper::default();
@@ -746,13 +763,11 @@ pub mod tests {
             InternalCommand::Quit
         );
         _ = tx_tank_level_switch_to_signal_handler.send(true);
-
         assert_eq!(
             rx_atlas_scientific_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
         _ = tx_atlas_scientific_to_signal_handler.send(true);
-
         assert_eq!(
             rx_ambient_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
@@ -830,6 +845,12 @@ pub mod tests {
             InternalCommand::Terminate
         );
         // no response to termination request
+        
+        assert_eq!(
+            rx_ds18b20_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        // no response to quit signal from ds18b20
 
         assert_eq!(
             rx_atlas_scientific_from_signal_handler.recv().unwrap(),

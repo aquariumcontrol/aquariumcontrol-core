@@ -176,3 +176,9 @@ watchdog_filename = "/var/tmp/watchdog"                     # filename for sendi
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
 heartbeat_duration_millis = 1000                         # duration between two hearbeats in milliseconds
 watchdog_deactivation = "V"                             # deactivation code for system's watchdog functionality
+
+[ds18b20]
+measurement_duration_micros = 100                       # tbd
+measurement_pause_duration_millis = 10000               # 10 seconds between each measurement
+replacement_value_ambient_temperature = 25.5            # replacement value for ambient temperature
+replacement_value_water_temperature = 22.0              # replacement value for water temperature

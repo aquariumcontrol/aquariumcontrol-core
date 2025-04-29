@@ -108,9 +108,9 @@ impl Watchdog {
                 );
                 break;
             }
-            
+
             // For testing purposes, allow deactivation of the watchdog communication.
-            // This will trigger a reset of the system. 
+            // This will trigger a reset of the system.
             if start_command_received {
                 inhibited = false;
             }

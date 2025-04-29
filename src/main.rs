@@ -113,6 +113,7 @@ use crate::watchmen::monitors::Monitors;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
+use crate::sensors::ds18b20::Ds18b20;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
@@ -162,9 +163,9 @@ fn check_argument_for_valid_config_file_name(
 
     if !path.exists() {
         return Err(ConfigFileDefinitionError::PathDoesNotExist(
-            "The configuration file (".to_string() +
-                &config_file_name +
-                ") is not an existing file system entry."
+            "The configuration file (".to_string()
+                + &config_file_name
+                + ") is not an existing file system entry.",
         ));
     }
 
@@ -904,6 +905,13 @@ fn main() {
         mpsc::channel();
     // *******************************
 
+    // *** signal handler => ds18b20 ***
+    let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // *******************************
+
     // *** controllino => tcp ***
     let (tx_controllino_to_tcp, rx_tcp_from_controllino): (
         Sender<InternalCommand>,
@@ -1141,9 +1149,19 @@ fn main() {
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
+    
+    let initial_value_water_temperature = config.ds18b20.replacement_value_water_temperature;
+    let initial_value_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
+    let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(
+            initial_value_water_temperature,
+        ));
+        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(
+            initial_value_ambient_temperature,
+        ));
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1254,6 +1272,7 @@ fn main() {
                 tx_signal_handler_to_dht_opt,
                 tx_signal_handler_to_i2c_interface_opt,
                 tx_signal_handler_to_watchdog,
+                tx_signal_handler_to_ds18b20,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1558,6 +1577,15 @@ fn main() {
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Watchdog terminated.");
+        });
+
+        // Ds18b20 communication
+        scope.spawn(move || {
+            ds18b20.execute(
+                rx_ds18b20_from_signal_handler,
+                mutex_ds18b20_water_temperature,
+                mutex_ds18b20_ambient_temperature,
+            );
         });
     });
 }
