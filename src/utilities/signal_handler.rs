@@ -391,12 +391,7 @@ pub fn handle_signals(
     );
 
     // phase 7: send quit/termination command to medium level controls
-    send_command(
-        InternalCommand::Quit,
-        Some(&tx_to_ds18b20),
-        None,
-        "ds18b20",
-    );
+    send_command(InternalCommand::Quit, Some(&tx_to_ds18b20), None, "ds18b20");
     send_command(
         InternalCommand::Terminate,
         Some(&tx_to_atlas_scientific),
@@ -845,7 +840,7 @@ pub mod tests {
             InternalCommand::Terminate
         );
         // no response to termination request
-        
+
         assert_eq!(
             rx_ds18b20_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit

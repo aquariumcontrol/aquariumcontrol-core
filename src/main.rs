@@ -103,6 +103,7 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
+use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::TankLevelSwitch;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::ventilation::Ventilation;
@@ -111,9 +112,9 @@ use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::watchdog::Watchdog;
+use crate::watchmen::petting::Petting;
 use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
-use crate::sensors::ds18b20::Ds18b20;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
@@ -1109,7 +1110,8 @@ fn main() {
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
-
+    let mut petting = Petting::new();
+    
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             let (_, tank_level_switch_input_pin_opt, dht_opt) =
@@ -1149,19 +1151,16 @@ fn main() {
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
-    
+
     let initial_value_water_temperature = config.ds18b20.replacement_value_water_temperature;
     let initial_value_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
-        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(
-            initial_value_water_temperature,
-        ));
-        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(
-            initial_value_ambient_temperature,
-        ));
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_water_temperature));
+        let mutex_ds18b20_ambient_temperature =
+            Arc::new(Mutex::new(initial_value_ambient_temperature));
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1573,6 +1572,7 @@ fn main() {
             watchdog.execute(
                 rx_watchdog_from_signal_handler,
                 rx_watchdog_from_messaging_opt,
+                &mut petting,
             );
 
             #[cfg(feature = "debug_main")]

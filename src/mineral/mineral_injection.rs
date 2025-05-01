@@ -18,13 +18,12 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of the Balling mineral dosing.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait MineralInjectionTrait {
-    /// Actuates the peristaltic pumps for injecting mineral solution into the main tank.
+    /// Actuates the peristaltic pumps for injecting a mineral solution into the main tank.
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to Receiver part of channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler   
-    /// * `config` - Reference to configuration of Balling dosing control
-    /// * `pump_id` - ID of pump to be actuated
+    /// * `tx_to_controllino` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_from_controllino` - Reference to Receiver part of the channel for communication from Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler
+    /// * `mineral_pump` - pump to be actuated of type AquariumDevice
     /// * `dosing_duration_millis` - dosing duration in milliseconds
     fn inject_mineral(
         &mut self,

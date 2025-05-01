@@ -122,7 +122,7 @@ impl Ds18b20 {
                     }
                 }
             }
-            
+
             let (
                 quit_command_received, // a request to end the application has been received
                 _,
