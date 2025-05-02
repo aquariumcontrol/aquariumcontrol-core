@@ -178,8 +178,8 @@ impl Ds18b20 {
 
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
-                        if config.ambient_temperature_sensor_id.is_not_empty() {
-                            match self.read(config.ambient_temperature_sensor_id.as_str()) {
+                        if !self.config.ambient_temperature_sensor_id.is_empty() {
+                            match self.read(self.config.ambient_temperature_sensor_id.as_str()) {
                                 Ok(temp) => {
                                     *ambient_temperature = temp;
                                 }
@@ -197,8 +197,8 @@ impl Ds18b20 {
                             *water_temperature =
                                 self.config.replacement_value_water_temperature;
                         }
-                        if config.water_temperature_sensor_id.is_not_empty() {
-                            match self.read(config.water_temperature_sensor_id.as_str()) {
+                        if !self.config.water_temperature_sensor_id.is_empty() {
+                            match self.read(self.config.water_temperature_sensor_id.as_str()) {
                                 Ok(temp) => {
                                     *water_temperature = temp;
                                 }
