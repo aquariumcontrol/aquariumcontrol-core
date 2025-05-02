@@ -723,7 +723,7 @@ pub mod tests {
     cfg_if::cfg_if! {
         if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
             use rppal::gpio::Gpio;
-            use crate::config::{read_config_file, ConfigData};
+            use crate::utilities::config::{read_config_file, ConfigData};
         }
     }
 

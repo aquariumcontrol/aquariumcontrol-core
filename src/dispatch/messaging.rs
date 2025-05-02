@@ -685,6 +685,7 @@ pub mod tests {
                     tx_messaging_to_feed,
                     tx_messaging_to_balling,
                     tx_messaging_to_monitors,
+                    tx_messaging_to_watchdog,
                 );
             })
             .unwrap();
@@ -1116,9 +1117,10 @@ pub mod tests {
         let (tx_messaging_to_ventilation, _rx_ventilation_from_messaging) = mpsc::channel();
         let (tx_messaging_to_heating, _rx_heating_from_messaging) = mpsc::channel();
         let (tx_messaging_to_feed, _rx_feed_from_messaging) = mpsc::channel();
-        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_balling, _rx_balling_from_messaging) = mpsc::channel();
         let (tx_messaging_to_monitors, _rx_monitors_from_messaging) = mpsc::channel();
         let (tx_messaging_to_signal_handler, rx_signal_handler_from_messaging) = mpsc::channel();
+        let (tx_messaging_to_watchdog, rx_watchdog_from_messaging) = mpsc::channel();
 
         let tx_test_environment_to_watchdog = tx_messaging_to_watchdog.clone();
 
@@ -1126,7 +1128,7 @@ pub mod tests {
             .name("mock_watchdog".to_string())
             .spawn(move || {
                 let mut commands_received =
-                    mock_message_command_receiver(rx_balling_from_messaging);
+                    mock_message_command_receiver(rx_watchdog_from_messaging);
 
                 // assert number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
@@ -1153,7 +1155,7 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_100_millisec);
 
-                // sending IPC message requesting stop of Watchdog communication
+                // sending IPC message requesting start of Watchdog communication
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
                 spin_sleeper.sleep(sleep_duration_100_millisec);

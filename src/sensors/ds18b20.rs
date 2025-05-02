@@ -12,20 +12,21 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use log::error;
-        use std::thread::{self, sleep};
-        use std::time::Duration;
-        use std::sync::mpsc::{Sender, Receiver};
+        use std::thread::sleep;
+        use std::io;
+        use std::fs;
+        use std::path::PathBuf;
 
         const LOG_TARGET_DS18B20: &str = "ds18b20";
 
         #[cfg(feature = "debug_ds18b20")]
         use log::debug;
 
-        use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+        use log::error;
     }
 }
 
@@ -45,15 +46,15 @@ pub struct Ds18b20Config {
 
     /// system driver base path
     #[allow(unused)]
-    pub driver_base_path: String,
+    pub system_driver_base_path: String,
 
     /// system driver sensor-specific path
     #[allow(unused)]
-    pub driver_sensor_path: String,
+    pub system_driver_sensor_path_prefix: String,
 
     /// system driver file name
     #[allow(unused)]
-    pub driver_file_name: String,
+    pub system_driver_file_name: String,
 
     /// max. number of retries
     #[allow(unused)]
@@ -61,7 +62,7 @@ pub struct Ds18b20Config {
 
     /// duration between retries in milliseconds
     #[allow(unused)]
-    pub retry_pause_duration_millis: u32,
+    pub retry_pause_duration_millis: u64,
 }
 
 pub mod ds18b20_constants {}
@@ -77,8 +78,6 @@ pub struct Ds18b20 {
 
 impl ProcessExternalRequestTrait for Ds18b20 {}
 
-use std::time::Duration;
-
 impl Ds18b20 {
     /// Provides a struct of type Ds18b20 - Linux platform-specific version
     /// # Arguments
@@ -90,17 +89,19 @@ impl Ds18b20 {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// reads temperature from DS18B20 sensor
     pub fn read(&self) -> Result<f32, io::Error> {
-        let base_dir = PathBuf::from(self.config.driver_base_path.clone());
+        let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let mut device_folder: Option<PathBuf> = None;
 
         // Find the DS18B20 device folder
         if let Ok(entries) = fs::read_dir(base_dir) {
             for entry in entries {
                 if let Ok(entry) = entry {
-                    let file_name = entry.file_name().to_string_lossy();
-                    if file_name.starts_with(self.config.driver_sensor_path_prefix.clone()) {
-                        device_folder = Some(entry.path());
-                        break;
+                    let file_name = entry.file_name();
+                    if let Some(name_str) = file_name.to_str() {
+                        if name_str.starts_with(&self.config.system_driver_sensor_path_prefix) {
+                            device_folder = Some(entry.path());
+                            break;
+                        }
                     }
                 }
             }
@@ -116,9 +117,9 @@ impl Ds18b20 {
             }
         };
 
-        let device_file = device_folder.join(self.config.driver_file_name.clone());
+        let device_file = device_folder.join(self.config.system_driver_file_name.clone());
 
-        let mut retries = config.max_retries;
+        let mut retries = self.config.max_retries;
         while retries > 0 {
             let contents = fs::read_to_string(&device_file)?;
             let lines: Vec<&str> = contents.trim().split('\n').collect();
@@ -181,6 +182,10 @@ impl Ds18b20 {
                                 *water_temperature = temp;
                             }
                             Err(e) => {
+                                error!(
+                                    target: LOG_TARGET_DS18B20,
+                                    "Encountered error ({e:?}) when reading from DS18B20 sensor."
+                                );
                                 *water_temperature =
                                     self.config.replacement_value_water_temperature;
                             }
@@ -218,7 +223,10 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config};
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::ds18b20::Ds18b20;
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::utilities::config::read_config_file;
 
     // This test case reads from DS18B20 sensor.
@@ -228,14 +236,13 @@ pub mod tests {
     #[ignore]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn test_read_ds18b20() {
-        
-        let config = read_config_file("aquarium_control_test_generic.toml".to_string());
-        
-        let mut ds18b20 = Ds18b20::new(config.ds18b20);
-        
+        let config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
         match ds18b20.read() {
-            Ok((celsius, fahrenheit)) => {
-                println!("Temperature: {:.2}°C ", celsius);
+            Ok(temperature) => {
+                println!("Temperature: {:.2}°C ", temperature);
                 assert!(true);
             }
             Err(e) => {

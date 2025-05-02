@@ -173,10 +173,10 @@ impl GpioHandler {
 pub mod tests {
     cfg_if::cfg_if! {
         if #[cfg(all(feature = "target_hw", target_os = "linux", test))] {
-            use crate::logger::setup_logger;
-            use crate::config::read_config_file;
-            use crate::config::ConfigData;
-            use crate::gpio_handler::GpioHandler;
+            use crate::utilities::logger::setup_logger;
+            use crate::utilities::config::read_config_file;
+            use crate::utilities::config::ConfigData;
+            use crate::sensors::gpio_handler::GpioHandler;
         }
     }
 
@@ -197,7 +197,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        config.gpio.gpio_pin_number_tank_level = 40;
+        config.gpio_handler.gpio_pin_number_tank_level = 3;
 
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
@@ -209,7 +209,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        config.gpio.gpio_pin_number_tank_level = 40;
+        config.gpio_handler.gpio_pin_number_tank_level = 40;
 
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }
