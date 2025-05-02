@@ -103,6 +103,7 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
+use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::TankLevelSwitch;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::ventilation::Ventilation;
@@ -110,6 +111,7 @@ use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::Monitors;
+use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
@@ -162,9 +164,9 @@ fn check_argument_for_valid_config_file_name(
 
     if !path.exists() {
         return Err(ConfigFileDefinitionError::PathDoesNotExist(
-            "The configuration file (".to_string() +
-                &config_file_name +
-                ") is not an existing file system entry."
+            "The configuration file (".to_string()
+                + &config_file_name
+                + ") is not an existing file system entry.",
         ));
     }
 
@@ -904,6 +906,13 @@ fn main() {
         mpsc::channel();
     // *******************************
 
+    // *** signal handler => ds18b20 ***
+    let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    // *******************************
+
     // *** controllino => tcp ***
     let (tx_controllino_to_tcp, rx_tcp_from_controllino): (
         Sender<InternalCommand>,
@@ -1101,6 +1110,7 @@ fn main() {
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
+    let mut petting = Petting::new();
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -1142,8 +1152,15 @@ fn main() {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
+    let initial_value_water_temperature = config.ds18b20.replacement_value_water_temperature;
+    let initial_value_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
+    let mut ds18b20 = Ds18b20::new(config.ds18b20);
+
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_water_temperature));
+        let mutex_ds18b20_ambient_temperature =
+            Arc::new(Mutex::new(initial_value_ambient_temperature));
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1254,6 +1271,7 @@ fn main() {
                 tx_signal_handler_to_dht_opt,
                 tx_signal_handler_to_i2c_interface_opt,
                 tx_signal_handler_to_watchdog,
+                tx_signal_handler_to_ds18b20,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1539,6 +1557,7 @@ fn main() {
                 tx_messaging_to_feed,
                 tx_messaging_to_balling,
                 tx_messaging_to_monitors,
+                tx_messaging_to_watchdog,
             );
 
             // remove PID from file
@@ -1553,10 +1572,20 @@ fn main() {
             watchdog.execute(
                 rx_watchdog_from_signal_handler,
                 rx_watchdog_from_messaging_opt,
+                &mut petting,
             );
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Watchdog terminated.");
+        });
+
+        // Ds18b20 communication
+        scope.spawn(move || {
+            ds18b20.execute(
+                rx_ds18b20_from_signal_handler,
+                mutex_ds18b20_water_temperature,
+                mutex_ds18b20_ambient_temperature,
+            );
         });
     });
 }

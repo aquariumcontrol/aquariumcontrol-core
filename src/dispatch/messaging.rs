@@ -34,25 +34,25 @@ const LOG_TARGET_MESSAGING: &str = "messaging";
 #[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
 pub mod messaging_domains {
-    /// value represents the refill control as domain
+    /// value represents the refill control as a domain
     pub const REFILL: i32 = 1;
 
-    /// value represents the ventilation control as domain
+    /// value represents the ventilation control as a domain
     pub const VENTILATION: i32 = 3;
 
-    /// value represents the feed control as domain
+    /// value represents the feed control as a domain
     pub const FEED: i32 = 8;
 
-    /// value represents the heating control as domain
+    /// value represents the heating control as a domain
     pub const HEATING: i32 = 9;
 
-    /// value represents the Balling dosing control as domain
+    /// value represents the Balling dosing control as a domain
     pub const BALLING: i32 = 11;
 
-    /// value represents the monitoring as domain
+    /// value represents the monitoring as a domain
     pub const MONITORS: i32 = 12;
 
-    /// value represents the watchdog communication as domain
+    /// value represents the watchdog communication as a domain
     pub const WATCHDOG: i32 = 13;
 }
 

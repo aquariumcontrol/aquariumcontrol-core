@@ -15,6 +15,7 @@ pub mod mock_data_injection;
 pub mod mock_data_logger;
 pub mod mock_heating;
 pub mod mock_message_command_receiver;
+pub mod mock_petting;
 pub mod mock_refill;
 pub mod mock_schedule_check;
 pub mod mock_signal;

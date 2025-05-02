@@ -38,6 +38,7 @@ use crate::dispatch::messaging::MessagingConfig;
 
 use crate::database::sql_interface::SqlInterfaceConfig;
 use crate::permission::schedule_check::ScheduleCheckConfig;
+use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
 use crate::utilities::publish_pid::PublishPidConfig;
@@ -113,6 +114,9 @@ pub struct ConfigData {
 
     /// configuration of Watchdog communication
     pub watchdog: WatchdogConfig,
+
+    /// configuration of DS18B20 temperature sensor communication
+    pub ds18b20: Ds18b20Config,
 }
 
 /// Loads the configuration data described in a struct of type ConfigData from the .toml file.
