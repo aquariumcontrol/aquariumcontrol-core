@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+    if #[cfg(any(target_os = "linux", target_os = "macos"))] {
         use std::thread::sleep;
         use std::io;
         use std::fs;
@@ -25,18 +25,22 @@ cfg_if::cfg_if! {
 
         #[cfg(feature = "debug_ds18b20")]
         use log::debug;
-
-        use log::error;
     }
 }
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use log::error;
 
 /// Holds the configuration data for DS18B20 sensor communication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct Ds18b20Config {
+    /// used primarily for testing purposes
+    pub active: bool,
+    
     /// pause duration between two measurements in milliseconds
-    measurement_pause_duration_millis: i32,
+    measurement_pause_duration_millis: u64,
 
     /// replacement value for ambient temperature
     pub replacement_value_ambient_temperature: f32,
@@ -45,24 +49,25 @@ pub struct Ds18b20Config {
     pub replacement_value_water_temperature: f32,
 
     /// system driver base path
-    #[allow(unused)]
     pub system_driver_base_path: String,
 
     /// system driver sensor-specific path
-    #[allow(unused)]
     pub system_driver_sensor_path_prefix: String,
 
     /// system driver file name
-    #[allow(unused)]
     pub system_driver_file_name: String,
 
     /// max. number of retries
-    #[allow(unused)]
     pub max_retries: u32,
 
     /// duration between retries in milliseconds
-    #[allow(unused)]
     pub retry_pause_duration_millis: u64,
+
+    /// unique 64-bit ID of water temperature sensor
+    pub water_temperature_sensor_id: String,
+
+    /// unique 64-bit ID of ambient temperature sensor
+    pub ambient_temperature_sensor_id: String,                        
 }
 
 pub mod ds18b20_constants {}
@@ -83,40 +88,37 @@ impl Ds18b20 {
     /// # Arguments
     /// * `config` - configuration for communication with DHT sensor
     pub fn new(config: Ds18b20Config) -> Ds18b20 {
+        if config.system_driver_base_path.is_empty() {
+            panic!("{}: System driver base path prefix is empty!", LOG_TARGET_DS18B20);
+        }
+        if config.system_driver_sensor_path_prefix.is_empty() {
+            panic!("{}: System driver sensor path prefix is empty!", LOG_TARGET_DS18B20);
+        }
+        if config.system_driver_file_name.is_empty() {
+            panic!("{}: System driver file name is empty!", LOG_TARGET_DS18B20);
+        }
+        if config.active &&
+            config.water_temperature_sensor_id.is_empty() &&
+            config.ambient_temperature_sensor_id.is_empty() {
+            panic!("{}: No water temperature sensor ID nor ambient temperature sensor ID provided!", LOG_TARGET_DS18B20);            
+        }
         Ds18b20 { config: config }
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// reads temperature from DS18B20 sensor
-    pub fn read(&self) -> Result<f32, io::Error> {
+    pub fn read(&self, sensor_id: &str) -> Result<f32, io::Error> {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
-        let mut device_folder: Option<PathBuf> = None;
+        let device_folder = base_dir.join(
+            self.config.system_driver_sensor_path_prefix.to_string() + sensor_id
+            );
 
-        // Find the DS18B20 device folder
-        if let Ok(entries) = fs::read_dir(base_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let file_name = entry.file_name();
-                    if let Some(name_str) = file_name.to_str() {
-                        if name_str.starts_with(&self.config.system_driver_sensor_path_prefix) {
-                            device_folder = Some(entry.path());
-                            break;
-                        }
-                    }
-                }
-            }
+        if !device_folder.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("DS18B20 sensor with ID '{}' not found!", sensor_id),
+            ));
         }
-
-        let device_folder = match device_folder {
-            Some(folder) => folder,
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "DS18B20 sensor not found!",
-                ))
-            }
-        };
-
+        
         let device_file = device_folder.join(self.config.system_driver_file_name.clone());
 
         let mut retries = self.config.max_retries;
@@ -176,24 +178,48 @@ impl Ds18b20 {
 
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
-                        *ambient_temperature = self.config.replacement_value_ambient_temperature;
-                        match self.read() {
-                            Ok(temp) => {
-                                *water_temperature = temp;
+                        if config.ambient_temperature_sensor_id.is_not_empty() {
+                            match self.read(config.ambient_temperature_sensor_id.as_str()) {
+                                Ok(temp) => {
+                                    *ambient_temperature = temp;
+                                }
+                                Err(e) => {
+                                    error!(
+                                        target: LOG_TARGET_DS18B20,
+                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
+                                    );
+                                    *ambient_temperature =
+                                        self.config.replacement_value_ambient_temperature;
+                                }
                             }
-                            Err(e) => {
-                                error!(
-                                    target: LOG_TARGET_DS18B20,
-                                    "Encountered error ({e:?}) when reading from DS18B20 sensor."
-                                );
-                                *water_temperature =
-                                    self.config.replacement_value_water_temperature;
+                        }
+                        else {
+                            *water_temperature =
+                                self.config.replacement_value_water_temperature;
+                        }
+                        if config.water_temperature_sensor_id.is_not_empty() {
+                            match self.read(config.water_temperature_sensor_id.as_str()) {
+                                Ok(temp) => {
+                                    *water_temperature = temp;
+                                }
+                                Err(e) => {
+                                    error!(
+                                        target: LOG_TARGET_DS18B20,
+                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
+                                    );
+                                    *water_temperature =
+                                        self.config.replacement_value_water_temperature;
+                                }
                             }
+                        }
+                        else {
+                            *water_temperature =
+                                self.config.replacement_value_water_temperature;
                         }
                     }
 
                     // restart the countdown
-                    measurement_countdown = self.config.measurement_pause_duration_millis;
+                    measurement_countdown = self.config.measurement_pause_duration_millis as i32;
 
                     // avoid compiler warning - write default values for mutex
                     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
@@ -223,14 +249,18 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::sensors::ds18b20::Ds18b20;
+    use std::env;
+    use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    use crate::utilities::config::read_config_file;
+    cfg_if::cfg_if! {
+        if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+            use crate::sensors::ds18b20::Ds18b20;
+            use crate::utilities::config::read_config_file;
+        }
+    }
 
-    // This test case reads from DS18B20 sensor.
-    // For this test case to succeed, the DS18B20 sensor needs to be connected
+    // This test case reads from a real DS18B20 sensor.
+    // For this test case to succeed, the DS18B20 sensor needs to be connected,
     // and the 1-wire interface needs to be enabled (see rasp-config)
     #[test]
     #[ignore]
@@ -238,9 +268,11 @@ pub mod tests {
     fn test_read_ds18b20() {
         let config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
+        let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+        
         let ds18b20 = Ds18b20::new(config.ds18b20);
 
-        match ds18b20.read() {
+        match ds18b20.read(&water_temperature_sensor_id) {
             Ok(temperature) => {
                 println!("Temperature: {:.2}°C ", temperature);
                 assert!(true);
@@ -250,5 +282,70 @@ pub mod tests {
                 assert!(false);
             }
         }
+    }
+
+    #[test]
+    // This test case read sensor data provided by a file.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn test_read_ds18b20_from_file() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let water_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+        
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+        match ds18b20.read(&water_temperature_sensor_id) {
+            Ok(temperature) => {
+                println!("{}: Temperature read from file: {:.2}°C ", LOG_TARGET_DS18B20, temperature);
+                assert!(true);
+            }
+            Err(e) => {
+                println!("Error reading DS18B20: {}", e);
+                assert!(false);
+            }
+        }
+    }
+    
+    #[test]
+    #[should_panic]
+    // Test cases checks if invalid configuration of the system driver base path triggers a panic.
+    fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        config.ds18b20.system_driver_base_path = "".to_string();
+        let _ = Ds18b20::new(config.ds18b20);
+    }
+
+    #[test]
+    #[should_panic]
+    // Test cases checks if invalid configuration of the system driver sensor path prefix triggers a panic.
+    fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        config.ds18b20.system_driver_sensor_path_prefix = "".to_string();
+        let _ = Ds18b20::new(config.ds18b20);
+    }
+    
+    #[test]
+    #[should_panic]
+    // Test cases checks if invalid configuration of the system driver sensor file name triggers a panic.
+    fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        config.ds18b20.system_driver_file_name = "".to_string();
+        let _ = Ds18b20::new(config.ds18b20);
+    }
+
+    #[test]
+    #[should_panic]
+    // Test cases checks if invalid configuration of the sensor ids triggers a panic.
+    fn test_dsb18b20_init_with_invalid_sensor_ids() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        config.ds18b20.active = true;
+        config.ds18b20.water_temperature_sensor_id = "".to_string();
+        config.ds18b20.ambient_temperature_sensor_id = "".to_string();
+        let _ = Ds18b20::new(config.ds18b20);
     }
 }
