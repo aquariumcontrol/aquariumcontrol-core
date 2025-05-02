@@ -36,7 +36,11 @@ pub mod tests {
                     let duration_since_start = timestamp.duration_since(start_time);
                     // Write the index and the elapsed duration since the start, line by line
                     // Using {:?} for Duration gives a human-readable output (e.g., 1.234s, 50ms)
-                    writeln!(f, "  [{:02}]: +{:?} {}", index, duration_since_start, self.signal_recorder[index])?;
+                    writeln!(
+                        f,
+                        "  [{:02}]: +{:?} {}",
+                        index, duration_since_start, self.signal_recorder[index]
+                    )?;
                 }
             }
             Ok(())
@@ -44,8 +48,7 @@ pub mod tests {
     }
 
     impl MockPetting {
-        pub fn new(
-        ) -> MockPetting {
+        pub fn new() -> MockPetting {
             MockPetting {
                 petting_recorder: Vec::new(),
                 signal_recorder: Vec::new(),

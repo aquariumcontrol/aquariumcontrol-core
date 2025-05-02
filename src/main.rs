@@ -111,8 +111,8 @@ use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::handle_signals;
 use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::Monitors;
-use crate::watchmen::watchdog::Watchdog;
 use crate::watchmen::petting::Petting;
+use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::Refill;
 use crate::water::water_injection::WaterInjection;
 
@@ -1111,7 +1111,7 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
-    
+
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             let (_, tank_level_switch_input_pin_opt, dht_opt) =

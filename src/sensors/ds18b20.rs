@@ -12,7 +12,6 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -35,10 +34,6 @@ cfg_if::cfg_if! {
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct Ds18b20Config {
-    /// measurement duration microseconds
-    #[allow(unused)]
-    measurement_duration_micros: u64,
-
     /// pause duration between two measurements in milliseconds
     measurement_pause_duration_millis: i32,
 
@@ -47,6 +42,26 @@ pub struct Ds18b20Config {
 
     /// replacement value for water temperature
     pub replacement_value_water_temperature: f32,
+
+    /// system driver base path
+    #[allow(unused)]
+    pub driver_base_path: String,
+
+    /// system driver sensor-specific path
+    #[allow(unused)]
+    pub driver_sensor_path: String,
+
+    /// system driver file name
+    #[allow(unused)]
+    pub driver_file_name: String,
+
+    /// max. number of retries
+    #[allow(unused)]
+    pub max_retries: u32,
+
+    /// duration between retries in milliseconds
+    #[allow(unused)]
+    pub retry_pause_duration_millis: u32,
 }
 
 pub mod ds18b20_constants {}
@@ -62,6 +77,8 @@ pub struct Ds18b20 {
 
 impl ProcessExternalRequestTrait for Ds18b20 {}
 
+use std::time::Duration;
+
 impl Ds18b20 {
     /// Provides a struct of type Ds18b20 - Linux platform-specific version
     /// # Arguments
@@ -71,10 +88,62 @@ impl Ds18b20 {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// reads temperature and humity from DHT sensor
-    /// # Arguments
-    /// * `reset_sensor` - flag to indicate if power supply to sensor shall be interrupted before measuring
-    pub fn read(&self) -> Result<(f32, f32), Ds18b20Error> {}
+    /// reads temperature from DS18B20 sensor
+    pub fn read(&self) -> Result<f32, io::Error> {
+        let base_dir = PathBuf::from(self.config.driver_base_path.clone());
+        let mut device_folder: Option<PathBuf> = None;
+
+        // Find the DS18B20 device folder
+        if let Ok(entries) = fs::read_dir(base_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let file_name = entry.file_name().to_string_lossy();
+                    if file_name.starts_with(self.config.driver_sensor_path_prefix.clone()) {
+                        device_folder = Some(entry.path());
+                        break;
+                    }
+                }
+            }
+        }
+
+        let device_folder = match device_folder {
+            Some(folder) => folder,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "DS18B20 sensor not found!",
+                ))
+            }
+        };
+
+        let device_file = device_folder.join(self.config.driver_file_name.clone());
+
+        let mut retries = config.max_retries;
+        while retries > 0 {
+            let contents = fs::read_to_string(&device_file)?;
+            let lines: Vec<&str> = contents.trim().split('\n').collect();
+
+            if lines.len() >= 2 && lines[0].ends_with(" YES") {
+                if let Some(temp_line) = lines[1].find("t=") {
+                    if let Ok(temp_str) = lines[1][temp_line + 2..].trim().parse::<f32>() {
+                        let celsius = temp_str / 1000.0;
+                        // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
+                        return Ok(celsius);
+                    }
+                }
+            }
+
+            sleep(Duration::from_millis(
+                self.config.retry_pause_duration_millis,
+            ));
+            retries -= 1;
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to read temperature after multiple retries.",
+        ))
+    }
 
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
@@ -104,11 +173,18 @@ impl Ds18b20 {
                     let mut water_temperature = mutex_water_temperature.lock().unwrap();
                     let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
 
-                    // @todo: platform-specific code for executing the measurement
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
                         *ambient_temperature = self.config.replacement_value_ambient_temperature;
-                        *water_temperature = self.config.replacement_value_water_temperature;
+                        match self.read() {
+                            Ok(temp) => {
+                                *water_temperature = temp;
+                            }
+                            Err(e) => {
+                                *water_temperature =
+                                    self.config.replacement_value_water_temperature;
+                            }
+                        }
                     }
 
                     // restart the countdown
@@ -141,4 +217,31 @@ impl Ds18b20 {
 }
 
 #[cfg(test)]
-pub mod tests {}
+pub mod tests {
+    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Config};
+    use crate::utilities::config::read_config_file;
+
+    // This test case reads from DS18B20 sensor.
+    // For this test case to succeed, the DS18B20 sensor needs to be connected
+    // and the 1-wire interface needs to be enabled (see rasp-config)
+    #[test]
+    #[ignore]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    fn test_read_ds18b20() {
+        
+        let config = read_config_file("aquarium_control_test_generic.toml".to_string());
+        
+        let mut ds18b20 = Ds18b20::new(config.ds18b20);
+        
+        match ds18b20.read() {
+            Ok((celsius, fahrenheit)) => {
+                println!("Temperature: {:.2}°C ", celsius);
+                assert!(true);
+            }
+            Err(e) => {
+                println!("Error reading DS18B20: {}", e);
+                assert!(false);
+            }
+        }
+    }
+}

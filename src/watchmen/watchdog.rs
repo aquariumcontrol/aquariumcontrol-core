@@ -76,7 +76,7 @@ impl Watchdog {
             panic!(
                 "{}: watchdog heartbeat and deactivation message are identical - please assign different values",
                 LOG_TARGET_WATCHDOG
-            );       
+            );
         }
 
         Watchdog { config }
@@ -104,7 +104,7 @@ impl Watchdog {
                 // Send the heartbeat to the watchdog
                 petting.pet(
                     &self.config.watchdog_filename,
-                    &self.config.watchdog_heartbeat
+                    &self.config.watchdog_heartbeat,
                 );
             }
             spin_sleeper.sleep(sleep_duration);
@@ -159,7 +159,7 @@ pub mod tests {
 
         let _ = Watchdog::new(config.watchdog);
     }
-    
+
     #[test]
     #[should_panic]
     // test if the watchdog is panicking during initialization if the configuration file contains an
@@ -171,7 +171,7 @@ pub mod tests {
 
         let _ = Watchdog::new(config.watchdog);
     }
-    
+
     #[test]
     #[should_panic]
     // test if the watchdog is panicking during initialization if the configuration file contains an
@@ -183,7 +183,7 @@ pub mod tests {
 
         let _ = Watchdog::new(config.watchdog);
     }
-    
+
     #[test]
     #[should_panic]
     // test if the watchdog is panicking during initialization if the configuration file contains
@@ -205,10 +205,10 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.watchdog.heartbeat_duration_millis = 0;
-        
+
         let _ = Watchdog::new(config.watchdog);
     }
-    
+
     #[test]
     // test if the watchdog is executing the petting in time
     pub fn test_watchdog_execute_petting() {
@@ -221,7 +221,7 @@ pub mod tests {
 
         let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
         let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
-        
+
         let mut watchdog = Watchdog::new(config.watchdog);
         let mut mock_petting = MockPetting::new();
 
@@ -232,7 +232,9 @@ pub mod tests {
                 let spin_sleeper_test_environment = SpinSleeper::default();
 
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
-                tx_signal_handler_to_watchdog.send(InternalCommand::Terminate).unwrap();
+                tx_signal_handler_to_watchdog
+                    .send(InternalCommand::Terminate)
+                    .unwrap();
             });
 
             // thread for the test object
@@ -248,8 +250,6 @@ pub mod tests {
                     5
                 );
 
-                //println!("{}", mock_petting);
-                
                 // Check intervals between consecutive heartbeats
                 // Iterate from the second timestamp (index 1)
                 for i in 1..mock_petting.petting_recorder.len() {
@@ -257,8 +257,6 @@ pub mod tests {
                     let current_ts = mock_petting.petting_recorder[i];
                     let delta_duration = current_ts.duration_since(previous_ts).unwrap();
 
-                    //println!("Main thread: Interval {}: {:?}", i - 1, delta_duration); // Debugging
-                    
                     // Assert that the delta is within the allowed range
                     assert!(
                         delta_duration >= min_duration && delta_duration <= max_duration,
@@ -281,7 +279,7 @@ pub mod tests {
                         mock_petting.signal_recorder[i]
                     );
                 }
-                
+
                 assert_eq!(
                     mock_petting.signal_recorder[4],
                     reference_deactivation_signal,
