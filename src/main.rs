@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #![deny(missing_docs)]
-//! Aquarium control is an open-source application which is part of a control system for salt-water aquariums.
+//! Aquarium control is an open-source application that is part of a control system for salt-water aquariums.
 //! It contains the following functionality:
 //! - Data acquisition of sensors (water temperature, pH, conductivity, ambient air temperature, ambient humidity)
 //! - Fresh water refill
@@ -18,23 +18,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 //! - Balling mineral dosing
 
 /// This is the container module for the database communication.
-/// Communicating with SQL data base includes preparing SQL queries, executing the queries and processing of query results.
+/// Communicating with the SQL database includes preparing SQL queries, executing the queries and processing of query results.
 mod database;
 
 #[cfg(target_os = "linux")]
-/// Communication with terminal user or webserver using POSIX message queues.
+/// Communication with the user via client application or webserver using POSIX message queues.
 mod dispatch;
 
-/// This container module features all functionality to execute the automatic feeding.
+/// This container module features all the functionality to execute the automatic feeding.
 mod food;
 
-/// This container module features all functionality to execute the Balling mineral dosing.
+/// This container module features all the functionality to execute the Balling mineral dosing.
 mod mineral;
 
 /// The container module contains the schedule checker.
 mod permission;
 
-/// This container module contains all functionality to periodically store signals either in one table of the SQL databaseor in specific text files stored in RAM-disk
+/// This container module contains all functionality to periodically store signals either in one table of the SQL database or in specific text files stored in the RAM disk
 mod recorder;
 
 /// This container module features all functionality to actuate the relays which control the actuators.
@@ -43,7 +43,7 @@ mod relays;
 /// This container module features all functionality to read and postprocess sensor data.
 mod sensors;
 
-/// This container module features all functionality to commiunicate with the test server via TCP.
+/// This container module features all functionality to communicate with the test server via TCP.
 mod simulator;
 
 /// This container module features a set of mock functionality used by test cases.
@@ -52,7 +52,7 @@ mod stubs;
 /// This container module features all functionality to either cool the water using ventilation heat the water using a heater.
 mod thermal;
 
-/// This container module features all functionality which could not be assigned to any other container module.
+/// This container module features all functionality that could not be assigned to any other container module.
 mod utilities;
 
 /// This container module features all functionality to monitor the control system.
@@ -146,7 +146,7 @@ impl fmt::Display for ConfigFileDefinitionError {
     }
 }
 
-/// check if the string provided as contains a valid file name to be used as configuration file
+/// Check if the string provided contains a valid file name to be used as the configuration file
 /// # Arguments    
 /// * `config_file_name` - reference to string provided by command line parameter
 fn check_argument_for_valid_config_file_name(
@@ -180,25 +180,25 @@ fn check_argument_for_valid_config_file_name(
     match path.extension() {
         Some(extension) => {
             if extension == "toml" {
-                return Ok(String::from(relative_config_file_name));
+                Ok(String::from(relative_config_file_name))
             } else {
-                return Err(ConfigFileDefinitionError::SuffixIsNotToml(
+                Err(ConfigFileDefinitionError::SuffixIsNotToml(
                     "The provided argument for the configuration file does not have extension '.toml'."
                     .to_string()
-                ));
+                ))
             }
         }
         None => {
-            return Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
+            Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
                 "The provided argument for the configuration file does not have any extension."
                     .to_string(),
-            ));
+            ))
         }
     }
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// creates the channels and sets up threads.
+/// Creates the channels and sets up threads.
 /// Global thread communication is as follows:
 /// ```mermaid
 /// graph LR
@@ -302,12 +302,12 @@ fn main() {
     setup_logger();
 
     // get command line parameters from OS
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
     let config_file_name: String;
 
     if args.len() > 1 {
-        // if first argument contains a path and file name, then let's use that
+        // if the first argument contains a path and file name, then let's use that
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
             Ok(valid_file_name) => valid_file_name,
             Err(error_message) => {
@@ -316,19 +316,19 @@ fn main() {
             }
         }
     } else {
-        // use standard file name
+        // use the default file name
         config_file_name = "/config/aquarium_control.toml".to_string();
     }
-    // read configuration file for operating the control system
+    // read the configuration file for operating the control system
     let config = read_config_file(config_file_name);
 
-    // publish the PID to a file so that client application can communicate with this application
+    // publish the PID to a file so that the client application can communicate with this application
     let publish_pid = PublishPid::new(config.publish_pid);
     let publish_pid_clone = publish_pid.clone();
 
     panic::set_hook(Box::new(move |panic_info| {
-        // custom panic handler: resets the PID to zero before entering in panic
-        // this allows subsequent runs of the application without needing to manually
+        // Custom panic handler: resets the PID to zero before entering in panic
+        // This allows later runs of the application without needing to manually
         // clear the PID file.
         // Print the panic message to stderr.
         publish_pid_clone.erase_pid();
@@ -447,7 +447,7 @@ fn main() {
         target: LOG_TARGET_MAIN,
         "{}", tables_string);
 
-    // check if any of the components requires use of simulator
+    // check if any of the components requires use of the simulator
     let use_simulator = config.gpio_handler.use_simulator
         | config.controllino.use_simulator
         | config.ambient.use_simulator
@@ -1040,7 +1040,7 @@ fn main() {
         };
 
     // communication channels between Ambient and Dht
-    // platform specific channels for Linux wrapped in Option
+    // platform-specific channels for Linux wrapped in Option
     cfg_if::cfg_if! {
         if #[cfg(target_os = "linux")] {
             cfg_if::cfg_if! {
@@ -1161,7 +1161,11 @@ fn main() {
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_water_temperature));
         let mutex_ds18b20_ambient_temperature =
             Arc::new(Mutex::new(initial_value_ambient_temperature));
-
+        let mutex_ds18b20_water_temperature_clone_for_data_logger = mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_water_temperature_clone_for_ds18b20 = mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_ambient_temperature_clone_for_data_logger = mutex_ds18b20_ambient_temperature.clone();
+        let mutex_ds18b20_ambient_temperature_clone_for_ds18b20 = mutex_ds18b20_ambient_temperature.clone();
+        
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_connection = match TcpCommunication::new(&config.tcp_connection) {
@@ -1324,7 +1328,7 @@ fn main() {
             scope.spawn(move || {
                 dht.execute(
                     tx_dht_to_ambient,
-                    rx_dht_from_ambient, // channel is shared with signal handler
+                    rx_dht_from_ambient, // channel is shared with the signal handler
                 );
 
                 #[cfg(feature = "debug_main")]
@@ -1360,14 +1364,14 @@ fn main() {
             debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
 
-        // give Ambient ant AtlasScientific some time so that they can aquire a first data set
+        // give Ambient ant AtlasScientific some time so that they can acquire a first data set
         let spin_sleeper = SpinSleeper::default();
         let duration_one_second = Duration::from_secs(1);
-        println!("trying to aquire data before starting control in 3 seconds...");
+        println!("trying to acquire data before starting control in 3 seconds...");
         spin_sleeper.sleep(duration_one_second);
-        println!("trying to aquire data before starting control in 2 seconds...");
+        println!("trying to acquire data before starting control in 2 seconds...");
         spin_sleeper.sleep(duration_one_second);
-        println!("trying to aquire data before starting control in 1 second...");
+        println!("trying to acquire data before starting control in 1 second...");
         spin_sleeper.sleep(duration_one_second);
         println!("starting control...");
 
@@ -1389,6 +1393,8 @@ fn main() {
                 rx_data_logger_from_ventilation,
                 tx_data_logger_to_signal_handler,
                 rx_data_logger_from_signal_handler,
+                mutex_ds18b20_water_temperature_clone_for_data_logger,
+                mutex_ds18b20_ambient_temperature_clone_for_data_logger
             );
 
             #[cfg(feature = "debug_main")]
@@ -1490,7 +1496,7 @@ fn main() {
             debug!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
         });
 
-        // Monitors needs communication with Controllino device
+        // Monitors needs communication with the Controllino device
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
@@ -1560,7 +1566,7 @@ fn main() {
                 tx_messaging_to_watchdog,
             );
 
-            // remove PID from file
+            // remove PID from the file
             publish_pid.erase_pid();
 
             #[cfg(feature = "debug_main")]
@@ -1583,8 +1589,8 @@ fn main() {
         scope.spawn(move || {
             ds18b20.execute(
                 rx_ds18b20_from_signal_handler,
-                mutex_ds18b20_water_temperature,
-                mutex_ds18b20_ambient_temperature,
+                mutex_ds18b20_water_temperature_clone_for_ds18b20,
+                mutex_ds18b20_ambient_temperature_clone_for_ds18b20
             );
         });
     });

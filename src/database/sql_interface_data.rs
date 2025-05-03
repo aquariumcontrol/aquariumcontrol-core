@@ -15,7 +15,7 @@ use crate::recorder::recorder_data_frame::RecorderDataFrame;
 
 /// Contains the configuration and the implementation of the SQL interface for time-based data.
 pub struct SqlInterfaceData {
-    /// Connection to database
+    /// Connection to the database
     pub conn: PooledConn,
 }
 
@@ -29,11 +29,31 @@ impl SqlInterfaceData {
         SqlInterfaceData { conn }
     }
 
-    /// Writes all data inside the data frame to the SQL data base.
+    /// Helper function to convert from f32 to String representation considering
+    /// unwrapping optional, NaN and Inf.
+    /// # Arguments
+    /// * `value` - value to be converted wrapped in Option
+    pub fn get_string_from_value(value: Option<f32>) -> String {
+        let null_string = "NULL".to_string();
+
+        match value {
+            Some(c) => {
+                match c.is_nan() | c.is_infinite() {
+                    true => null_string,
+                    false => c.to_string(),
+                }
+            }
+            None => {
+                null_string
+            },
+        }
+    }
+
+    /// Writes all data inside the data frame to the SQL database.
     /// None values or float variables with NaN or infinite (both positive and negative) are inserted as NULL into the database.
     /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
     /// # Arguments
-    /// * `data` - data to be written to database as type RecorderDataFrame
+    /// * `data` - data to be written to the database as type RecorderDataFrame
     pub fn write_data_frame_to_database(
         &mut self,
         data: &RecorderDataFrame,
@@ -43,116 +63,53 @@ impl SqlInterfaceData {
         let timestamp_string = data.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
 
         // replace signal placeholders with values
-        let water_temperature_string: String;
+        let water_temperature_string = Self::get_string_from_value(data.water_temperature);
         let sql_query_water_temperature_replaced = str::replace(
             sql_query_strings::SQL_QUERY_WRITE_DATA,
             "#TemperatureUnfiltered",
-            match data.water_temperature {
-                Some(c) => {
-                    water_temperature_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &water_temperature_string
-                }
-                None => &null_string,
-            },
+            &water_temperature_string
         );
 
-        let water_temperature_filtered_string: String;
+        let water_temperature_filtered_string = Self::get_string_from_value(data.water_temperature_filtered);
         let sql_query_water_temperature_filtered_replaced = str::replace(
             &sql_query_water_temperature_replaced,
             "#TemperatureFiltered",
-            match data.water_temperature_filtered {
-                Some(c) => {
-                    water_temperature_filtered_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &water_temperature_filtered_string
-                }
-                None => &null_string,
-            },
+            &water_temperature_filtered_string
         );
 
-        let ph_string: String;
+        let ph_string = Self::get_string_from_value(data.ph);
         let sql_query_ph_replaced = str::replace(
             &sql_query_water_temperature_filtered_replaced,
             "#pHUnfiltered",
-            match data.ph {
-                Some(c) => {
-                    ph_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &ph_string
-                }
-                None => &null_string,
-            },
+            &ph_string
         );
 
-        let ph_filtered_string: String;
+        let ph_filtered_string = Self::get_string_from_value(data.ph_filtered);
         let sql_query_ph_filtered_replaced = str::replace(
             &sql_query_ph_replaced,
             "#pHFiltered",
-            match data.ph_filtered {
-                Some(c) => {
-                    ph_filtered_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &ph_filtered_string
-                }
-                None => &null_string,
-            },
+            &ph_filtered_string
         );
 
-        let conductivity_string: String;
+        let conductivity_string = Self::get_string_from_value(data.conductivity);
         let sql_query_conductivity_replaced = str::replace(
             &sql_query_ph_filtered_replaced,
             "#ConductivityUnfiltered",
-            match data.conductivity {
-                Some(c) => {
-                    conductivity_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &conductivity_string
-                }
-                None => &null_string,
-            },
+            &conductivity_string
         );
 
-        let conductivity_filtered_string: String;
+        let conductivity_filtered_string = Self::get_string_from_value(data.conductivity_filtered);
         let sql_query_conductivity_filtered_replaced = str::replace(
             &sql_query_conductivity_replaced,
             "#ConductivityFiltered",
-            match data.conductivity_filtered {
-                Some(c) => {
-                    conductivity_filtered_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &conductivity_filtered_string
-                }
-                None => &null_string,
-            },
+            &conductivity_filtered_string
         );
 
-        let conductivity_compensated_string: String;
+        let conductivity_compensated_string = Self::get_string_from_value(data.conductivity_compensated);
         let sql_query_string_conductivity_compensated_replaced = str::replace(
             &sql_query_conductivity_filtered_replaced,
             "#ConductivityCompensated",
-            match data.conductivity_compensated {
-                Some(c) => {
-                    conductivity_compensated_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &conductivity_compensated_string
-                }
-                None => &null_string,
-            },
+            &conductivity_compensated_string
         );
 
         let refill_in_progress_string: String;
@@ -207,40 +164,22 @@ impl SqlInterfaceData {
             },
         );
 
-        let ambient_temperature_string: String;
+        let ambient_temperature_string = Self::get_string_from_value(data.ambient_temperature);
         let sql_query_ambient_temperature_replaced = str::replace(
             &sql_query_surface_ventilation_status_replaced,
             "#AmbTemp",
-            match data.ambient_temperature {
-                Some(c) => {
-                    ambient_temperature_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &ambient_temperature_string
-                }
-                None => &null_string,
-            },
+            &ambient_temperature_string
         );
 
-        let ambient_humidity_string: String;
+        let ambient_humidity_string = Self::get_string_from_value(data.ambient_humidity);
         let sql_query_ambient_humidity_replaced = str::replace(
             &sql_query_ambient_temperature_replaced,
             "#AmbHum",
-            match data.ambient_humidity {
-                Some(c) => {
-                    ambient_humidity_string = match c.is_nan() | c.is_infinite() {
-                        true => null_string.clone(),
-                        false => c.to_string(),
-                    };
-                    &ambient_humidity_string
-                }
-                None => &null_string,
-            },
+            &ambient_humidity_string
         );
 
         let heater_string: String;
-        let sql_query_string = str::replace(
+        let sql_query_string_heater_replaced = str::replace(
             &sql_query_ambient_humidity_replaced,
             "#Heater",
             match data.heater_status {
@@ -252,6 +191,21 @@ impl SqlInterfaceData {
             },
         );
 
+        let water_temperature_ds18b20_string = Self::get_string_from_value(data.water_temperature_ds18b20);
+        let sql_query_water_temperature_ds18b20_replaced = str::replace(
+            &sql_query_string_heater_replaced,
+            "#TempWaterDs18B20",
+            &water_temperature_ds18b20_string
+        );
+
+        let ambient_temperature_ds18b20_string = Self::get_string_from_value(data.ambient_temperature_ds18b20);
+        let sql_query_string = str::replace(
+            &sql_query_water_temperature_ds18b20_replaced,
+            "#TempAmbDs18B20",
+            &ambient_temperature_ds18b20_string
+        );
+
+        println!("Executing query: {}", sql_query_string);
         // execute query
         match self.conn.exec_drop::<_, _>(
             sql_query_string.clone(),
@@ -265,10 +219,10 @@ impl SqlInterfaceData {
                     target: Self::LOG_TARGET_SQL_INTERFACE_DATA,
                     "could not insert data frame into database ({e:?})"
                 );
-                return Err(SqlInterfaceError::InsertDataFrameFailure(
+                Err(SqlInterfaceError::InsertDataFrameFailure(
                     "Error when inserting data frame into database using query: ".to_string()
                         + sql_query_string.as_str(),
-                ));
+                ))
             }
         }
     }
@@ -311,6 +265,8 @@ pub mod tests {
         pub ambient_temperature: f32,
         pub ambient_humidity: f32,
         pub heater_status: bool,
+        pub water_temperature_ds18b20: f32,
+        pub ambient_temperature_ds18b20: f32,
     }
 
     pub const SQL_QUERY_READ_DATA_FRAME_1: &str = "SELECT Timestamp, \
@@ -321,7 +277,7 @@ pub mod tests {
 
     pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
         RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater FROM data \
+        AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
     pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
@@ -329,7 +285,7 @@ pub mod tests {
         pH, pHFiltered, \
         Conductivity, ConductivityFiltered, ConductivityCompensated \
         RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater FROM data \
+        AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
     /// The function executes two SQL statements to retrieve one row from table 'data'
@@ -340,7 +296,7 @@ pub mod tests {
         timestamp: NaiveDateTime,
     ) -> Result<RecorderDataFrame, SqlInterfaceError> {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-        // Get data frame part 1 from database
+        // Get data frame part 1 from the database
         let sql_query_string_1 =
             str::replace(SQL_QUERY_READ_DATA_FRAME_1, "#timestamp", &timestamp_string);
         let data_frame_1_array: Vec<SqlDataFrame1> = match conn.query_map(
@@ -355,10 +311,10 @@ pub mod tests {
                 conduc_filt,
                 conduc_comp,
             )| SqlDataFrame1 {
-                timestamp: timestamp,
+                timestamp,
                 water_temperature: water_temp,
                 water_temperature_filtered: water_temp_filt,
-                ph: ph,
+                ph,
                 ph_filtered: ph_filt,
                 conductivity: conduc,
                 conductivity_filtered: conduc_filt,
@@ -382,6 +338,8 @@ pub mod tests {
                 ambient_temperature,
                 ambient_humidity,
                 heater_status,
+                temperature_water_ds18b20,
+                temperature_ambient_ds18b20,
             )| SqlDataFrame2 {
                 refill_in_progress,
                 tank_level_switch_position,
@@ -390,6 +348,8 @@ pub mod tests {
                 ambient_temperature,
                 ambient_humidity,
                 heater_status,
+                water_temperature_ds18b20: temperature_water_ds18b20,
+                ambient_temperature_ds18b20: temperature_ambient_ds18b20,
             },
         ) {
             Ok(c) => c,
@@ -398,13 +358,13 @@ pub mod tests {
             }
         };
 
-        // check error case if there is no response
+        // check the error case if there is no response
         if (data_frame_1_array.len() == 0) || (data_frame_2_array.len() == 0) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
                 "SQL database responded with empty response to query.".to_string(),
             ));
         }
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if (data_frame_2_array.len() > 1) || (data_frame_2_array.len() > 1) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query: ".to_string(),
@@ -430,15 +390,17 @@ pub mod tests {
             ambient_temperature: Some(data_frame_2.ambient_temperature),
             ambient_humidity: Some(data_frame_2.ambient_humidity),
             heater_status: Some(data_frame_2.heater_status),
+            water_temperature_ds18b20: Some(data_frame_2.water_temperature_ds18b20),
+            ambient_temperature_ds18b20: Some(data_frame_2.ambient_temperature_ds18b20),
         })
     }
 
     /// The function executes two SQL statements to retrieve one row from table 'data'
     /// In Ok case, the function returns one struct of type DataFrame wrapped in Result.
-    /// Note: This function handles exclusively entries with NULL data.
+    /// Note: This function exclusively handles entries with NULL data.
     pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDateTime) {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
-        // Get series of NULL values from database
+        // Get a series of NULL values from the database
         let sql_query_string = str::replace(
             SQL_QUERY_READ_NULL_DATA_FRAME,
             "#timestamp",
@@ -463,7 +425,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #32.
     pub fn test_sql_interface_data() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -502,6 +464,8 @@ pub mod tests {
             ambient_temperature: Some(22.0),
             ambient_humidity: Some(60.0),
             heater_status: Some(true),
+            water_temperature_ds18b20: Some(25.6),
+            ambient_temperature_ds18b20: Some(22.1),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_1) {
             Ok(()) => {}
@@ -539,6 +503,8 @@ pub mod tests {
             ambient_temperature: Some(23.0),
             ambient_humidity: Some(61.0),
             heater_status: Some(false),
+            water_temperature_ds18b20: Some(26.6),
+            ambient_temperature_ds18b20: Some(23.1),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_2) {
             Ok(()) => {}
@@ -586,6 +552,8 @@ pub mod tests {
             ambient_temperature: None,
             ambient_humidity: None,
             heater_status: None,
+            water_temperature_ds18b20: None,
+            ambient_temperature_ds18b20: None,
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_3) {
             Ok(()) => {}

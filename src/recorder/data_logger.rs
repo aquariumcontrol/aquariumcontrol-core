@@ -19,6 +19,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use crate::database::sql_interface::SqlInterface;
@@ -37,7 +38,7 @@ const MILLIS_PER_SEC: u64 = 1000;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
-    /// switch indicating if self-generated timestamp or data-base timestamp shall be used
+    /// switch indicating if a self-generated timestamp or the database-generated timestamp shall be used
     use_sql_timestamp: bool,
 
     /// interval of the data logger in seconds
@@ -55,7 +56,7 @@ pub struct DataLoggerConfig {
     /// switch if output to file (in ramdisk) shall be written
     output_to_disk: bool,
 
-    /// output file name (in ramdisk) for current timestamp
+    /// output file name (in ramdisk) for the current timestamp
     output_file_name_timestamp: String,
 
     /// output file name (in ramdisk) for current value of water temperature
@@ -64,45 +65,52 @@ pub struct DataLoggerConfig {
     /// output file name (in ramdisk) for current value of water temperature filtered
     output_file_name_water_temperature_filtered: String,
 
-    /// output file name (in ramdisk) for current value of pH
+    /// output file name (in ramdisk) for the current value of pH
     output_file_name_pH: String,
 
-    /// output file name (in ramdisk) for current value of pH filtered
+    /// output file name (in ramdisk) for the current value of pH filtered
     output_file_name_pH_filtered: String,
 
-    /// output file name (in ramdisk) for current value of conductivity
+    /// output file name (in ramdisk) for the current value of conductivity
     output_file_name_conductivity: String,
 
-    /// output file name (in ramdisk) for current value of conductivity filtered
+    /// output file name (in ramdisk) for the current value of conductivity filtered
     output_file_name_conductivity_filtered: String,
 
-    /// output file name (in ramdisk) for current value of tank level switch position
+    /// output file name (in ramdisk) for the current value of tank level switch position
     output_file_name_tank_level_switch_position: String,
 
-    /// output file name (in ramdisk) for current value of tank level switch invalid
+    /// output file name (in ramdisk) for the current value of tank level switch invalid
     output_file_name_tank_level_switch_invalid: String,
 
-    /// output file name (in ramdisk) for current value of tank level switch position stabilized
+    /// output file name (in ramdisk) for the current value of tank level switch position stabilized
     output_file_name_tank_level_switch_position_stabilized: String,
 
-    /// output file name (in ramdisk) for current value of ventilation
+    /// output file name (in ramdisk) for the current value of ventilation
     output_file_name_ventilation_is_on: String,
 
-    /// output file name (in ramdisk) for current value of heating
+    /// output file name (in ramdisk) for the current value of heating
     output_file_name_heating_is_on: String,
 
-    /// output file name (in ramdisk) for current value of ambient air temperature
+    /// output file name (in ramdisk) for the current value of ambient air temperature
     output_file_name_ambient_temperature: String,
 
-    /// output file name (in ramdisk) for current value of air humidity
+    /// output file name (in ramdisk) for the current value of air humidity
     output_file_name_humidity: String,
 
-    /// output file name (in ramdisk) for current refill pump status
+    /// output file name (in ramdisk) for the current refill pump status
     output_file_name_refill_in_progress: String,
+    
+    /// output file name (in ramdisk) for the water temperature measured by DS18B20 sensor
+    output_file_name_water_temperature_ds18b20: String,
+    
+    /// output file name (in ramdisk) for the ambient temperature measured by DS18B20 sensor
+    output_file_name_ambient_temperature_ds18b20: String,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Contains the configuration and the implementation for regular data logging to SQL database.
+/// Contains the configuration and the implementation for regular data logging to SQL database
+/// and writing to the file (in RAM disk).
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
@@ -118,7 +126,6 @@ pub struct DataLoggerConfig {
 ///     data_logger --> signal_handler[Signal handler]
 ///     signal_handler[Signal handler] --> data_logger
 /// ```
-
 pub struct DataLogger {
     /// configuration data for the data logger
     config: DataLoggerConfig,
@@ -132,59 +139,65 @@ pub struct DataLogger {
     /// filter for the conductivity signal
     filter_conductivity: IIRFilter,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to create timestamp
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to create the timestamp
     lock_error_get_timestamp: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write refill in progress to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write refill in progress to disk
     lock_error_output_state_refill_in_progress: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write heating is on to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write heating is on to disk
     lock_error_output_state_heating_is_on: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation is on to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ventilation is on to disk
     lock_error_output_state_ventilation_is_on: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature to disk
     lock_error_output_signal_water_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write pH to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write pH to disk
     lock_error_output_signal_pH: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity to disk
     lock_error_output_signal_conductivity: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature to disk
     lock_error_output_signal_ambient_temperature: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write humidity to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write humidity to disk
     lock_error_output_signal_humidity: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position to disk
     lock_error_output_state_tank_level_switch_position: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch invalid to disk
     lock_error_output_state_tank_level_switch_invalid: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position stabilized to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write tank level switch position stabilized to disk
     lock_error_output_state_tank_level_switch_position_stabilized: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write temperature filtered to disk
     lock_error_output_signal_water_temperature_filtered: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write pH filtered to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write pH filtered to disk
     lock_error_output_signal_pH_filtered: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity filtered to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write conductivity filtered to disk
     lock_error_output_signal_conductivity_filtered: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to write timestamp to disk
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write timestamp to disk
     lock_error_output_timestamp: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
+    /// an inhibition flag to avoid flooding the log file with repeated messages about having received an inapplicable command
     lock_warn_inapplicable_command: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
+    
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature from DS18B20 sensor to disk
+    lock_error_output_signal_water_temperature_ds18b20: bool,
+    
+    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature from DS18B20 sensor to disk
+    lock_error_output_signal_ambient_temperature_ds18b20: bool,
 }
 
 impl DataLogger {
@@ -194,17 +207,17 @@ impl DataLogger {
     pub fn new(config: DataLoggerConfig) -> DataLogger {
         let filter_water_temperature = IIRFilter::new_requires_initial(
             &config.filter_coefficient_water_temperature,
-            0.0, // initialization value (mesured value not available at this time)
+            0.0, // initialization value (measured value not available at this time)
             1.0, // 1 second time step
         );
         let filter_pH = IIRFilter::new_requires_initial(
             &config.filter_coefficient_pH,
-            0.0, // initialization value (mesured value not available at this time)
+            0.0, // initialization value (measured value not available at this time)
             1.0, // 1 second time step
         );
         let filter_conductivity = IIRFilter::new_requires_initial(
             &config.filter_coefficient_conductivity,
-            0.0, // initialization value (mesured value not available at this time)
+            0.0, // initialization value (measured value not available at this time)
             1.0, // 1 second time step
         );
 
@@ -230,6 +243,8 @@ impl DataLogger {
                 || config.output_file_name_ambient_temperature.is_empty()
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
+                || config.output_file_name_water_temperature_ds18b20.is_empty()
+                || config.output_file_name_ambient_temperature_ds18b20.is_empty()
             {
                 panic!(
                     "{}: one of the output file names is empty.",
@@ -277,14 +292,20 @@ impl DataLogger {
                 fs::write(config.output_file_name_refill_in_progress.clone(), "").expect(
                     "DataLogger: Could not reset content of output file for refill in progress.",
                 );
+                fs::write(config.output_file_name_water_temperature_ds18b20.clone(), "").expect(
+                    "DataLogger: Could not reset content of output file for water temperature from DS18B20 sensor.",
+                );
+                fs::write(config.output_file_name_ambient_temperature_ds18b20.clone(), "").expect(
+                    "DataLogger: Could not reset content of output file for ambient air temperature from DS18B20 sensor.",
+                );
             }
         }
 
         Self {
-            config: config,
-            filter_water_temperature: filter_water_temperature,
-            filter_pH: filter_pH,
-            filter_conductivity: filter_conductivity,
+            config,
+            filter_water_temperature,
+            filter_pH,
+            filter_conductivity,
             lock_error_get_timestamp: false,
             lock_error_output_signal_water_temperature: false,
             lock_error_output_state_refill_in_progress: false,
@@ -303,13 +324,15 @@ impl DataLogger {
             lock_error_output_timestamp: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_receive_termination: false,
+            lock_error_output_signal_water_temperature_ds18b20: false,
+            lock_error_output_signal_ambient_temperature_ds18b20: false,
         }
     }
 
-    /// Outputs non-binary signal to file (in RAM disk).
+    /// Outputs non-binary signal to a file (in RAM disk).
     /// # Arguments
-    /// * `signal` - signal which shall be converted to human readable format and written to file
-    /// * `output_file_name` - name of file where the value shall be written to    
+    /// * `signal` - signal which shall be converted to humanly readable format and written to file
+    /// * `output_file_name` - name of the file where the value shall be written to    
     fn output_signal(
         &self,
         signal: f32,
@@ -341,12 +364,12 @@ impl DataLogger {
         }
     }
 
-    /// Outputs binary signal to file (in RAM disk).
+    /// Outputs binary signal to a file (in RAM disk).
     /// # Arguments
-    /// * `device_state` - signal which shall be converted to human readable format and written to file
-    /// * `state_description_true` - label to write to file for true value
-    /// * `state_description_false` - label to write to file for false value
-    /// * `output_file_name` - name of file where the value shall be written to    
+    /// * `device_state` - signal which shall be converted to a humanly readable format and written to file
+    /// * `state_description_true` - label to write to a file for true value
+    /// * `state_description_false` - label to write to a file for false value
+    /// * `output_file_name` - name of the file where the value shall be written to    
     fn output_state(
         &self,
         state: bool,
@@ -382,10 +405,10 @@ impl DataLogger {
         }
     }
 
-    /// Outputs string to file (in RAM disk).
+    /// Outputs string to a file (in RAM disk).
     /// # Arguments
     /// * `data` - string data to be written to file
-    /// * `output_file_name` - name of file where the value shall be written to    
+    /// * `output_file_name` - name of the file where the value shall be written to    
     fn output_timestamp(
         &self,
         timestamp: NaiveDateTime,
@@ -415,11 +438,12 @@ impl DataLogger {
         }
     }
 
-    /// get information from refill/ventilation/heating thread
+    /// Get information from refill/ventilation/heating thread
+    /// # Arguments
     /// * `signal` - reference to variable for storing control status information of refill/ventilation/heating
     /// * `signal_name` - enum indicating which signal shall be measured
-    /// * `tx_to_on_off_thread` - reference to sender part of channel for communication to refill/ventilation/heating
-    /// * `rx_from_on_off_thread` - reference to receiver part of channel for communication from refill/ventilation/heating
+    /// * `tx_to_on_off_thread` - reference to sender part of the channel for communication to refill/ventilation/heating
+    /// * `rx_from_on_off_thread` - reference to receiver part of the channel for communication from refill/ventilation/heating
     /// * `lock_error_output_state` - information if error has already occurred
     fn update_on_off_signal(
         &mut self,
@@ -436,7 +460,7 @@ impl DataLogger {
 
             match tx_to_on_off_thread.send(InternalCommand::RequestSignal(signal_name.clone())) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for a response
                     match rx_from_on_off_thread.recv() {
                         Ok(c) => {
                             *signal = c;
@@ -500,13 +524,14 @@ impl DataLogger {
         lock_error_output_state
     }
 
-    /// get information from AtlasScientific thread
+    /// Get information from AtlasScientific thread
+    /// # Arguments    
     /// * `water_temperature` - reference to variable for storing signal
     /// * `ph` - reference to variable for storing signal
     /// * `conductivity` - reference to variable for storing signal
-    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `tx_to_atlas_scientific` - reference to sender part of channel for communication to Atlas Scientific
-    /// * `rx_from_atlas_scientific` - reference to receiver part of channel for communication from Atlas Scientific
+    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of the channel
+    /// * `tx_to_atlas_scientific` - reference to sender part of the channel for communication to Atlas Scientific
+    /// * `rx_from_atlas_scientific` - reference to receiver part of the channel for communication from Atlas Scientific
     fn update_atlas_scientific_signals(
         &mut self,
         water_temperature: &mut Option<f32>,
@@ -520,12 +545,12 @@ impl DataLogger {
             #[cfg(feature = "debug_data_logger")]
             let start_time_atlas_scientific = SystemTime::now();
 
-            // send request for water temperature
+            // send the request for water temperature
             match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
                 AquariumSignal::WaterTemperature,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *water_temperature = match rx_from_atlas_scientific.recv() {
                         Ok(c) => {
                             self.lock_error_output_signal_water_temperature = self.output_signal(
@@ -555,10 +580,10 @@ impl DataLogger {
                 }
             }
 
-            // send request for pH
+            // send the request for pH
             match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(AquariumSignal::pH)) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *ph = match rx_from_atlas_scientific.recv() {
                         Ok(c) => {
                             self.lock_error_output_signal_pH = self.output_signal(
@@ -588,12 +613,12 @@ impl DataLogger {
                 }
             }
 
-            // send request for conductivity
+            // send the request for conductivity
             match tx_to_atlas_scientific
                 .send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
             {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *conductivity = match rx_from_atlas_scientific.recv() {
                         Ok(c) => {
                             self.lock_error_output_signal_conductivity = self.output_signal(
@@ -639,13 +664,13 @@ impl DataLogger {
         }
     }
 
-    /// get information from Ambient thread
+    /// Get information from Ambient thread
     /// # Arguments
     /// * `ambient_temperature` - reference to variable for storing signal
     /// * `ambient_humidity` - reference to variable for storing signal
-    /// * `ambient_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `tx_to_ambient` - reference to sender part of channel for communication to Ambient
-    /// * `rx_from_ambient` - reference to receiver part of channel for communication from Ambient
+    /// * `ambient_channel_disconnected` - reference to variable for storing health status of the channel
+    /// * `tx_to_ambient` - reference to sender part of the channel for communication to Ambient
+    /// * `rx_from_ambient` - reference to receiver part of the channel for communication from Ambient
     fn update_ambient_signals(
         &mut self,
         ambient_temperature: &mut Option<f32>,
@@ -663,7 +688,7 @@ impl DataLogger {
                 AquariumSignal::AmbientTemperature,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *ambient_temperature = match rx_from_ambient.recv() {
                         Ok(c) => {
                             self.lock_error_output_signal_ambient_temperature = self.output_signal(
@@ -698,7 +723,7 @@ impl DataLogger {
                 AquariumSignal::AmbientHumidity,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *ambient_humidity = match rx_from_ambient.recv() {
                         Ok(c) => {
                             self.lock_error_output_signal_humidity = self.output_signal(
@@ -743,13 +768,13 @@ impl DataLogger {
         }
     }
 
-    /// get information from TankLevelSwitch thread
+    /// Get information from TankLevelSwitch thread
     /// # Arguments
     /// * `tank_level_switch_position` - reference to variable for storing signal
     /// * `tank_level_switch_invalid` - reference to variable for storing signal
-    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `tx_to_tank_level_switch` - reference to sender part of channel for communication to Tank Level Switch
-    /// * `rx_from_tank_level_switch` - reference to receiver part of channel for communication from Tank Level Switch
+    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of the channel
+    /// * `tx_to_tank_level_switch` - reference to sender part of the channel for communication to Tank Level Switch
+    /// * `rx_from_tank_level_switch` - reference to receiver part of the channel for communication from Tank Level Switch
     fn update_tank_level_switch_signals(
         &mut self,
         tank_level_switch_position: &mut Option<bool>,
@@ -762,12 +787,12 @@ impl DataLogger {
             #[cfg(feature = "debug_data_logger")]
             let start_time_tank_level_switch = SystemTime::now();
 
-            // send request for tank level switch position
+            // send the request for tank level switch position
             match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchPosition,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *tank_level_switch_position = match rx_from_tank_level_switch.recv() {
                         Ok(c) => {
                             self.lock_error_output_state_tank_level_switch_position = self
@@ -799,12 +824,12 @@ impl DataLogger {
                 }
             }
 
-            // send request for tank level switch invalid
+            // send the request for tank level switch invalid
             match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchInvalid,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     *tank_level_switch_invalid = match rx_from_tank_level_switch.recv() {
                         Ok(c) => {
                             self.lock_error_output_state_tank_level_switch_invalid = self
@@ -836,12 +861,12 @@ impl DataLogger {
                 }
             }
 
-            // send request for tank level switch stabilized position
+            // send the request for tank level switch stabilized position
             match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
                 AquariumSignal::TankLevelSwitchPositionStabilized,
             )) {
                 Ok(_) => {
-                    // now listen for response
+                    // now listen for the response
                     match rx_from_tank_level_switch.recv() {
                         Ok(c) => {
                             self.lock_error_output_state_tank_level_switch_position_stabilized = self
@@ -1073,7 +1098,8 @@ impl DataLogger {
         )
     }
 
-    /// get timestampe either from SQL server or application-generated
+    /// get timestamp either from SQL server or application-generated
+    /// # Arguments    
     /// * `conn` - connection to SQL database
     fn update_timestamp(&mut self, conn: &mut PooledConn) -> NaiveDateTime {
         match self.config.use_sql_timestamp {
@@ -1102,7 +1128,7 @@ impl DataLogger {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `data_injection` - Trait method for transferring data to database or mock data structure
     /// * `sql_interface_data` - Interface to SQL database for manipulation of data table
@@ -1120,6 +1146,8 @@ impl DataLogger {
     /// * `rx_from_ventilation` - Receiver part of channel for communication from Ventilation
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `mutex_water_temperature_ds18b20` - Mutex for water temperature from DS18B20 sensor
+    /// * `mutex_ambient_temperature_ds18b20` - Mutex for ambient temperature from DS18B20 sensor                
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
@@ -1138,12 +1166,14 @@ impl DataLogger {
         rx_from_ventilation: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
+        mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
     ) {
-        let sleep_duration_hundred_millisec = Duration::from_millis(100);
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut i;
 
-        // define and initialize with value which will be overwritten in first iteration
+        // define and initialize with values which will be overwritten in the first iteration
         let mut water_temperature: Option<f32> = Some(0.0);
         let mut ph: Option<f32> = Some(0.0);
         let mut conductivity: Option<f32> = Some(0.0);
@@ -1164,8 +1194,11 @@ impl DataLogger {
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
-
+        let mut water_temperature_ds18b20: Option<f32>;
+        let mut ambient_temperature_ds18b20: Option<f32>;
+        
         loop {
+            // update signals via channel communication
             self.update_signals(
                 &tx_to_ambient,
                 &rx_from_ambient,
@@ -1196,6 +1229,35 @@ impl DataLogger {
                 &mut tank_level_switch_invalid,
                 &mut tank_level_switch_channel_disconnected,
             );
+            
+            // update signals by accessing mutex for DS18B20 sensor signals
+            {
+                // internal scope to limit lifetime of mutex lock
+                water_temperature_ds18b20 = match mutex_water_temperature_ds18b20.lock() {
+                    Ok(c) => {
+                        self.lock_error_output_signal_water_temperature_ds18b20 = self.output_signal(
+                            *c,
+                            AquariumSignal::WaterTemperature,
+                            &self.config.output_file_name_water_temperature_ds18b20,
+                            self.lock_error_output_signal_water_temperature_ds18b20,
+                        );
+                        Some(*c)
+                    },
+                    Err(_) => None,
+                };
+                ambient_temperature_ds18b20 = match mutex_ambient_temperature_dsb18b20.lock() {
+                    Ok(c) => {
+                        self.lock_error_output_signal_ambient_temperature_ds18b20 = self.output_signal(
+                            *c,
+                            AquariumSignal::AmbientTemperature,
+                            &self.config.output_file_name_ambient_temperature_ds18b20,
+                            self.lock_error_output_signal_ambient_temperature_ds18b20,
+                        );
+                        Some(*c)
+                    },
+                    Err(_) => None,
+                };
+            }
 
             let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
                 self.calculate_filtered_signals(water_temperature, ph, conductivity);
@@ -1205,20 +1267,22 @@ impl DataLogger {
             // all data received, let's construct a data frame
             let data_frame = RecorderDataFrame {
                 timestamp: current_timestamp,
-                water_temperature: water_temperature,
-                water_temperature_filtered: water_temperature_filtered,
-                ph: ph,
+                water_temperature,
+                water_temperature_filtered,
+                ph,
                 ph_filtered: pH_filtered,
-                conductivity: conductivity,
-                conductivity_filtered: conductivity_filtered,
+                conductivity,
+                conductivity_filtered,
                 conductivity_compensated: None,
                 refill_in_progress: Some(refill_in_progress),
-                tank_level_switch_position: tank_level_switch_position,
-                tank_level_switch_invalid: tank_level_switch_invalid,
+                tank_level_switch_position,
+                tank_level_switch_invalid,
                 surface_ventilation_status: Some(ventilation_is_on),
-                ambient_temperature: ambient_temperature,
-                ambient_humidity: ambient_humidity,
+                ambient_temperature,
+                ambient_humidity,
                 heater_status: Some(heater_is_on),
+                water_temperature_ds18b20,
+                ambient_temperature_ds18b20,
             };
 
             data_injection.inject_data(data_frame, &mut sql_interface_data);
@@ -1242,7 +1306,7 @@ impl DataLogger {
                 remaining_sleep_time_millis = 0;
                 cycle_time_exceeded = true;
             } else {
-                // underflow cannot happen because else statement require that first operand is higher than second
+                // underflow cannot happen because the else statement requires that first operand is higher than the second
                 remaining_sleep_time_millis =
                     self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
                 cycle_time_exceeded = false;
@@ -1259,7 +1323,7 @@ impl DataLogger {
             i = 0;
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
-                spin_sleeper.sleep(sleep_duration_hundred_millisec);
+                spin_sleeper.sleep(sleep_duration_hundred_millis);
                 (quit_command_received, _, _) =
                     self.process_external_request(&rx_from_signal_handler, None);
                 if quit_command_received {
@@ -1271,7 +1335,7 @@ impl DataLogger {
                     break;
                 }
 
-                // once per second, retrieve signals and write them to RAM-disk
+                // once per second, retrieve signals and write them to the RAM disk
                 if i % 1000 == 0 {
                     self.update_signals(
                         &tx_to_ambient,
@@ -1316,11 +1380,11 @@ impl DataLogger {
                 "finished idling restarting loop"
             );
 
-            start_time = SystemTime::now(); // start time for next cycle
+            start_time = SystemTime::now(); // start time for the next cycle
         }
 
         // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -1331,9 +1395,9 @@ impl DataLogger {
             }
         };
 
-        // this thread has channel connection to underlying threads.
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads.
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
@@ -1365,7 +1429,7 @@ impl DataLogger {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_hundred_millisec);
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
 }
@@ -1374,7 +1438,7 @@ impl DataLogger {
 pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::{fs, sync::mpsc, thread, time::Duration};
-
+    use std::sync::{Arc, Mutex};
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
     use crate::stubs::mock_ambient::tests::mock_ambient;
@@ -1406,6 +1470,8 @@ pub mod tests {
         target_ambient_temperature: f32,
         target_ambient_humidity: f32,
         target_heater_status: bool,
+        target_water_temperature_ds18b20: f32,
+        target_ambient_temperature_ds18b20: f32,
     ) {
         assert_eq!(
             fs::read_to_string(&data_logger_config.output_file_name_water_temperature)
@@ -1520,6 +1586,20 @@ pub mod tests {
                 .expect("Could not read back heater status from disk."),
             target_heater_status_string,
         );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_water_temperature_ds18b20)
+                .expect("Could not read back DS18B20 water temperature from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_water_temperature_ds18b20,
+        );
+        assert_eq!(
+            fs::read_to_string(&data_logger_config.output_file_name_ambient_temperature_ds18b20)
+                .expect("Could not read back DS18B20 ambient temperature from disk.")
+                .parse::<f32>()
+                .unwrap(),
+            target_ambient_temperature_ds18b20,
+        );
     }
 
     #[test]
@@ -1528,7 +1608,7 @@ pub mod tests {
     // - writing output to filesystem
     // Test case uses test database #45.
     pub fn test_data_log() {
-        // channels for communication with test environment
+        // channels for communication with the test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
         let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
         let (tx_data_logger_to_atlas_scientific, rx_atlas_scientific_from_data_logger) =
@@ -1643,7 +1723,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_1_second);
                 spin_sleeper.sleep(sleep_duration_1_second);
 
-                // cease operation of test object
+                // cease operation of the test object
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
                 rx_signal_handler_from_data_logger.recv().unwrap();
 
@@ -1757,6 +1837,8 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_100_millis = Duration::from_millis(100);
         spin_sleeper.sleep(sleep_duration_100_millis);
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(config.ds18b20.replacement_value_water_temperature));
+        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(config.ds18b20.replacement_value_ambient_temperature));
 
         // thread for test object and asserts
         let join_handle_test_object = thread::Builder::new()
@@ -1779,6 +1861,8 @@ pub mod tests {
                     rx_data_logger_from_ventilation,
                     tx_data_logger_to_signal_handler,
                     rx_data_logger_from_signal_handler,
+                    mutex_ds18b20_water_temperature,
+                    mutex_ds18b20_ambient_temperature
                 );
 
                 println!("Printing recorded data:");
@@ -1802,6 +1886,8 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #5
@@ -1822,6 +1908,8 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #4
@@ -1842,6 +1930,8 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(14.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #3
@@ -1862,6 +1952,8 @@ pub mod tests {
                     Some(13.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
                     Some(true),     // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #2
@@ -1882,6 +1974,8 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(true),  // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #1
@@ -1902,6 +1996,8 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 // Dataframe #0
@@ -1922,6 +2018,8 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
+                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
+                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
                 );
 
                 assert_output_file_contents(
@@ -1941,6 +2039,8 @@ pub mod tests {
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
                     true,                 // target_heater_status
+                    config.ds18b20.replacement_value_water_temperature,
+                    config.ds18b20.replacement_value_ambient_temperature
                 );
             })
             .unwrap();

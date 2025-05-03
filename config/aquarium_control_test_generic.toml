@@ -32,27 +32,29 @@ ip_address = "127.0.0.1"                                # ipv4 address for commu
 port = 35000                                            # port number for communication with control application for testing purposes
 
 [data_logger]
-use_sql_timestamp = true                                                                        # switch for defining data source of timestamp
+use_sql_timestamp = true                                                                        # switch for defining the data source of timestamp
 logging_interval = 60                                                                           # log data every x seconds
 filter_coefficient_water_temperature = { filter_coefficient = 0.5 }                             # filter configuration for the water temperature
 filter_coefficient_pH = { filter_coefficient = 0.5 }                                            # filter configuration for the pH value
 filter_coefficient_conductivity = { filter_coefficient = 0.5 }                                  # filter configuration for the conductivity
 output_to_disk = true                                                                           # switch to enable writing selected signals to (RAM) disk
-output_file_name_timestamp = "/var/local/aquarium-ctrl/aquarium-ctrl-ts"                        # output file name (in ramdisk) for current time stamp
-output_file_name_water_temperature = "/var/local/aquarium-ctrl/atlsscntfc-temp"                 # output file name (in ramdisk) for current value of water temperature
-output_file_name_water_temperature_filtered = "/var/local/aquarium-ctrl/atlsscntfc-tempfltrd"   # output file name (in ramdisk) for current value of water temperature filtered
-output_file_name_pH = "/var/local/aquarium-ctrl/atlsscntfc-ph"                                  # output file name (in ramdisk) for current value of pH
-output_file_name_pH_filtered = "/var/local/aquarium-ctrl/atlsscntfc-phfltrd"                    # output file name (in ramdisk) for current value of pH filtered
-output_file_name_conductivity = "/var/local/aquarium-ctrl/atlsscntfc-conduc"                    # output file name (in ramdisk) for current value of conductivity
-output_file_name_conductivity_filtered = "/var/local/aquarium-ctrl/atlsscntfc-conducfltrd"      # output file name (in ramdisk) for current value of conductivity filtered
-output_file_name_tank_level_switch_position = "/var/local/aquarium-ctrl/tnklvlswtch"            # output file name (in ramdisk) for current value of tank level switch position
-output_file_name_tank_level_switch_invalid = "/var/local/aquarium-ctrl/tnklvlswtch_invld"       # output file name (in ramdisk) for current value of tank level switch invalid
-output_file_name_tank_level_switch_position_stabilized = "/var/local/aquarium-ctrl/tnklvlswtch_stblzd"  # output file name (in ramdisk) for current value of tank level switch stabailized
-output_file_name_ventilation_is_on = "/var/local/aquarium-ctrl/srfcvntltn"                      # output file name (in ramdisk) for current value of ventilation
-output_file_name_heating_is_on = "/var/local/aquarium-ctrl/htng"                                # output file name (in ramdisk) for current value of heating
-output_file_name_ambient_temperature = "/var/local/aquarium-ctrl/ambtemp"                       # output file name (in ramdisk) for current value of ambient air temperature
-output_file_name_humidity = "/var/local/aquarium-ctrl/ambhum"                                   # output file name (in ramdisk) for current value of air humidity
-output_file_name_refill_in_progress = "/var/local/aquarium-ctrl/refillpump"                     # output file name (in ramdisk) for current refill pump status
+output_file_name_timestamp = "/var/local/aquarium-ctrl/aquarium-ctrl-ts"                        # output file name (in ramdisk) for the current time stamp
+output_file_name_water_temperature = "/var/local/aquarium-ctrl/atlsscntfc-temp"                 # output file name (in ramdisk) for the current value of water temperature
+output_file_name_water_temperature_filtered = "/var/local/aquarium-ctrl/atlsscntfc-tempfltrd"   # output file name (in ramdisk) for the current value of water temperature filtered
+output_file_name_pH = "/var/local/aquarium-ctrl/atlsscntfc-ph"                                  # output file name (in ramdisk) for the current value of pH
+output_file_name_pH_filtered = "/var/local/aquarium-ctrl/atlsscntfc-phfltrd"                    # output file name (in ramdisk) for the current value of pH filtered
+output_file_name_conductivity = "/var/local/aquarium-ctrl/atlsscntfc-conduc"                    # output file name (in ramdisk) for the current value of conductivity
+output_file_name_conductivity_filtered = "/var/local/aquarium-ctrl/atlsscntfc-conducfltrd"      # output file name (in ramdisk) for the current value of conductivity filtered
+output_file_name_tank_level_switch_position = "/var/local/aquarium-ctrl/tnklvlswtch"            # output file name (in ramdisk) for the current value of tank level switch position
+output_file_name_tank_level_switch_invalid = "/var/local/aquarium-ctrl/tnklvlswtch_invld"       # output file name (in ramdisk) for the current value of tank level switch invalid
+output_file_name_tank_level_switch_position_stabilized = "/var/local/aquarium-ctrl/tnklvlswtch_stblzd"  # output file name (in ramdisk) for the current value of tank level switch stabailized
+output_file_name_ventilation_is_on = "/var/local/aquarium-ctrl/srfcvntltn"                      # output file name (in ramdisk) for the current value of ventilation
+output_file_name_heating_is_on = "/var/local/aquarium-ctrl/htng"                                # output file name (in ramdisk) for the current value of heating
+output_file_name_ambient_temperature = "/var/local/aquarium-ctrl/ambtemp"                       # output file name (in ramdisk) for the current value of ambient air temperature
+output_file_name_humidity = "/var/local/aquarium-ctrl/ambhum"                                   # output file name (in ramdisk) for the current value of air humidity
+output_file_name_refill_in_progress = "/var/local/aquarium-ctrl/refillpump"                     # output file name (in ramdisk) for the current refill pump status
+output_file_name_water_temperature_ds18b20 = "/var/local/aquarium-ctrl/ds18b20-temp-water"      # output file name (in ramdisk) for the current value of water temperature measured by DS18B20 sensor
+output_file_name_ambient_temperature_ds18b20 = "/var/local/aquarium-ctrl/ds18b20-temp-ambient"  # output file name (in ramdisk) for the current value of ambient temperature measured by DS18B20 sensor
 
 [refill]
 active = true

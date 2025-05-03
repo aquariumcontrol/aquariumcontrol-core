@@ -58,9 +58,11 @@ pub struct Ds18b20Config {
     pub system_driver_file_name: String,
 
     /// max. number of retries
+    #[allow(unused)]
     pub max_retries: u32,
 
     /// duration between retries in milliseconds
+    #[allow(unused)]
     pub retry_pause_duration_millis: u64,
 
     /// unique 64-bit ID of water temperature sensor
@@ -102,10 +104,11 @@ impl Ds18b20 {
             config.ambient_temperature_sensor_id.is_empty() {
             panic!("{}: No water temperature sensor ID nor ambient temperature sensor ID provided!", LOG_TARGET_DS18B20);            
         }
-        Ds18b20 { config: config }
+        Ds18b20 { config }
     }
 
     /// reads temperature from DS18B20 sensor
+    #[allow(unused)]
     pub fn read(&self, sensor_id: &str) -> Result<f32, io::Error> {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder = base_dir.join(

@@ -11,7 +11,7 @@ use std::fmt;
 
 #[derive(Debug, PartialEq)]
 /// Contains the data to be logged wrapped into Option.
-/// For each signal, where the data could be not be acquired. The None value is used.
+/// For each signal, where the data could not be acquired, the None value is used.
 /// The None value is represented as NULL in the SQL database.
 /// The struct only contains minimal implementation for development purposes.
 pub struct RecorderDataFrame {
@@ -51,14 +51,20 @@ pub struct RecorderDataFrame {
     /// status bit indicating that ventilation is switched on
     pub surface_ventilation_status: Option<bool>,
 
-    /// measured ambient temoerature in °C
+    /// measured ambient temperature in °C
     pub ambient_temperature: Option<f32>,
 
     /// measured ambient humidity in %
     pub ambient_humidity: Option<f32>,
 
-    /// status bit indicating that heater is switched on
+    /// status bit indicating that the heater is switched on
     pub heater_status: Option<bool>,
+    
+    /// measured water temperature from DS18B20 sensor in °C
+    pub water_temperature_ds18b20: Option<f32>,
+
+    /// measured ambient temperature from DS18B20 sensor in °C
+    pub ambient_temperature_ds18b20: Option<f32>,
 }
 
 /// Provides output of the enum values for debugging purposes.
@@ -138,6 +144,14 @@ impl fmt::Display for RecorderDataFrame {
             },
             None => none_string.clone(),
         };
+        let water_temperature_ds18b20_string = match self.water_temperature_ds18b20 {
+            Some(water_temperature_ds18b20) => water_temperature_ds18b20.to_string(),
+            None => none_string.clone(),
+        };
+        let ambient_temperature_ds18b20_string = match self.ambient_temperature_ds18b20 {
+            Some(ambient_temperature_ds18b20) => ambient_temperature_ds18b20.to_string(),
+            None => none_string.clone(),
+        };
         write!(
             f,
             "\n**************************************\ntimestamp: {}\
@@ -148,7 +162,9 @@ impl fmt::Display for RecorderDataFrame {
             \ntank_level_switch_position: {},\ntank_level_switch_invalid: {},\
             \nsurface_ventilation_status: {},\
             \nambient_temperature: {},\nambient_humidity: {}, \
-            \nheater_status: {}\n**************************************\n",
+            \nheater_status: {} \
+            \nwater_temperature_ds18b20: {}, ambient_temperature_ds18b20: {}\n
+            **************************************\n",
             self.timestamp,
             water_temperature_string,
             water_temperature_filtered_string,
@@ -163,7 +179,9 @@ impl fmt::Display for RecorderDataFrame {
             surface_ventilation_status_string,
             ambient_temperature_string,
             ambient_humidity_string,
-            heater_status_string
+            heater_status_string,
+            water_temperature_ds18b20_string,
+            ambient_temperature_ds18b20_string,
         )
     }
 }
@@ -186,6 +204,8 @@ impl RecorderDataFrame {
         target_ambient_temperature: Option<f32>,
         target_ambient_humidity: Option<f32>,
         target_heater_status: Option<bool>,
+        target_water_temperature_ds18b20: Option<f32>,
+        target_ambient_temperature_ds18b20: Option<f32>
     ) {
         assert_eq!(self.water_temperature, target_water_temperature);
         assert_eq!(
@@ -219,5 +239,7 @@ impl RecorderDataFrame {
         assert_eq!(self.ambient_temperature, target_ambient_temperature);
         assert_eq!(self.ambient_humidity, target_ambient_humidity);
         assert_eq!(self.heater_status, target_heater_status);
+        assert_eq!(self.water_temperature_ds18b20, target_water_temperature_ds18b20);
+        assert_eq!(self.ambient_temperature_ds18b20, target_ambient_temperature_ds18b20);
     }
 }
