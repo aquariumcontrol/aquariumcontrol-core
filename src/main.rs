@@ -543,18 +543,6 @@ fn main() {
         mpsc::channel();
     // ****************************
 
-    // *** heating <=> atlas_scientific ***
-    let (tx_heating_to_atlas_scientific, rx_atlas_scientific_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-
-    let (tx_atlas_scientific_to_heating, rx_heating_from_atlas_scientific): (
-        Sender<f32>,
-        Receiver<f32>,
-    ) = mpsc::channel();
-    // ****************************
-
     // *** refill <=> tank_level_switch ***
     let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill): (
         Sender<InternalCommand>,
@@ -1164,6 +1152,8 @@ fn main() {
             mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_data_logger =
             mutex_atlas_scientific_temperature.clone();
+        let mutex_atlas_scientific_temperature_clone_for_heating =
+            mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_ph = Arc::new(Mutex::new(initial_value_atlas_scientific_ph));
         let mutex_atlas_scientific_ph_clone_for_atlas_scientific =
             mutex_atlas_scientific_ph.clone();
@@ -1313,8 +1303,6 @@ fn main() {
             atlas_scientific.execute(
                 tx_atlas_scientific_to_tcp_opt,
                 rx_atlas_scientific_from_tcp_opt,
-                tx_atlas_scientific_to_heating,
-                rx_atlas_scientific_from_heating,
                 tx_atlas_scientific_to_ventilation,
                 rx_atlas_scientific_from_ventilation,
                 tx_atlas_scientific_to_i2c_interface_opt,
@@ -1464,8 +1452,6 @@ fn main() {
                 mutex_device_scheduler_heating,
                 tx_heating_to_ambient,
                 rx_heating_from_ambient,
-                tx_heating_to_atlas_scientific,
-                rx_heating_from_atlas_scientific,
                 tx_heating_to_tank_level_switch,
                 rx_heating_from_tank_level_switch,
                 tx_heating_to_controllino,
@@ -1478,6 +1464,7 @@ fn main() {
                 rx_heating_from_schedule_check,
                 rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
+                mutex_atlas_scientific_temperature_clone_for_heating,
             );
 
             #[cfg(feature = "debug_main")]

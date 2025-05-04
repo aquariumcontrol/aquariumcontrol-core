@@ -99,19 +99,7 @@ pub struct AtlasScientific {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control thread via the channel
-    lock_error_channel_receive_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send the response to heating control thread via the channel
-    lock_error_heating_response: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the heating control thread
-    lock_warn_inapplicable_command_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received an invalid signal request via the channel from the heating control thread
-    lock_error_invalid_signal_request_heating: bool,
-
+    
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from ventilation control thread via the channel
     lock_error_channel_receive_ventilation: bool,
 
@@ -156,10 +144,6 @@ impl AtlasScientific {
             pH_invalid: true,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_heating_response: false,
-            lock_warn_inapplicable_command_heating: false,
-            lock_error_invalid_signal_request_heating: false,
             lock_error_channel_receive_ventilation: false,
             lock_error_ventilation_response: false,
             lock_warn_inapplicable_command_ventilation: false,
@@ -173,7 +157,7 @@ impl AtlasScientific {
             lock_error_i2c_interface: false,
         }
     }
-    
+
     /// communication to heating thread via channel
     /// # Arguments
     /// * `tx_to_heating` - reference to sender part of the channel for sending data to heating control
@@ -259,93 +243,6 @@ impl AtlasScientific {
             }
             None => { /* do nothing */ }
         }
-    }
-
-    /// communication to heating thread via channel
-    /// # Arguments
-    /// * `tx_to_heating` - reference to sender part of the channel for sending data to heating control
-    /// * `rx_from_heating` - reference to receiver part of the channel for receiving command from heating control
-    fn communicate_with_heating(
-        &mut self,
-        tx_to_heating: &Sender<f32>,
-        rx_from_heating: &Receiver<InternalCommand>,
-    ) {
-        //*** communication to heating thread ****
-        let response_to_heating_opt = match rx_from_heating.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_heating = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_heating = false;
-                        match d {
-                            AquariumSignal::WaterTemperature => {
-                                self.lock_error_invalid_signal_request_heating = false;
-                                Some(self.water_temperature)
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_heating {
-                                    error!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                        "internal error: received request for invalid signal {}",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_heating = true;
-                                }
-                                Some(0.0) // default response to unknown signal request instead of panicking
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_heating {
-                            warn!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "ignoring inapplicable command from heating thread."
-                            );
-                            self.lock_warn_inapplicable_command_heating = true;
-                        }
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_heating = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_heating {
-                            error!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "receiving command from heating thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_heating = true;
-                        }
-                    }
-                }
-                None
-            }
-        };
-
-        match response_to_heating_opt {
-            Some(response_to_heating) => {
-                _ = match tx_to_heating.send(response_to_heating.into()) {
-                    Ok(()) => {
-                        self.lock_error_heating_response = false;
-                    }
-                    Err(e) => {
-                        if !self.lock_error_heating_response {
-                            error!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "responding back to heating thread failed ({e:?})"
-                            );
-                            self.lock_error_heating_response = true;
-                        }
-                    }
-                };
-            }
-            None => { /* do nothing */ }
-        };
     }
 
     /// communication with simulator thread via channel
@@ -490,8 +387,6 @@ impl AtlasScientific {
         &mut self,
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: Option<Receiver<f32>>,
-        tx_to_heating: Sender<f32>,
-        rx_from_heating: Receiver<InternalCommand>,
         tx_to_ventilation: Sender<f32>,
         rx_from_ventilation: Receiver<InternalCommand>,
         tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
@@ -623,7 +518,6 @@ impl AtlasScientific {
             }
 
             // answer requests from outside using measured data
-            self.communicate_with_heating(&tx_to_heating, &rx_from_heating);
             self.communicate_with_ventilation(&tx_to_ventilation, &rx_from_ventilation);
 
             spin_sleeper.sleep(sleep_duration_ten_millis);

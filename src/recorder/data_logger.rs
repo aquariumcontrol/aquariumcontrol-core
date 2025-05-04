@@ -1665,9 +1665,11 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 {
-                    let mut water_temperature_ds18b20 = mutex_ds18b20_water_temperature.lock().unwrap();
+                    let mut water_temperature_ds18b20 =
+                        mutex_ds18b20_water_temperature.lock().unwrap();
                     *water_temperature_ds18b20 = 15.5;
-                    let mut ambient_temperature_ds18b20 = mutex_ds18b20_ambient_temperature.lock().unwrap();
+                    let mut ambient_temperature_ds18b20 =
+                        mutex_ds18b20_ambient_temperature.lock().unwrap();
                     *ambient_temperature_ds18b20 = 16.5;
                 }
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1826,7 +1828,7 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #5");
                 data_frame.assert(
-                    Some(29.0),                                                 // target_water_temperature
+                    Some(29.0),      // target_water_temperature
                     Some(28.25),     // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
                     Some(7.078125),  // target_water_ph_filtered
@@ -1848,7 +1850,7 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #4");
                 data_frame.assert(
-                    Some(29.0),                                                 // target_water_temperature
+                    Some(29.0),      // target_water_temperature
                     Some(27.5),      // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
                     Some(7.15625),   // target_water_ph_filtered
@@ -1870,7 +1872,7 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #3");
                 data_frame.assert(
-                    Some(29.0),                                                 // target_water_temperature
+                    Some(29.0),     // target_water_temperature
                     Some(26.0),     // target_water_temperature_filtered
                     Some(7.0),      // target_water_ph
                     Some(7.3125),   // target_water_ph_filtered
@@ -1892,7 +1894,7 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #2");
                 data_frame.assert(
-                    Some(29.0),                                                 // target_water_temperature
+                    Some(29.0),  // target_water_temperature
                     Some(23.0),  // target_water_temperature_filtered
                     Some(7.0),   // target_water_ph
                     Some(7.625), // target_water_ph_filtered
@@ -1914,7 +1916,7 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #1");
                 data_frame.assert(
-                    Some(29.0),                                                 // target_water_temperature
+                    Some(29.0),  // target_water_temperature
                     Some(17.0),  // target_water_temperature_filtered
                     Some(11.0),  // target_water_ph
                     Some(8.25),  // target_water_ph_filtered
@@ -1971,8 +1973,8 @@ pub mod tests {
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
                     true,                 // target_heater_status
-                    15.5, // target DS18B20 water temperature
-                    16.5, // target DS18B20 ambient temperature
+                    15.5,                 // target DS18B20 water temperature
+                    16.5,                 // target DS18B20 ambient temperature
                 );
             })
             .unwrap();

@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use serde_derive::Deserialize;
-use std::fs;
+use std::{env, fs};
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
@@ -117,20 +117,64 @@ pub struct ConfigData {
     pub ds18b20: Ds18b20Config,
 }
 
-/// Loads the configuration data described in a struct of type ConfigData from the .toml file.
+/// Loads the configuration data described in a struct of type ConfigData from the .toml file - version for execution.
 /// In case of failure, the function panics.
 /// In success case, the function returns a variable of type ConfigData.
 /// # Arguments:
-/// * `filename` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
+/// * `filename` - Fully qualified filename (folder and file name).
+#[cfg(not(test))]
 pub fn read_config_file(filename: String) -> ConfigData {
-    #[cfg(not(test))]
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
-
+     
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block
     // to return the `data: Ok(c)` as a `String`
     // or handle any `errors: Err(_)`.
     let contents = match fs::read_to_string(filename.clone()) {
+        // If successful, return the file's text as `contents`.
+        // `c` is a local variable.
+        Ok(c) => c,
+        // Handle the `error` case.
+        Err(_) => {
+            // Write `msg` to `stderr`.
+            panic!("Could not read file `{}`", filename);
+        }
+    };
+
+    // Use a `match` block to return the
+    // file `contents` as a `Data struct: Ok(d)`
+    // or handle any `errors: Err(_)`.
+    match toml::from_str(&contents) {
+        // If successful, return data as `Data` struct.
+        // `d` is a local variable.
+        Ok(d) => d,
+        // Handle the `error` case.
+        Err(e) => {
+            // Write `msg` to `stderr`.
+            panic!(
+                "{}: unable to load data from `{filename}` ({e})",
+                LOG_TARGET_CONFIG
+            );
+        }
+    }
+}
+
+/// Loads the configuration data described in a struct of type ConfigData from the .toml file - version for testing.
+/// In case of failure, the function panics.
+/// In success case, the function returns a variable of type ConfigData.
+/// # Arguments:
+/// * `filename` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
+#[cfg(test)]
+pub fn read_config_file(filename: String) -> ConfigData {
+    let filename_test = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+        panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+    }) + "/" + filename.as_str();
+
+    // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
+    // Read the contents of the file using a `match` block
+    // to return the `data: Ok(c)` as a `String`
+    // or handle any `errors: Err(_)`.
+    let contents = match fs::read_to_string(filename_test.clone()) {
         // If successful, return the file's text as `contents`.
         // `c` is a local variable.
         Ok(c) => c,
