@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martinuuu
+/* Copyright 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -8,6 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use std::sync::{Arc, Mutex};
 use log::{error, warn};
 
 #[cfg(feature = "debug_ambient")]
@@ -28,7 +29,7 @@ const LOG_TARGET_AMBIENT: &str = "ambient";
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 60;
 
-// max loops for receiving when quit command has been received
+// max loops for receiving when the quit command has been received
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 const RECEIVE_COUNTER_MAX: u32 = 10;
 
@@ -37,18 +38,18 @@ const RECEIVE_COUNTER_MAX: u32 = 10;
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 pub struct AmbientConfig {
-    /// flag to determine if application shall communicate with hardware directly or via TCP with a simulator
+    /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
     /// replacement value for ambient temperature in case reading from DHT22 sensor fails
-    replacement_value_ambient_temperature: f32,
+    pub replacement_value_ambient_temperature: f32,
 
     /// replacement value for ambient humidity in case reading from DHT22 sensor fails
-    replacement_value_ambient_humidity: f32,
+    pub replacement_value_ambient_humidity: f32,
 }
 
 /// Contains the communication with DHT ambient temperature and humidity sensor.
-/// Alternatively, TCP communication is used when configured to run with simulator.
+/// Alternatively, TCP communication is used when configured to run with the simulator.
 /// Sensor data is read periodically and stored.
 /// Requests from data logger and heating control are answered with last measured data.
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -74,42 +75,30 @@ pub struct Ambient {
     /// humidity in %
     ambient_humidity: f32,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from signal handler thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via the channel
     lock_error_channel_receive_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send a response to data logger thread via the channel
     lock_error_data_logger_response: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from data logger thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the data logger thread
     lock_warn_inapplicable_command_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from data logger thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received an invalid signal request via the channel from the data logger thread
     lock_error_invalid_signal_request_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control  thread via channel
-    lock_error_channel_receive_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to heating control thread via channel
-    lock_error_heating_response: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from heating control thread    
-    lock_warn_inapplicable_command_heating: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
-    lock_error_invalid_signal_request_heating: bool,
-
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request to Dht thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request to Dht thread via the channel
     lock_error_channel_send_dht: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from Dht thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from Dht thread via the channel
     lock_error_channel_receive_dht: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -129,7 +118,7 @@ impl Ambient {
         let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
         let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
         Ambient {
-            config: config,
+            config,
             ambient_temperature: replacement_value_ambient_temperature,
             ambient_humidity: replacement_value_ambient_humidity,
             lock_error_channel_receive_termination: false,
@@ -138,10 +127,6 @@ impl Ambient {
             lock_error_data_logger_response: false,
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_invalid_signal_request_data_logger: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_heating_response: false,
-            lock_warn_inapplicable_command_heating: false,
-            lock_error_invalid_signal_request_heating: false,
 
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_channel_send_dht: false,
@@ -154,7 +139,7 @@ impl Ambient {
         }
     }
 
-    /// communication to data logger thread via channel
+    /// communication to data logger thread via the channel
     /// # Arguments
     /// * `tx_to_data_logger` - reference to sender part of channel for sending data to data logger
     /// * `rx_from_data_logger` - reference to receiver part of channel for receiving command from data logger
@@ -237,87 +222,7 @@ impl Ambient {
         };
     }
 
-    /// communication to heating thread via channel
-    /// # Arguments
-    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
-    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
-    fn communicate_with_heating(
-        &mut self,
-        tx_to_heating: &Sender<f32>,
-        rx_from_heating: &Receiver<InternalCommand>,
-    ) {
-        match rx_from_heating.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_heating = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_heating = false;
-                        let response_to_heating = match d {
-                            AquariumSignal::AmbientTemperature => {
-                                self.lock_error_invalid_signal_request_heating = false;
-                                self.ambient_temperature
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_heating {
-                                    error!(
-                                        target: LOG_TARGET_AMBIENT,
-                                        "internal error: received request for invalid signal {} from heating",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_heating = true;
-                                }
-                                0.0 // default response to unknown signal request instead of panicking
-                            }
-                        };
-                        // respond only after having received request:
-                        match tx_to_heating.send(response_to_heating.into()) {
-                            Ok(()) => {
-                                self.lock_error_heating_response = false;
-                            }
-                            Err(e) => {
-                                if !self.lock_error_heating_response {
-                                    error!(
-                                        target: LOG_TARGET_AMBIENT,
-                                        "responding back to heating thread failed ({e:?})"
-                                    );
-                                    self.lock_error_heating_response = true;
-                                }
-                            }
-                        };
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_heating {
-                            warn!(
-                                target: LOG_TARGET_AMBIENT,
-                                "ignoring inapplicable command from heating thread."
-                            );
-                            self.lock_warn_inapplicable_command_heating = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_heating = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_heating {
-                            #[cfg(not(test))]
-                            error!(
-                                target: LOG_TARGET_AMBIENT,
-                                "receiving command from heating thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_heating = true;
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    /// communication with simulator thread via channel
+    /// communication with simulator thread via the channel
     /// # Arguments
     /// * `tx_to_tcp_opt` - reference to sender part of channel wrapped in Option for sending command to TcpCommunication
     /// * `rx_from_tcp_opt` - reference to receiver part of channel wrapped in Option for receiving data from TcpCommunication
@@ -326,7 +231,7 @@ impl Ambient {
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<f32>>,
     ) {
-        // unwrap is safe, because tested beforehand
+        // unwrap is safe because tested beforehand
         let tx_to_simulator = tx_to_tcp_opt.as_ref().unwrap();
         let rx_from_simulator = rx_from_tcp_opt.as_ref().unwrap();
 
@@ -344,7 +249,7 @@ impl Ambient {
 
     /// request execution of measurement by Dht
     /// # Arguments
-    /// * `tx_to_dht` - reference to sender part of channel for sending command to Dht
+    /// * `tx_to_dht` - reference to sender part of the channel for sending command to Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn send_request_to_dht(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
         match tx_to_dht.send(InternalCommand::RequestSignal(
@@ -402,7 +307,7 @@ impl Ambient {
                     self.ambient_temperature = ambient_temperature;
                     self.ambient_humidity = ambient_humidity;
                     self.lock_error_dht = false;
-                    false // allow for next request to be sent
+                    false // allow for the next request to be sent
                 }
                 Err(e) => {
                     if !self.lock_error_dht {
@@ -412,7 +317,7 @@ impl Ambient {
                         );
                         self.lock_error_dht = true;
                     }
-                    false // allow for next request to be sent
+                    false // allow for the next request to be sent
                 }
             },
             Err(e) => {
@@ -436,7 +341,7 @@ impl Ambient {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
     /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
@@ -448,21 +353,23 @@ impl Ambient {
     /// * `rx_from_dht_opt` - Receiver part of channel for communication from Dht
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
+    /// * `mutex_ambient_humidity` - Mutex for ambient humidity
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<f32>>,
-        tx_to_heating: Sender<f32>,
-        rx_from_heating: Receiver<InternalCommand>,
         tx_to_data_logger: Sender<f32>,
         rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_dht_opt: Option<Sender<InternalCommand>>,
         rx_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        mutex_ambient_temperature: Arc<Mutex<f32>>,
+        mutex_ambient_humidity: Arc<Mutex<f32>>,
     ) {
-        let sleep_duration_hundred_millisec = Duration::from_millis(100);
-        let sleep_duration_one_millisec = Duration::from_millis(1);
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
+        let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
         cfg_if::cfg_if! {
@@ -502,7 +409,7 @@ impl Ambient {
 
         loop {
             let (
-                quit_command_received, // request to end the application has been received
+                quit_command_received, // the request to end the application has been received
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
@@ -510,7 +417,7 @@ impl Ambient {
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
                     if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
-                        // quit command has been received and there is no pending measurement
+                        // quit command has been received, and there is no pending measurement
                         // no further waiting for Dht is required
                         break;
                     }
@@ -544,7 +451,7 @@ impl Ambient {
                                     }
                                 }
                             } else {
-                                // read from channel if measurement result is available from Dht thread
+                                // read from the channel if a measurement result is available from Dht thread
                                 let rx_from_dht = rx_from_dht_opt.as_ref().unwrap();
 
                                 state_send_receive = self.receive_response_from_dht(rx_from_dht);
@@ -574,6 +481,22 @@ impl Ambient {
                     self.communicate_with_simulator(tx_to_tcp_opt, rx_from_tcp_opt);
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
+                
+                // write measurement result to Mutex
+                {
+                    match mutex_ambient_temperature.lock() {
+                        Ok(mut c) => {*c = self.ambient_temperature},
+                        Err(_) => {
+                            // do nothing
+                        }
+                    }
+                    match mutex_ambient_humidity.lock() {
+                        Ok(mut c) => {*c = self.ambient_humidity},
+                        Err(_) => {
+                            // do nothing
+                        }
+                    }
+                }
             }
 
             #[cfg(feature = "debug_ambient")]
@@ -588,10 +511,9 @@ impl Ambient {
             }
 
             // answer requests from outside using measured data
-            self.communicate_with_heating(&tx_to_heating, &rx_from_heating);
             self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
-            spin_sleeper.sleep(sleep_duration_hundred_millisec);
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
         _ = match tx_to_signal_handler.send(true) {
@@ -604,9 +526,9 @@ impl Ambient {
             }
         };
 
-        // this thread has channel connection to underlying threads (GpioHandler).
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads (GpioHandler).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
@@ -638,13 +560,14 @@ impl Ambient {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_one_millisec);
+            spin_sleeper.sleep(sleep_duration_one_millis);
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use std::sync::{Arc, Mutex};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{self, TryRecvError};
     use std::thread::scope;
@@ -657,24 +580,26 @@ pub mod tests {
     #[test]
     // Test case verifies if the test object is processing the interfaces correctly.
     pub fn ambient_interfaces() {
-        // channels for communication with test environment
+        // channels for communication with the test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
         let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
         let (tx_tcp_to_ambient, rx_ambient_from_tcp) = mpsc::channel();
         let (tx_ambient_to_tcp, rx_tcp_from_ambient) = mpsc::channel();
         let tx_ambient_to_tcp_opt = Some(tx_ambient_to_tcp.clone());
         let rx_ambient_from_tcp_opt = Some(rx_ambient_from_tcp);
-        let (tx_heating_to_ambient, rx_ambient_from_heating) = mpsc::channel();
-        let (tx_ambient_to_heating, rx_heating_from_ambient) = mpsc::channel();
         let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler) = mpsc::channel();
         let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient) = mpsc::channel();
 
-        // re-use configuration previously create for different component
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
+        let initial_value_ambient_temperature = config.ambient.replacement_value_ambient_temperature;
+        let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
         let mut ambient = Ambient::new(config.ambient);
 
+        let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
+        let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
+        
         scope(|scope| {
             scope.spawn(move || {
                 // mock signal handler
@@ -684,26 +609,6 @@ pub mod tests {
                 let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
                 rx_signal_handler_from_ambient.recv().unwrap();
                 let _ = tx_signal_handler_to_ambient.send(InternalCommand::Terminate);
-            });
-
-            scope.spawn(move || {
-                // mock Heating thread
-                let result_temperature = match tx_heating_to_ambient.send(
-                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
-                    ) {
-                    Ok(()) => {
-                        match rx_heating_from_ambient.recv() {
-                            Ok(c) => { c },
-                            Err(e) => {
-                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
-                    }
-                };
-                assert_eq!(result_temperature, 20.0);
             });
 
             scope.spawn(move || {
@@ -793,14 +698,14 @@ pub mod tests {
                 ambient.execute(
                     &tx_ambient_to_tcp_opt,
                     &rx_ambient_from_tcp_opt,
-                    tx_ambient_to_heating,
-                    rx_ambient_from_heating,
                     tx_ambient_to_data_logger,
                     rx_ambient_from_data_logger,
                     None,
                     None,
                     tx_ambient_to_signal_handler,
                     rx_ambient_from_signal_handler,
+                    mutex_ambient_temperature,
+                    mutex_ambient_humidity,
                 );
 
                 // signal end of test case execution to mock TCP communication thread

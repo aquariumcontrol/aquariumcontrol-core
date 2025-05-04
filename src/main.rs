@@ -576,15 +576,6 @@ fn main() {
     ) = mpsc::channel();
     // *****************************
 
-    // *** heating <=> ambient ***
-    let (tx_heating_to_ambient, rx_ambient_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_ambient_to_heating, rx_heating_from_ambient): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
-    // *****************************
-
     // *** refill <=> data_logger ***
     let (tx_data_logger_to_refill, rx_refill_from_data_logger): (
         Sender<InternalCommand>,
@@ -1085,6 +1076,8 @@ fn main() {
         config.atlas_scientific.replacement_value_conductivity;
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
+    let initial_value_ambient_temperature = config.ambient.replacement_value_ambient_temperature;
+    let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
     let mut ambient = Ambient::new(config.ambient);
 
     let mut controllino = Controllino::new(config.controllino.clone());
@@ -1114,46 +1107,44 @@ fn main() {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
-    let initial_value_water_temperature = config.ds18b20.replacement_value_water_temperature;
-    let initial_value_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
+    let initial_value_ds18b20_water_temperature = config.ds18b20.replacement_value_water_temperature;
+    let initial_value_ds18b20_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         // Mutexes for DS18B20 signals
-        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_water_temperature));
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_ds18b20_water_temperature));
         let mutex_ds18b20_ambient_temperature =
-            Arc::new(Mutex::new(initial_value_ambient_temperature));
+            Arc::new(Mutex::new(initial_value_ds18b20_ambient_temperature));
         let mutex_ds18b20_water_temperature_clone_for_data_logger =
             mutex_ds18b20_water_temperature.clone();
-        let mutex_ds18b20_water_temperature_clone_for_ds18b20 =
-            mutex_ds18b20_water_temperature.clone();
         let mutex_ds18b20_ambient_temperature_clone_for_data_logger =
-            mutex_ds18b20_ambient_temperature.clone();
-        let mutex_ds18b20_ambient_temperature_clone_for_ds18b20 =
             mutex_ds18b20_ambient_temperature.clone();
 
         // Mutexes for Atlas Scientific signals
         let mutex_atlas_scientific_temperature =
             Arc::new(Mutex::new(initial_value_atlas_scientific_temperature));
-        let mutex_atlas_scientific_temperature_clone_for_atlas_scientific =
-            mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_data_logger =
             mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_heating =
             mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_ventilation = mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_ph = Arc::new(Mutex::new(initial_value_atlas_scientific_ph));
-        let mutex_atlas_scientific_ph_clone_for_atlas_scientific =
-            mutex_atlas_scientific_ph.clone();
         let mutex_atlas_scientific_ph_clone_for_data_logger = mutex_atlas_scientific_ph.clone();
         let mutex_atlas_scientific_conductivity =
             Arc::new(Mutex::new(initial_value_atlas_scientific_conductivity));
-        let mutex_atlas_scientific_conductivity_clone_for_atlas_scientific =
-            mutex_atlas_scientific_conductivity.clone();
         let mutex_atlas_scientific_conductivity_clone_for_data_logger =
             mutex_atlas_scientific_conductivity.clone();
+
+        // Mutexes for Ambient
+        let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
+        let mutex_ambient_temperature_clone_for_heating = mutex_ambient_temperature.clone();
+        //let mutex_ambient_temperature_clone_for_data_logger = mutex_ambient_temperature.clone();
+
+        let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
+        //let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1297,9 +1288,9 @@ fn main() {
                 rx_atlas_scientific_from_i2c_interface_opt,
                 tx_atlas_scientific_to_signal_handler,
                 rx_atlas_scientific_from_signal_handler,
-                mutex_atlas_scientific_temperature_clone_for_atlas_scientific,
-                mutex_atlas_scientific_ph_clone_for_atlas_scientific,
-                mutex_atlas_scientific_conductivity_clone_for_atlas_scientific,
+                mutex_atlas_scientific_temperature,
+                mutex_atlas_scientific_ph,
+                mutex_atlas_scientific_conductivity,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1336,14 +1327,14 @@ fn main() {
             ambient.execute(
                 &tx_ambient_to_tcp_opt,
                 &rx_ambient_from_tcp_opt,
-                tx_ambient_to_heating,
-                rx_ambient_from_heating,
                 tx_ambient_to_data_logger,
                 rx_ambient_from_data_logger,
                 tx_ambient_to_dht_opt,
                 rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
+                mutex_ambient_temperature,
+                mutex_ambient_humidity
             );
 
             #[cfg(feature = "debug_main")]
@@ -1438,8 +1429,6 @@ fn main() {
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
-                tx_heating_to_ambient,
-                rx_heating_from_ambient,
                 tx_heating_to_tank_level_switch,
                 rx_heating_from_tank_level_switch,
                 tx_heating_to_controllino,
@@ -1453,6 +1442,7 @@ fn main() {
                 rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
                 mutex_atlas_scientific_temperature_clone_for_heating,
+                mutex_ambient_temperature_clone_for_heating
             );
 
             #[cfg(feature = "debug_main")]
@@ -1574,8 +1564,8 @@ fn main() {
         scope.spawn(move || {
             ds18b20.execute(
                 rx_ds18b20_from_signal_handler,
-                mutex_ds18b20_water_temperature_clone_for_ds18b20,
-                mutex_ds18b20_ambient_temperature_clone_for_ds18b20,
+                mutex_ds18b20_water_temperature,
+                mutex_ds18b20_ambient_temperature,
             );
         });
     });
