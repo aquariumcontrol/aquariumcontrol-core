@@ -37,15 +37,11 @@ impl SqlInterfaceData {
         let null_string = "NULL".to_string();
 
         match value {
-            Some(c) => {
-                match c.is_nan() | c.is_infinite() {
-                    true => null_string,
-                    false => c.to_string(),
-                }
-            }
-            None => {
-                null_string
+            Some(c) => match c.is_nan() | c.is_infinite() {
+                true => null_string,
+                false => c.to_string(),
             },
+            None => null_string,
         }
     }
 
@@ -67,49 +63,48 @@ impl SqlInterfaceData {
         let sql_query_water_temperature_replaced = str::replace(
             sql_query_strings::SQL_QUERY_WRITE_DATA,
             "#TemperatureUnfiltered",
-            &water_temperature_string
+            &water_temperature_string,
         );
 
-        let water_temperature_filtered_string = Self::get_string_from_value(data.water_temperature_filtered);
+        let water_temperature_filtered_string =
+            Self::get_string_from_value(data.water_temperature_filtered);
         let sql_query_water_temperature_filtered_replaced = str::replace(
             &sql_query_water_temperature_replaced,
             "#TemperatureFiltered",
-            &water_temperature_filtered_string
+            &water_temperature_filtered_string,
         );
 
         let ph_string = Self::get_string_from_value(data.ph);
         let sql_query_ph_replaced = str::replace(
             &sql_query_water_temperature_filtered_replaced,
             "#pHUnfiltered",
-            &ph_string
+            &ph_string,
         );
 
         let ph_filtered_string = Self::get_string_from_value(data.ph_filtered);
-        let sql_query_ph_filtered_replaced = str::replace(
-            &sql_query_ph_replaced,
-            "#pHFiltered",
-            &ph_filtered_string
-        );
+        let sql_query_ph_filtered_replaced =
+            str::replace(&sql_query_ph_replaced, "#pHFiltered", &ph_filtered_string);
 
         let conductivity_string = Self::get_string_from_value(data.conductivity);
         let sql_query_conductivity_replaced = str::replace(
             &sql_query_ph_filtered_replaced,
             "#ConductivityUnfiltered",
-            &conductivity_string
+            &conductivity_string,
         );
 
         let conductivity_filtered_string = Self::get_string_from_value(data.conductivity_filtered);
         let sql_query_conductivity_filtered_replaced = str::replace(
             &sql_query_conductivity_replaced,
             "#ConductivityFiltered",
-            &conductivity_filtered_string
+            &conductivity_filtered_string,
         );
 
-        let conductivity_compensated_string = Self::get_string_from_value(data.conductivity_compensated);
+        let conductivity_compensated_string =
+            Self::get_string_from_value(data.conductivity_compensated);
         let sql_query_string_conductivity_compensated_replaced = str::replace(
             &sql_query_conductivity_filtered_replaced,
             "#ConductivityCompensated",
-            &conductivity_compensated_string
+            &conductivity_compensated_string,
         );
 
         let refill_in_progress_string: String;
@@ -168,14 +163,14 @@ impl SqlInterfaceData {
         let sql_query_ambient_temperature_replaced = str::replace(
             &sql_query_surface_ventilation_status_replaced,
             "#AmbTemp",
-            &ambient_temperature_string
+            &ambient_temperature_string,
         );
 
         let ambient_humidity_string = Self::get_string_from_value(data.ambient_humidity);
         let sql_query_ambient_humidity_replaced = str::replace(
             &sql_query_ambient_temperature_replaced,
             "#AmbHum",
-            &ambient_humidity_string
+            &ambient_humidity_string,
         );
 
         let heater_string: String;
@@ -191,18 +186,20 @@ impl SqlInterfaceData {
             },
         );
 
-        let water_temperature_ds18b20_string = Self::get_string_from_value(data.water_temperature_ds18b20);
+        let water_temperature_ds18b20_string =
+            Self::get_string_from_value(data.water_temperature_ds18b20);
         let sql_query_water_temperature_ds18b20_replaced = str::replace(
             &sql_query_string_heater_replaced,
             "#TempWaterDs18B20",
-            &water_temperature_ds18b20_string
+            &water_temperature_ds18b20_string,
         );
 
-        let ambient_temperature_ds18b20_string = Self::get_string_from_value(data.ambient_temperature_ds18b20);
+        let ambient_temperature_ds18b20_string =
+            Self::get_string_from_value(data.ambient_temperature_ds18b20);
         let sql_query_string = str::replace(
             &sql_query_water_temperature_ds18b20_replaced,
             "#TempAmbDs18B20",
-            &ambient_temperature_ds18b20_string
+            &ambient_temperature_ds18b20_string,
         );
 
         println!("Executing query: {}", sql_query_string);

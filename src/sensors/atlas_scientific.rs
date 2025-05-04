@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martinuuu
+/* Copyright 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -7,10 +7,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #![allow(non_snake_case)]
+
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::sensors::i2c_interface::I2cError;
@@ -23,7 +25,7 @@ const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 1;
 
-// max loops for receiving when quit command has been received
+// max loops for receiving when the quit command has been received
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 const RECEIVE_COUNTER_MAX: u32 = 10;
 
@@ -32,7 +34,7 @@ const RECEIVE_COUNTER_MAX: u32 = 10;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct AtlasScientificConfig {
-    /// flag to determine if application shall communicate with hardware directly or via TCP with a simulator
+    /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
     /// replacement value for water temperature in case reading from I2C fails
@@ -46,12 +48,12 @@ pub struct AtlasScientificConfig {
 }
 
 /// Contains the communication Atlas Scientific sensors via I2C.
-/// Alternatively, TCP communication is used when configured to run with simulator.
+/// Alternatively, TCP communication is used when configured to run with the simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
 /// Sensor data is read periodically and stored.
 /// Requests from data logger, ventilation control and heating control are answered with last measured data.
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// creates the channels and sets up threads.
+/// Creates the channels and sets up threads.
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
@@ -92,54 +94,42 @@ pub struct AtlasScientific {
     #[allow(dead_code)]
     pH_invalid: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from signal handler thread    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via channel
-    lock_error_channel_receive_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger thread via channel
-    lock_error_data_logger_response: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from data logger thread  
-    lock_warn_inapplicable_command_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from data logger thread
-    lock_error_invalid_signal_request_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control  thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from heating control thread via the channel
     lock_error_channel_receive_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to heating control thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send the response to heating control thread via the channel
     lock_error_heating_response: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from heating control thread    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the heating control thread
     lock_warn_inapplicable_command_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from heating control thread    
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received an invalid signal request via the channel from the heating control thread
     lock_error_invalid_signal_request_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from ventilation control thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from ventilation control thread via the channel
     lock_error_channel_receive_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to ventilation control thread via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send the response to ventilation control thread via the channel
     lock_error_ventilation_response: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel from ventilation control thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the ventilation control thread
     lock_warn_inapplicable_command_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received invalid signal request via channel from ventilation control thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received an invalid signal request via the channel from the ventilation control thread
     lock_error_invalid_signal_request_ventilation: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about to send request via channel to I2cInterface thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to received via channel from I2cInterface thread
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive via the channel from I2cInterface thread
     lock_error_channel_receive_i2c_interface: bool,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -157,7 +147,7 @@ impl AtlasScientific {
     /// * `config` - configuration data for AtlasScientific
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         AtlasScientific {
-            config: config,
+            config,
             water_temperature: 0.0,
             water_temperature_invalid: true,
             conductivity: 0.0,
@@ -166,10 +156,6 @@ impl AtlasScientific {
             pH_invalid: true,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_error_data_logger_response: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
             lock_error_channel_receive_heating: false,
             lock_error_heating_response: false,
             lock_warn_inapplicable_command_heating: false,
@@ -187,97 +173,11 @@ impl AtlasScientific {
             lock_error_i2c_interface: false,
         }
     }
-
-    /// communication to data logger thread via channel
-    /// # Arguments
-    /// * `tx_to_data_logger` - reference to sender part of channel for sending data to data logger
-    /// * `rx_from_data_logger` - reference to receiver part of channel for receiving command from data logger
-    fn communicate_with_data_logger(
-        &mut self,
-        tx_to_data_logger: &Sender<f32>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        let response_to_data_logger = match d {
-                            AquariumSignal::WaterTemperature => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                self.water_temperature
-                            }
-                            AquariumSignal::Conductivity => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                self.conductivity
-                            }
-                            AquariumSignal::pH => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                self.pH
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                                0.0 // default response to unknown signal request instead of panicking
-                            }
-                        };
-                        _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
-                            Ok(()) => {
-                                self.lock_error_data_logger_response = false;
-                            }
-                            Err(e) => {
-                                if !self.lock_error_data_logger_response {
-                                    error!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                        "responding back to data logger thread failed ({e:?})"
-                                    );
-                                    self.lock_error_data_logger_response = true;
-                                }
-                            }
-                        };
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            error!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
-    }
-
+    
     /// communication to heating thread via channel
     /// # Arguments
-    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
-    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
+    /// * `tx_to_heating` - reference to sender part of the channel for sending data to heating control
+    /// * `rx_from_heating` - reference to receiver part of the channel for receiving command from heating control
     fn communicate_with_ventilation(
         &mut self,
         tx_to_ventilation: &Sender<f32>,
@@ -363,8 +263,8 @@ impl AtlasScientific {
 
     /// communication to heating thread via channel
     /// # Arguments
-    /// * `tx_to_heating` - reference to sender part of channel for sending data to heating control
-    /// * `rx_from_heating` - reference to receiver part of channel for receiving command from heating control
+    /// * `tx_to_heating` - reference to sender part of the channel for sending data to heating control
+    /// * `rx_from_heating` - reference to receiver part of the channel for receiving command from heating control
     fn communicate_with_heating(
         &mut self,
         tx_to_heating: &Sender<f32>,
@@ -450,14 +350,14 @@ impl AtlasScientific {
 
     /// communication with simulator thread via channel
     /// # Arguments
-    /// * `tx_to_tcp_opt` - reference to sender part of channel wrapped in Option for sending command to TcpCommunication
-    /// * `rx_from_tcp_opt` - reference to receiver part of channel wrapped in Option for receiving data from TcpCommunication
+    /// * `tx_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
+    /// * `rx_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
     fn communicate_with_simulator(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<f32>>,
     ) {
-        // unwrap is safe, because tested above
+        // unwrap is safe because tested above
         let tx_to_simulator = tx_to_tcp_opt.as_ref().unwrap();
         let rx_from_simulator = rx_from_tcp_opt.as_ref().unwrap();
 
@@ -510,7 +410,7 @@ impl AtlasScientific {
 
     /// receive and process response from I2cInterface
     /// # Arguments
-    /// * `rx_from_i2c_interface` - reference to receiver part of channel for receiving data from I2cInterface
+    /// * `rx_from_i2c_interface` - reference to the receiver part of the channel for receiving data from I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_i2c_interface(
         &mut self,
@@ -526,7 +426,7 @@ impl AtlasScientific {
                     self.pH_invalid = false;
                     self.conductivity_invalid = false;
                     self.lock_error_i2c_interface = false;
-                    false // allow for next request to be sent
+                    false // allow for the next request to be sent
                 }
                 #[cfg(not(test))]
                 Err(e) => {
@@ -541,14 +441,14 @@ impl AtlasScientific {
                         );
                         self.lock_error_i2c_interface = true;
                     }
-                    false // allow for next request to be sent
+                    false // allow for the next request to be sent
                 }
                 #[cfg(test)]
                 Err(_) => {
                     self.water_temperature_invalid = true;
                     self.pH_invalid = true;
                     self.conductivity_invalid = true;
-                    true // do not allow for next request to be sent
+                    true // do not allow for the next request to be sent
                 }
             },
             Err(e) => {
@@ -561,7 +461,7 @@ impl AtlasScientific {
                         if !self.lock_error_channel_receive_i2c_interface {
                             error!(
                                 target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                "error occured when trying to receive response from I2cInterface ({e:?})"
+                                "error occurred when trying to receive response from I2cInterface ({e:?})"
                             );
                             self.lock_error_channel_receive_i2c_interface = true;
                         }
@@ -594,17 +494,18 @@ impl AtlasScientific {
         rx_from_heating: Receiver<InternalCommand>,
         tx_to_ventilation: Sender<f32>,
         rx_from_ventilation: Receiver<InternalCommand>,
-        tx_to_data_logger: Sender<f32>,
-        rx_from_data_logger: Receiver<InternalCommand>,
         tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
         rx_atlas_scientific_from_i2c_interface_opt: Option<
             Receiver<Result<(f32, f32, f32), I2cError>>,
         >,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
+        mutex_atlas_scientific_water_temperature: Arc<Mutex<f32>>,
+        mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
+        mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
     ) {
-        let sleep_duration_ten_millisec = Duration::from_millis(10);
-        let sleep_duration_one_millisec = Duration::from_millis(1);
+        let sleep_duration_ten_millis = Duration::from_millis(10);
+        let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
         cfg_if::cfg_if! {
@@ -639,7 +540,7 @@ impl AtlasScientific {
 
         loop {
             let (
-                quit_command_received, // request to end the application has been received
+                quit_command_received, // the request to end the application has been received
                 _,
                 _,
             ) = self.process_external_request(&rx_from_signal_handler, None);
@@ -647,7 +548,7 @@ impl AtlasScientific {
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
                     if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
-                        // quit command has been received and there is no pending measurement
+                        // quit command has been received, and there is no pending measurement
                         // no further waiting for Dht is required
                         break;
                     }
@@ -675,7 +576,7 @@ impl AtlasScientific {
                                 state_send_receive =
                                     self.send_request_to_i2c_interface(&tx_to_i2c_interface);
                             } else {
-                                // read from channel if measurement result is available from I2cInterface thread
+                                // read from the channel if the measurement result is available from I2cInterface thread
                                 let rx_from_i2c_interface =
                                     rx_atlas_scientific_from_i2c_interface_opt.as_ref().unwrap();
 
@@ -686,6 +587,19 @@ impl AtlasScientific {
                                     // data could be received successfully
                                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                                     receive_counter = 0;
+                                    {
+                                        let mut mutex_water_temperature =
+                                            mutex_atlas_scientific_water_temperature
+                                                .lock()
+                                                .unwrap();
+                                        let mut mutex_ph =
+                                            mutex_atlas_scientific_ph.lock().unwrap();
+                                        let mut mutex_atlas_scientific =
+                                            mutex_atlas_scientific_conductivity.lock().unwrap();
+                                        *mutex_water_temperature = self.water_temperature;
+                                        *mutex_ph = self.pH;
+                                        *mutex_atlas_scientific = self.conductivity;
+                                    }
                                 } else {
                                     receive_counter = receive_counter.saturating_add(1);
                                 }
@@ -694,6 +608,16 @@ impl AtlasScientific {
                     }
                 } else {
                     self.communicate_with_simulator(&tx_to_tcp_opt, &rx_from_tcp_opt);
+                    {
+                        let mut mutex_water_temperature =
+                            mutex_atlas_scientific_water_temperature.lock().unwrap();
+                        let mut mutex_ph = mutex_atlas_scientific_ph.lock().unwrap();
+                        let mut mutex_atlas_scientific =
+                            mutex_atlas_scientific_conductivity.lock().unwrap();
+                        *mutex_water_temperature = self.water_temperature;
+                        *mutex_ph = self.pH;
+                        *mutex_atlas_scientific = self.conductivity;
+                    }
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
             }
@@ -701,9 +625,8 @@ impl AtlasScientific {
             // answer requests from outside using measured data
             self.communicate_with_heating(&tx_to_heating, &rx_from_heating);
             self.communicate_with_ventilation(&tx_to_ventilation, &rx_from_ventilation);
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
 
-            spin_sleeper.sleep(sleep_duration_ten_millisec);
+            spin_sleeper.sleep(sleep_duration_ten_millis);
         }
 
         _ = match tx_to_signal_handler.send(true) {
@@ -716,9 +639,9 @@ impl AtlasScientific {
             }
         };
 
-        // this thread has channel connection to underlying threads (GpioHandler).
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads (GpioHandler).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
@@ -750,31 +673,7 @@ impl AtlasScientific {
                     false
                 }
             };
-            spin_sleeper.sleep(sleep_duration_one_millisec);
+            spin_sleeper.sleep(sleep_duration_one_millis);
         }
     }
-}
-
-#[cfg(test)]
-pub mod tests {
-    /*
-    use chrono::DateTime;
-    use chrono::Local;
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::sync::{Arc, Mutex};
-    use std::thread::scope;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-    use crate::atlas_scientific::AtlasScientific;
-    use crate::atlas_scientific::LOG_TARGET_ATLAS_SCIENTIFIC;
-    use crate::channel_content::AquariumSignal;
-    use crate::channel_content::InternalCommand;
-    use crate::config::read_config_file;
-    use crate::config::ConfigData;
-    use crate::proc_ext_req::ProcessExternalRequestTrait;
-    */
-
-    // @todo: add test cases
 }

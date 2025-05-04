@@ -59,7 +59,7 @@ pub struct RecorderDataFrame {
 
     /// status bit indicating that the heater is switched on
     pub heater_status: Option<bool>,
-    
+
     /// measured water temperature from DS18B20 sensor in °C
     pub water_temperature_ds18b20: Option<f32>,
 
@@ -205,7 +205,7 @@ impl RecorderDataFrame {
         target_ambient_humidity: Option<f32>,
         target_heater_status: Option<bool>,
         target_water_temperature_ds18b20: Option<f32>,
-        target_ambient_temperature_ds18b20: Option<f32>
+        target_ambient_temperature_ds18b20: Option<f32>,
     ) {
         assert_eq!(self.water_temperature, target_water_temperature);
         assert_eq!(
@@ -239,7 +239,13 @@ impl RecorderDataFrame {
         assert_eq!(self.ambient_temperature, target_ambient_temperature);
         assert_eq!(self.ambient_humidity, target_ambient_humidity);
         assert_eq!(self.heater_status, target_heater_status);
-        assert_eq!(self.water_temperature_ds18b20, target_water_temperature_ds18b20);
-        assert_eq!(self.ambient_temperature_ds18b20, target_ambient_temperature_ds18b20);
+        assert_eq!(
+            self.water_temperature_ds18b20,
+            target_water_temperature_ds18b20
+        );
+        assert_eq!(
+            self.ambient_temperature_ds18b20,
+            target_ambient_temperature_ds18b20
+        );
     }
 }

@@ -24,13 +24,16 @@ pub mod tests {
         /// position of tank level switch stabilized
         TankLevelSwitchPositionStabilized(bool),
 
+        #[allow(unused)]
         /// water temperature in °C
         WaterTemperature(f32),
 
+        #[allow(unused)]
         #[allow(non_camel_case_types)]
         /// pH Value
         pH(f32),
 
+        #[allow(unused)]
         /// conductivity im uS/cm
         Conductivity(f32),
 

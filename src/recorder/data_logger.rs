@@ -100,10 +100,10 @@ pub struct DataLoggerConfig {
 
     /// output file name (in ramdisk) for the current refill pump status
     output_file_name_refill_in_progress: String,
-    
+
     /// output file name (in ramdisk) for the water temperature measured by DS18B20 sensor
     output_file_name_water_temperature_ds18b20: String,
-    
+
     /// output file name (in ramdisk) for the ambient temperature measured by DS18B20 sensor
     output_file_name_ambient_temperature_ds18b20: String,
 }
@@ -192,10 +192,10 @@ pub struct DataLogger {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
-    
+
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature from DS18B20 sensor to disk
     lock_error_output_signal_water_temperature_ds18b20: bool,
-    
+
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature from DS18B20 sensor to disk
     lock_error_output_signal_ambient_temperature_ds18b20: bool,
 }
@@ -244,7 +244,9 @@ impl DataLogger {
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
                 || config.output_file_name_water_temperature_ds18b20.is_empty()
-                || config.output_file_name_ambient_temperature_ds18b20.is_empty()
+                || config
+                    .output_file_name_ambient_temperature_ds18b20
+                    .is_empty()
             {
                 panic!(
                     "{}: one of the output file names is empty.",
@@ -524,146 +526,6 @@ impl DataLogger {
         lock_error_output_state
     }
 
-    /// Get information from AtlasScientific thread
-    /// # Arguments    
-    /// * `water_temperature` - reference to variable for storing signal
-    /// * `ph` - reference to variable for storing signal
-    /// * `conductivity` - reference to variable for storing signal
-    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of the channel
-    /// * `tx_to_atlas_scientific` - reference to sender part of the channel for communication to Atlas Scientific
-    /// * `rx_from_atlas_scientific` - reference to receiver part of the channel for communication from Atlas Scientific
-    fn update_atlas_scientific_signals(
-        &mut self,
-        water_temperature: &mut Option<f32>,
-        ph: &mut Option<f32>,
-        conductivity: &mut Option<f32>,
-        atlas_scientific_channel_disconnected: &mut bool,
-        tx_to_atlas_scientific: &Sender<InternalCommand>,
-        rx_from_atlas_scientific: &Receiver<f32>,
-    ) {
-        if !*atlas_scientific_channel_disconnected {
-            #[cfg(feature = "debug_data_logger")]
-            let start_time_atlas_scientific = SystemTime::now();
-
-            // send the request for water temperature
-            match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
-                AquariumSignal::WaterTemperature,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    *water_temperature = match rx_from_atlas_scientific.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_signal_water_temperature = self.output_signal(
-                                c,
-                                AquariumSignal::WaterTemperature,
-                                &self.config.output_file_name_water_temperature,
-                                self.lock_error_output_signal_water_temperature,
-                            );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Atlas Scientific thread for water temperature failed ({e:?})"
-                            );
-                            *atlas_scientific_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
-                    );
-                    *atlas_scientific_channel_disconnected = true;
-                }
-            }
-
-            // send the request for pH
-            match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(AquariumSignal::pH)) {
-                Ok(_) => {
-                    // now listen for the response
-                    *ph = match rx_from_atlas_scientific.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_signal_pH = self.output_signal(
-                                c,
-                                AquariumSignal::pH,
-                                &self.config.output_file_name_pH,
-                                self.lock_error_output_signal_pH,
-                            );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Atlas Scientific thread for pH failed ({e:?})"
-                            );
-                            *atlas_scientific_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to Atlas Scientific thread when requesting pH failed ({e:?})"
-                    );
-                    *atlas_scientific_channel_disconnected = true;
-                }
-            }
-
-            // send the request for conductivity
-            match tx_to_atlas_scientific
-                .send(InternalCommand::RequestSignal(AquariumSignal::Conductivity))
-            {
-                Ok(_) => {
-                    // now listen for the response
-                    *conductivity = match rx_from_atlas_scientific.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_signal_conductivity = self.output_signal(
-                                c,
-                                AquariumSignal::Conductivity,
-                                &self.config.output_file_name_conductivity,
-                                self.lock_error_output_signal_conductivity,
-                            );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            *atlas_scientific_channel_disconnected = true;
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Atlas Scientific thread for conductivity failed ({e:?})"
-                            );
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to Atlas Scientific thread when requesting conductivity failed ({e:?})"
-                    );
-                    *atlas_scientific_channel_disconnected = true;
-                }
-            }
-            #[cfg(feature = "debug_data_logger")]
-            {
-                let stop_time_atlas_scientific = SystemTime::now();
-                let execution_duration_atlas_scientific_millis = stop_time_atlas_scientific
-                    .duration_since(start_time_atlas_scientific)
-                    .unwrap()
-                    .as_millis()
-                    as u64;
-                debug!(
-                    target: LOG_TARGET_DATA_LOGGER,
-                    "communication with atlas_scientific took {} ms.",
-                    execution_duration_atlas_scientific_millis
-                );
-            }
-        }
-    }
-
     /// Get information from Ambient thread
     /// # Arguments
     /// * `ambient_temperature` - reference to variable for storing signal
@@ -921,8 +783,6 @@ impl DataLogger {
     /// # Arguments
     /// * `tx_to_ambient` - reference to sender part of channel for communication to Ambient
     /// * `rx_from_ambient` - reference to receiver part of channel for communication from Ambient
-    /// * `tx_to_atlas_scientific` - reference to sender part of channel for communication to Atlas Scientific
-    /// * `rx_from_atlas_scientific` - reference to receiver part of channel for communication from Atlas Scientific
     /// * `tx_to_tank_level_switch` - reference to sender part of channel for communication to Tank Level Switch
     /// * `rx_from_tank_level_switch` - reference to receiver part of channel for communication from Tank Level Switch
     /// * `tx_to_refill` - reference to sender part of channel for communication to Refill
@@ -951,8 +811,6 @@ impl DataLogger {
         &mut self,
         tx_to_ambient: &Sender<InternalCommand>,
         rx_from_ambient: &Receiver<f32>,
-        tx_to_atlas_scientific: &Sender<InternalCommand>,
-        rx_from_atlas_scientific: &Receiver<f32>,
         tx_to_tank_level_switch: &Sender<InternalCommand>,
         rx_from_tank_level_switch: &Receiver<bool>,
         tx_to_refill: &Sender<InternalCommand>,
@@ -967,10 +825,6 @@ impl DataLogger {
         heating_channel_disconnected: &mut bool,
         ventilation_is_on: &mut bool,
         ventilation_channel_disconnected: &mut bool,
-        water_temperature: &mut Option<f32>,
-        ph: &mut Option<f32>,
-        conductivity: &mut Option<f32>,
-        atlas_scientific_channel_disconnected: &mut bool,
         ambient_temperature: &mut Option<f32>,
         ambient_humidity: &mut Option<f32>,
         ambient_channel_disconnected: &mut bool,
@@ -1008,16 +862,6 @@ impl DataLogger {
             self.lock_error_output_state_ventilation_is_on,
         );
 
-        //*** communication with Atlas Scientific thread ***
-        self.update_atlas_scientific_signals(
-            water_temperature,
-            ph,
-            conductivity,
-            atlas_scientific_channel_disconnected,
-            tx_to_atlas_scientific,
-            rx_from_atlas_scientific,
-        );
-
         //*** communication with Ambient thread ***
         self.update_ambient_signals(
             ambient_temperature,
@@ -1036,8 +880,107 @@ impl DataLogger {
             rx_from_tank_level_switch,
         );
     }
+    /// Read values of Atlas Scientific from Mutex and write them to RAM disk
+    /// # Arguments
+    /// * `mutex_temperature` - Mutex for water temperature
+    /// * `mutex_ph` - Mutex for pH
+    /// * `mutex_conductivity` - Mutex for conductivity
+    /// * `temperature` - Reference to temperature variable
+    /// * `ph` - Reference to pH variable
+    /// * `conductivity` - Reference to conductivity variable
+    fn update_atlas_scientific_signals(
+        &mut self,
+        mutex_temperature: Arc<Mutex<f32>>,
+        mutex_ph: Arc<Mutex<f32>>,
+        mutex_conductivity: Arc<Mutex<f32>>,
+        temperature: &mut Option<f32>,
+        ph: &mut Option<f32>,
+        conductivity: &mut Option<f32>,
+    ) {
+        {
+            // internal scope to limit lifetime of mutex lock
+            *temperature = match mutex_temperature.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_water_temperature = self.output_signal(
+                        *c,
+                        AquariumSignal::WaterTemperature,
+                        &self.config.output_file_name_water_temperature,
+                        self.lock_error_output_signal_water_temperature,
+                    );
+                    Some(*c)
+                }
+                Err(_) => None,
+            };
+            *ph = match mutex_ph.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_pH = self.output_signal(
+                        *c,
+                        AquariumSignal::pH,
+                        &self.config.output_file_name_pH,
+                        self.lock_error_output_signal_pH,
+                    );
+                    Some(*c)
+                }
+                Err(_) => None,
+            };
+            *conductivity = match mutex_conductivity.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_conductivity = self.output_signal(
+                        *c,
+                        AquariumSignal::Conductivity,
+                        &self.config.output_file_name_conductivity,
+                        self.lock_error_output_signal_conductivity,
+                    );
+                    Some(*c)
+                }
+                Err(_) => None,
+            };
+        }
+    }
 
-    /// calculate filtered values and output them to (RAM disk) files
+    /// Read values of DS18B20 sensor from Mutex and write them to RAM disk
+    /// # Arguments
+    /// * `mutex_water_temperature` - Mutex for water temperature
+    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
+    /// * `water_temperature` - Reference to water temperature variable
+    /// * `ambient_temperature` - Reference to ambient temperature variable
+    fn update_ds18b20_signals(
+        &mut self,
+        mutex_water_temperature: Arc<Mutex<f32>>,
+        mutex_ambient_temperature: Arc<Mutex<f32>>,
+        water_temperature: &mut Option<f32>,
+        ambient_temperature: &mut Option<f32>,
+    ) {
+        {
+            // internal scope to limit lifetime of mutex lock
+            *water_temperature = match mutex_water_temperature.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_water_temperature_ds18b20 = self.output_signal(
+                        *c,
+                        AquariumSignal::WaterTemperature,
+                        &self.config.output_file_name_water_temperature_ds18b20,
+                        self.lock_error_output_signal_water_temperature_ds18b20,
+                    );
+                    Some(*c)
+                }
+                Err(_) => None,
+            };
+            *ambient_temperature = match mutex_ambient_temperature.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_ambient_temperature_ds18b20 = self.output_signal(
+                        *c,
+                        AquariumSignal::AmbientTemperature,
+                        &self.config.output_file_name_ambient_temperature_ds18b20,
+                        self.lock_error_output_signal_ambient_temperature_ds18b20,
+                    );
+                    Some(*c)
+                }
+                Err(_) => None,
+            };
+        }
+    }
+
+    /// Calculate filtered values and output them to (RAM disk) files
     /// # Arguments
     /// * `water_temperature` - measured water temperature wrapped in Option
     /// * `ph` - measured ph temperature wrapped in Option
@@ -1134,8 +1077,6 @@ impl DataLogger {
     /// * `sql_interface_data` - Interface to SQL database for manipulation of data table
     /// * `tx_to_ambient` - Sender part of channel for communication to Ambient
     /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient
-    /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific
-    /// * `rx_from_atlas_scientific` - Receiver part of channel for communication from Atlas Scientific
     /// * `tx_to_tank_level_switch` - Sender part of channel for communication to Tank Level Switch
     /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from Tank Level Switch
     /// * `tx_to_refill` - Sender part of channel for communication to Refill
@@ -1147,15 +1088,16 @@ impl DataLogger {
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     /// * `mutex_water_temperature_ds18b20` - Mutex for water temperature from DS18B20 sensor
-    /// * `mutex_ambient_temperature_ds18b20` - Mutex for ambient temperature from DS18B20 sensor                
+    /// * `mutex_ambient_temperature_ds18b20` - Mutex for ambient temperature from DS18B20 sensor
+    /// * `mutex_atlas_scientific_temperature` - Mutex for temperature from Atlas Scientific
+    /// * `mutex_atlas_scientific_ph` - Mutex for pH from Atlas Scientific
+    /// * `mutex_atlas_scientific_conductivity` - Mutex for conductivity DS18B20 sensor
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
         tx_to_ambient: Sender<InternalCommand>,
         rx_from_ambient: Receiver<f32>,
-        tx_to_atlas_scientific: Sender<InternalCommand>,
-        rx_from_atlas_scientific: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
         rx_from_tank_level_switch: Receiver<bool>,
         tx_to_refill: Sender<InternalCommand>,
@@ -1168,13 +1110,16 @@ impl DataLogger {
         rx_from_signal_handler: Receiver<InternalCommand>,
         mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
         mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
+        mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
+        mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
+        mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut i;
 
         // define and initialize with values which will be overwritten in the first iteration
-        let mut water_temperature: Option<f32> = Some(0.0);
+        let mut water_temperature: Option<f32> = Some(10.0);
         let mut ph: Option<f32> = Some(0.0);
         let mut conductivity: Option<f32> = Some(0.0);
         let mut ambient_temperature: Option<f32> = Some(0.0);
@@ -1189,21 +1134,18 @@ impl DataLogger {
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
         let mut tank_level_switch_channel_disconnected = false;
-        let mut atlas_scientific_channel_disconnected = false;
         let mut ambient_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
-        let mut water_temperature_ds18b20: Option<f32>;
-        let mut ambient_temperature_ds18b20: Option<f32>;
-        
+        let mut water_temperature_ds18b20: Option<f32> = Some(0.0);
+        let mut ambient_temperature_ds18b20: Option<f32> = Some(0.0);
+
         loop {
             // update signals via channel communication
             self.update_signals(
                 &tx_to_ambient,
                 &rx_from_ambient,
-                &tx_to_atlas_scientific,
-                &rx_from_atlas_scientific,
                 &tx_to_tank_level_switch,
                 &rx_from_tank_level_switch,
                 &tx_to_refill,
@@ -1218,10 +1160,6 @@ impl DataLogger {
                 &mut heating_channel_disconnected,
                 &mut ventilation_is_on,
                 &mut ventilation_channel_disconnected,
-                &mut water_temperature,
-                &mut ph,
-                &mut conductivity,
-                &mut atlas_scientific_channel_disconnected,
                 &mut ambient_temperature,
                 &mut ambient_humidity,
                 &mut ambient_channel_disconnected,
@@ -1229,36 +1167,24 @@ impl DataLogger {
                 &mut tank_level_switch_invalid,
                 &mut tank_level_switch_channel_disconnected,
             );
-            
-            // update signals by accessing mutex for DS18B20 sensor signals
-            {
-                // internal scope to limit lifetime of mutex lock
-                water_temperature_ds18b20 = match mutex_water_temperature_ds18b20.lock() {
-                    Ok(c) => {
-                        self.lock_error_output_signal_water_temperature_ds18b20 = self.output_signal(
-                            *c,
-                            AquariumSignal::WaterTemperature,
-                            &self.config.output_file_name_water_temperature_ds18b20,
-                            self.lock_error_output_signal_water_temperature_ds18b20,
-                        );
-                        Some(*c)
-                    },
-                    Err(_) => None,
-                };
-                ambient_temperature_ds18b20 = match mutex_ambient_temperature_dsb18b20.lock() {
-                    Ok(c) => {
-                        self.lock_error_output_signal_ambient_temperature_ds18b20 = self.output_signal(
-                            *c,
-                            AquariumSignal::AmbientTemperature,
-                            &self.config.output_file_name_ambient_temperature_ds18b20,
-                            self.lock_error_output_signal_ambient_temperature_ds18b20,
-                        );
-                        Some(*c)
-                    },
-                    Err(_) => None,
-                };
-            }
 
+            // update signals by accessing mutex for DS18B20 sensor signals
+            self.update_ds18b20_signals(
+                mutex_water_temperature_ds18b20.clone(),
+                mutex_ambient_temperature_dsb18b20.clone(),
+                &mut water_temperature_ds18b20,
+                &mut ambient_temperature_ds18b20,
+            );
+
+            // update signals by accessing mutex for Atlas Scientific signals
+            self.update_atlas_scientific_signals(
+                mutex_atlas_scientific_temperature.clone(),
+                mutex_atlas_scientific_ph.clone(),
+                mutex_atlas_scientific_conductivity.clone(),
+                &mut water_temperature,
+                &mut ph,
+                &mut conductivity,
+            );
             let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
                 self.calculate_filtered_signals(water_temperature, ph, conductivity);
 
@@ -1340,8 +1266,6 @@ impl DataLogger {
                     self.update_signals(
                         &tx_to_ambient,
                         &rx_from_ambient,
-                        &tx_to_atlas_scientific,
-                        &rx_from_atlas_scientific,
                         &tx_to_tank_level_switch,
                         &rx_from_tank_level_switch,
                         &tx_to_refill,
@@ -1356,16 +1280,20 @@ impl DataLogger {
                         &mut heating_channel_disconnected,
                         &mut ventilation_is_on,
                         &mut ventilation_channel_disconnected,
-                        &mut water_temperature,
-                        &mut ph,
-                        &mut conductivity,
-                        &mut atlas_scientific_channel_disconnected,
                         &mut ambient_temperature,
                         &mut ambient_humidity,
                         &mut ambient_channel_disconnected,
                         &mut tank_level_switch_position,
                         &mut tank_level_switch_invalid,
                         &mut tank_level_switch_channel_disconnected,
+                    );
+
+                    // update signals by accessing mutex for DS18B20 sensor signals
+                    self.update_ds18b20_signals(
+                        mutex_water_temperature_ds18b20.clone(),
+                        mutex_ambient_temperature_dsb18b20.clone(),
+                        &mut water_temperature_ds18b20,
+                        &mut ambient_temperature_ds18b20,
                     );
                 }
                 cycle_time_exceeded = false;
@@ -1436,13 +1364,9 @@ impl DataLogger {
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::{fs, sync::mpsc, thread, time::Duration};
-    use std::sync::{Arc, Mutex};
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
     use crate::stubs::mock_ambient::tests::mock_ambient;
-    use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
     use crate::stubs::mock_refill::tests::mock_refill;
@@ -1452,6 +1376,9 @@ pub mod tests {
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use spin_sleep::SpinSleeper;
+    use std::sync::{Arc, Mutex};
+    use std::{fs, sync::mpsc, thread, time::Duration};
 
     fn assert_output_file_contents(
         data_logger_config: &DataLoggerConfig,
@@ -1611,10 +1538,6 @@ pub mod tests {
         // channels for communication with the test environment
         let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
         let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
-        let (tx_data_logger_to_atlas_scientific, rx_atlas_scientific_from_data_logger) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_data_logger, rx_data_logger_from_atlas_scientific) =
-            mpsc::channel();
         let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
@@ -1639,13 +1562,10 @@ pub mod tests {
             mpsc::channel();
         let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
         let (tx_test_environment_to_refill, rx_refill_from_test_environment) = mpsc::channel();
-        let (tx_test_environment_to_atlas_scientific, rx_atlas_scientific_from_test_environment) =
-            mpsc::channel();
         let (tx_test_environment_to_ambient, rx_ambient_from_test_environment) = mpsc::channel();
 
         let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
         let tx_signal_handler_to_ambient = tx_data_logger_to_ambient.clone();
-        let tx_signal_handler_to_atlas_scientific = tx_data_logger_to_atlas_scientific.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1670,6 +1590,21 @@ pub mod tests {
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
         let mut data_logger = DataLogger::new(config.data_logger);
 
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(10.0));
+        let mutex_atlas_scientific_temperature_clone_for_data_logger =
+            mutex_atlas_scientific_temperature.clone();
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(11.0));
+        let mutex_atlas_scientific_ph_clone_for_data_logger = mutex_atlas_scientific_ph.clone();
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(12.0));
+        let mutex_atlas_scientific_conductivity_clone_for_data_logger =
+            mutex_atlas_scientific_conductivity.clone();
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(15.0));
+        let mutex_ds18b20_water_temperature_clone_for_data_logger =
+            mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(16.0));
+        let mutex_ds18b20_ambient_temperature_clone_for_data_logger =
+            mutex_ds18b20_ambient_temperature.clone();
+
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1683,25 +1618,32 @@ pub mod tests {
                 let _ = tx_test_environment_to_ventilation.send(TestCommand::UpdateSignal(
                     MockSignal::VentilationControlStatus(true),
                 ));
-                let _ = tx_test_environment_to_atlas_scientific.send(TestCommand::UpdateSignal(
-                    MockSignal::WaterTemperature(29.0),
-                ));
+                {
+                    let mut water_temperature = mutex_atlas_scientific_temperature.lock().unwrap();
+                    *water_temperature = 29.0;
+                }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 let _ = tx_test_environment_to_heating.send(TestCommand::UpdateSignal(
                     MockSignal::HeatingControlStatus(true),
                 ));
-                let _ = tx_test_environment_to_atlas_scientific
-                    .send(TestCommand::UpdateSignal(MockSignal::pH(7.0)));
+
+                {
+                    let mut ph = mutex_atlas_scientific_ph.lock().unwrap();
+                    *ph = 7.0;
+                }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 let _ = tx_test_environment_to_refill.send(TestCommand::UpdateSignal(
                     MockSignal::RefillPumpStatus(true),
                 ));
-                let _ = tx_test_environment_to_atlas_scientific
-                    .send(TestCommand::UpdateSignal(MockSignal::Conductivity(50000.0)));
+
+                {
+                    let mut conductivity = mutex_atlas_scientific_conductivity.lock().unwrap();
+                    *conductivity = 50000.0;
+                }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
@@ -1721,6 +1663,13 @@ pub mod tests {
                     .send(TestCommand::UpdateSignal(MockSignal::AmbientHumidity(66.0)));
 
                 spin_sleeper.sleep(sleep_duration_1_second);
+
+                {
+                    let mut water_temperature_ds18b20 = mutex_ds18b20_water_temperature.lock().unwrap();
+                    *water_temperature_ds18b20 = 15.5;
+                    let mut ambient_temperature_ds18b20 = mutex_ds18b20_ambient_temperature.lock().unwrap();
+                    *ambient_temperature_ds18b20 = 16.5;
+                }
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 // cease operation of the test object
@@ -1730,7 +1679,6 @@ pub mod tests {
                 // signal end of test case execution to mock threads
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_atlas_scientific.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
@@ -1804,21 +1752,6 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Atlas Scientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_data_logger,
-                    &rx_atlas_scientific_from_data_logger,
-                    Some(&rx_atlas_scientific_from_test_environment),
-                    10.0, // initial water temperature
-                    12.0, // initial conductivity
-                    11.0, // initial pH
-                );
-            })
-            .unwrap();
-
         // thread for mock Ambient
         let join_handle_mock_ambient = thread::Builder::new()
             .name("mock_ambient".to_string())
@@ -1837,8 +1770,6 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_100_millis = Duration::from_millis(100);
         spin_sleeper.sleep(sleep_duration_100_millis);
-        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(config.ds18b20.replacement_value_water_temperature));
-        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(config.ds18b20.replacement_value_ambient_temperature));
 
         // thread for test object and asserts
         let join_handle_test_object = thread::Builder::new()
@@ -1849,8 +1780,6 @@ pub mod tests {
                     sql_interface_data,
                     tx_data_logger_to_ambient,
                     rx_data_logger_from_ambient,
-                    tx_data_logger_to_atlas_scientific,
-                    rx_data_logger_from_atlas_scientific,
                     tx_data_logger_to_tank_level_switch,
                     rx_data_logger_from_tank_level_switch,
                     tx_data_logger_to_refill,
@@ -1861,8 +1790,11 @@ pub mod tests {
                     rx_data_logger_from_ventilation,
                     tx_data_logger_to_signal_handler,
                     rx_data_logger_from_signal_handler,
-                    mutex_ds18b20_water_temperature,
-                    mutex_ds18b20_ambient_temperature
+                    mutex_ds18b20_water_temperature_clone_for_data_logger,
+                    mutex_ds18b20_ambient_temperature_clone_for_data_logger,
+                    mutex_atlas_scientific_temperature_clone_for_data_logger,
+                    mutex_atlas_scientific_ph_clone_for_data_logger,
+                    mutex_atlas_scientific_conductivity_clone_for_data_logger,
                 );
 
                 println!("Printing recorded data:");
@@ -1886,15 +1818,15 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.5),      // target DS18B20 water temperature
+                    Some(16.5),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #5
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #5");
                 data_frame.assert(
-                    Some(29.0),      // target_water_temperature
+                    Some(29.0),                                                 // target_water_temperature
                     Some(28.25),     // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
                     Some(7.078125),  // target_water_ph_filtered
@@ -1908,15 +1840,15 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),      // target DS18B20 water temperature
+                    Some(16.0),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #4
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #4");
                 data_frame.assert(
-                    Some(29.0),      // target_water_temperature
+                    Some(29.0),                                                 // target_water_temperature
                     Some(27.5),      // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
                     Some(7.15625),   // target_water_ph_filtered
@@ -1930,15 +1862,15 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(14.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),      // target DS18B20 water temperature
+                    Some(16.0),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #3
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #3");
                 data_frame.assert(
-                    Some(29.0),     // target_water_temperature
+                    Some(29.0),                                                 // target_water_temperature
                     Some(26.0),     // target_water_temperature_filtered
                     Some(7.0),      // target_water_ph
                     Some(7.3125),   // target_water_ph_filtered
@@ -1952,15 +1884,15 @@ pub mod tests {
                     Some(13.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
                     Some(true),     // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),     // target DS18B20 water temperature
+                    Some(16.0),     // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #2
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #2");
                 data_frame.assert(
-                    Some(29.0),  // target_water_temperature
+                    Some(29.0),                                                 // target_water_temperature
                     Some(23.0),  // target_water_temperature_filtered
                     Some(7.0),   // target_water_ph
                     Some(7.625), // target_water_ph_filtered
@@ -1974,15 +1906,15 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(true),  // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),  // target DS18B20 water temperature
+                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #1
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #1");
                 data_frame.assert(
-                    Some(29.0),  // target_water_temperature
+                    Some(29.0),                                                 // target_water_temperature
                     Some(17.0),  // target_water_temperature_filtered
                     Some(11.0),  // target_water_ph
                     Some(8.25),  // target_water_ph_filtered
@@ -1996,8 +1928,8 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),  // target DS18B20 water temperature
+                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #0
@@ -2018,8 +1950,8 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
-                    Some(config.ds18b20.replacement_value_water_temperature), // target_water_temperature_ds18b20
-                    Some(config.ds18b20.replacement_value_ambient_temperature), // target_water_temperature_ds18b20
+                    Some(15.0),  // target DS18B20 water temperature
+                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 assert_output_file_contents(
@@ -2039,8 +1971,8 @@ pub mod tests {
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
                     true,                 // target_heater_status
-                    config.ds18b20.replacement_value_water_temperature,
-                    config.ds18b20.replacement_value_ambient_temperature
+                    15.5, // target DS18B20 water temperature
+                    16.5, // target DS18B20 ambient temperature
                 );
             })
             .unwrap();
@@ -2054,9 +1986,6 @@ pub mod tests {
         join_handle_mock_heating
             .join()
             .expect("Mock heating thread did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific thread did not finish.");
         join_handle_mock_ambient
             .join()
             .expect("Mock Ambient thread did not finish.");

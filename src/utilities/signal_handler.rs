@@ -870,13 +870,13 @@ pub mod tests {
             InternalCommand::Terminate
         );
         // no response to termination request
-        
+
         assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
-        
+
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
