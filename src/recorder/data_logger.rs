@@ -528,105 +528,44 @@ impl DataLogger {
 
     /// Get information from Ambient thread
     /// # Arguments
+    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
+    /// * `mutex_humidity` - reference to receiver part of the channel for communication from Ambient
     /// * `ambient_temperature` - reference to variable for storing signal
-    /// * `ambient_humidity` - reference to variable for storing signal
-    /// * `ambient_channel_disconnected` - reference to variable for storing health status of the channel
-    /// * `tx_to_ambient` - reference to sender part of the channel for communication to Ambient
-    /// * `rx_from_ambient` - reference to receiver part of the channel for communication from Ambient
+    /// * `humidity` - reference to variable for storing signal
+
     fn update_ambient_signals(
         &mut self,
+        mutex_ambient_temperature: Arc<Mutex<f32>>,
+        mutex_humidity: Arc<Mutex<f32>>,
         ambient_temperature: &mut Option<f32>,
-        ambient_humidity: &mut Option<f32>,
-        ambient_channel_disconnected: &mut bool,
-        tx_to_ambient: &Sender<InternalCommand>,
-        rx_from_ambient: &Receiver<f32>,
+        humidity: &mut Option<f32>,
     ) {
-        if !*ambient_channel_disconnected {
-            #[cfg(feature = "debug_data_logger")]
-            let start_time_ambient = SystemTime::now();
-
-            // send request for ambient temperature
-            match tx_to_ambient.send(InternalCommand::RequestSignal(
-                AquariumSignal::AmbientTemperature,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    *ambient_temperature = match rx_from_ambient.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_signal_ambient_temperature = self.output_signal(
-                                c,
-                                AquariumSignal::AmbientTemperature,
-                                &self.config.output_file_name_ambient_temperature,
-                                self.lock_error_output_signal_ambient_temperature,
-                            );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Ambient thread for temperature failed ({e:?})"
-                            );
-                            *ambient_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to Ambient thread when requesting ambient temperature failed ({e:?})"
+        {
+            // internal scope to limit lifetime of mutex lock
+            *ambient_temperature = match mutex_ambient_temperature.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_ambient_temperature = self.output_signal(
+                        *c,
+                        AquariumSignal::AmbientTemperature,
+                        &self.config.output_file_name_ambient_temperature,
+                        self.lock_error_output_signal_ambient_temperature,
                     );
-                    *ambient_channel_disconnected = true;
+                    Some(*c)
                 }
-            }
-
-            // send request for ambient humidity
-            match tx_to_ambient.send(InternalCommand::RequestSignal(
-                AquariumSignal::AmbientHumidity,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    *ambient_humidity = match rx_from_ambient.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_signal_humidity = self.output_signal(
-                                c,
-                                AquariumSignal::AmbientHumidity,
-                                &self.config.output_file_name_humidity,
-                                self.lock_error_output_signal_humidity,
-                            );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Ambient thread for humidity failed ({e:?})"
-                            );
-                            *ambient_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to Ambient thread when requesting ambient humidity failed ({e:?})"
+                Err(_) => None,
+            };
+            *humidity = match mutex_humidity.lock() {
+                Ok(c) => {
+                    self.lock_error_output_signal_humidity = self.output_signal(
+                        *c,
+                        AquariumSignal::AmbientHumidity,
+                        &self.config.output_file_name_humidity,
+                        self.lock_error_output_signal_humidity,
                     );
-                    *ambient_channel_disconnected = true;
+                    Some(*c)
                 }
-            }
-            #[cfg(feature = "debug_data_logger")]
-            {
-                let stop_time_ambient = SystemTime::now();
-                let execution_duration_ambient_millis = stop_time_ambient
-                    .duration_since(start_time_ambient)
-                    .unwrap()
-                    .as_millis() as u64;
-                debug!(
-                    target: LOG_TARGET_DATA_LOGGER,
-                    "communication with ambient took {} ms.",
-                    execution_duration_ambient_millis
-                );
-            }
+                Err(_) => None,
+            };
         }
     }
 
@@ -809,8 +748,6 @@ impl DataLogger {
     /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of channel
     fn update_signals(
         &mut self,
-        tx_to_ambient: &Sender<InternalCommand>,
-        rx_from_ambient: &Receiver<f32>,
         tx_to_tank_level_switch: &Sender<InternalCommand>,
         rx_from_tank_level_switch: &Receiver<bool>,
         tx_to_refill: &Sender<InternalCommand>,
@@ -825,9 +762,6 @@ impl DataLogger {
         heating_channel_disconnected: &mut bool,
         ventilation_is_on: &mut bool,
         ventilation_channel_disconnected: &mut bool,
-        ambient_temperature: &mut Option<f32>,
-        ambient_humidity: &mut Option<f32>,
-        ambient_channel_disconnected: &mut bool,
         tank_level_switch_position: &mut Option<bool>,
         tank_level_switch_invalid: &mut Option<bool>,
         tank_level_switch_channel_disconnected: &mut bool,
@@ -862,15 +796,6 @@ impl DataLogger {
             self.lock_error_output_state_ventilation_is_on,
         );
 
-        //*** communication with Ambient thread ***
-        self.update_ambient_signals(
-            ambient_temperature,
-            ambient_humidity,
-            ambient_channel_disconnected,
-            tx_to_ambient,
-            rx_from_ambient,
-        );
-
         //*** communication with Tank Level Switch thread ***
         self.update_tank_level_switch_signals(
             tank_level_switch_position,
@@ -880,6 +805,7 @@ impl DataLogger {
             rx_from_tank_level_switch,
         );
     }
+
     /// Read values of Atlas Scientific from Mutex and write them to RAM disk
     /// # Arguments
     /// * `mutex_temperature` - Mutex for water temperature
@@ -1092,12 +1018,12 @@ impl DataLogger {
     /// * `mutex_atlas_scientific_temperature` - Mutex for temperature from Atlas Scientific
     /// * `mutex_atlas_scientific_ph` - Mutex for pH from Atlas Scientific
     /// * `mutex_atlas_scientific_conductivity` - Mutex for conductivity DS18B20 sensor
+    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
+    /// * `mutex_ambient_humidity` - Mutex for ambient humidity
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
-        tx_to_ambient: Sender<InternalCommand>,
-        rx_from_ambient: Receiver<f32>,
         tx_to_tank_level_switch: Sender<InternalCommand>,
         rx_from_tank_level_switch: Receiver<bool>,
         tx_to_refill: Sender<InternalCommand>,
@@ -1113,6 +1039,8 @@ impl DataLogger {
         mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
         mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
         mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
+        mutex_ambient_temperature: Arc<Mutex<f32>>,
+        mutex_ambient_humidity: Arc<Mutex<f32>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1134,7 +1062,6 @@ impl DataLogger {
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
         let mut tank_level_switch_channel_disconnected = false;
-        let mut ambient_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
@@ -1144,8 +1071,6 @@ impl DataLogger {
         loop {
             // update signals via channel communication
             self.update_signals(
-                &tx_to_ambient,
-                &rx_from_ambient,
                 &tx_to_tank_level_switch,
                 &rx_from_tank_level_switch,
                 &tx_to_refill,
@@ -1160,9 +1085,6 @@ impl DataLogger {
                 &mut heating_channel_disconnected,
                 &mut ventilation_is_on,
                 &mut ventilation_channel_disconnected,
-                &mut ambient_temperature,
-                &mut ambient_humidity,
-                &mut ambient_channel_disconnected,
                 &mut tank_level_switch_position,
                 &mut tank_level_switch_invalid,
                 &mut tank_level_switch_channel_disconnected,
@@ -1185,6 +1107,15 @@ impl DataLogger {
                 &mut ph,
                 &mut conductivity,
             );
+
+            // update signals by accessing mutex for ambient signal
+            self.update_ambient_signals(
+                mutex_ambient_temperature.clone(),
+                mutex_ambient_humidity.clone(),
+                &mut ambient_temperature,
+                &mut ambient_humidity,
+            );
+
             let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
                 self.calculate_filtered_signals(water_temperature, ph, conductivity);
 
@@ -1264,8 +1195,6 @@ impl DataLogger {
                 // once per second, retrieve signals and write them to the RAM disk
                 if i % 1000 == 0 {
                     self.update_signals(
-                        &tx_to_ambient,
-                        &rx_from_ambient,
                         &tx_to_tank_level_switch,
                         &rx_from_tank_level_switch,
                         &tx_to_refill,
@@ -1280,9 +1209,6 @@ impl DataLogger {
                         &mut heating_channel_disconnected,
                         &mut ventilation_is_on,
                         &mut ventilation_channel_disconnected,
-                        &mut ambient_temperature,
-                        &mut ambient_humidity,
-                        &mut ambient_channel_disconnected,
                         &mut tank_level_switch_position,
                         &mut tank_level_switch_invalid,
                         &mut tank_level_switch_channel_disconnected,
@@ -1294,6 +1220,24 @@ impl DataLogger {
                         mutex_ambient_temperature_dsb18b20.clone(),
                         &mut water_temperature_ds18b20,
                         &mut ambient_temperature_ds18b20,
+                    );
+
+                    // update signals by accessing mutex for Atlas Scientific signals
+                    self.update_atlas_scientific_signals(
+                        mutex_atlas_scientific_temperature.clone(),
+                        mutex_atlas_scientific_ph.clone(),
+                        mutex_atlas_scientific_conductivity.clone(),
+                        &mut water_temperature,
+                        &mut ph,
+                        &mut conductivity,
+                    );
+
+                    // update signals by accessing mutex for ambient signal
+                    self.update_ambient_signals(
+                        mutex_ambient_temperature.clone(),
+                        mutex_ambient_humidity.clone(),
+                        &mut ambient_temperature,
+                        &mut ambient_humidity,
                     );
                 }
                 cycle_time_exceeded = false;
@@ -1366,7 +1310,6 @@ impl DataLogger {
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
-    use crate::stubs::mock_ambient::tests::mock_ambient;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
     use crate::stubs::mock_refill::tests::mock_refill;
@@ -1536,8 +1479,6 @@ pub mod tests {
     // Test case uses test database #45.
     pub fn test_data_log() {
         // channels for communication with the test environment
-        let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
-        let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
         let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
             mpsc::channel();
         let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
@@ -1562,10 +1503,8 @@ pub mod tests {
             mpsc::channel();
         let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
         let (tx_test_environment_to_refill, rx_refill_from_test_environment) = mpsc::channel();
-        let (tx_test_environment_to_ambient, rx_ambient_from_test_environment) = mpsc::channel();
 
         let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
-        let tx_signal_handler_to_ambient = tx_data_logger_to_ambient.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1598,6 +1537,10 @@ pub mod tests {
         let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(12.0));
         let mutex_atlas_scientific_conductivity_clone_for_data_logger =
             mutex_atlas_scientific_conductivity.clone();
+        let mutex_ambient_temperature = Arc::new(Mutex::new(13.0));
+        let mutex_ambient_temperature_clone_for_data_logger = mutex_ambient_temperature.clone();
+        let mutex_ambient_humidity = Arc::new(Mutex::new(14.0));
+        let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(15.0));
         let mutex_ds18b20_water_temperature_clone_for_data_logger =
             mutex_ds18b20_water_temperature.clone();
@@ -1650,17 +1593,21 @@ pub mod tests {
                 let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
                     MockSignal::TankLevelSwitchPosition(false),
                 ));
-                let _ = tx_test_environment_to_ambient.send(TestCommand::UpdateSignal(
-                    MockSignal::AmbientTemperature(35.0),
-                ));
+                {
+                    let mut ambient_temperature =
+                        mutex_ambient_temperature.lock().unwrap();
+                    *ambient_temperature = 35.0;
+                }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
                     MockSignal::TankLevelSwitchInvalid(true),
                 ));
-                let _ = tx_test_environment_to_ambient
-                    .send(TestCommand::UpdateSignal(MockSignal::AmbientHumidity(66.0)));
+                {
+                    let mut ambient_humidity = mutex_ambient_humidity.lock().unwrap();
+                    *ambient_humidity = 66.0;
+                }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
@@ -1680,7 +1627,6 @@ pub mod tests {
 
                 // signal end of test case execution to mock threads
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
@@ -1754,20 +1700,6 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Ambient
-        let join_handle_mock_ambient = thread::Builder::new()
-            .name("mock_ambient".to_string())
-            .spawn(move || {
-                mock_ambient(
-                    &tx_ambient_to_data_logger,
-                    &rx_ambient_from_data_logger,
-                    Some(&rx_ambient_from_test_environment),
-                    13.0, // initial ambient temperature
-                    14.0, // initial ambient humidity
-                );
-            })
-            .unwrap();
-
         // give mock threads some time to establish
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -1780,8 +1712,6 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    tx_data_logger_to_ambient,
-                    rx_data_logger_from_ambient,
                     tx_data_logger_to_tank_level_switch,
                     rx_data_logger_from_tank_level_switch,
                     tx_data_logger_to_refill,
@@ -1797,6 +1727,8 @@ pub mod tests {
                     mutex_atlas_scientific_temperature_clone_for_data_logger,
                     mutex_atlas_scientific_ph_clone_for_data_logger,
                     mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                    mutex_ambient_temperature_clone_for_data_logger,
+                    mutex_ambient_humidity_clone_for_data_logger,
                 );
 
                 println!("Printing recorded data:");
@@ -1988,9 +1920,6 @@ pub mod tests {
         join_handle_mock_heating
             .join()
             .expect("Mock heating thread did not finish.");
-        join_handle_mock_ambient
-            .join()
-            .expect("Mock Ambient thread did not finish.");
         join_handle_mock_refill
             .join()
             .expect("Mock refill thread did not finish.");

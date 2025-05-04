@@ -37,9 +37,11 @@ pub mod tests {
         /// conductivity im uS/cm
         Conductivity(f32),
 
+        #[allow(unused)]
         /// ambient (air) temperature in °C
         AmbientTemperature(f32),
 
+        #[allow(unused)]
         /// ambient humidity in %
         AmbientHumidity(f32),
 

@@ -534,15 +534,6 @@ fn main() {
         }
     }
 
-    // *** data_logger <=> ambient ***
-    let (tx_data_logger_to_ambient, rx_ambient_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_ambient_to_data_logger, rx_data_logger_from_ambient): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
-    // ****************************
-
     // *** refill <=> tank_level_switch ***
     let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill): (
         Sender<InternalCommand>,
@@ -1141,10 +1132,10 @@ fn main() {
         // Mutexes for Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
         let mutex_ambient_temperature_clone_for_heating = mutex_ambient_temperature.clone();
-        //let mutex_ambient_temperature_clone_for_data_logger = mutex_ambient_temperature.clone();
+        let mutex_ambient_temperature_clone_for_data_logger = mutex_ambient_temperature.clone();
 
         let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
-        //let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
+        let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1327,8 +1318,6 @@ fn main() {
             ambient.execute(
                 &tx_ambient_to_tcp_opt,
                 &rx_ambient_from_tcp_opt,
-                tx_ambient_to_data_logger,
-                rx_ambient_from_data_logger,
                 tx_ambient_to_dht_opt,
                 rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
@@ -1356,8 +1345,6 @@ fn main() {
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                tx_data_logger_to_ambient,
-                rx_data_logger_from_ambient,
                 tx_data_logger_to_tank_level_switch,
                 rx_data_logger_from_tank_level_switch,
                 tx_data_logger_to_refill,
@@ -1373,6 +1360,8 @@ fn main() {
                 mutex_atlas_scientific_temperature_clone_for_data_logger,
                 mutex_atlas_scientific_ph_clone_for_data_logger,
                 mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                mutex_ambient_temperature_clone_for_data_logger,
+                mutex_ambient_humidity_clone_for_data_logger,
             );
 
             #[cfg(feature = "debug_main")]

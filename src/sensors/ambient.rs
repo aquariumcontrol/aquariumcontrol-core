@@ -16,7 +16,7 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 use crate::sensors::dht::DhtError;
@@ -81,18 +81,6 @@ pub struct Ambient {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive signal from data logger thread via the channel
-    lock_error_channel_receive_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send a response to data logger thread via the channel
-    lock_error_data_logger_response: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the data logger thread
-    lock_warn_inapplicable_command_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received an invalid signal request via the channel from the data logger thread
-    lock_error_invalid_signal_request_data_logger: bool,
-
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request to Dht thread via the channel
     lock_error_channel_send_dht: bool,
@@ -123,10 +111,6 @@ impl Ambient {
             ambient_humidity: replacement_value_ambient_humidity,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_error_data_logger_response: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
 
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_channel_send_dht: false,
@@ -137,89 +121,6 @@ impl Ambient {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_dht: false,
         }
-    }
-
-    /// communication to data logger thread via the channel
-    /// # Arguments
-    /// * `tx_to_data_logger` - reference to sender part of channel for sending data to data logger
-    /// * `rx_from_data_logger` - reference to receiver part of channel for receiving command from data logger
-    fn communicate_with_data_logger(
-        &mut self,
-        tx_to_data_logger: &Sender<f32>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        let response_to_data_logger = match d {
-                            AquariumSignal::AmbientTemperature => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                self.ambient_temperature
-                            }
-                            AquariumSignal::AmbientHumidity => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                self.ambient_humidity
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_AMBIENT,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                                0.0 // default response to unknown signal request instead of panicking
-                            }
-                        };
-                        _ = match tx_to_data_logger.send(response_to_data_logger.into()) {
-                            Ok(()) => {
-                                self.lock_error_data_logger_response = false;
-                            }
-                            Err(e) => {
-                                if !self.lock_error_data_logger_response {
-                                    error!(
-                                        target: LOG_TARGET_AMBIENT,
-                                        "responding back to data logger thread failed ({e:?})"
-                                    );
-                                    self.lock_error_data_logger_response = true;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_AMBIENT,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            #[cfg(not(test))]
-                            error!(
-                                target: LOG_TARGET_AMBIENT,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
     }
 
     /// communication with simulator thread via the channel
@@ -359,8 +260,6 @@ impl Ambient {
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<f32>>,
-        tx_to_data_logger: Sender<f32>,
-        rx_from_data_logger: Receiver<InternalCommand>,
         tx_to_dht_opt: Option<Sender<InternalCommand>>,
         rx_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
         tx_to_signal_handler: Sender<bool>,
@@ -510,9 +409,6 @@ impl Ambient {
                 }
             }
 
-            // answer requests from outside using measured data
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger);
-
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
@@ -581,8 +477,6 @@ pub mod tests {
     // Test case verifies if the test object is processing the interfaces correctly.
     pub fn ambient_interfaces() {
         // channels for communication with the test environment
-        let (tx_data_logger_to_ambient, rx_ambient_from_data_logger) = mpsc::channel();
-        let (tx_ambient_to_data_logger, rx_data_logger_from_ambient) = mpsc::channel();
         let (tx_tcp_to_ambient, rx_ambient_from_tcp) = mpsc::channel();
         let (tx_ambient_to_tcp, rx_tcp_from_ambient) = mpsc::channel();
         let tx_ambient_to_tcp_opt = Some(tx_ambient_to_tcp.clone());
@@ -658,48 +552,10 @@ pub mod tests {
             });
 
             scope.spawn(move || {
-                // mock Data logger thread
-                let result_temperature = match tx_data_logger_to_ambient.send(
-                        InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature)
-                    ) {
-                    Ok(()) => {
-                        match rx_data_logger_from_ambient.recv() {
-                            Ok(c) => { c },
-                            Err(e) => {
-                                panic!("Error occurred when mock data logger thread tried to receive from test object: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Error occurred when mock data logger thread tried to send to test object: {e:?}");         
-                    }
-                };
-                assert_eq!(result_temperature, 20.0);
-                let result_humidity = match tx_data_logger_to_ambient.send(
-                        InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity)
-                    ) {
-                    Ok(()) => {
-                        match rx_data_logger_from_ambient.recv() {
-                            Ok(c) => { c },
-                            Err(e) => {
-                                panic!("Error occurred when mock heating thread tried to receive from test object: {e:?}");
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        panic!("Error occurred when mock heating thread tried to send to test object: {e:?}");         
-                    }
-                };
-                assert_eq!(result_humidity, 60.0);
-            });
-
-            scope.spawn(move || {
                 // test object
                 ambient.execute(
                     &tx_ambient_to_tcp_opt,
                     &rx_ambient_from_tcp_opt,
-                    tx_ambient_to_data_logger,
-                    rx_ambient_from_data_logger,
                     None,
                     None,
                     tx_ambient_to_signal_handler,
