@@ -419,15 +419,15 @@ pub fn handle_signals(
     // phase 8: allow messaging thread and watchdog to close
     send_command(
         InternalCommand::Terminate,
-        tx_to_messaging_opt.as_ref(),
-        None,
-        "messaging",
-    );
-    send_command(
-        InternalCommand::Terminate,
         Some(&tx_to_watchdog),
         None,
         "watchdog",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        tx_to_messaging_opt.as_ref(),
+        None,
+        "messaging",
     );
 
     println!("Termination of application completed");
@@ -866,17 +866,17 @@ pub mod tests {
         // no response to termination request
 
         assert_eq!(
-            rx_messaging_from_signal_handler.recv().unwrap(),
-            InternalCommand::Terminate
-        );
-        // no response to termination request
-
-        assert_eq!(
             rx_watchdog_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request
-
+        
+        assert_eq!(
+            rx_messaging_from_signal_handler.recv().unwrap(),
+            InternalCommand::Terminate
+        );
+        // no response to termination request
+        
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
