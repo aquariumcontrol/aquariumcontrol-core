@@ -7,13 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::error;
-
 #[cfg(not(test))]
 use log::info;
 
 use serde_derive::Deserialize;
-use std::{env, fs};
+use std::fs;
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
@@ -55,7 +53,7 @@ pub struct ConfigData {
     /// configuration of the SQL database interface
     pub sql_interface: SqlInterfaceConfig,
 
-    /// configuration of the TCP connection (e.g. for simulator)
+    /// configuration of the TCP connection (e.g., for simulator)
     pub tcp_connection: TcpConnectionConfig,
 
     /// configuration of the data logger
@@ -71,7 +69,7 @@ pub struct ConfigData {
     pub gpio_handler: GpioHandlerConfig,
 
     #[cfg(feature = "target_hw")]
-    /// configuration of DHT driver
+    /// configuration of the DHT driver
     pub dht: DhtConfig,
 
     /// configuration of the fresh water refill control
@@ -80,7 +78,7 @@ pub struct ConfigData {
     /// configuration of the tank level switch calculation
     pub tank_level_switch: TankLevelSwitchConfig,
 
-    /// configuratino of the heating control
+    /// configuration of the heating control
     pub heating: HeatingConfig,
 
     /// configuration of the ventilation control
@@ -123,16 +121,8 @@ pub struct ConfigData {
 /// In case of failure, the function panics.
 /// In success case, the function returns a variable of type ConfigData.
 /// # Arguments:
-/// * `relative_path` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
-pub fn read_config_file(relative_path: String) -> ConfigData {
-    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
-        error!(target: LOG_TARGET_CONFIG,
-                "could not read environment variable CARGO_MANIFEST_DIR for reading configuration file. Using fallback path.");
-        "/usr/local/src/aquarium_control".to_string()
-    });
-
-    let filename = out_dir + "/" + &relative_path;
-
+/// * `filename` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
+pub fn read_config_file(filename: String) -> ConfigData {
     #[cfg(not(test))]
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
 
@@ -186,7 +176,7 @@ pub fn read_config_file_with_test_database(
 
     let mut config = read_config_file(relative_path);
 
-    // replace data base name from configuration file with the test data base name
+    // replace the database name from the configuration file with the test database name
     // required by the test case
     config.sql_interface.db_name = test_db_name;
 
