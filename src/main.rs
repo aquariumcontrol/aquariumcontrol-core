@@ -585,17 +585,6 @@ fn main() {
         mpsc::channel();
     // *****************************
 
-    // *** ventilation <=> atlas_scientific ***
-    let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific): (
-        Sender<f32>,
-        Receiver<f32>,
-    ) = mpsc::channel();
-    // *****************************
-
     // *** refill <=> data_logger ***
     let (tx_data_logger_to_refill, rx_refill_from_data_logger): (
         Sender<InternalCommand>,
@@ -1154,6 +1143,7 @@ fn main() {
             mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_heating =
             mutex_atlas_scientific_temperature.clone();
+        let mutex_atlas_scientific_temperature_clone_for_ventilation = mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_ph = Arc::new(Mutex::new(initial_value_atlas_scientific_ph));
         let mutex_atlas_scientific_ph_clone_for_atlas_scientific =
             mutex_atlas_scientific_ph.clone();
@@ -1303,8 +1293,6 @@ fn main() {
             atlas_scientific.execute(
                 tx_atlas_scientific_to_tcp_opt,
                 rx_atlas_scientific_from_tcp_opt,
-                tx_atlas_scientific_to_ventilation,
-                rx_atlas_scientific_from_ventilation,
                 tx_atlas_scientific_to_i2c_interface_opt,
                 rx_atlas_scientific_from_i2c_interface_opt,
                 tx_atlas_scientific_to_signal_handler,
@@ -1477,8 +1465,6 @@ fn main() {
         scope.spawn(move || {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
-                tx_ventilation_to_atlas_scientific,
-                rx_ventilation_from_atlas_scientific,
                 tx_ventilation_to_controllino,
                 rx_ventilation_from_controllino,
                 tx_ventilation_to_signal_handler,
@@ -1488,6 +1474,7 @@ fn main() {
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
                 rx_ventilation_from_messaging_opt,
+                mutex_atlas_scientific_temperature_clone_for_ventilation
             );
 
             #[cfg(feature = "debug_main")]

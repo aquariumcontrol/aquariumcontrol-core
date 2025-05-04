@@ -37,31 +37,31 @@ const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f3
 #[derive(Deserialize)]
 pub struct VentilationConfig {
     active: bool,
-    /// temperature at which the ventilation is switched on for 100% of the time
+    /// The temperature at which the ventilation is switched on for 100% of the time
     /// This temperature must be higher than switch_off_temperature
     switch_on_temperature: f32,
 
-    /// temperature at which the ventilation is switched off for 100% of the time
+    /// The temperature at which the ventilation is switched off for 100% of the time
     /// this temperature must be lower than switch_on_temperature
     switch_off_temperature: f32,
 
-    /// flag to determine the behavior of the control when the application is terminating
+    /// A flag to determine the behavior of the control when the application is terminating
     /// If this flag is true, the application will switch on the ventilation when exiting.    
     switch_on_when_terminating: bool,
 
-    /// configuration of saw tooth profile for generation of low-frequency PWM signal
+    /// The configuration of saw tooth profile for generation of low-frequency PWM signal
     saw_tooth_profile_config: SawToothProfileConfig,
 
-    // strategy when schedule check does not allow operation:
-    // true=ventilation will be switched on; false=ventilation will be switched off
+    /// The strategy when schedule check does not allow operation:
+    /// true=ventilation will be switched on; false=ventilation will be switched off
     switch_on_when_out_of_schedule: bool,
 
-    // strategy when external request for stopping ventilation control has been received:
-    // true=ventilation will be switched on; false=ventilation will be switched off
+    /// The strategy when an external request for stopping ventilation control has been received:
+    /// true=ventilation will be switched on; false=ventilation will be switched off
     switch_on_when_external_stop: bool,
 }
 
-/// Communicates to Controllino thread via channel to switch on the ventilation
+/// Communicates to Controllino thread via the channel to switch on the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
 /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
@@ -81,7 +81,7 @@ fn switch_on_ventilation(
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
         Ok(_) => {
-            // now listen for response
+            // now listen for the response
             match rx_from_controllino.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -102,7 +102,7 @@ fn switch_on_ventilation(
     *mutex_data += 1;
 }
 
-/// Communicates to Controllino thread via channel to switch off the ventilation
+/// Communicates to Controllino thread via the channel to switch off the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
 /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
@@ -122,7 +122,7 @@ fn switch_off_ventilation(
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
     match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
         Ok(_) => {
-            // now listen for response
+            // now listen for the response
             match rx_from_controllino.recv() {
                 Ok(_) => {}
                 Err(e) => {
@@ -164,34 +164,28 @@ fn switch_off_ventilation(
 pub struct Ventilation {
     config: VentilationConfig,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination_signal: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
     lock_warn_inapplicable_command: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to schedule check
+    /// inhibition flag to avoid flooding the log file with repeated messages to send request via the channel to schedule check
     lock_error_channel_send_schedule_check: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from schedule check
+    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via the channel from schedule check
     lock_error_channel_receive_schedule_check: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages to send request via channel to Atlas Scientific thread
-    lock_error_channel_send_water_temperature: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages to receive request via channel from Atlas Scientific thread
-    lock_error_channel_receive_water_temperature: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
     lock_error_channel_receive_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via the channel
     lock_warn_inapplicable_command_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having recevied request for invalid signal from data logger
+    /// inhibition flag to avoid flooding the log file with repeated messages about having received a request for invalid signal from the data logger
     lock_error_invalid_signal_request_data_logger: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failuire to send response to data logger
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger
     lock_error_send_to_data_logger: bool,
 }
 
@@ -203,13 +197,11 @@ impl Ventilation {
     /// * `config` - configuration data for Ventilation control
     pub fn new(config: VentilationConfig) -> Ventilation {
         Self {
-            config: config,
+            config,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
-            lock_error_channel_send_water_temperature: false,
-            lock_error_channel_receive_water_temperature: false,
             lock_error_channel_receive_data_logger: false,
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_invalid_signal_request_data_logger: false,
@@ -231,7 +223,7 @@ impl Ventilation {
         }
     }
 
-    /// check if data logger sent command and respond
+    /// check if data logger sent a command and respond
     fn communicate_with_data_logger(
         &mut self,
         ventilation_state: &ActuatorState,
@@ -324,8 +316,6 @@ impl Ventilation {
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
-        tx_to_atlas_scientific: Sender<InternalCommand>,
-        rx_from_atlas_scientific: Receiver<f32>,
         tx_to_controllino: Sender<InternalCommand>,
         rx_from_controllino: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
@@ -335,15 +325,16 @@ impl Ventilation {
         tx_to_schedule_check: Sender<InternalCommand>,
         rx_from_schedule_check: Receiver<bool>,
         rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        mutex_water_temperature: Arc<Mutex<f32>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
-        let mut measured_temperature = 0.0;
-        let mut measurement_error: bool;
+        let mut measured_water_temperature = 0.0;
+        let mut measurement_error_water_temperature: bool;
         let mut ventilation_state: ActuatorState = ActuatorState::Undefined;
         let mut schedule_check_result: bool = false;
-        let mut ventilation_inhibited = false; // state of ventilation control determined by if start/stop command has been received
+        let mut ventilation_inhibited = false; // state of ventilation control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = SystemTime::now();
         let mut mutex_blocked_during_actuation: bool = false;
@@ -372,49 +363,25 @@ impl Ventilation {
             }
 
             if self.config.active {
-                // send request for temperature
-                match tx_to_atlas_scientific.send(InternalCommand::RequestSignal(
-                    AquariumSignal::WaterTemperature,
-                )) {
-                    Ok(_) => {
-                        self.lock_error_channel_send_water_temperature = false;
-                        measurement_error = false;
-                        // now listen for response
-                        measured_temperature = match rx_from_atlas_scientific.recv() {
-                            Ok(c) => {
-                                self.lock_error_channel_receive_water_temperature = false;
-                                c
-                            }
-                            Err(e) => {
-                                if !self.lock_error_channel_receive_water_temperature {
-                                    error!(
-                                        target: LOG_TARGET_VENTILATION,
-                                        "reading channel content for water temperature failed ({e:?})"
-                                    );
-                                    self.lock_error_channel_receive_water_temperature = true;
-                                }
-                                measurement_error = true;
-                                measured_temperature // keep the old value
-                            }
-                        };
-                    }
-                    Err(e) => {
-                        measurement_error = true;
-                        if !self.lock_error_channel_send_water_temperature {
-                            error!(
-                                target: LOG_TARGET_VENTILATION,
-                                "channel communication to Atlas Scientific thread when requesting water temperature failed ({e:?})"
-                            );
-                            self.lock_error_channel_send_water_temperature = true;
-                        }
-                    }
+                // read water temperature from mutex
+                {
+                    measured_water_temperature = match mutex_water_temperature.lock() {
+                        Ok(c) => {
+                            measurement_error_water_temperature = false;
+                            *c
+                        },
+                        Err(_) => {
+                            measurement_error_water_temperature = true;
+                            measured_water_temperature
+                        },
+                    };
                 }
 
                 // schedule check to see if actuation is allowed
                 match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
-                        // now listen for response
+                        // now listen for the response
                         schedule_check_result = match rx_from_schedule_check.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
@@ -445,13 +412,13 @@ impl Ventilation {
 
                 if schedule_check_result && !ventilation_inhibited {
                     // actuation is allowed. proceed with control.
-                    if (measured_temperature >= self.config.switch_off_temperature)
-                        && (measured_temperature <= self.config.switch_on_temperature)
+                    if (measured_water_temperature >= self.config.switch_off_temperature)
+                        && (measured_water_temperature <= self.config.switch_on_temperature)
                     {
                         // temperature is within (dynamic) control window
-                        if (self.calc_normalized_control_deviation(measured_temperature)
+                        if (self.calc_normalized_control_deviation(measured_water_temperature)
                             > saw_tooth_profile.level_normalized)
-                            && !measurement_error
+                            && !measurement_error_water_temperature
                         {
                             // switch on ventilation if not already on
                             if ventilation_state != ActuatorState::On {
@@ -476,8 +443,8 @@ impl Ventilation {
                             }
                         }
                     } else {
-                        // temperature is above or below (dynamic) control window
-                        if measured_temperature > self.config.switch_on_temperature {
+                        // The temperature is above or below (dynamic) control window
+                        if measured_water_temperature > self.config.switch_on_temperature {
                             // switch on ventilation if not already on
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
@@ -489,7 +456,7 @@ impl Ventilation {
                                 ventilation_state = ActuatorState::On;
                             }
                         }
-                        if measured_temperature < self.config.switch_off_temperature {
+                        if measured_water_temperature < self.config.switch_off_temperature {
                             // switch off ventilation if not already off
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
@@ -504,10 +471,10 @@ impl Ventilation {
                     }
                 } else {
                     if ventilation_inhibited {
-                        // external request for stopping ventilation control has been received
+                        // An external request for stopping ventilation control has been received
                         match self.config.switch_on_when_external_stop {
                             true => {
-                                // switch on heater if not already on
+                                // switch on the heater if not already on
                                 if ventilation_state != ActuatorState::On {
                                     switch_on_ventilation(
                                         &mutex_device_scheduler_ventilation,
@@ -519,7 +486,7 @@ impl Ventilation {
                                 }
                             }
                             false => {
-                                // switch off heater if not already off
+                                // switch off the heater if not already off
                                 if ventilation_state != ActuatorState::Off {
                                     switch_off_ventilation(
                                         &mutex_device_scheduler_ventilation,
@@ -535,7 +502,7 @@ impl Ventilation {
                         // schedule check requires stop of ventilation control
                         match self.config.switch_on_when_out_of_schedule {
                             true => {
-                                // switch on heater if not already on
+                                // switch on the heater if not already on
                                 if ventilation_state != ActuatorState::On {
                                     switch_on_ventilation(
                                         &mutex_device_scheduler_ventilation,
@@ -547,7 +514,7 @@ impl Ventilation {
                                 }
                             }
                             false => {
-                                // switch off heater if not already off
+                                // switch off the heater if not already off
                                 if ventilation_state != ActuatorState::Off {
                                     switch_off_ventilation(
                                         &mutex_device_scheduler_ventilation,
@@ -591,12 +558,12 @@ impl Ventilation {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_VENTILATION_MILLIS - execution_duration_millis;
             }
-            mutex_blocked_during_actuation = false; // reset for next cycle
+            mutex_blocked_during_actuation = false; // reset for the next cycle
 
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
-            start_time = SystemTime::now(); // start time for next cycle
+            start_time = SystemTime::now(); // start time for the next cycle
         }
 
         if self.config.switch_on_when_terminating {
@@ -621,8 +588,8 @@ impl Ventilation {
             }
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received a request to terminate, that is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -633,9 +600,9 @@ impl Ventilation {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino, Atlas Scientific).
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads (Controllino, Atlas Scientific).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
@@ -689,7 +656,6 @@ pub mod tests {
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
 
-    use crate::stubs::mock_atlas_scientific::tests::mock_atlas_scientific;
     use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
@@ -701,20 +667,16 @@ pub mod tests {
         Ventilation::new(config.ventilation)
     }
 
-    // Check if the ventilation is switched on when temperature is high.
+    // Check if the ventilation is switched on when the temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_ventilation_with_measured_temperature_high() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let mut ventilation = prepare_ventilation_tests();
 
-        // channels for the test object. test environment only uses one of the channels
-        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
-            mpsc::channel();
+        // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
@@ -743,20 +705,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock AtlasScientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_ventilation,
-                    &rx_atlas_scientific_from_ventilation,
-                    None,
-                    30.0,
-                    50000.0,
-                    7.0,
-                );
-            })
-            .unwrap();
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
 
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
@@ -802,24 +752,20 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
-                    tx_ventilation_to_atlas_scientific.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_atlas_scientific,
-                    rx_ventilation_from_atlas_scientific,
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -829,12 +775,11 @@ pub mod tests {
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     None,
+                    mutex_water_temperature,
                 );
 
-                // send Quit signal to mock threads because test object has terminated
+                // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ =
                     tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
@@ -845,9 +790,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific did not finish.");
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
@@ -867,16 +809,12 @@ pub mod tests {
     // Check if the ventilation is switched off after sending Quit command and before sending Terminate command.
     #[test]
     pub fn test_ventilation_with_measured_temperature_low() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let mut ventilation = prepare_ventilation_tests();
 
-        // channels for the test object. test environment only uses one of the channels
-        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
-            mpsc::channel();
+        // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
@@ -905,20 +843,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock AtlasScientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_ventilation,
-                    &rx_atlas_scientific_from_ventilation,
-                    None,
-                    20.0,
-                    50000.0,
-                    7.0,
-                );
-            })
-            .unwrap();
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
 
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
@@ -969,24 +895,20 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
-                    tx_ventilation_to_atlas_scientific.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_atlas_scientific,
-                    rx_ventilation_from_atlas_scientific,
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -996,12 +918,11 @@ pub mod tests {
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     None,
+                    mutex_water_temperature,
                 );
 
-                // send Quit signal to mock threads because test object has terminated
+                // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ =
                     tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
@@ -1012,9 +933,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific did not finish.");
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
@@ -1030,20 +948,16 @@ pub mod tests {
     }
 
     // Check if the ventilation is switched on and off during two cycles of the saw tooth profile.
-    // Duration of ventilation switched on shall equal duration of ventilation switched off (1% tolerance).
+    // Duration of ventilation switched on shall equal the duration of ventilation switched off (1% tolerance).
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_ventilation_with_measured_temperature_50_percent() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let mut ventilation = prepare_ventilation_tests();
 
-        // channels for the test object. test environment only uses one of the channels
-        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
-            mpsc::channel();
+        // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
@@ -1072,20 +986,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock AtlasScientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_ventilation,
-                    &rx_atlas_scientific_from_ventilation,
-                    None,
-                    25.0,
-                    50000.0,
-                    7.0,
-                );
-            })
-            .unwrap();
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(25.0));
 
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
@@ -1219,7 +1121,7 @@ pub mod tests {
                 let delta_min_max_duration = max_actuation_duration - min_actuation_duration;
 
                 // execution timing differs between platforms.
-                // hence, platform specific asserts are necessary
+                // hence, platform-specific asserts are necessary
                 cfg_if::cfg_if! {
                     if #[cfg(target_os = "linux")] {
                         assert_le!(second_last_actuation_duration, 7600);
@@ -1263,24 +1165,20 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
-                    tx_ventilation_to_atlas_scientific.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_atlas_scientific,
-                    rx_ventilation_from_atlas_scientific,
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1290,12 +1188,11 @@ pub mod tests {
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     None,
+                    mutex_water_temperature,
                 );
 
-                // send Quit signal to mock threads because test object has terminated
+                // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ =
                     tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
@@ -1306,9 +1203,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific did not finish.");
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
@@ -1323,19 +1217,15 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // Check if ventilation control is only actuating when quitting while schedule check provides negative result
+    // Check if ventilation control is only actuating when quitting while schedule check provides a negative result.
     #[test]
     pub fn test_ventilation_block_by_schedule() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         let mut ventilation = prepare_ventilation_tests();
 
-        // channels for the test object. test environment only uses one of the channels
-        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
-            mpsc::channel();
+        // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
@@ -1364,20 +1254,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock AtlasScientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_ventilation,
-                    &rx_atlas_scientific_from_ventilation,
-                    None,
-                    30.0,
-                    50000.0,
-                    7.0,
-                );
-            })
-            .unwrap();
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
 
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
@@ -1428,24 +1306,20 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
-                    tx_ventilation_to_atlas_scientific.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_atlas_scientific,
-                    rx_ventilation_from_atlas_scientific,
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1455,12 +1329,11 @@ pub mod tests {
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     None,
+                    mutex_water_temperature,
                 );
 
-                // send Quit signal to mock threads because test object has terminated
+                // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ =
                     tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
@@ -1477,9 +1350,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific did not finish.");
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
@@ -1494,9 +1364,9 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    // Test case runs ventilation control and triggers inhibition by sending stop message via channel.
+    // Test case runs ventilation control and triggers inhibition by sending the stop message via the channel.
     // After verification that ventilation is stopped,
-    // test case sends start message via channel and verifies if ventilation control
+    // The test case sends the start message via the channel and verifies if ventilation control
     // resumes operation.
     #[test]
     pub fn test_messaging_stops_starts_ventilation() {
@@ -1504,10 +1374,6 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut ventilation = Ventilation::new(config.ventilation);
 
-        let (tx_ventilation_to_atlas_scientific, rx_atlas_scientific_from_ventilation) =
-            mpsc::channel();
-        let (tx_atlas_scientific_to_ventilation, rx_ventilation_from_atlas_scientific) =
-            mpsc::channel();
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
@@ -1540,20 +1406,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock AtlasScientific
-        let join_handle_mock_atlas_scientific = thread::Builder::new()
-            .name("mock_atlas_scientific".to_string())
-            .spawn(move || {
-                mock_atlas_scientific(
-                    &tx_atlas_scientific_to_ventilation,
-                    &rx_atlas_scientific_from_ventilation,
-                    None,
-                    30.0,
-                    50000.0,
-                    7.0,
-                );
-            })
-            .unwrap();
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
 
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
@@ -1612,17 +1466,17 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
                 // initial wait so that ventilation control can switch on
                 for _ in 0..10 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                    spin_sleeper.sleep(sleep_duration_100_millis);
                 }
-                // check initial state of mutex: should be already switched on
+                // check the initial state of mutex: should be already switched on
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 1);
 
-                // sending message requesting stop of ventilation control
+                // sending a message requesting stop of ventilation control
                 match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -1635,12 +1489,12 @@ pub mod tests {
 
                 // wait for 1 second: Ventilation control will switch off
                 for _ in 0..10 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                    spin_sleeper.sleep(sleep_duration_100_millis);
                 }
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 2);
 
-                // sending message requesting restart of ventilation control
+                // sending a message requesting restart of ventilation control
                 match tx_messaging_to_ventilation.send(InternalCommand::Start) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -1651,14 +1505,14 @@ pub mod tests {
                     }
                 }
 
-                // wait for 1 second. Ventilation control will switch on
+                // Wait for 1 second. Ventilation control will switch on
                 for _ in 0..10 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                    spin_sleeper.sleep(sleep_duration_100_millis);
                 }
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 3);
 
-                // sending message requesting stop of ventilation control
+                // sending a message requesting stop of ventilation control
                 match tx_messaging_to_ventilation.send(InternalCommand::Stop) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -1671,7 +1525,7 @@ pub mod tests {
 
                 // wait for 1 second: Ventilation control will switch off
                 for _ in 0..10 {
-                    spin_sleeper.sleep(sleep_duration_100_millisec);
+                    spin_sleeper.sleep(sleep_duration_100_millis);
                 }
                 // check if ventilation is actuated
                 assert_eq!(*mutex_device_scheduler_test_environment.lock().unwrap(), 4);
@@ -1686,22 +1540,18 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of test object
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_atlas_scientific_for_test_case_finish =
-                    tx_ventilation_to_atlas_scientific.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
-                    tx_ventilation_to_atlas_scientific,
-                    rx_ventilation_from_atlas_scientific,
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1711,12 +1561,11 @@ pub mod tests {
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     Some(rx_ventilation_from_messaging),
+                    mutex_water_temperature,
                 );
 
-                // send Quit signal to mock threads because test object has terminated
+                // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
-                    .send(InternalCommand::Quit);
-                let _ = tx_ventilation_to_atlas_scientific_for_test_case_finish
                     .send(InternalCommand::Quit);
                 let _ =
                     tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
@@ -1728,9 +1577,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_atlas_scientific
-            .join()
-            .expect("Mock Atlas Scientific did not finish.");
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");

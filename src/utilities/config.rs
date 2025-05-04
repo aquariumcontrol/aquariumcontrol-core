@@ -11,7 +11,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use serde_derive::Deserialize;
-use std::{env, fs};
+use std::{fs};
+
+#[cfg(test)]
+use std::{env};
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
