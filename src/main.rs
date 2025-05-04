@@ -148,24 +148,17 @@ impl fmt::Display for ConfigFileDefinitionError {
 
 /// Check if the string provided contains a valid file name to be used as the configuration file
 /// # Arguments    
-/// * `config_file_name` - reference to string provided by command line parameter
+/// * `user_selected_config_file_name` - reference to string provided by command line parameter
 fn check_argument_for_valid_config_file_name(
-    relative_config_file_name: &str,
+    user_selected_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
-    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
-        error!(target: LOG_TARGET_MAIN,
-                "could not read environment variable CARGO_MANIFEST_DIR for checking alternative configuration file. Using fallback path.");
-        "/usr/local/src/aquarium_control".to_string()
-    });
-
-    let config_file_name = out_dir + "/" + relative_config_file_name;
-
-    let path = Path::new(&config_file_name);
+    
+    let path = Path::new(&user_selected_config_file_name);
 
     if !path.exists() {
         return Err(ConfigFileDefinitionError::PathDoesNotExist(
             "The configuration file (".to_string()
-                + &config_file_name
+                + &user_selected_config_file_name
                 + ") is not an existing file system entry.",
         ));
     }
@@ -180,7 +173,7 @@ fn check_argument_for_valid_config_file_name(
     match path.extension() {
         Some(extension) => {
             if extension == "toml" {
-                Ok(String::from(relative_config_file_name))
+                Ok(String::from(user_selected_config_file_name))
             } else {
                 Err(ConfigFileDefinitionError::SuffixIsNotToml(
                     "The provided argument for the configuration file does not have extension '.toml'."
@@ -317,7 +310,7 @@ fn main() {
         }
     } else {
         // use the default file name
-        config_file_name = "/config/aquarium_control.toml".to_string();
+        config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
     }
     // read the configuration file for operating the control system
     let config = read_config_file(config_file_name);
@@ -1165,7 +1158,7 @@ fn main() {
         let mutex_ds18b20_water_temperature_clone_for_ds18b20 = mutex_ds18b20_water_temperature.clone();
         let mutex_ds18b20_ambient_temperature_clone_for_data_logger = mutex_ds18b20_ambient_temperature.clone();
         let mutex_ds18b20_ambient_temperature_clone_for_ds18b20 = mutex_ds18b20_ambient_temperature.clone();
-        
+
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_connection = match TcpCommunication::new(&config.tcp_connection) {
