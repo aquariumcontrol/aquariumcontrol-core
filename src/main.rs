@@ -104,7 +104,7 @@ use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
 use crate::sensors::ds18b20::Ds18b20;
-use crate::sensors::tank_level_switch::TankLevelSwitch;
+use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::thermal::ventilation::Ventilation;
 use crate::utilities::publish_pid::PublishPid;
@@ -533,39 +533,6 @@ fn main() {
             rx_watchdog_from_messaging_opt = None;
         }
     }
-
-    // *** refill <=> tank_level_switch ***
-    let (tx_refill_to_tank_level_switch, rx_tank_level_switch_from_refill): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tank_level_switch_to_refill, rx_refill_from_tank_level_switch): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *****************************
-
-    // *** heating <=> tank_level_switch ***
-    let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tank_level_switch_to_heating, rx_heating_from_tank_level_switch): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *****************************
-
-    // *** data logger <=> tank_level_switch ***
-    let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
-    // *****************************
 
     // *** refill <=> data_logger ***
     let (tx_data_logger_to_refill, rx_refill_from_data_logger): (
@@ -1098,15 +1065,18 @@ fn main() {
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
-    let initial_value_ds18b20_water_temperature = config.ds18b20.replacement_value_water_temperature;
-    let initial_value_ds18b20_ambient_temperature = config.ds18b20.replacement_value_ambient_temperature;
+    let initial_value_ds18b20_water_temperature =
+        config.ds18b20.replacement_value_water_temperature;
+    let initial_value_ds18b20_ambient_temperature =
+        config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
         // Mutexes for DS18B20 signals
-        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(initial_value_ds18b20_water_temperature));
+        let mutex_ds18b20_water_temperature =
+            Arc::new(Mutex::new(initial_value_ds18b20_water_temperature));
         let mutex_ds18b20_ambient_temperature =
             Arc::new(Mutex::new(initial_value_ds18b20_ambient_temperature));
         let mutex_ds18b20_water_temperature_clone_for_data_logger =
@@ -1121,7 +1091,8 @@ fn main() {
             mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_temperature_clone_for_heating =
             mutex_atlas_scientific_temperature.clone();
-        let mutex_atlas_scientific_temperature_clone_for_ventilation = mutex_atlas_scientific_temperature.clone();
+        let mutex_atlas_scientific_temperature_clone_for_ventilation =
+            mutex_atlas_scientific_temperature.clone();
         let mutex_atlas_scientific_ph = Arc::new(Mutex::new(initial_value_atlas_scientific_ph));
         let mutex_atlas_scientific_ph_clone_for_data_logger = mutex_atlas_scientific_ph.clone();
         let mutex_atlas_scientific_conductivity =
@@ -1136,6 +1107,16 @@ fn main() {
 
         let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
         let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
+
+        // Mutexes for TankLevelSwitch
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+        let mutex_tank_level_switch_signals_clone_for_data_logger =
+            mutex_tank_level_switch_signals.clone();
+        let mutex_tank_level_switch_signals_clone_for_heating =
+            mutex_tank_level_switch_signals.clone();
+        let mutex_tank_level_switch_signals_clone_for_refill =
+            mutex_tank_level_switch_signals.clone();
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1323,7 +1304,7 @@ fn main() {
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
                 mutex_ambient_temperature,
-                mutex_ambient_humidity
+                mutex_ambient_humidity,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1345,8 +1326,6 @@ fn main() {
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                tx_data_logger_to_tank_level_switch,
-                rx_data_logger_from_tank_level_switch,
                 tx_data_logger_to_refill,
                 rx_data_logger_from_refill,
                 tx_data_logger_to_heating,
@@ -1362,6 +1341,7 @@ fn main() {
                 mutex_atlas_scientific_conductivity_clone_for_data_logger,
                 mutex_ambient_temperature_clone_for_data_logger,
                 mutex_ambient_humidity_clone_for_data_logger,
+                mutex_tank_level_switch_signals_clone_for_data_logger,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1372,14 +1352,9 @@ fn main() {
             tank_level_switch.execute(
                 &tx_tank_level_switch_to_tcp_opt,
                 &rx_tank_level_switch_from_tcp_opt,
-                &tx_tank_level_switch_to_data_logger,
-                &rx_tank_level_switch_from_data_logger,
-                &tx_tank_level_switch_to_refill,
-                &rx_tank_level_switch_from_refill,
-                &tx_tank_level_switch_to_heating,
-                &rx_tank_level_switch_from_heating,
                 &tx_tank_level_switch_to_signal_handler,
                 &rx_tank_level_switch_from_signal_handler,
+                mutex_tank_level_switch_signals,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1392,8 +1367,6 @@ fn main() {
         scope.spawn(move || {
             refill.execute(
                 mutex_device_scheduler_refill,
-                tx_refill_to_tank_level_switch,
-                rx_refill_from_tank_level_switch,
                 tx_refill_to_controllino,
                 rx_refill_from_controllino,
                 tx_refill_to_signal_handler,
@@ -1404,6 +1377,7 @@ fn main() {
                 rx_refill_from_data_logger,
                 rx_refill_from_messaging_opt,
                 &mut water_injection,
+                mutex_tank_level_switch_signals_clone_for_refill,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1418,8 +1392,6 @@ fn main() {
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
-                tx_heating_to_tank_level_switch,
-                rx_heating_from_tank_level_switch,
                 tx_heating_to_controllino,
                 rx_heating_from_controllino,
                 tx_heating_to_signal_handler,
@@ -1431,7 +1403,8 @@ fn main() {
                 rx_heating_from_messaging_opt,
                 &mut heating_stats_transfer,
                 mutex_atlas_scientific_temperature_clone_for_heating,
-                mutex_ambient_temperature_clone_for_heating
+                mutex_ambient_temperature_clone_for_heating,
+                mutex_tank_level_switch_signals_clone_for_heating,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1453,7 +1426,7 @@ fn main() {
                 tx_ventilation_to_schedule_check,
                 rx_ventilation_from_schedule_check,
                 rx_ventilation_from_messaging_opt,
-                mutex_atlas_scientific_temperature_clone_for_ventilation
+                mutex_atlas_scientific_temperature_clone_for_ventilation,
             );
 
             #[cfg(feature = "debug_main")]

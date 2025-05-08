@@ -11,10 +11,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use serde_derive::Deserialize;
-use std::{fs};
+use std::fs;
 
 #[cfg(test)]
-use std::{env};
+use std::env;
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
@@ -128,7 +128,7 @@ pub struct ConfigData {
 #[cfg(not(test))]
 pub fn read_config_file(filename: String) -> ConfigData {
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
-     
+
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block
     // to return the `data: Ok(c)` as a `String`
@@ -171,7 +171,8 @@ pub fn read_config_file(filename: String) -> ConfigData {
 pub fn read_config_file(filename: String) -> ConfigData {
     let filename_test = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
         panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
-    }) + "/" + filename.as_str();
+    }) + "/"
+        + filename.as_str();
 
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block

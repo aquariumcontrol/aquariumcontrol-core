@@ -45,6 +45,9 @@ pub struct RecorderDataFrame {
     /// measured tank level switch position (true=high, false=low)
     pub tank_level_switch_position: Option<bool>,
 
+    /// calculated tank level switch stabilized position (true=high, false=low)
+    pub tank_level_switch_position_stabilized: Option<bool>,
+
     /// tank level switch validity bit (true=invalid, false=valid)
     pub tank_level_switch_invalid: Option<bool>,
 
@@ -115,6 +118,16 @@ impl fmt::Display for RecorderDataFrame {
             },
             None => none_string.clone(),
         };
+        let tank_level_switch_position_stabilized_string =
+            match self.tank_level_switch_position_stabilized {
+                Some(tank_level_switch_position_stabilized) => {
+                    match tank_level_switch_position_stabilized {
+                        true => "high".to_string(),
+                        false => "low".to_string(),
+                    }
+                }
+                None => none_string.clone(),
+            };
         let tank_level_switch_invalid_string = match self.tank_level_switch_invalid {
             Some(tank_level_switch_invalid) => match tank_level_switch_invalid {
                 true => "invalid".to_string(),
@@ -159,7 +172,7 @@ impl fmt::Display for RecorderDataFrame {
             \nph: {},\nph_filtered: {}, \
             \nconductivity: {},\nconductivity_filtered: {},\nconductivity_compensated: {}, \
             \nrefill_in_progress: {}, \
-            \ntank_level_switch_position: {},\ntank_level_switch_invalid: {},\
+            \ntank_level_switch_position: {},\ntank_level_switch_position_stabilized: {}\ntank_level_switch_invalid: {},\
             \nsurface_ventilation_status: {},\
             \nambient_temperature: {},\nambient_humidity: {}, \
             \nheater_status: {} \
@@ -175,6 +188,7 @@ impl fmt::Display for RecorderDataFrame {
             conductivity_compensated_string,
             refill_in_progress_string,
             tank_level_switch_position_string,
+            tank_level_switch_position_stabilized_string,
             tank_level_switch_invalid_string,
             surface_ventilation_status_string,
             ambient_temperature_string,
@@ -199,6 +213,7 @@ impl RecorderDataFrame {
         target_water_conductivity_compensated: Option<f32>,
         target_refill_in_progress: Option<bool>,
         target_tank_level_switch_position: Option<bool>,
+        target_tank_level_switch_position_stabilized: Option<bool>,
         target_tank_level_switch_invalid: Option<bool>,
         target_surface_ventilation_status: Option<bool>,
         target_ambient_temperature: Option<f32>,
@@ -227,6 +242,10 @@ impl RecorderDataFrame {
         assert_eq!(
             self.tank_level_switch_position,
             target_tank_level_switch_position
+        );
+        assert_eq!(
+            self.tank_level_switch_position_stabilized,
+            target_tank_level_switch_position_stabilized
         );
         assert_eq!(
             self.tank_level_switch_invalid,

@@ -26,6 +26,7 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
+use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -569,161 +570,8 @@ impl DataLogger {
         }
     }
 
-    /// Get information from TankLevelSwitch thread
-    /// # Arguments
-    /// * `tank_level_switch_position` - reference to variable for storing signal
-    /// * `tank_level_switch_invalid` - reference to variable for storing signal
-    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of the channel
-    /// * `tx_to_tank_level_switch` - reference to sender part of the channel for communication to Tank Level Switch
-    /// * `rx_from_tank_level_switch` - reference to receiver part of the channel for communication from Tank Level Switch
-    fn update_tank_level_switch_signals(
-        &mut self,
-        tank_level_switch_position: &mut Option<bool>,
-        tank_level_switch_invalid: &mut Option<bool>,
-        tank_level_switch_channel_disconnected: &mut bool,
-        tx_to_tank_level_switch: &Sender<InternalCommand>,
-        rx_from_tank_level_switch: &Receiver<bool>,
-    ) {
-        if !*tank_level_switch_channel_disconnected {
-            #[cfg(feature = "debug_data_logger")]
-            let start_time_tank_level_switch = SystemTime::now();
-
-            // send the request for tank level switch position
-            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                AquariumSignal::TankLevelSwitchPosition,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    *tank_level_switch_position = match rx_from_tank_level_switch.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_state_tank_level_switch_position = self
-                                .output_state(
-                                    c,
-                                    "HIGH",
-                                    "LOW",
-                                    &self.config.output_file_name_tank_level_switch_position,
-                                    self.lock_error_output_state_tank_level_switch_position,
-                                );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Tank Level Switch thread for position failed ({e:?})"
-                            );
-                            *tank_level_switch_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to tank level switch thread failed when requesting tank level switch position ({e:?})"
-                    );
-                    *tank_level_switch_channel_disconnected = true;
-                }
-            }
-
-            // send the request for tank level switch invalid
-            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                AquariumSignal::TankLevelSwitchInvalid,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    *tank_level_switch_invalid = match rx_from_tank_level_switch.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_state_tank_level_switch_invalid = self
-                                .output_state(
-                                    c,
-                                    "INVALID",
-                                    "VALID",
-                                    &self.config.output_file_name_tank_level_switch_invalid,
-                                    self.lock_error_output_state_tank_level_switch_invalid,
-                                );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Tank Level Switch thread for validity failed ({e:?})"
-                            );
-                            *tank_level_switch_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to tank level switch thread failed when requesting tank level switch invalid  ({e:?})"
-                    );
-                    *tank_level_switch_channel_disconnected = true;
-                }
-            }
-
-            // send the request for tank level switch stabilized position
-            match tx_to_tank_level_switch.send(InternalCommand::RequestSignal(
-                AquariumSignal::TankLevelSwitchPositionStabilized,
-            )) {
-                Ok(_) => {
-                    // now listen for the response
-                    match rx_from_tank_level_switch.recv() {
-                        Ok(c) => {
-                            self.lock_error_output_state_tank_level_switch_position_stabilized = self
-                                .output_state(
-                                    c,
-                                    "HIGH",
-                                    "LOW",
-                                    &self
-                                        .config
-                                        .output_file_name_tank_level_switch_position_stabilized,
-                                    self.lock_error_output_state_tank_level_switch_position_stabilized,
-                                );
-                            Some(c)
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value from Tank Level Switch thread for position stabilized failed ({e:?})"
-                            );
-                            *tank_level_switch_channel_disconnected = true;
-                            None
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication to tank level switch thread failed when requesting tank level switch position stabilized ({e:?})"
-                    );
-                    *tank_level_switch_channel_disconnected = true;
-                }
-            }
-
-            #[cfg(feature = "debug_data_logger")]
-            {
-                let stop_time_tank_level_switch = SystemTime::now();
-                let execution_duration_tank_level_switch_millis = stop_time_tank_level_switch
-                    .duration_since(start_time_tank_level_switch)
-                    .unwrap()
-                    .as_millis()
-                    as u64;
-                debug!(
-                    target: LOG_TARGET_DATA_LOGGER,
-                    "communication with tank_level_switch took {} ms.",
-                    execution_duration_tank_level_switch_millis
-                );
-            }
-        }
-    }
-
     /// Executes thread communication and filter calculation for all signals
     /// # Arguments
-    /// * `tx_to_ambient` - reference to sender part of channel for communication to Ambient
-    /// * `rx_from_ambient` - reference to receiver part of channel for communication from Ambient
-    /// * `tx_to_tank_level_switch` - reference to sender part of channel for communication to Tank Level Switch
-    /// * `rx_from_tank_level_switch` - reference to receiver part of channel for communication from Tank Level Switch
     /// * `tx_to_refill` - reference to sender part of channel for communication to Refill
     /// * `rx_from_refill` - reference to receiver part of channel for communication from Refill
     /// * `rx_from_heating` - reference to sender part of channel for communication to Heating
@@ -743,13 +591,8 @@ impl DataLogger {
     /// * `ambient_temperature` - reference to variable for storing signal
     /// * `ambient_humidity` - reference to variable for storing signal
     /// * `ambient_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `tank_level_switch_position` - reference to variable for storing signal
-    /// * `tank_level_switch_invalid` - reference to variable for storing signal
-    /// * `tank_level_switch_channel_disconnected` - reference to variable for storing health status of channel
     fn update_signals(
         &mut self,
-        tx_to_tank_level_switch: &Sender<InternalCommand>,
-        rx_from_tank_level_switch: &Receiver<bool>,
         tx_to_refill: &Sender<InternalCommand>,
         rx_from_refill: &Receiver<bool>,
         tx_to_heating: &Sender<InternalCommand>,
@@ -762,9 +605,6 @@ impl DataLogger {
         heating_channel_disconnected: &mut bool,
         ventilation_is_on: &mut bool,
         ventilation_channel_disconnected: &mut bool,
-        tank_level_switch_position: &mut Option<bool>,
-        tank_level_switch_invalid: &mut Option<bool>,
-        tank_level_switch_channel_disconnected: &mut bool,
     ) {
         //*** communication with refill thread ***
         self.lock_error_output_state_refill_in_progress = self.update_on_off_signal(
@@ -794,15 +634,6 @@ impl DataLogger {
             tx_to_ventilation,
             rx_from_ventilation,
             self.lock_error_output_state_ventilation_is_on,
-        );
-
-        //*** communication with Tank Level Switch thread ***
-        self.update_tank_level_switch_signals(
-            tank_level_switch_position,
-            tank_level_switch_invalid,
-            tank_level_switch_channel_disconnected,
-            tx_to_tank_level_switch,
-            rx_from_tank_level_switch,
         );
     }
 
@@ -902,6 +733,66 @@ impl DataLogger {
                     Some(*c)
                 }
                 Err(_) => None,
+            };
+        }
+    }
+
+    /// Read values of tank level switch from Mutex and write them to RAM disk
+    /// # Arguments
+    /// * `mutex_tank_level_switch_signals` - Mutex for tank level switch signals
+    /// * `tank_level_switch_position_opt` - Reference to tank level switch position variable wrapped in Option
+    /// * `tank_level_switch_position_stabilized_opt` - Reference to tank level switch position stabilized variable wrapped in Option
+    /// * `tank_level_switch_invalid_opt` - Reference to tank level switch invalid variable wrapped in Option
+    fn update_tank_level_switch_signals(
+        &mut self,
+        mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
+        tank_level_switch_position_opt: &mut Option<bool>,
+        tank_level_switch_position_stabilized_opt: &mut Option<bool>,
+        tank_level_switch_invalid_opt: &mut Option<bool>,
+    ) {
+        {
+            // internal scope to limit lifetime of mutex lock
+            match mutex_tank_level_switch_signals.lock() {
+                Ok(tank_level_switch_signals) => {
+                    *tank_level_switch_position_opt =
+                        Some(tank_level_switch_signals.tank_level_switch_position);
+                    *tank_level_switch_position_stabilized_opt =
+                        Some(tank_level_switch_signals.tank_level_switch_position_stabilized);
+                    *tank_level_switch_invalid_opt =
+                        Some(tank_level_switch_signals.tank_level_switch_invalid);
+
+                    self.lock_error_output_state_tank_level_switch_position = self.output_state(
+                        tank_level_switch_signals.tank_level_switch_position,
+                        "HIGH",
+                        "LOW",
+                        &self.config.output_file_name_tank_level_switch_position,
+                        self.lock_error_output_state_tank_level_switch_position,
+                    );
+
+                    self.lock_error_output_state_tank_level_switch_position_stabilized = self
+                        .output_state(
+                            tank_level_switch_signals.tank_level_switch_position_stabilized,
+                            "HIGH",
+                            "LOW",
+                            &self
+                                .config
+                                .output_file_name_tank_level_switch_position_stabilized,
+                            self.lock_error_output_state_tank_level_switch_position_stabilized,
+                        );
+
+                    self.lock_error_output_state_tank_level_switch_invalid = self.output_state(
+                        tank_level_switch_signals.tank_level_switch_invalid,
+                        "INVALID",
+                        "VALID",
+                        &self.config.output_file_name_tank_level_switch_invalid,
+                        self.lock_error_output_state_tank_level_switch_invalid,
+                    );
+                }
+                Err(_) => {
+                    *tank_level_switch_position_opt = None;
+                    *tank_level_switch_position_stabilized_opt = None;
+                    *tank_level_switch_invalid_opt = None;
+                }
             };
         }
     }
@@ -1024,8 +915,6 @@ impl DataLogger {
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
-        tx_to_tank_level_switch: Sender<InternalCommand>,
-        rx_from_tank_level_switch: Receiver<bool>,
         tx_to_refill: Sender<InternalCommand>,
         rx_from_refill: Receiver<bool>,
         tx_to_heating: Sender<InternalCommand>,
@@ -1041,6 +930,7 @@ impl DataLogger {
         mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
         mutex_ambient_humidity: Arc<Mutex<f32>>,
+        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1053,7 +943,8 @@ impl DataLogger {
         let mut ambient_temperature: Option<f32> = Some(0.0);
         let mut ambient_humidity: Option<f32> = Some(0.0);
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
-        let mut tank_level_switch_position: Option<bool> = Some(false);
+        let mut tank_level_switch_position: Option<bool> = Some(true);
+        let mut tank_level_switch_position_stabilized: Option<bool> = Some(true);
         let mut refill_in_progress: bool = false;
         let mut heater_is_on: bool = false;
         let mut ventilation_is_on: bool = false;
@@ -1061,7 +952,6 @@ impl DataLogger {
         let mut refill_channel_disconnected = false;
         let mut heating_channel_disconnected = false;
         let mut ventilation_channel_disconnected = false;
-        let mut tank_level_switch_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
@@ -1071,8 +961,6 @@ impl DataLogger {
         loop {
             // update signals via channel communication
             self.update_signals(
-                &tx_to_tank_level_switch,
-                &rx_from_tank_level_switch,
                 &tx_to_refill,
                 &rx_from_refill,
                 &tx_to_heating,
@@ -1085,9 +973,6 @@ impl DataLogger {
                 &mut heating_channel_disconnected,
                 &mut ventilation_is_on,
                 &mut ventilation_channel_disconnected,
-                &mut tank_level_switch_position,
-                &mut tank_level_switch_invalid,
-                &mut tank_level_switch_channel_disconnected,
             );
 
             // update signals by accessing mutex for DS18B20 sensor signals
@@ -1116,6 +1001,14 @@ impl DataLogger {
                 &mut ambient_humidity,
             );
 
+            // update signals by accessing mutex for tank level switch signals
+            self.update_tank_level_switch_signals(
+                &mutex_tank_level_switch_signals,
+                &mut tank_level_switch_position,
+                &mut tank_level_switch_position_stabilized,
+                &mut tank_level_switch_invalid,
+            );
+
             let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
                 self.calculate_filtered_signals(water_temperature, ph, conductivity);
 
@@ -1133,6 +1026,7 @@ impl DataLogger {
                 conductivity_compensated: None,
                 refill_in_progress: Some(refill_in_progress),
                 tank_level_switch_position,
+                tank_level_switch_position_stabilized,
                 tank_level_switch_invalid,
                 surface_ventilation_status: Some(ventilation_is_on),
                 ambient_temperature,
@@ -1195,8 +1089,6 @@ impl DataLogger {
                 // once per second, retrieve signals and write them to the RAM disk
                 if i % 1000 == 0 {
                     self.update_signals(
-                        &tx_to_tank_level_switch,
-                        &rx_from_tank_level_switch,
                         &tx_to_refill,
                         &rx_from_refill,
                         &tx_to_heating,
@@ -1209,9 +1101,6 @@ impl DataLogger {
                         &mut heating_channel_disconnected,
                         &mut ventilation_is_on,
                         &mut ventilation_channel_disconnected,
-                        &mut tank_level_switch_position,
-                        &mut tank_level_switch_invalid,
-                        &mut tank_level_switch_channel_disconnected,
                     );
 
                     // update signals by accessing mutex for DS18B20 sensor signals
@@ -1238,6 +1127,14 @@ impl DataLogger {
                         mutex_ambient_humidity.clone(),
                         &mut ambient_temperature,
                         &mut ambient_humidity,
+                    );
+
+                    // update signals by accessing mutex for tank level switch signals
+                    self.update_tank_level_switch_signals(
+                        &mutex_tank_level_switch_signals,
+                        &mut tank_level_switch_position,
+                        &mut tank_level_switch_position_stabilized,
+                        &mut tank_level_switch_invalid,
                     );
                 }
                 cycle_time_exceeded = false;
@@ -1310,11 +1207,11 @@ impl DataLogger {
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
     use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
+    use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
     use crate::stubs::mock_refill::tests::mock_refill;
     use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::stubs::mock_ventilation::tests::mock_ventilation;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
@@ -1479,10 +1376,6 @@ pub mod tests {
     // Test case uses test database #45.
     pub fn test_data_log() {
         // channels for communication with the test environment
-        let (tx_data_logger_to_tank_level_switch, rx_tank_level_switch_from_data_logger) =
-            mpsc::channel();
-        let (tx_tank_level_switch_to_data_logger, rx_data_logger_from_tank_level_switch) =
-            mpsc::channel();
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) = mpsc::channel();
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -1497,14 +1390,10 @@ pub mod tests {
             mpsc::channel();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
-            mpsc::channel();
         let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
             mpsc::channel();
         let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
         let (tx_test_environment_to_refill, rx_refill_from_test_environment) = mpsc::channel();
-
-        let tx_signal_handler_to_tank_level_switch = tx_data_logger_to_tank_level_switch.clone();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1547,7 +1436,8 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(16.0));
         let mutex_ds18b20_ambient_temperature_clone_for_data_logger =
             mutex_ds18b20_ambient_temperature.clone();
-
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1590,20 +1480,23 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
-                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
-                    MockSignal::TankLevelSwitchPosition(false),
-                ));
                 {
-                    let mut ambient_temperature =
-                        mutex_ambient_temperature.lock().unwrap();
+                    let mut tank_level_switch_signals =
+                        mutex_tank_level_switch_signals.lock().unwrap();
+                    tank_level_switch_signals.tank_level_switch_invalid = true;
+                }
+                {
+                    let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
                     *ambient_temperature = 35.0;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
-                let _ = tx_test_environment_to_tank_level_switch.send(TestCommand::UpdateSignal(
-                    MockSignal::TankLevelSwitchInvalid(true),
-                ));
+                {
+                    let mut tank_level_switch_signals =
+                        mutex_tank_level_switch_signals.lock().unwrap();
+                    tank_level_switch_signals.tank_level_switch_position = true;
+                }
                 {
                     let mut ambient_humidity = mutex_ambient_humidity.lock().unwrap();
                     *ambient_humidity = 66.0;
@@ -1619,6 +1512,12 @@ pub mod tests {
                         mutex_ds18b20_ambient_temperature.lock().unwrap();
                     *ambient_temperature_ds18b20 = 16.5;
                 }
+                {
+                    let mut tank_level_switch_signals =
+                        mutex_tank_level_switch_signals.lock().unwrap();
+                    tank_level_switch_signals.tank_level_switch_position_stabilized = true;
+                }
+
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 // cease operation of the test object
@@ -1626,10 +1525,8 @@ pub mod tests {
                 rx_signal_handler_from_data_logger.recv().unwrap();
 
                 // signal end of test case execution to mock threads
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
 
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1683,22 +1580,8 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock TankLevelSwitch
-        let join_handle_mock_tank_level_switch = thread::Builder::new()
-            .name("mock_tank_level_switch".to_string())
-            .spawn(move || {
-                mock_tank_level_switch(
-                    &tx_tank_level_switch_to_data_logger,
-                    &rx_tank_level_switch_from_data_logger,
-                    Some(&rx_tank_level_switch_from_test_environment),
-                    Some(&tx_tank_level_switch_to_data_logger),
-                    Some(&rx_tank_level_switch_from_data_logger),
-                    true,  // initial tank level switch position
-                    false, // initial tank level switch invalid
-                    true,  // initial tank level switch position stabilized
-                );
-            })
-            .unwrap();
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
         // give mock threads some time to establish
         let spin_sleeper = SpinSleeper::default();
@@ -1712,8 +1595,6 @@ pub mod tests {
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    tx_data_logger_to_tank_level_switch,
-                    rx_data_logger_from_tank_level_switch,
                     tx_data_logger_to_refill,
                     rx_data_logger_from_refill,
                     tx_data_logger_to_heating,
@@ -1729,6 +1610,7 @@ pub mod tests {
                     mutex_atlas_scientific_conductivity_clone_for_data_logger,
                     mutex_ambient_temperature_clone_for_data_logger,
                     mutex_ambient_humidity_clone_for_data_logger,
+                    mutex_tank_level_switch_signals,
                 );
 
                 println!("Printing recorded data:");
@@ -1746,8 +1628,9 @@ pub mod tests {
                     Some(46875.656), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(true),      // target_refill_in_progress
-                    Some(false),     // target_tank_level_switch_position
-                    Some(true),      // target_tank_level_switch_invalid
+                    Some(true),      // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_position_stabilized
+                    Some(false),     // target_tank_level_switch_invalid
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
@@ -1768,8 +1651,9 @@ pub mod tests {
                     Some(43751.313), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(true),      // target_refill_in_progress
-                    Some(false),     // target_tank_level_switch_position
-                    Some(true),      // target_tank_level_switch_invalid
+                    Some(true),      // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_position_stabilized
+                    Some(false),     // target_tank_level_switch_invalid
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
@@ -1790,7 +1674,8 @@ pub mod tests {
                     Some(37502.625), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(true),      // target_refill_in_progress
-                    Some(false),     // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_position
+                    Some(true),      // target_tank_level_switch_position_stabilized
                     Some(false),     // target_tank_level_switch_invalid
                     Some(true),      // target_surface_ventilation_status
                     Some(35.0),      // target_ambient_temperature
@@ -1813,6 +1698,7 @@ pub mod tests {
                     None,           // target_water_conductivity_compensated
                     Some(true),     // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
+                    Some(true),     // target_tank_level_switch_position_stabilized
                     Some(false),    // target_tank_level_switch_invalid
                     Some(true),     // target_surface_ventilation_status
                     Some(13.0),     // target_ambient_temperature
@@ -1835,6 +1721,7 @@ pub mod tests {
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
+                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1857,6 +1744,7 @@ pub mod tests {
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
+                    Some(true), // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1879,6 +1767,7 @@ pub mod tests {
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
+                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(false), // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1898,8 +1787,8 @@ pub mod tests {
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated
                     true,                 // target_refill_in_progress
-                    false,                // target_tank_level_switch_position
-                    true,                 // target_tank_level_switch_invalid
+                    true,                // target_tank_level_switch_position
+                    false,                 // target_tank_level_switch_invalid
                     true,                 // target_tank_level_switch_position_stabilized
                     true,                 // target_surface_ventilation_status
                     35.0,                 // target_ambient_temperature
@@ -1911,9 +1800,6 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_tank_level_switch
-            .join()
-            .expect("Mock tank level switch thread did not finish.");
         join_handle_mock_ventilation
             .join()
             .expect("Mock ventilation thread did not finish.");

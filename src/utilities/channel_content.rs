@@ -99,9 +99,11 @@ pub enum AquariumSignal {
     /// position of tank level switch
     TankLevelSwitchPosition,
 
+    #[allow(unused)]
     /// status bit of tank level switch signal
     TankLevelSwitchInvalid,
 
+    #[allow(unused)]
     /// stabilized position of tank level switch
     TankLevelSwitchPositionStabilized,
 

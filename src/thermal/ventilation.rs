@@ -105,9 +105,9 @@ fn switch_on_ventilation(
 /// Communicates to Controllino thread via the channel to switch off the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-/// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-/// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+/// * `tx_to_controllino` - Sender part of the channel for communication to Controllino
+/// * `rx_from_controllino` - Receiver part of the channel for communication from Controllino
+/// * `tx_to_data_logger` - Sender part of the channel for communication to data logger
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_to_controllino: &Sender<InternalCommand>,
@@ -301,18 +301,18 @@ impl Ventilation {
         };
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_atlas_scientific` - Sender part of channel for communication to Atlas Scientific thread
-    /// * `rx_from_atlas_scientific` - Receiver part of channel for communication from Atlas Scientific thread
     /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
     /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
     /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
     /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
     /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
     /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker                   
+    /// * `mutex_water_temperature` - Mutex which contains water temperature                   
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
@@ -369,11 +369,11 @@ impl Ventilation {
                         Ok(c) => {
                             measurement_error_water_temperature = false;
                             *c
-                        },
+                        }
                         Err(_) => {
                             measurement_error_water_temperature = true;
                             measured_water_temperature
-                        },
+                        }
                     };
                 }
 

@@ -99,7 +99,7 @@ pub struct AtlasScientific {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
-    
+
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
@@ -141,7 +141,7 @@ impl AtlasScientific {
             lock_error_i2c_interface: false,
         }
     }
-    
+
     /// communication with simulator thread via channel
     /// # Arguments
     /// * `tx_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
@@ -266,7 +266,7 @@ impl AtlasScientific {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
     /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional

@@ -8,8 +8,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use std::sync::{Arc, Mutex};
 use log::{error, warn};
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "debug_ambient")]
 use log::debug;
@@ -125,8 +125,8 @@ impl Ambient {
 
     /// communication with simulator thread via the channel
     /// # Arguments
-    /// * `tx_to_tcp_opt` - reference to sender part of channel wrapped in Option for sending command to TcpCommunication
-    /// * `rx_from_tcp_opt` - reference to receiver part of channel wrapped in Option for receiving data from TcpCommunication
+    /// * `tx_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
+    /// * `rx_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
     fn communicate_with_simulator(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -182,7 +182,7 @@ impl Ambient {
 
     /// receive and process response from Dht
     /// # Arguments
-    /// * `rx_from_dht` - reference to receiver part of channel for receiving data from Dht
+    /// * `rx_from_dht` - reference to the receiver part of the channel for receiving data from Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_dht(
         &mut self,
@@ -246,10 +246,6 @@ impl Ambient {
     /// # Arguments
     /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
     /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
-    /// * `tx_to_heating` - Sender part of channel for communication to heating control
-    /// * `rx_from_heating` - Receiver part of channel for communication from heating control
-    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
-    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
     /// * `tx_to_dht_opt` - Sender part of channel for communication to Dht
     /// * `rx_from_dht_opt` - Receiver part of channel for communication from Dht
     /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
@@ -380,17 +376,17 @@ impl Ambient {
                     self.communicate_with_simulator(tx_to_tcp_opt, rx_from_tcp_opt);
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
-                
-                // write measurement result to Mutex
+
+                // write the measurement result to Mutex
                 {
                     match mutex_ambient_temperature.lock() {
-                        Ok(mut c) => {*c = self.ambient_temperature},
+                        Ok(mut c) => *c = self.ambient_temperature,
                         Err(_) => {
                             // do nothing
                         }
                     }
                     match mutex_ambient_humidity.lock() {
-                        Ok(mut c) => {*c = self.ambient_humidity},
+                        Ok(mut c) => *c = self.ambient_humidity,
                         Err(_) => {
                             // do nothing
                         }
@@ -463,9 +459,9 @@ impl Ambient {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::{Arc, Mutex};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{self, TryRecvError};
+    use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
 
@@ -487,13 +483,14 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        let initial_value_ambient_temperature = config.ambient.replacement_value_ambient_temperature;
+        let initial_value_ambient_temperature =
+            config.ambient.replacement_value_ambient_temperature;
         let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
         let mut ambient = Ambient::new(config.ambient);
 
         let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
         let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
-        
+
         scope(|scope| {
             scope.spawn(move || {
                 // mock signal handler

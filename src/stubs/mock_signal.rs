@@ -21,6 +21,7 @@ pub mod tests {
         /// status bit of tank level switch signal
         TankLevelSwitchInvalid(bool),
 
+        #[allow(unused)]
         /// position of tank level switch stabilized
         TankLevelSwitchPositionStabilized(bool),
 
