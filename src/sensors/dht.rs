@@ -187,13 +187,13 @@ pub struct Dht {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     gpio: Gpio,
 
-    /// GPIO pin number for communication with DHT22 sensor
+    /// GPIO for communication with DHT22 sensor
     #[allow(unused)]
-    gpio_pin_number_dht22_io: u8,
+    gpio_dht22_io: u8,
 
     /// GPIO pin number for providing power to DHT22 sensor
     #[allow(unused)]
-    gpio_pin_number_dht22_vcc: u8,
+    gpio_dht22_vcc: u8,
 }
 
 impl Dht {
@@ -392,9 +392,9 @@ impl Dht {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// reads temperature and humity from DHT sensor
+    /// reads temperature and humidity from DHT sensor
     /// # Arguments
-    /// * `reset_sensor` - flag to indicate if power supply to sensor shall be interrupted before measuring
+    /// * `reset_sensor` - flag to indicate if power supply to the sensor shall be interrupted before measuring
     pub fn read(&self, reset_sensor: bool) -> Result<(f32, f32), DhtError> {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
@@ -416,7 +416,7 @@ impl Dht {
             }
         };
 
-        // scope to force drop of output pin
+        // scope to force the drop of the output pin
         {
             // get pin for triggering DHT sensor
             let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {

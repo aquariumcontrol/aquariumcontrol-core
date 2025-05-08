@@ -132,9 +132,22 @@ replacement_value_conductivity = 50000                  # replacement value for 
 
 [gpio_handler]
 use_simulator = true                                    # if true, then do not use real HW
-gpio_pin_number_tank_level = 23                         # GPIO pin number where tank level sensor is connected
-gpio_pin_number_dht22_io = 11                           # GPIO pin number where DHT sensor is connected
-gpio_pin_number_dht22_vcc = 17                          # GPIO pin number for power supply of DHT sensor
+tank_level_switch = 20                                  # GPIO where the tank level sensor is connected
+dht22_io = 11                                           # GPIO where the DHT sensor data line is connected
+dht22_vcc = 17                                          # GPIO for power supply of DHT sensor
+skimmer = 3                                             # GPIO of the protein skimmer
+main_pump1 = 4                                          # GPIO of the main pump #1
+main_pump2 = 5                                          # GPIO of the main pump #2
+aux_pump1 = 6                                           # GPIO of the auxiliary pump #1
+aux_pump2 = 7                                           # GPIO of the auxiliary pump #2
+feeder = 8                                              # GPIO of the feeder
+refill_pump = 11                                        # GPIO of the refill pump
+heater = 2                                              # GPIO of the heater
+ventilation = 10                                        # GPIO of the surface ventilation
+peristaltic_pump1 = 12                                  # GPIO of the peristaltic pump #1
+peristaltic_pump2 = 13                                  # GPIO of the peristaltic pump #2
+peristaltic_pump3 = 14                                  # GPIO of the peristaltic pump #3
+peristaltic_pump4 = 15                                  # GPIO of the peristaltic pump #4
 
 [dht]
 sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds

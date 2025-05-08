@@ -6,7 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use std::collections::HashSet;
 #[cfg(not(test))]
 use log::error;
 
@@ -27,75 +27,131 @@ const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct GpioHandlerConfig {
-    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
+    /// Flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
-    /// GPIO pin number for tank level sensor
-    pub gpio_pin_number_tank_level: u8,
+    /// GPIO for the tank level sensor
+    pub tank_level_switch: u8,
 
-    /// GPIO pin number for communication with DHT22 sensor
-    pub gpio_pin_number_dht22_io: u8,
+    /// GPIO for communication with the DHT22 sensor
+    pub dht22_io: u8,
 
-    /// GPIO pin number for providing power to DHT22 sensor
-    pub gpio_pin_number_dht22_vcc: u8,
+    /// GPIO for providing power to the DHT22 sensor
+    pub dht22_vcc: u8,
+
+    /// GPIO of the protein skimmer
+    pub skimmer: u8,
+
+    /// GPIO of the main pump #1
+    pub main_pump1: u8, 
+
+    /// GPIO of the main pump #2
+    pub main_pump2: u8,
+
+    /// GPIO of the auxiliary pump #1
+    pub aux_pump1: u8, 
+
+    /// GPIO of the auxiliary pump #2
+    pub aux_pump2: u8, 
+
+    /// GPIO of the feeder
+    pub feeder: u8, 
+
+    /// GPIO of the refill pump
+    pub refill_pump: u8, 
+
+    /// GPIO of the heater
+    pub heater: u8, 
+
+    /// GPIO of the surface ventilation
+    pub ventilation: u8, 
+
+    /// GPIO of the peristaltic pump #1
+    pub peristaltic_pump1: u8,
+    
+    /// GPIO of the peristaltic pump #2
+    pub peristaltic_pump2: u8,
+    
+    /// GPIO of the peristaltic pump #3
+    pub peristaltic_pump3: u8,
+    
+    /// GPIO of the peristaltic pump #4
+    pub peristaltic_pump4: u8,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
 
-pub struct GpioHandler {}
+pub struct GpioHandler {
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// GPIO interface wrapped in Option
+    pub gpio_lib_handle_opt: Option<gpio>
+}
 
 impl GpioHandler {
+    #[allow(unused)]
     /// checks if the GPIO pin configuration valid:
-    /// - pin numbers shall be within permissible range
-    /// - pin numbers shall be distinct
+    /// - GPIOs shall be within permissible range
+    /// - GPIOs shall be distinct
     /// # Arguments
     /// * `config` - configuration of GPIO handler
     pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
-        // check if pin ids are in valid range
-        if config.gpio_pin_number_tank_level > 3
-            && config.gpio_pin_number_tank_level < 28
-            && config.gpio_pin_number_dht22_vcc > 3
-            && config.gpio_pin_number_dht22_vcc < 28
-            && config.gpio_pin_number_dht22_io > 3
-            && config.gpio_pin_number_dht22_io < 28
-        {
-            // check if pin ids are distinct
-            if config.gpio_pin_number_tank_level != config.gpio_pin_number_dht22_vcc
-                && config.gpio_pin_number_dht22_vcc != config.gpio_pin_number_dht22_io
-                && config.gpio_pin_number_dht22_io != config.gpio_pin_number_tank_level
-            {
-                true // valid GPIO pin number
-            } else {
+        // check if pin ids are in valid range and if they are distinct
+        let mut seen_values = HashSet::new();
+
+        let gpio_values = [
+            config.tank_level_switch,
+            config.dht22_io,
+            config.dht22_vcc,
+            config.skimmer,
+            config.main_pump1,
+            config.main_pump2,
+            config.aux_pump1,
+            config.aux_pump2,
+            config.feeder,
+            config.refill_pump,
+            config.heater,
+            config.ventilation,
+            config.peristaltic_pump1,
+            config.peristaltic_pump2,
+            config.peristaltic_pump3,
+            config.peristaltic_pump4,
+        ];
+
+        for &value in &gpio_values {
+            if value <= 3 || value >= 28 {
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_GPIO_HANDLER,
-                    "GPIO pins are not distinct."
+                    "Not all GPIOs are inside permissible range."
                 );
-                false // invalid GPIO pin numbers because not distinct
+                #[cfg(test)]
+                println!("Not all GPIOs are inside permissible range.");
+                return false; // Value is out of the allowed range
             }
-        } else {
-            #[cfg(not(test))]
-            error!(
-                target: LOG_TARGET_GPIO_HANDLER,
-                "GPIO pins are not inside permissible range."
-            );
-            false // invalid GPIO pin number because out of range
+            if !seen_values.insert(value) {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_GPIO_HANDLER,
+                    "Not all GPIOs distinct - duplicate values found."
+                );
+                #[cfg(test)]
+                println!("Not all GPIOs distinct - duplicate values found.");
+                return false; // Duplicate value found
+            }
         }
+
+        true
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// This function returns a struct of type GpioHandler.
-    /// If real hardware is used, then the function also opens interface to GPIO and I2C.
+    /// This function returns a struct of type GpioHandler after opening the interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
-    /// * `dht_config` - configuration data for GPIO handler
-    /// * `i2c_config` - configuration data for I2C handler
     pub fn new(
         config: GpioHandlerConfig,
-        dht_config: DhtConfig,
-    ) -> (GpioHandler, Option<InputPin>, Option<Dht>) {
-        let use_simulator = config.use_simulator; // create copy because struct is moved
+    ) -> Option<GpioHandler> {
+        let use_simulator = config.use_simulator; // create copy because the struct is moved
 
         // check if GPIO pin configuration is valid
         if !Self::check_valid_gpio_pin_config(&config) {
@@ -106,8 +162,8 @@ impl GpioHandler {
         }
 
         if !use_simulator {
-            // open interface to GPIO library
-            let gpio = match Gpio::new() {
+            // open interface to the GPIO library
+            let gpio_lib_handle = match Gpio::new() {
                 Ok(c) => c,
                 Err(e) => {
                     panic!(
@@ -116,43 +172,25 @@ impl GpioHandler {
                     );
                 }
             };
-
-            // get pin for tank level monitoring
-            let tank_level_pin = match gpio.get(config.gpio_pin_number_tank_level) {
-                Ok(c) => c,
-                Err(e) => {
-                    panic!(
-                    "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER,
-                    config.gpio_pin_number_tank_level
-                );
-                }
-            };
-
-            // clone the values before creating struct
-            let gpio_pin_number_dht22_io = config.gpio_pin_number_dht22_io;
-            let gpio_pin_number_dht22_vcc = config.gpio_pin_number_dht22_vcc;
-
+            
             (
-                GpioHandler {},
-                Some(tank_level_pin.into_input_pullup()),
-                Some(Dht::new(
-                    dht_config,
-                    gpio.clone(),
-                    gpio_pin_number_dht22_io,
-                    gpio_pin_number_dht22_vcc,
-                )),
+                GpioHandler {
+                    gpio_lib_handle_opt: Some(gpio_lib_handle)
+                },
             )
         } else {
-            (GpioHandler {}, None, None)
+            GpioHandler {
+                None,
+            }
         }
     }
 
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+    #[allow(unused)]
     /// This function returns a struct of type GpioHandler for development purposes.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
-    pub fn new(config: GpioHandlerConfig) -> GpioHandler {
+    pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
         if !config.use_simulator {
             panic!(
                 "{}: Usage of hardware not supported on this platform.",
@@ -166,40 +204,43 @@ impl GpioHandler {
                 LOG_TARGET_GPIO_HANDLER,
             );
         }
-        GpioHandler {}
+        None
     }
 }
 
 pub mod tests {
-    cfg_if::cfg_if! {
-        if #[cfg(all(feature = "target_hw", target_os = "linux", test))] {
-            use crate::utilities::logger::setup_logger;
-            use crate::utilities::config::read_config_file;
-            use crate::utilities::config::ConfigData;
-            use crate::sensors::gpio_handler::GpioHandler;
-        }
-    }
+    #[allow(unused_imports)]
+    use crate::sensors::gpio_handler::GpioHandler;
+    #[allow(unused_imports)]
+    use crate::utilities::config::{read_config_file, ConfigData};
 
     #[test]
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     pub fn test_valid_gpio_config() {
-        setup_logger();
-
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler);
     }
 
     #[test]
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[should_panic]
     pub fn test_invalid_gpio_config_low() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        config.gpio_handler.gpio_pin_number_tank_level = 3;
+        config.gpio_handler.dht22_io = 3;
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler);
+    }
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_gpio_config_duplicate() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.gpio_handler.dht22_io = 5;
+        config.gpio_handler.tank_level_switch = 5;
+
+        let _gpio_handler = GpioHandler::new(config.gpio_handler);
     }
 
     #[test]
@@ -209,7 +250,7 @@ pub mod tests {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        config.gpio_handler.gpio_pin_number_tank_level = 40;
+        config.gpio_handler.dht22_io = 40;
 
         let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
     }

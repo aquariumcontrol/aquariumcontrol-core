@@ -16,8 +16,12 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use rppal::gpio::InputPin;
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            use rppal::gpio::{Gpio, InputPin};
+            use rppal::gpio::InputPin;
+    }
+}
 
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -154,11 +158,13 @@ impl TankLevelSwitch {
     /// # Arguments
     /// * `config` - configuration data for TankLevelSwitch
     /// * `initial_position_stabilized` - assumed initial position of tank level before the first measurement
-    /// * `input_pin_opt` - interface to GPIO pin wrapped as optional
+    /// * `gpio_lib_handle` - interface to GPIO
+    /// * `gpio_tank_level` - GPIO of tank level
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
-        input_pin_opt: Option<InputPin>,
+        gpio_lib_handle: gpio,
+        gpio_tank_level: u8,
     ) -> TankLevelSwitch {
         if !config.use_simulator && !input_pin_opt.is_some() {
             panic!(
@@ -166,7 +172,19 @@ impl TankLevelSwitch {
                 LOG_TARGET_TANK_LEVEL_SWITCH
             );
         }
-
+        
+        // get pin for tank level monitoring
+        let tank_level_pin = match gpio.get(gpio_tank_level) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
+                    LOG_TARGET_GPIO_HANDLER,
+                    config.gpio_pin_number_tank_level
+                );
+            }
+        };
+        
         TankLevelSwitch {
             config: config,
             tank_level_switch_position: true, // initialization value assuming no error
@@ -188,7 +206,7 @@ impl TankLevelSwitch {
             lock_error_channel_receive_data_logger: false,
             lock_error_data_logger_response: false,
             lock_error_input_pin_none: false,
-            input_pin_opt: input_pin_opt,
+            input_pin_opt: Some(tank_level_pin.into_input_pullup()),
         }
     }
 

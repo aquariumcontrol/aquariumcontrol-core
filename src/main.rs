@@ -81,7 +81,10 @@ use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::relays::controllino_actuate_simulator::ControllinoActuateSimulator;
 use crate::sensors::ambient::Ambient;
 use crate::sensors::atlas_scientific::AtlasScientific;
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
+
 use crate::thermal::heating::Heating;
 use crate::thermal::heating::HeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
@@ -103,6 +106,10 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use crate::sensors::dht::{Dht, DhtConfig};
+
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::TcpCommunication;
@@ -1019,11 +1026,12 @@ fn main() {
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            let (_, tank_level_switch_input_pin_opt, dht_opt) =
-                GpioHandler::new(config.gpio_handler, config.dht);
-        }
-        else {
-            let _ = GpioHandler::new(config.gpio_handler);
+            // clone GPIO numbers
+            let gpio_dht22_io = config.gpio_handler.dht22_io;
+            let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
+            let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
+
+            let gpio_handler = GpioHandler::new(config.gpio_handler);
         }
     }
 
@@ -1044,18 +1052,44 @@ fn main() {
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
 
+    let mut tank_level_switch: TankLevelSwitch;
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            let mut tank_level_switch = TankLevelSwitch::new(
-                config.tank_level_switch,
-                true,
-                tank_level_switch_input_pin_opt,
-            );
+            if config.gpio.use_simulator {
+                tank_level_switch = TankLevelSwitch::new(
+                    config.tank_level_switch,
+                    true
+                );
+            }
+            else {
+                tank_level_switch = TankLevelSwitch::new(
+                    config.tank_level_switch,
+                    true,
+                    gpio_handler.gpio_lib_handle.clone(),
+                    gpio_tank_level_switch
+                );
+            }
         }
         else {
-            let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+            tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
         }
     }
+
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut dht_opt: Option<Dht>;
+
+            if config.dht.use_simulator {
+                dht_opt = None;
+            }
+            else {
+                dht_opt = Some(
+                    Dht::new(config.dht, gpio_handler.gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
+                );
+            }
+        }
+    }
+
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
