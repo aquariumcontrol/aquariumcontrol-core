@@ -24,7 +24,7 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Contains constants for communication with Controllino
 #[allow(unused)]
 pub mod controllino_constants {
-    /// the size of ControllinoMessage is delibereately set here because checksums are added to content of struct
+    /// the size of ControllinoMessage is deliberately set here because checksums are added to content of struct
     pub const MESSAGE_SIZE: usize = 8;
 
     /// command for setting a single relay
@@ -54,7 +54,7 @@ pub mod controllino_constants {
     /// initial wait period after resetting DTR
     pub const SLEEP_AFTER_DTR_RESET_MILLIS: u64 = 1000;
 
-    /// initial wait periof after clearing buffer
+    /// initial wait period after clearing buffer
     pub const SLEEP_AFTER_CLEAR_BUFFER_MILLIS: u64 = 2000;
 }
 
@@ -115,26 +115,26 @@ pub struct ControllinoConfig {
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub skimmer_id: u8,
 
-    /// Relay id of main pump #1
+    /// Relay id of the main pump #1
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub main_pump1_id: u8,
 
-    /// Relay id of main pump #2
+    /// Relay id of the main pump #2
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub main_pump2_id: u8,
 
-    /// Relay id of auxiliary pump #1
+    /// Relay id of the auxiliary pump #1
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub aux_pump1_id: u8,
 
-    /// Relay id of auxiliary pump #2
+    /// Relay id of the auxiliary pump #2
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub aux_pump2_id: u8,
 
-    /// Relay id of refill pump
+    /// Relay id of the refill pump
     pub refill_pump_id: u8,
 
-    /// Relay id of heater
+    /// Relay id of the heater
     pub heater_id: u8,
 
     /// Relay id of ventilation
@@ -155,7 +155,7 @@ pub struct ControllinoConfig {
     /// Relay id of peristaltic pump #4
     pub peristaltic_pump4_id: u8,
 
-    /// Flag to determine if application shall communicate with hardware directly or via TCP with a simulator
+    /// Flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
     /// Baud rate for communication via serial port
@@ -196,15 +196,15 @@ pub struct Controllino {
     config: ControllinoConfig,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    /// Attribute is public becaused access from within test cases.
+    /// Attribute is public because access from within test cases.
     pub spin_sleeper_opt: Option<SpinSleeper>,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    /// Attribute is public becaused access from within test cases.
+    /// Attribute is public because access from within test cases.
     pub controllino_processing_duration_opt: Option<Duration>,
 
     /// Interface to serial port for communication via USB
-    /// Attribute is public becaused access from within test cases.
+    /// Attribute is public because access from within test cases.
     pub serial_port_opt: Option<Box<dyn SerialPort>>,
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump
@@ -222,34 +222,34 @@ pub struct Controllino {
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate Balling mineral dosing
     lock_error_actuate_balling: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to refill control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to refill control via the channel
     lock_error_channel_send_refill: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from refill control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from refill control via the channel
     lock_error_channel_receive_refill: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to feed control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to feed control via the channel
     lock_error_channel_send_feed: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from feed control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from feed control via the channel
     lock_error_channel_receive_feed: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to ventilation control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to ventilation control via the channel
     lock_error_channel_send_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from ventilation control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from ventilation control via the channel
     lock_error_channel_receive_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to heating control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to heating control via the channel
     lock_error_channel_send_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from heating control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from heating control via the channel
     lock_error_channel_receive_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to balling minderal dosing via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to send to balling mineral dosing via the channel
     lock_error_channel_send_balling: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via the channel
     lock_error_channel_receive_balling: bool,
 }
 
@@ -308,7 +308,7 @@ impl Controllino {
                     }
                 }
 
-                // wait for device
+                // wait for the device
                 let sleep_duration_after_dtr_reset =
                     Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
                 spin_sleeper.sleep(sleep_duration_after_dtr_reset);
@@ -324,7 +324,7 @@ impl Controllino {
                     }
                 }
 
-                // wait for device
+                // wait for the device
                 let sleep_duration_after_buffer_clear =
                     Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
                 spin_sleeper.sleep(sleep_duration_after_buffer_clear);
@@ -342,10 +342,10 @@ impl Controllino {
         }
 
         Controllino {
-            config: config,
-            spin_sleeper_opt: spin_sleeper_opt,
-            controllino_processing_duration_opt: controllino_processing_duration_opt,
-            serial_port_opt: serial_port_opt,
+            config,
+            spin_sleeper_opt,
+            controllino_processing_duration_opt,
+            serial_port_opt,
             lock_error_actuate_refill: false,
             lock_error_actuate_ventilation: false,
             lock_error_actuate_heating: false,
@@ -364,7 +364,7 @@ impl Controllino {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting.
+    /// Executes the main control in a loop until the signal handler commands quitting.
     /// This function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     /// # Arguments
@@ -755,7 +755,7 @@ impl Controllino {
         );
 
         // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
         _ = match tx_to_signal_handler.send(true) {
             Ok(()) => {
                 #[cfg(feature = "debug_controllino")]
@@ -809,14 +809,14 @@ pub mod tests {
     }
 
     impl ControllinoActuateVoid {
-        // provides number of execution to test case for assertion
+        // provides the number of executions to the test case for assertion
         pub fn get_execution_count(&self) -> u32 {
             self.execution_counter
         }
     }
 
     #[test]
-    // Test case tests the channel communication of the .execute function of Controllino.
+    // Test case tests the channel communication for the .execute function of Controllino.
     pub fn test_controllino_channel_communication() {
         let config: ConfigData = read_config_file(
             "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
@@ -1063,7 +1063,7 @@ pub mod tests {
                 rx_signal_handler_from_controllino.recv().unwrap();
             });
 
-            // thread for test object
+            // thread for the test object
             scope.spawn(move || {
                 let mut mock_actuator = ControllinoActuateVoid {
                     execution_counter: 0,
@@ -1086,7 +1086,7 @@ pub mod tests {
                     &mut mock_actuator,
                 );
 
-                // test object thread has ended. Assertion checks number of calls to actuator.
+                // Test object thread has ended. Assertion checks the number of calls to the actuator.
                 assert_eq!(mock_actuator.get_execution_count(), 24);
             });
         });
