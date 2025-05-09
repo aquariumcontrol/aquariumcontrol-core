@@ -37,7 +37,6 @@ pub struct MonitorsConfig {
 ///     signal_handler --> monitors
 ///     messaging[Messaging] --> monitors
 /// ```
-
 pub struct Monitors {
     /// configuration data for monitors
     config: MonitorsConfig,
@@ -59,7 +58,7 @@ impl Monitors {
     /// * `config` - configuration data for monitors
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self {
-            config: config,
+            config,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
         }
@@ -140,8 +139,8 @@ impl Monitors {
         }
 
         // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -151,9 +150,9 @@ impl Monitors {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino).
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads (Controllino).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {

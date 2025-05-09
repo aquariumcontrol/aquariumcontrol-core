@@ -18,7 +18,7 @@ cfg_if::cfg_if! {
     }
 }
 
-const LOG_TARGET_GPIO_HANDLER: &'static str = "gpio_handler";
+const LOG_TARGET_GPIO_HANDLER: &str = "gpio_handler";
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -79,7 +79,6 @@ pub struct GpioHandlerConfig {
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
-
 pub struct GpioHandler {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// GPIO interface wrapped in Option

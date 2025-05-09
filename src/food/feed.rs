@@ -46,14 +46,33 @@ pub struct FeedConfig {
     /// waiting time in milliseconds before switching on or off a device during feed
     pub device_switch_delay_millis: u32,
 
-    /// describes strategy to use when there are multiple feed schedule entries in the past
+    /// Describes the strategy to use when there are multiple feed schedule entries in the past.
+    /// Using strategy_multiple_schedule_entries_in_past:
     /// negative value: execute none of them
     /// positive value: execute the xth entry according to how they are stacked in time
-    /// - e.g. 0: execute the first entry which has a timestamp closest to now
-    /// - e.g. 1: execute the second last entry which lies closest to now
-    /// - e.g. 99: numbers higher than the amount of entries found in the past will trigger execution of the
-    /// last entry which has timestamp furthest from now
+    /// Example 0: Execute the first entry which has a timestamp closest to the current time.
+    /// Example 1: Execute the second last entry which lies closest to the current time.
+    /// Example 99: Numbers higher than the number of entries found in the past will trigger execution of the
+    /// last entry which has a timestamp furthest from the current time.
     strategy_multiple_schedule_entries_in_past: i32,
+}
+
+/// Struct collects the channels for communication between the feed control and the other components.
+pub struct FeedChannels {
+    /// Sender part of the channel for communication to Controllino
+    pub tx_feed_to_controllino: Sender<InternalCommand>,
+    
+    /// Receiver part of the channel for communication from Controllino
+    pub rx_feed_from_controllino: Receiver<bool>,
+    
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_feed_to_signal_handler: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the signal handler  
+    pub rx_feed_from_signal_handler: Receiver<InternalCommand>,
+    
+    /// Receiver part of the channel wrapped in Option for communication from the messaging  
+    pub rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -70,7 +89,6 @@ pub struct FeedConfig {
 /// ```
 /// Communication channel to Controllino is forwarded to implementation of FoodInjectionTrait.
 /// Signal handler is communicating both directly with feed as well with implementation of FoodInjectionTrait.
-
 pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
@@ -107,8 +125,8 @@ impl Feed {
         sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
     ) -> Feed {
         Self {
-            config: config,
-            sql_interface_feed: sql_interface_feed,
+            config,
+            sql_interface_feed,
             execute_command_received: false,
             profile_id_requested: -1,
             execution_blocked: false,
@@ -135,16 +153,16 @@ impl Feed {
     /// # Arguments
     /// * `profile_id` - ID of feed profile to be executed
     /// * `food_injection` - Trait method for actuation to execute the feed profile
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
+    /// * `tx_feed_to_controllino` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_feed_from_controllino` - Reference to receiver part of the channel for communication from Controllino
+    /// * `rx_feed_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler  
     fn execute_feed(
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
+        tx_feed_to_controllino: &Sender<InternalCommand>,
+        rx_feed_from_controllino: &Receiver<bool>,
+        rx_feed_from_signal_handler: &Receiver<InternalCommand>,
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
         // load feed pattern from database
@@ -156,9 +174,9 @@ impl Feed {
             Ok(feed_pattern) => {
                 //*** execute feed pattern ***
                 quit_command_received = food_injection.inject_food(
-                    &tx_to_controllino,
-                    &rx_from_controllino,
-                    &rx_from_signal_handler,
+                    tx_feed_to_controllino,
+                    rx_feed_from_controllino,
+                    rx_feed_from_signal_handler,
                     &feed_pattern,
                 );
 
@@ -208,27 +226,25 @@ impl Feed {
     /// Using strategy_multiple_schedule_entries_in_past:
     /// negative value: execute none of them
     /// positive value: execute the xth entry according to how they are stacked in time
-    /// - e.g. 0: execute the first entry which has a timestamp closest to now
-    /// - e.g. 1: execute the second last entry which lies closest to now
-    /// - e.g. 99: numbers higher than the amount of entries found in the past will trigger execution of the
-    /// last entry which has timestamp furthest from now     
+    /// Example 0: Execute the first entry which has a timestamp closest to the current time.
+    /// Example 1: Execute the second last entry which lies closest to the current time.
+    /// Example 99: Numbers higher than the number of entries found in the past will trigger execution of the
+    /// last entry which has a timestamp furthest from the current time.
     /// # Arguments
-    /// * `feedschedule_entries` - reference to vector of feed schedule entries
+    /// * `feedschedule_entries` - reference to a vector of feed schedule entries
     fn select_feed_schedule_entry_for_execution(
         &self,
-        feedschedule_entries: &Vec<FeedScheduleEntry>,
+        feedschedule_entries: &[FeedScheduleEntry],
     ) -> Option<FeedScheduleEntry> {
         if (self.config.strategy_multiple_schedule_entries_in_past >= 0)
-            && (feedschedule_entries.len() > 0)
+            && (!feedschedule_entries.is_empty())
         {
             // user chose strategy to select one element
             if (self.config.strategy_multiple_schedule_entries_in_past as usize + 1)
                 > feedschedule_entries.len()
             {
-                // vector has not sufficient number of lements - choose last element
-                feedschedule_entries
-                    .get(feedschedule_entries.len() - 1)
-                    .cloned()
+                // vector has not enough elements - choose the last element
+                feedschedule_entries.last().cloned()
             } else {
                 // vector has sufficient number of elements - choose as per parameter
                 feedschedule_entries
@@ -244,17 +260,17 @@ impl Feed {
     /// Execute the feed profile and update the SQL database.
     /// # Arguments
     /// * `profile_id` - Numeric ID of the feed profile to be executed
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to receiver part of channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler  
+    /// * `tx_feed_to_controllino` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_feed_from_controllino` - Reference to receiver part of the channel for communication from Controllino
+    /// * `rx_feed_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler  
     /// * `food_injection` - Trait method for actuation to execute the feed profile  
     fn execute_profile_update_database(
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
+        tx_feed_to_controllino: &Sender<InternalCommand>,
+        rx_feed_from_controllino: &Receiver<bool>,
+        rx_feed_from_signal_handler: &Receiver<InternalCommand>,
         feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> bool {
         #[cfg(all(feature = "debug_feed", not(test)))]
@@ -267,9 +283,9 @@ impl Feed {
         let (result, quit_command_received_during_feed) = self.execute_feed(
             profile_id,
             food_injection,
-            &tx_to_controllino,
-            &rx_from_controllino,
-            &rx_from_signal_handler,
+            tx_feed_to_controllino,
+            rx_feed_from_controllino,
+            rx_feed_from_signal_handler,
         );
 
         match result {
@@ -307,20 +323,12 @@ impl Feed {
     /// Executes the main control in a loop until signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler  
-    /// * `rx_from_messaging_opt` - Receiver part of channel wrapped in Option for communication from messaging  
+    /// * `feed_channels` - channels for communication with other threads
     /// * `food_injection` - Trait method for actuation to execute the feed profile  
     pub fn execute(
         &mut self,
         mutex_device_scheduler_feed: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        feed_channels: FeedChannels,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -379,9 +387,9 @@ impl Feed {
                                                 .execute_profile_update_database(
                                                     feed_schedule_entry.profile_id,
                                                     food_injection,
-                                                    &tx_to_controllino,
-                                                    &rx_from_controllino,
-                                                    &rx_from_signal_handler,
+                                                    &feed_channels.tx_feed_to_controllino,
+                                                    &feed_channels.rx_feed_from_controllino,
+                                                    &feed_channels.rx_feed_from_signal_handler,
                                                     &mut feed_schedule_entries,
                                                 );
 
@@ -423,7 +431,7 @@ impl Feed {
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
             ) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+                .process_external_request(&feed_channels.rx_feed_from_signal_handler, feed_channels.rx_feed_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }
@@ -474,9 +482,9 @@ impl Feed {
                     let (result, quit_command_received_during_requested_feed) = self.execute_feed(
                         self.profile_id_requested,
                         food_injection,
-                        &tx_to_controllino,
-                        &rx_from_controllino,
-                        &rx_from_signal_handler,
+                        &feed_channels.tx_feed_to_controllino,
+                        &feed_channels.rx_feed_from_controllino,
+                        &feed_channels.rx_feed_from_signal_handler,
                     );
                     match result {
                         Ok(_) => { /* do nothing */ }
@@ -511,7 +519,7 @@ impl Feed {
             "Sending Quit confirmation to signal handler."
         );
 
-        _ = match tx_to_signal_handler.send(true) {
+        match feed_channels.tx_feed_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -526,7 +534,7 @@ impl Feed {
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match feed_channels.rx_feed_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
@@ -575,7 +583,7 @@ pub mod tests {
 
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-    use crate::food::feed::{Feed, LOG_TARGET_FEED};
+    use crate::food::feed::{Feed, FeedChannels, LOG_TARGET_FEED};
     use crate::food::feed_pattern::Feedpattern;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::food::food_injection::FoodInjectionTrait;
@@ -607,9 +615,9 @@ pub mod tests {
     impl FoodInjectionTrait for MockFoodInjection {
         fn inject_food(
             &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            _tx_feed_to_controllino: &Sender<InternalCommand>,
+            _rx_feed_from_controllino: &Receiver<bool>,
+            _rx_feed_from_signal_handler: &Receiver<InternalCommand>,
             feed_pattern: &Feedpattern,
         ) -> bool {
             // do nothing except for logging the profile id of the feed pattern
@@ -750,15 +758,19 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
+            let feed_channels = FeedChannels {
+                tx_feed_to_controllino,
+                rx_feed_from_controllino,
+                tx_feed_to_signal_handler,
+                rx_feed_from_signal_handler,
+                rx_feed_from_messaging_opt: None,
+            };
+            
             // thread for test object
             scope.spawn(move || {
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
-                    tx_feed_to_signal_handler,
-                    rx_feed_from_signal_handler,
-                    None,
+                    feed_channels,
                     &mut mock_food_injection,
                 );
 
@@ -938,13 +950,18 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
-                    mutex_device_scheduler_feed_test_object.clone(),
+
+                let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    Some(rx_feed_from_messaging),
+                    rx_feed_from_messaging_opt: Some(rx_feed_from_messaging),
+                };
+
+                feed.execute(
+                    mutex_device_scheduler_feed_test_object.clone(),
+                    feed_channels,
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -1022,13 +1039,18 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                feed.execute(
-                    mutex_device_scheduler_feed_test_object.clone(),
+
+                let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    None,
+                    rx_feed_from_messaging_opt: None,
+                };
+
+                feed.execute(
+                    mutex_device_scheduler_feed_test_object.clone(),
+                    feed_channels,
                     &mut mock_food_injection,
                 );
                 println!("MockFoodInjection:\n{}", mock_food_injection);
@@ -1293,16 +1315,20 @@ pub mod tests {
             });
 
             spin_sleeper.sleep(sleep_duration_100_millisec);
-
-            // thread for test object
+            
+            // thread for the test object
             scope.spawn(move || {
-                feed.execute(
-                    mutex_device_scheduler_feed.clone(),
+                let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    None,
+                    rx_feed_from_messaging_opt: None,
+                };
+                
+                feed.execute(
+                    mutex_device_scheduler_feed.clone(),
+                    feed_channels,
                     &mut mock_food_injection,
                 );
 
@@ -1427,15 +1453,19 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object
+            // thread for the test object
             scope.spawn(move || {
-                feed.execute(
-                    mutex_device_scheduler_feed.clone(),
+                let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
-                    None,
+                    rx_feed_from_messaging_opt: None,
+                };
+                
+                feed.execute(
+                    mutex_device_scheduler_feed.clone(),
+                    feed_channels,
                     &mut mock_food_injection,
                 );
 

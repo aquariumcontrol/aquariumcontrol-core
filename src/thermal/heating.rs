@@ -127,14 +127,14 @@ pub struct HeatingConfig {
 
 /// Communicates to Controllino thread via the channel to switch on the heater.
 /// # Arguments
-/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
-/// * `tx_to_controllino` - sender part of channel for communication to Controllino
-/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_data_logger` - sender part of channel for communication to data logger
+/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
+/// * `tx_heating_to_controllino` - sender part of the channel for communication to Controllino
+/// * `rx_heating_from_controllino` - receiver part of the channel for communication from Controllino
+/// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_to_controllino: &Sender<InternalCommand>,
-    rx_from_controllino: &Receiver<bool>,
+    tx_heating_to_controllino: &Sender<InternalCommand>,
+    rx_heating_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
@@ -144,10 +144,10 @@ fn switch_on_heater(
 
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-        match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
+        match tx_heating_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_heating_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -171,14 +171,14 @@ fn switch_on_heater(
 
 /// Communicates to Controllino thread via the channel to switch off the heater.
 /// # Arguments
-/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of device
-/// * `tx_to_controllino` - sender part of channel for communication to Controllino
-/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_data_logger` - sender part of channel for communication to data logger
+/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
+/// * `tx_heating_to_controllino` - sender part of the channel for communication to Controllino
+/// * `rx_heating_from_controllino` - receiver part of the channel for communication from Controllino
+/// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_to_controllino: &Sender<InternalCommand>,
-    rx_from_controllino: &Receiver<bool>,
+    tx_heating_to_controllino: &Sender<InternalCommand>,
+    rx_heating_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
@@ -188,10 +188,10 @@ fn switch_off_heater(
 
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-        match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
+        match tx_heating_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_heating_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -210,6 +210,36 @@ fn switch_off_heater(
         }
         *mutex_data = mutex_data.saturating_add(1);
     }
+}
+
+/// Struct collects the channels for communication to Controllino, signal handler, data logger, schedule check and messaging.
+pub struct HeatingChannels {
+    /// Sender part of the channel for communication to the Controllino
+    pub tx_heating_to_controllino: Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from the Controllino
+    pub rx_heating_from_controllino: Receiver<bool>,
+
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_heating_to_signal_handler: Sender<bool>,
+
+    /// Receiver part of the channel for communication from the signal handler                
+    pub rx_heating_from_signal_handler: Receiver<InternalCommand>,
+
+    /// Sender part of the channel for communication to the data logger
+    pub tx_heating_to_data_logger: Sender<bool>,
+
+    /// Receiver part of the channel for communication from the data logger
+    pub rx_heating_from_data_logger: Receiver<InternalCommand>,
+
+    /// Sender part of the channel for communication to the schedule checker
+    pub tx_heating_to_schedule_check: Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from the schedule checker               
+    pub rx_heating_from_schedule_check: Receiver<bool>,
+
+    /// Receiver part of the channel for communication from the messaging
+    pub rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -231,7 +261,6 @@ fn switch_off_heater(
 ///     schedule_check --> heating
 ///     messaging[Messaging] --> heating
 /// ```
-
 pub struct Heating {
     /// configuration data for heating control
     config: HeatingConfig,
@@ -317,10 +346,10 @@ impl Heating {
     fn communicate_with_data_logger(
         &mut self,
         heater_state: &ActuatorState,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
+        tx_heating_to_data_logger: &Sender<bool>,
+        rx_heating_from_data_logger: &Receiver<InternalCommand>,
     ) {
-        match rx_from_data_logger.try_recv() {
+        match rx_heating_from_data_logger.try_recv() {
             Ok(c) => {
                 self.lock_error_channel_receive_data_logger = false;
                 match c {
@@ -329,11 +358,10 @@ impl Heating {
                         match d {
                             AquariumSignal::HeatingControlStatus => {
                                 self.lock_error_invalid_signal_request_data_logger = false;
-                                let response_to_data_logger = match heater_state {
-                                    ActuatorState::On => true,
-                                    _ => false,
-                                };
-                                match tx_to_data_logger.send(response_to_data_logger) {
+                                let response_to_data_logger =
+                                    matches!(heater_state, ActuatorState::On);
+
+                                match tx_heating_to_data_logger.send(response_to_data_logger) {
                                     Ok(_) => {
                                         self.lock_error_send_to_data_logger = false;
                                     }
@@ -394,32 +422,15 @@ impl Heating {
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_ambient` - Sender part of channel for communication to Ambient thread
-    /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient thread
-    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to tank level switch thread
-    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from tank level switch thread
-    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
-    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
-    /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
-    /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker               
-    /// * `sql_interface` - Reference to generic SQL interface
-    /// * `heating_stats_transfer` - generic struct for transfer of statistical data to database
+    /// * `heating_channels` - struct containing channels for communication to Controllino, signal handler, data logger, schedule check and messaging.
+    /// * `heating_stats_transfer` - generic struct for transfer of statistical data to the database
+    /// * `mutex_water_temperature` - Mutex for water temperature
+    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
+    /// * `mutex_tank_level_switch_signals` - Mutex for tank level switch signals
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_data_logger: Sender<bool>,
-        rx_from_data_logger: Receiver<InternalCommand>,
-        tx_to_schedule_check: Sender<InternalCommand>,
-        rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        heating_channels: HeatingChannels,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
         mutex_water_temperature: Arc<Mutex<f32>>,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
@@ -442,7 +453,7 @@ impl Heating {
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded: bool = false;
-        let mut mutex_blocked_during_actuation: bool = false;
+        let mut mutex_was_blocked_during_actuation: bool = false;
 
         let mut heating_stats_opt = match self
             .sql_interface_heating
@@ -466,8 +477,10 @@ impl Heating {
                 quit_command_received,  // the request to end the application has been received
                 start_command_received, // the request to (re-)start heating has been received
                 stop_command_received, // the request to (temporarily) stop heating has been received
-            ) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+            ) = self.process_external_request(
+                &heating_channels.rx_heating_from_signal_handler,
+                heating_channels.rx_heating_from_messaging_opt.as_ref(),
+            );
             if quit_command_received {
                 break;
             }
@@ -543,26 +556,30 @@ impl Heating {
                 }
 
                 // schedule check to see if actuation is allowed
-                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                match heating_channels
+                    .tx_heating_to_schedule_check
+                    .send(InternalCommand::ScheduleCheck)
+                {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
-                        schedule_check_result = match rx_from_schedule_check.recv() {
-                            Ok(c) => {
-                                self.lock_error_channel_receive_schedule_check = false;
-                                c
-                            }
-                            Err(e) => {
-                                if !self.lock_error_channel_receive_schedule_check {
-                                    error!(
-                                        target: LOG_TARGET_HEATING,
-                                        "receiving from schedule check failed ({e:?})"
-                                    );
-                                    self.lock_error_channel_receive_schedule_check = true;
+                        schedule_check_result =
+                            match heating_channels.rx_heating_from_schedule_check.recv() {
+                                Ok(c) => {
+                                    self.lock_error_channel_receive_schedule_check = false;
+                                    c
                                 }
-                                false // assume we are not allowed to actuate when communication is not successful
-                            }
-                        };
+                                Err(e) => {
+                                    if !self.lock_error_channel_receive_schedule_check {
+                                        error!(
+                                            target: LOG_TARGET_HEATING,
+                                            "receiving from schedule check failed ({e:?})"
+                                        );
+                                        self.lock_error_channel_receive_schedule_check = true;
+                                    }
+                                    false // assume we are not allowed to actuate when communication is not successful
+                                }
+                            };
                     }
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
@@ -583,9 +600,9 @@ impl Heating {
                     if heater_state != ActuatorState::Off {
                         switch_off_heater(
                             &mutex_device_scheduler_heating,
-                            &tx_to_controllino,
-                            &rx_from_controllino,
-                            &mut mutex_blocked_during_actuation,
+                            &heating_channels.tx_heating_to_controllino,
+                            &heating_channels.rx_heating_from_controllino,
+                            &mut mutex_was_blocked_during_actuation,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -607,9 +624,9 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -618,9 +635,9 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -632,9 +649,9 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -644,69 +661,67 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
                             }
                         }
-                    } else {
-                        if heating_inhibited {
-                            // the external request to stop heating control has been received
-                            match self.config.switch_on_when_external_stop {
-                                true => {
-                                    // switch on the heater if not already on
-                                    if heater_state != ActuatorState::On {
-                                        switch_on_heater(
-                                            &mutex_device_scheduler_heating,
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &mut mutex_blocked_during_actuation,
-                                        );
-                                        heater_state = ActuatorState::On;
-                                    }
-                                }
-                                false => {
-                                    // switch off the heater if not already off
-                                    if heater_state != ActuatorState::Off {
-                                        switch_off_heater(
-                                            &mutex_device_scheduler_heating,
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &mut mutex_blocked_during_actuation,
-                                        );
-                                        heater_state = ActuatorState::Off;
-                                    }
+                    } else if heating_inhibited {
+                        // the external request to stop heating control has been received
+                        match self.config.switch_on_when_external_stop {
+                            true => {
+                                // switch on the heater if not already on
+                                if heater_state != ActuatorState::On {
+                                    switch_on_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
+                                    );
+                                    heater_state = ActuatorState::On;
                                 }
                             }
-                        } else {
-                            // schedule check said that we are not allowed to actuate
-                            match self.config.switch_on_when_out_of_schedule {
-                                true => {
-                                    // switch on the heater if not already on
-                                    if heater_state != ActuatorState::On {
-                                        switch_on_heater(
-                                            &mutex_device_scheduler_heating,
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &mut mutex_blocked_during_actuation,
-                                        );
-                                        heater_state = ActuatorState::On;
-                                    }
+                            false => {
+                                // switch off the heater if not already off
+                                if heater_state != ActuatorState::Off {
+                                    switch_off_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
+                                    );
+                                    heater_state = ActuatorState::Off;
                                 }
-                                false => {
-                                    // switch off the heater if not already off
-                                    if heater_state != ActuatorState::Off {
-                                        switch_off_heater(
-                                            &mutex_device_scheduler_heating,
-                                            &tx_to_controllino,
-                                            &rx_from_controllino,
-                                            &mut mutex_blocked_during_actuation,
-                                        );
-                                        heater_state = ActuatorState::Off;
-                                    }
+                            }
+                        }
+                    } else {
+                        // schedule check said that we are not allowed to actuate
+                        match self.config.switch_on_when_out_of_schedule {
+                            true => {
+                                // switch on the heater if not already on
+                                if heater_state != ActuatorState::On {
+                                    switch_on_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
+                                    );
+                                    heater_state = ActuatorState::On;
+                                }
+                            }
+                            false => {
+                                // switch off the heater if not already off
+                                if heater_state != ActuatorState::Off {
+                                    switch_off_heater(
+                                        &mutex_device_scheduler_heating,
+                                        &heating_channels.tx_heating_to_controllino,
+                                        &heating_channels.rx_heating_from_controllino,
+                                        &mut mutex_was_blocked_during_actuation,
+                                    );
+                                    heater_state = ActuatorState::Off;
                                 }
                             }
                         }
@@ -761,8 +776,8 @@ impl Heating {
 
             self.communicate_with_data_logger(
                 &heater_state,
-                &tx_to_data_logger,
-                &rx_from_data_logger,
+                &heating_channels.tx_heating_to_data_logger,
+                &heating_channels.rx_heating_from_data_logger,
             );
 
             loop_counter += 1;
@@ -778,7 +793,7 @@ impl Heating {
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_HEATING_MILLIS {
-                if !lock_warn_cycle_time_exceeded && !mutex_blocked_during_actuation {
+                if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
                     warn!(target: LOG_TARGET_HEATING,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
@@ -791,7 +806,7 @@ impl Heating {
             } else {
                 remaining_sleep_time_millis = CYCLE_TIME_HEATING_MILLIS - execution_duration_millis;
             }
-            mutex_blocked_during_actuation = false; // reset for the next cycle
+            mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
@@ -803,9 +818,9 @@ impl Heating {
         if heater_state != ActuatorState::Off {
             switch_off_heater(
                 &mutex_device_scheduler_heating,
-                &tx_to_controllino,
-                &rx_from_controllino,
-                &mut mutex_blocked_during_actuation,
+                &heating_channels.tx_heating_to_controllino,
+                &heating_channels.rx_heating_from_controllino,
+                &mut mutex_was_blocked_during_actuation,
             );
         }
 
@@ -820,7 +835,7 @@ impl Heating {
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        match heating_channels.tx_heating_to_signal_handler.send(true) {
             Ok(()) => {
                 #[cfg(test)]
                 println!(
@@ -841,37 +856,38 @@ impl Heating {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: LOG_TARGET_HEATING,
-                                    "ignoring not applicable command from signal handler (c)"
-                                );
-                                self.lock_warn_inapplicable_command = true;
+            termination_command_received =
+                match heating_channels.rx_heating_from_signal_handler.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_termination_signal = false;
+                        match c {
+                            InternalCommand::Terminate => {
+                                self.lock_warn_inapplicable_command = false;
+                                true
                             }
-                            false
+                            _ => {
+                                if !self.lock_warn_inapplicable_command {
+                                    warn!(
+                                        target: LOG_TARGET_HEATING,
+                                        "ignoring not applicable command from signal handler (c)"
+                                    );
+                                    self.lock_warn_inapplicable_command = true;
+                                }
+                                false
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(
-                            target: LOG_TARGET_HEATING,
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination_signal = true;
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_termination_signal {
+                            error!(
+                                target: LOG_TARGET_HEATING,
+                                "receiving termination signal from signal handler failed ({e:?})"
+                            );
+                            self.lock_error_channel_receive_termination_signal = true;
+                        }
+                        false
                     }
-                    false
-                }
-            };
+                };
             let sleep_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
             spin_sleeper.sleep(sleep_duration);
         }
@@ -897,7 +913,9 @@ pub mod tests {
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
 
-    use crate::thermal::heating::{Heating, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
+    use crate::thermal::heating::{
+        Heating, HeatingChannels, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING,
+    };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -1117,7 +1135,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_tank_level_switch_for_test_case_finish =
@@ -1125,9 +1143,7 @@ pub mod tests {
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
-                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1136,7 +1152,13 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None,
+                };
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -1274,15 +1296,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
-                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1291,7 +1311,13 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None,
+                };
+
+                let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -1547,15 +1573,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1564,7 +1590,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -1693,15 +1724,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1710,8 +1741,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
-                    &mut heating_stats_transfer,
+                    rx_heating_from_messaging_opt: None
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+heating_channels,                    &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
@@ -1853,15 +1888,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -1870,7 +1905,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -2113,15 +2153,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -2130,7 +2170,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -2364,15 +2409,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -2381,7 +2426,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -2511,15 +2561,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
                     tx_heating_to_controllino.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -2528,7 +2578,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    None,
+                    rx_heating_from_messaging_opt: None,
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -2736,7 +2791,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_controllino_for_test_case_finish =
@@ -2744,8 +2799,7 @@ pub mod tests {
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
-                heating.execute(
-                    mutex_device_scheduler_heating.clone(),
+                let heating_channels = HeatingChannels {
                     tx_heating_to_controllino,
                     rx_heating_from_controllino,
                     tx_heating_to_signal_handler,
@@ -2754,7 +2808,12 @@ pub mod tests {
                     rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
-                    Some(rx_heating_from_messaging),
+                    rx_heating_from_messaging_opt: Some(rx_heating_from_messaging),
+                };
+
+                heating.execute(
+                    mutex_device_scheduler_heating.clone(),
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,

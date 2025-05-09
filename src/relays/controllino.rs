@@ -171,6 +171,47 @@ pub struct ControllinoConfig {
     controllino_processing_millis: u64,
 }
 
+pub struct ControllinoChannels {
+    /// receiver part of the channel for communication to the signal handler
+    pub tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>>,
+
+    /// sender part of the channel for communication to the refill thread
+    pub tx_controllino_to_refill: Sender<bool>,
+
+    /// receiver part of the channel for communication from the refill thread
+    pub rx_controllino_from_refill: Receiver<InternalCommand>,
+
+    /// sender part of the channel for communication to the heating thread
+    pub tx_controllino_to_heating: Sender<bool>,
+
+    /// receiver part of the channel for communication from the heating thread
+    pub rx_controllino_from_heating: Receiver<InternalCommand>,
+
+    /// sender part of the channel for communication to the ventilation thread
+    pub tx_controllino_to_ventilation: Sender<bool>,
+
+    /// receiver part of the channel for communication from the ventilation thread
+    pub rx_controllino_from_ventilation: Receiver<InternalCommand>,
+
+    /// sender part of the channel for communication to the Balling dosing thread
+    pub tx_controllino_to_balling: Sender<bool>,
+
+    /// receiver part of the channel for communication from the Balling dosing thread
+    pub rx_controllino_from_balling: Receiver<InternalCommand>,
+
+    /// sender part of the channel for communication to the feed thread
+    pub tx_controllino_to_feed: Sender<bool>,
+
+    /// receiver part of the channel for communication from the feed thread
+    pub rx_controllino_from_feed: Receiver<InternalCommand>,
+
+    /// sender part of the channel for communication to the signal handler
+    pub tx_controllino_to_signal_handler: Sender<bool>,
+
+    /// receiver part of the channel for communication from the signal handler
+    pub rx_controllino_from_signal_handler: Receiver<InternalCommand>,
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation of the Controllino interface
 /// Thread communication of this component is as follows:
@@ -190,7 +231,6 @@ pub struct ControllinoConfig {
 ///     controllino --> ventilation[Ventilation control]
 ///     ventilation --> controllino
 /// ```
-
 pub struct Controllino {
     /// configuration data for Controllino
     config: ControllinoConfig,
@@ -368,40 +408,16 @@ impl Controllino {
     /// This function receives request from other threads and either actuates on real HW
     /// or communicates with simulator
     /// # Arguments
-    /// * `tx_to_tcp_opt` - receiver part of channel for communication to signal handler
-    /// * `tx_to_refill` -  sender part of channel for communication to refill thread
-    /// * `rx_from_refill` - receiver part of channel for communication from refill thread
-    /// * `tx_to_heating` - sender part of channel for communication to heating thread
-    /// * `rx_from_heating` - receiver part of channel for communication from heating thread
-    /// * `tx_to_ventilation` - sender part of channel for communication to ventilation thread
-    /// * `rx_from_ventilation` - receiver part of channel for communication from ventilation thread
-    /// * `tx_to_balling` - sender part of channel for communication to Balling dosing thread
-    /// * `rx_from_balling` - receiver part of channel for communication from Balling dosing thread
-    /// * `tx_to_feed` - sender part of channel for communication to feed thread
-    /// * `rx_from_feed` - receiver part of channel for communication from feed thread
-    /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler
+    /// * `controllino_channels` - struct containing channels for communication with other threads   
     /// * `actuator` - struct implementing RelayActuationTrait    
     pub fn execute(
         &mut self,
-        tx_to_tcp_opt: Option<Sender<InternalCommand>>,
-        tx_to_refill: Sender<bool>,
-        rx_from_refill: Receiver<InternalCommand>,
-        tx_to_heating: Sender<bool>,
-        rx_from_heating: Receiver<InternalCommand>,
-        tx_to_ventilation: Sender<bool>,
-        rx_from_ventilation: Receiver<InternalCommand>,
-        tx_to_balling: Sender<bool>,
-        rx_from_balling: Receiver<InternalCommand>,
-        tx_to_feed: Sender<bool>,
-        rx_from_feed: Receiver<InternalCommand>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        controllino_channels: ControllinoChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(&controllino_channels.rx_controllino_from_signal_handler, None);
             if quit_command_received {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
@@ -413,7 +429,7 @@ impl Controllino {
             }
 
             // *** communication with refill control ***
-            match rx_from_refill.try_recv() {
+            match controllino_channels.rx_controllino_from_refill.try_recv() {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -425,7 +441,7 @@ impl Controllino {
                     self.lock_error_channel_receive_refill = false;
                     match actuator.actuate(
                         c,
-                        tx_to_tcp_opt.as_ref(),
+                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
                         &mut self.serial_port_opt,
                         &self.spin_sleeper_opt,
                         &self.controllino_processing_duration_opt,
@@ -444,7 +460,7 @@ impl Controllino {
                             }
                         }
                     }
-                    match tx_to_refill.send(true) {
+                    match &controllino_channels.tx_controllino_to_refill.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_refill = false;
                         }
@@ -480,7 +496,7 @@ impl Controllino {
             // **********************************
 
             // *** communication with heating control ***
-            match rx_from_heating.try_recv() {
+            match controllino_channels.rx_controllino_from_heating.try_recv() {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -492,7 +508,7 @@ impl Controllino {
                     self.lock_error_channel_receive_heating = false;
                     match actuator.actuate(
                         c,
-                        tx_to_tcp_opt.as_ref(),
+                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
                         &mut self.serial_port_opt,
                         &self.spin_sleeper_opt,
                         &self.controllino_processing_duration_opt,
@@ -511,7 +527,7 @@ impl Controllino {
                             }
                         }
                     }
-                    match tx_to_heating.send(true) {
+                    match &controllino_channels.tx_controllino_to_heating.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_heating = false;
                         }
@@ -547,7 +563,7 @@ impl Controllino {
             // **********************************
 
             // *** communication with ventilation control ***
-            match rx_from_ventilation.try_recv() {
+            match controllino_channels.rx_controllino_from_ventilation.try_recv() {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -559,7 +575,7 @@ impl Controllino {
                     self.lock_error_channel_receive_ventilation = false;
                     match actuator.actuate(
                         c,
-                        tx_to_tcp_opt.as_ref(),
+                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
                         &mut self.serial_port_opt,
                         &self.spin_sleeper_opt,
                         &self.controllino_processing_duration_opt,
@@ -578,7 +594,7 @@ impl Controllino {
                             }
                         }
                     }
-                    match tx_to_ventilation.send(true) {
+                    match &controllino_channels.tx_controllino_to_ventilation.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_ventilation = false;
                         }
@@ -614,7 +630,7 @@ impl Controllino {
             // **********************************
 
             // *** communication with Balling dosing control ***
-            match rx_from_balling.try_recv() {
+            match controllino_channels.rx_controllino_from_balling.try_recv() {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -626,7 +642,7 @@ impl Controllino {
                     self.lock_error_channel_receive_balling = false;
                     match actuator.actuate(
                         c,
-                        tx_to_tcp_opt.as_ref(),
+                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
                         &mut self.serial_port_opt,
                         &self.spin_sleeper_opt,
                         &self.controllino_processing_duration_opt,
@@ -645,7 +661,7 @@ impl Controllino {
                             }
                         }
                     }
-                    match tx_to_balling.send(true) {
+                    match &controllino_channels.tx_controllino_to_balling.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_balling = false;
                         }
@@ -681,7 +697,7 @@ impl Controllino {
             // **********************************
 
             // *** communication with feed control ***
-            match rx_from_feed.try_recv() {
+            match controllino_channels.rx_controllino_from_feed.try_recv() {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -693,7 +709,7 @@ impl Controllino {
                     self.lock_error_channel_receive_feed = false;
                     match actuator.actuate(
                         c,
-                        tx_to_tcp_opt.as_ref(),
+                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
                         &mut self.serial_port_opt,
                         &self.spin_sleeper_opt,
                         &self.controllino_processing_duration_opt,
@@ -712,7 +728,7 @@ impl Controllino {
                             }
                         }
                     }
-                    match tx_to_feed.send(true) {
+                    match &controllino_channels.tx_controllino_to_feed.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_feed = false;
                         }
@@ -756,7 +772,7 @@ impl Controllino {
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        match &controllino_channels.tx_controllino_to_signal_handler.send(true) {
             Ok(()) => {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
@@ -780,9 +796,7 @@ pub mod tests {
     use std::sync::mpsc::{self, Sender};
     use std::{thread::scope, time::Duration};
 
-    use crate::relays::controllino::{
-        Controllino, ControllinoConfig, ControllinoError, RelayActuationTrait,
-    };
+    use crate::relays::controllino::{Controllino, ControllinoChannels, ControllinoConfig, ControllinoError, RelayActuationTrait};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -1069,8 +1083,8 @@ pub mod tests {
                     execution_counter: 0,
                 };
 
-                controllino.execute(
-                    Some(tx_controllino_to_tcp),
+                let controllino_channels = ControllinoChannels {
+                    tx_controllino_to_tcp_opt: Some(tx_controllino_to_tcp),
                     tx_controllino_to_refill,
                     rx_controllino_from_refill,
                     tx_controllino_to_heating,
@@ -1083,6 +1097,10 @@ pub mod tests {
                     rx_controllino_from_feed,
                     tx_controllino_to_signal_handler,
                     rx_controllino_from_signal_handler,
+                };
+                
+                controllino.execute(
+                    controllino_channels,
                     &mut mock_actuator,
                 );
 

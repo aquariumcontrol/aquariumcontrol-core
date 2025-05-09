@@ -20,6 +20,6 @@ pub trait PettingTrait {
 
 impl PettingTrait for Petting {
     fn pet(&mut self, watchdog_filename: &str, watchdog_heartbeat: &str) {
-        let _ = std::fs::write(&watchdog_filename, &watchdog_heartbeat);
+        let _ = std::fs::write(watchdog_filename, watchdog_heartbeat);
     }
 }

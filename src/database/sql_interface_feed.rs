@@ -18,7 +18,7 @@ use crate::database::{
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
-const LOG_TARGET_SQL_INTERFACE_FEED: &'static str = "sql_interface_feed";
+const LOG_TARGET_SQL_INTERFACE_FEED: &str = "sql_interface_feed";
 
 #[derive(Clone)]
 /// Holds the header information of a feed pattern.
@@ -255,7 +255,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             "could not calculate update of feed schedule entry ({e:?})"
                         );
                         result = Err(
-                            SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                            SqlInterfaceError::FeedScheduleUpdateFailure(
                                 "Error calculating update of feed schedule entry which shall be repeated.".to_string(),
                             )
                         );
@@ -280,7 +280,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             target: LOG_TARGET_SQL_INTERFACE_FEED,
                             "could not update feed schedule entry ({e:?})"
                         );
-                        result = Err(SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                        result = Err(SqlInterfaceError::FeedScheduleUpdateFailure(
                             "Error updating feed schedule of entry which shall be repeated.".to_string(),
                         ));
                     }
@@ -302,7 +302,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             "could not delete feed schedule entry ({e:?})"
                         );
                         result = Err(
-                            SqlInterfaceError::SqlInterfaceErrorFeedScheduleUpdateFailure(
+                            SqlInterfaceError::FeedScheduleUpdateFailure(
                                 "Error when deleting refill entry which shall be not repeated."
                                     .to_string(),
                             ),
@@ -391,8 +391,8 @@ impl SqlInterfaceFeed {
             }
         };
 
-        // return none if query result is empty
-        if sql_feedschedule_entry_array.len() == 0 {
+        // return none if the query result is empty
+        if sql_feedschedule_entry_array.is_empty() {
             return Ok(None);
         }
 
@@ -407,7 +407,7 @@ impl SqlInterfaceFeed {
             }
         }
 
-        if feedschedule_entries.len() == 0 {
+        if feedschedule_entries.is_empty() {
             Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
                 "Could not convert any feedschedule entry timestamp string read from SQL database".to_string(),
             ))
@@ -484,14 +484,14 @@ impl SqlInterfaceFeed {
                 }
             };
 
-        // check error case if there is no response
-        if single_feedpattern_entry_array.len() == 0 {
+        // check the error case if there is no response
+        if single_feedpattern_entry_array.is_empty() {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query.as_str(),
             ));
         }
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -559,14 +559,14 @@ impl SqlInterfaceFeed {
             }
         };
 
-        // check error case if there is no response
-        if single_feedpattern_entry_array.len() == 0 {
+        // check the error case if there is no response
+        if single_feedpattern_entry_array.is_empty() {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query.as_str(),
             ));
         }
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query: ".to_string()

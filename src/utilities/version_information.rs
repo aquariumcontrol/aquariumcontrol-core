@@ -66,7 +66,7 @@ impl VersionInformation {
             major: VERSION_MAJOR,
             minor: VERSION_MINOR,
             build: VERSION_BUILD,
-            hash: hash,
+            hash,
         }
     }
 }

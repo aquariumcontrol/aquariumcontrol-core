@@ -64,13 +64,13 @@ pub struct VentilationConfig {
 /// Communicates to Controllino thread via the channel to switch on the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-/// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-/// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+/// * `tx_ventilation_to_controllino` - Sender part of the channel for communication to Controllino
+/// * `rx_ventilation_from_controllino` - Receiver part of the channel for communication from Controllino
+/// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_to_controllino: &Sender<InternalCommand>,
-    rx_from_controllino: &Receiver<bool>,
+    tx_ventilation_to_controllino: &Sender<InternalCommand>,
+    rx_ventilation_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     // reduce probability of wrong warning
@@ -79,10 +79,10 @@ fn switch_on_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
+    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
         Ok(_) => {
             // now listen for the response
-            match rx_from_controllino.recv() {
+            match rx_ventilation_from_controllino.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     error!(
@@ -105,13 +105,13 @@ fn switch_on_ventilation(
 /// Communicates to Controllino thread via the channel to switch off the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_to_controllino` - Sender part of the channel for communication to Controllino
-/// * `rx_from_controllino` - Receiver part of the channel for communication from Controllino
-/// * `tx_to_data_logger` - Sender part of the channel for communication to data logger
+/// * `tx_ventilation_to_controllino` - Sender part of the channel for communication to Controllino
+/// * `rx_ventilation_from_controllino` - Receiver part of the channel for communication from Controllino
+/// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_to_controllino: &Sender<InternalCommand>,
-    rx_from_controllino: &Receiver<bool>,
+    tx_ventilation_to_controllino: &Sender<InternalCommand>,
+    rx_ventilation_from_controllino: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     // reduce probability of wrong warning
@@ -120,10 +120,10 @@ fn switch_off_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
+    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
         Ok(_) => {
             // now listen for the response
-            match rx_from_controllino.recv() {
+            match rx_ventilation_from_controllino.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     error!(
@@ -143,6 +143,36 @@ fn switch_off_ventilation(
     *mutex_data += 1;
 }
 
+/// Struct collects the channels for communication between Ventilation and other components.
+pub struct VentilationChannels {
+    /// Sender part of the channel for communication to Controllino
+    pub tx_ventilation_to_controllino: Sender<InternalCommand>,
+    
+    /// Receiver part of the channel for communication from Controllino
+    pub rx_ventilation_from_controllino: Receiver<bool>,
+    
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_ventilation_to_signal_handler: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the signal handler                
+    pub rx_ventilation_from_signal_handler: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to the data logger
+    pub tx_ventilation_to_data_logger: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the data logger
+    pub rx_ventilation_from_data_logger: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to the schedule checker
+    pub tx_ventilation_to_schedule_check: Sender<InternalCommand>,
+    
+    /// Receiver part of the channel for communication from the schedule checker                   
+    pub rx_ventilation_from_schedule_check: Receiver<bool>,
+    
+    /// Receiver part of the channel for communication from the messaging                   
+    pub rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>,
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Holds the configuration and the implementation for the ventilation control.
 /// Thread communication of this component is as follows:
@@ -160,7 +190,6 @@ fn switch_off_ventilation(
 ///     schedule_check --> ventilation
 ///     messaging[Messaging] --> ventilation
 /// ```
-
 pub struct Ventilation {
     config: VentilationConfig,
 
@@ -227,10 +256,10 @@ impl Ventilation {
     fn communicate_with_data_logger(
         &mut self,
         ventilation_state: &ActuatorState,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
+        tx_ventilation_to_data_logger: &Sender<bool>,
+        rx_ventilation_from_data_logger: &Receiver<InternalCommand>,
     ) {
-        match rx_from_data_logger.try_recv() {
+        match rx_ventilation_from_data_logger.try_recv() {
             Ok(c) => {
                 self.lock_error_channel_receive_data_logger = false;
                 match c {
@@ -239,11 +268,10 @@ impl Ventilation {
                         match d {
                             AquariumSignal::VentilationControlStatus => {
                                 self.lock_error_invalid_signal_request_data_logger = false;
-                                let response_to_data_logger = match ventilation_state {
-                                    ActuatorState::On => true,
-                                    _ => false,
-                                };
-                                match tx_to_data_logger.send(response_to_data_logger) {
+                                let response_to_data_logger =
+                                    matches!(ventilation_state, ActuatorState::On);
+
+                                match tx_ventilation_to_data_logger.send(response_to_data_logger) {
                                     Ok(_) => {
                                         self.lock_error_send_to_data_logger = false;
                                     }
@@ -304,27 +332,12 @@ impl Ventilation {
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_controllino` - Sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
-    /// * `rx_from_data_logger` - Receiver part of channel for communication from data logger
-    /// * `tx_to_schedule_check` - Sender part of channel for communication to schedule checker
-    /// * `rx_from_schedule_check` - Receiver part of channel for communication from schedule checker                   
+    /// * `refill_channels` - struct with all channels required for Ventilation
     /// * `mutex_water_temperature` - Mutex which contains water temperature                   
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_data_logger: Sender<bool>,
-        rx_from_data_logger: Receiver<InternalCommand>,
-        tx_to_schedule_check: Sender<InternalCommand>,
-        rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        ventilation_channels: VentilationChannels,
         mutex_water_temperature: Arc<Mutex<f32>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -337,11 +350,11 @@ impl Ventilation {
         let mut ventilation_inhibited = false; // state of ventilation control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = SystemTime::now();
-        let mut mutex_blocked_during_actuation: bool = false;
+        let mut mutex_was_blocked_during_actuation: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+                .process_external_request(&ventilation_channels.rx_ventilation_from_signal_handler, ventilation_channels.rx_ventilation_from_messaging_opt.as_ref());
             if quit_command_received {
                 break;
             }
@@ -378,11 +391,11 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                match ventilation_channels.tx_ventilation_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
-                        schedule_check_result = match rx_from_schedule_check.recv() {
+                        schedule_check_result = match ventilation_channels.rx_ventilation_from_schedule_check.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
                                 c
@@ -424,9 +437,9 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -435,9 +448,9 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -449,9 +462,9 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -461,69 +474,67 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &tx_to_controllino,
-                                    &rx_from_controllino,
-                                    &mut mutex_blocked_during_actuation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
+                                );
+                                ventilation_state = ActuatorState::Off;
+                            }
+                        }
+                    }
+                } else if ventilation_inhibited {
+                    // An external request for stopping ventilation control has been received
+                    match self.config.switch_on_when_external_stop {
+                        true => {
+                            // switch on the heater if not already on
+                            if ventilation_state != ActuatorState::On {
+                                switch_on_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
+                                );
+                                ventilation_state = ActuatorState::On;
+                            }
+                        }
+                        false => {
+                            // switch off the heater if not already off
+                            if ventilation_state != ActuatorState::Off {
+                                switch_off_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
                         }
                     }
                 } else {
-                    if ventilation_inhibited {
-                        // An external request for stopping ventilation control has been received
-                        match self.config.switch_on_when_external_stop {
-                            true => {
-                                // switch on the heater if not already on
-                                if ventilation_state != ActuatorState::On {
-                                    switch_on_ventilation(
-                                        &mutex_device_scheduler_ventilation,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
-                                    );
-                                    ventilation_state = ActuatorState::On;
-                                }
-                            }
-                            false => {
-                                // switch off the heater if not already off
-                                if ventilation_state != ActuatorState::Off {
-                                    switch_off_ventilation(
-                                        &mutex_device_scheduler_ventilation,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
-                                    );
-                                    ventilation_state = ActuatorState::Off;
-                                }
+                    // schedule check requires stop of ventilation control
+                    match self.config.switch_on_when_out_of_schedule {
+                        true => {
+                            // switch on the heater if not already on
+                            if ventilation_state != ActuatorState::On {
+                                switch_on_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
+                                );
+                                ventilation_state = ActuatorState::On;
                             }
                         }
-                    } else {
-                        // schedule check requires stop of ventilation control
-                        match self.config.switch_on_when_out_of_schedule {
-                            true => {
-                                // switch on the heater if not already on
-                                if ventilation_state != ActuatorState::On {
-                                    switch_on_ventilation(
-                                        &mutex_device_scheduler_ventilation,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
-                                    );
-                                    ventilation_state = ActuatorState::On;
-                                }
-                            }
-                            false => {
-                                // switch off the heater if not already off
-                                if ventilation_state != ActuatorState::Off {
-                                    switch_off_ventilation(
-                                        &mutex_device_scheduler_ventilation,
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &mut mutex_blocked_during_actuation,
-                                    );
-                                    ventilation_state = ActuatorState::Off;
-                                }
+                        false => {
+                            // switch off the heater if not already off
+                            if ventilation_state != ActuatorState::Off {
+                                switch_off_ventilation(
+                                    &mutex_device_scheduler_ventilation,
+                                    &ventilation_channels.tx_ventilation_to_controllino,
+                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &mut mutex_was_blocked_during_actuation,
+                                );
+                                ventilation_state = ActuatorState::Off;
                             }
                         }
                     }
@@ -532,8 +543,8 @@ impl Ventilation {
 
             self.communicate_with_data_logger(
                 &ventilation_state,
-                &tx_to_data_logger,
-                &rx_from_data_logger,
+                &ventilation_channels.tx_ventilation_to_data_logger,
+                &ventilation_channels.rx_ventilation_from_data_logger,
             );
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
@@ -544,7 +555,7 @@ impl Ventilation {
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_VENTILATION_MILLIS {
-                if !lock_warn_cycle_time_exceeded && !!mutex_blocked_during_actuation {
+                if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
                     warn!(target: LOG_TARGET_VENTILATION,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration_millis,
@@ -558,7 +569,7 @@ impl Ventilation {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_VENTILATION_MILLIS - execution_duration_millis;
             }
-            mutex_blocked_during_actuation = false; // reset for the next cycle
+            mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
@@ -571,9 +582,9 @@ impl Ventilation {
             if ventilation_state != ActuatorState::On {
                 switch_on_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &tx_to_controllino,
-                    &rx_from_controllino,
-                    &mut mutex_blocked_during_actuation,
+                    &ventilation_channels.tx_ventilation_to_controllino,
+                    &ventilation_channels.rx_ventilation_from_controllino,
+                    &mut mutex_was_blocked_during_actuation,
                 );
             }
         } else {
@@ -581,16 +592,16 @@ impl Ventilation {
             if ventilation_state != ActuatorState::Off {
                 switch_off_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &tx_to_controllino,
-                    &rx_from_controllino,
-                    &mut mutex_blocked_during_actuation,
+                    &ventilation_channels.tx_ventilation_to_controllino,
+                    &ventilation_channels.rx_ventilation_from_controllino,
+                    &mut mutex_was_blocked_during_actuation,
                 );
             }
         }
 
         // The application received a request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        match ventilation_channels.tx_ventilation_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -605,7 +616,7 @@ impl Ventilation {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match ventilation_channels.rx_ventilation_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
@@ -651,7 +662,7 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use crate::thermal::ventilation::{Ventilation, LOG_TARGET_VENTILATION};
+    use crate::thermal::ventilation::{Ventilation, VentilationChannels, LOG_TARGET_VENTILATION};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -758,14 +769,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
+                let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -774,7 +784,12 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    None,
+                    rx_ventilation_from_messaging_opt: None,
+                };
+                
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
                     mutex_water_temperature,
                 );
 
@@ -901,14 +916,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
-
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
+                
+                let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -917,7 +931,12 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    None,
+                    rx_ventilation_from_messaging_opt: None,
+                };
+                
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
                     mutex_water_temperature,
                 );
 
@@ -1171,14 +1190,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
+                let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1187,7 +1205,12 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    None,
+                    rx_ventilation_from_messaging_opt: None,
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
                     mutex_water_temperature,
                 );
 
@@ -1312,14 +1335,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
+                let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1328,7 +1350,12 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    None,
+                    rx_ventilation_from_messaging_opt: None,
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
                     mutex_water_temperature,
                 );
 
@@ -1544,14 +1571,13 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
 
-                ventilation.execute(
-                    mutex_device_scheduler_ventilation.clone(),
+                let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
                     tx_ventilation_to_signal_handler,
@@ -1560,7 +1586,12 @@ pub mod tests {
                     rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
-                    Some(rx_ventilation_from_messaging),
+                    rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
+                };
+
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
                     mutex_water_temperature,
                 );
 

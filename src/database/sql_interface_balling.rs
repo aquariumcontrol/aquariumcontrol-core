@@ -165,15 +165,15 @@ impl SqlInterfaceBalling {
             }
         };
 
-        // check error case if there is no response
-        if single_balling_setval_array.len() == 0 {
+        // check the error case if there is no response
+        if single_balling_setval_array.is_empty() {
             return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
                 "SQL database responded with empty response to query: ".to_string()
                     + &sql_query_string,
             ));
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_balling_setval_array.len() > 1 {
             return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
                 "SQL database responded with multiple responses to request to query:".to_string()

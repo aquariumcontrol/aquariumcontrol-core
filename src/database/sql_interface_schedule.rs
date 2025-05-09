@@ -125,14 +125,14 @@ impl ScheduleEntry {
         let is_active = sql_schedule_entry.is_active > 0;
 
         Ok(Self {
-            schedule_type: schedule_type,
-            start_time: start_time,
-            stop_time: stop_time,
-            is_active: is_active,
+            schedule_type,
+            start_time,
+            stop_time,
+            is_active,
         })
     }
 
-    /// Checks if the current local time is inbetween start and stop time for the schedule entry.
+    /// Checks if the current local time is in between start and stop time for the schedule entry.
     pub fn check_if_allowed(&self) -> bool {
         let current_time = Local::now().time();
         (current_time >= self.start_time) & (current_time <= self.stop_time)
@@ -156,7 +156,7 @@ impl SqlInterfaceSchedule {
     /// * `config` - configuration data for Balling dosing control
     pub fn new(conn: PooledConn) -> SqlInterfaceSchedule {
         Self {
-            conn: conn,
+            conn,
             schedules: Vec::new(),
         }
     }
@@ -179,7 +179,7 @@ impl SqlInterfaceSchedule {
             Err(_) => {
                 return Err(SqlInterfaceError::ScheduleRequestFailure(
                     "Could not get schedule entries from SQL database using query:".to_string()
-                        + &sql_query_strings::SQL_QUERY_READ_SCHEDULE,
+                        + sql_query_strings::SQL_QUERY_READ_SCHEDULE,
                 ));
             }
         };

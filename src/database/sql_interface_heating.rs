@@ -261,8 +261,8 @@ impl SqlInterfaceHeating {
             }
         };
 
-        // check error case if there is no response
-        if single_heating_stats_entry_array.len() == 0 {
+        // check the error case if there is no response
+        if single_heating_stats_entry_array.is_empty() {
             return Err(
                 SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
                     "SQL database responded with empty response to query: ".to_string()
@@ -270,7 +270,7 @@ impl SqlInterfaceHeating {
                 ),
             );
         }
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_heating_stats_entry_array.len() > 1 {
             return Err(
                 SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
@@ -297,7 +297,7 @@ impl SqlInterfaceHeating {
         };
 
         let single_heating_stats_entry = HeatingStatsEntry {
-            date: date.into(),
+            date,
             energy: single_heating_stats_string_entry.energy,
             ambient_temperature_average_value: single_heating_stats_string_entry
                 .ambient_temperature_average_value,

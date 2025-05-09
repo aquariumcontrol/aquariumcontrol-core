@@ -128,35 +128,35 @@ impl Ambient {
 
     /// communication with simulator thread via the channel
     /// # Arguments
-    /// * `tx_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
-    /// * `rx_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
+    /// * `tx_ambient_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
+    /// * `rx_ambient_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
     fn communicate_with_simulator(
         &mut self,
-        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_from_tcp_opt: &Option<Receiver<f32>>,
+        tx_ambient_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_ambient_from_tcp_opt: &Option<Receiver<f32>>,
     ) {
         // unwrap is safe because tested beforehand
-        let tx_to_simulator = tx_to_tcp_opt.as_ref().unwrap();
-        let rx_from_simulator = rx_from_tcp_opt.as_ref().unwrap();
+        let tx_ambient_to_simulator = tx_ambient_to_tcp_opt.as_ref().unwrap();
+        let rx_ambient_from_simulator = rx_ambient_from_tcp_opt.as_ref().unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
-            &tx_to_simulator,
-            &rx_from_simulator,
+            tx_ambient_to_simulator,
+            rx_ambient_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
         );
         self.ambient_humidity = Self::get_response_from_simulator(
-            &tx_to_simulator,
-            &rx_from_simulator,
+            tx_ambient_to_simulator,
+            rx_ambient_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
         );
     }
 
     /// request execution of measurement by Dht
     /// # Arguments
-    /// * `tx_to_dht` - reference to sender part of the channel for sending command to Dht
+    /// * `tx_ambient_to_dht` - reference to sender part of the channel for sending command to Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    fn send_request_to_dht(&mut self, tx_to_dht: &Sender<InternalCommand>) -> bool {
-        match tx_to_dht.send(InternalCommand::RequestSignal(
+    fn send_request_to_dht(&mut self, tx_ambient_to_dht: &Sender<InternalCommand>) -> bool {
+        match tx_ambient_to_dht.send(InternalCommand::RequestSignal(
             AquariumSignal::AmbientTemperature,
         )) {
             Ok(()) => {
@@ -185,11 +185,11 @@ impl Ambient {
 
     /// receive and process response from Dht
     /// # Arguments
-    /// * `rx_from_dht` - reference to the receiver part of the channel for receiving data from Dht
+    /// * `rx_ambient_from_dht` - reference to the receiver part of the channel for receiving data from Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     fn receive_response_from_dht(
         &mut self,
-        rx_from_dht: &Receiver<Result<(f32, f32), DhtError>>,
+        rx_ambient_from_dht: &Receiver<Result<(f32, f32), DhtError>>,
     ) -> bool {
         #[cfg(feature = "debug_ambient")]
         debug!(
@@ -197,7 +197,7 @@ impl Ambient {
             "checking if response from dht is available",
         );
 
-        match rx_from_dht.try_recv() {
+        match rx_ambient_from_dht.try_recv() {
             Ok(response) => match response {
                 Ok((ambient_temperature, ambient_humidity)) => {
                     #[cfg(feature = "debug_ambient")]
@@ -247,22 +247,22 @@ impl Ambient {
 
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
-    /// * `tx_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
-    /// * `rx_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
-    /// * `tx_to_dht_opt` - Sender part of channel for communication to Dht
-    /// * `rx_from_dht_opt` - Receiver part of channel for communication from Dht
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `tx_ambient_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
+    /// * `rx_ambient_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
+    /// * `tx_ambient_to_dht_opt` - Sender part of channel for communication to Dht
+    /// * `rx_ambient_from_dht_opt` - Receiver part of channel for communication from Dht
+    /// * `tx_ambient_to_signal_handler` - Sender part of channel for communication to signal handler
+    /// * `rx_ambient_from_signal_handler` - Receiver part of channel for communication from signal handler                
     /// * `mutex_ambient_temperature` - Mutex for ambient temperature
     /// * `mutex_ambient_humidity` - Mutex for ambient humidity
     pub fn execute(
         &mut self,
-        tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_from_tcp_opt: &Option<Receiver<f32>>,
-        tx_to_dht_opt: Option<Sender<InternalCommand>>,
-        rx_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        tx_ambient_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_ambient_from_tcp_opt: &Option<Receiver<f32>>,
+        tx_ambient_to_dht_opt: Option<Sender<InternalCommand>>,
+        rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
+        tx_ambient_to_signal_handler: Sender<bool>,
+        rx_ambient_from_signal_handler: Receiver<InternalCommand>,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
         mutex_ambient_humidity: Arc<Mutex<f32>>,
     ) {
@@ -284,14 +284,14 @@ impl Ambient {
         // initialize countdown
         let mut measurement_countdown: i32 = 0;
 
-        if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
+        if (self.config.use_simulator) && (tx_ambient_to_tcp_opt.is_none() | rx_ambient_from_tcp_opt.is_none()) {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
                 LOG_TARGET_AMBIENT
             );
         }
 
-        if (self.config.use_simulator) && ((tx_to_dht_opt.is_some()) | (rx_from_dht_opt.is_some()))
+        if (self.config.use_simulator) && ((tx_ambient_to_dht_opt.is_some()) | (rx_ambient_from_dht_opt.is_some()))
         {
             panic!(
                 "{}: configured to run with simulator, but channels to Dht thread provided",
@@ -300,7 +300,7 @@ impl Ambient {
         }
 
         #[cfg(not(target_os = "linux"))]
-        if tx_to_dht_opt.is_some() || rx_from_dht_opt.is_some() {
+        if tx_ambient_to_dht_opt.is_some() || rx_ambient_from_dht_opt.is_some() {
             warn!(target: LOG_TARGET_AMBIENT,
                 "Sender/Receiver to Dht are not 'None'");
         }
@@ -310,7 +310,7 @@ impl Ambient {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&rx_from_signal_handler, None);
+            ) = self.process_external_request(&rx_ambient_from_signal_handler, None);
 
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -333,11 +333,11 @@ impl Ambient {
                 if !self.config.use_simulator {
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
-                        if tx_to_dht_opt.is_some() && rx_from_dht_opt.is_some() {
+                        if tx_ambient_to_dht_opt.is_some() && rx_ambient_from_dht_opt.is_some() {
                             if !state_send_receive {
-                                let tx_to_dht = tx_to_dht_opt.as_ref().unwrap();
+                                let tx_ambient_to_dht = tx_ambient_to_dht_opt.as_ref().unwrap();
 
-                                state_send_receive = self.send_request_to_dht(tx_to_dht);
+                                state_send_receive = self.send_request_to_dht(tx_ambient_to_dht);
 
                                 #[cfg(feature = "debug_ambient")]
                                 {
@@ -350,9 +350,9 @@ impl Ambient {
                                 }
                             } else {
                                 // read from the channel if a measurement result is available from Dht thread
-                                let rx_from_dht = rx_from_dht_opt.as_ref().unwrap();
+                                let rx_ambient_from_dht = rx_ambient_from_dht_opt.as_ref().unwrap();
 
-                                state_send_receive = self.receive_response_from_dht(rx_from_dht);
+                                state_send_receive = self.receive_response_from_dht(rx_ambient_from_dht);
 
                                 if !state_send_receive {
                                     // data could be received successfully
@@ -376,7 +376,7 @@ impl Ambient {
                         }
                     }
                 } else {
-                    self.communicate_with_simulator(tx_to_tcp_opt, rx_from_tcp_opt);
+                    self.communicate_with_simulator(tx_ambient_to_tcp_opt, rx_ambient_from_tcp_opt);
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
 
@@ -411,7 +411,7 @@ impl Ambient {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
-        _ = match tx_to_signal_handler.send(true) {
+        match tx_ambient_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -426,7 +426,7 @@ impl Ambient {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match rx_ambient_from_signal_handler.recv() {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command_signal_handler = false;

@@ -143,15 +143,15 @@ impl SqlInterface {
             }
         };
 
-        // check error case if there is no response
-        if single_string_array.len() == 0 {
+        // check the error case if there is no response
+        if single_string_array.is_empty() {
             return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_string_array.len() > 1 {
             return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -187,12 +187,12 @@ impl SqlInterface {
             }
         };
 
-        // check case if there is no response
-        if single_string_array.len() == 0 {
+        // return an empty response if there is no response from the database
+        if single_string_array.is_empty() {
             return Ok(Option::None);
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_string_array.len() > 1 {
             return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -243,15 +243,15 @@ impl SqlInterface {
             }
         };
 
-        // check error case if there is no response
-        if single_string_array.len() == 0 {
+        // check the error case if there is no response
+        if single_string_array.is_empty() {
             return Err(SqlInterfaceError::SingleVersionRequestNotListed(
                 "SQL database responded with empty response to query: ".to_owned()
                     + &sql_query_string,
             ));
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_string_array.len() > 1 {
             error!(
                 target: Self::LOG_TARGET_SQL_INTERFACE,
@@ -330,15 +330,15 @@ impl SqlInterface {
             }
         };
 
-        // check error case if there is no response
-        if single_integer_array.len() == 0 {
+        // check the error case if there is no response
+        if single_integer_array.is_empty() {
             return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_integer_array.len() > 1 {
             return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -372,15 +372,15 @@ impl SqlInterface {
             }
         };
 
-        // check error case if there is no response
-        if single_float_array.len() == 0 {
+        // check the error case if there is no response
+        if single_float_array.is_empty() {
             return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
                 "SQL database responded with empty response to query: ".to_string()
                     + sql_query_string,
             ));
         }
 
-        // check error case if there is more than one response
+        // check the error case if there is more than one response
         if single_float_array.len() > 1 {
             return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
                 "SQL database responded with multiple responses to request to query:".to_string()
@@ -610,15 +610,13 @@ impl SqlInterface {
         true
     }
 
-    /// Reads all tables from the data base and checks if all required tables are existing.
+    /// Reads all tables from the database and checks if all required tables are existing.
     /// The function provides wrapped in Result type either
     /// - Ok value
     /// - or an error code from the enum SqlInterfaceError
     pub fn check_required_tables_existing(&mut self) -> Result<(), SqlInterfaceError> {
-        let existing_tables = match self.get_tables() {
-            Ok(c) => c,
-            Err(e) => return Err(e),
-        };
+        let existing_tables = self.get_tables()?;
+
         if !Self::compare_required_tables_existing_tables(
             self.config.db_tables.clone(),
             existing_tables.clone(),

@@ -81,13 +81,12 @@ impl PublishPid {
         fs::write(config.pid_filename.clone(), process_id_string)
             .expect("PublishPid: Could not publish PID.");
 
-        PublishPid { config: config }
+        PublishPid { config }
     }
 
     /// Erases PID from previously generated file
     pub fn erase_pid(&self) {
-        fs::write(self.config.pid_filename.clone(), "0".to_string())
-            .expect("PublishPid: Could not erase PID.");
+        fs::write(self.config.pid_filename.clone(), "0").expect("PublishPid: Could not erase PID.");
     }
 }
 

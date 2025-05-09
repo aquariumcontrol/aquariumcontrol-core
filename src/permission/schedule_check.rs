@@ -1,4 +1,4 @@
-/* Cuopyright 2024 Uwe Martin
+/* Copyright 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -27,10 +27,43 @@ pub struct ScheduleCheckConfig {
     /// interval for polling the SQL database
     schedule_check_interval: u32,
 
-    /// strategy if entry could not be found in database:
+    /// strategy if entry could not be found in the database:
     /// - true allows actuation
     /// - false inhibits actuation
     strategy_if_schedule_not_found: bool,
+}
+
+/// Struct collects all channels for communication between ScheduleCheck and other components.
+pub struct ScheduleCheckChannels {
+    /// Sender part of the channel for communication to ventilation
+    pub tx_schedule_check_to_ventilation: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from ventilation
+    pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to heating
+    pub tx_schedule_check_to_heating: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from heating
+    pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to refill
+    pub tx_schedule_check_to_refill: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from refill
+    pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to the Balling dosing control
+    pub tx_schedule_check_to_balling: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the Balling dosing control
+    pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
+    
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_schedule_check_to_signal_handler: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the signal handler                
+    pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -49,7 +82,6 @@ pub struct ScheduleCheckConfig {
 ///     schedule_check --> signal_handler[Signal handler]
 ///     signal_handler --> schedule_check
 /// ```
-
 pub struct ScheduleCheck {
     /// configuration data for schedule checker
     config: ScheduleCheckConfig,
@@ -69,28 +101,28 @@ pub struct ScheduleCheck {
     /// inhibition flag to avoid flooding the log file with repeated messages about not finding schedule entry for heating control
     lock_error_find_heating_schedule: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from Balling dosing via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from Balling dosing via the channel
     lock_error_channel_receive_balling: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from ventilation control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from ventilation control via the channel
     lock_error_channel_receive_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from refill control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from refill control via the channel
     lock_error_channel_receive_refill: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from heating control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from heating control via the channel
     lock_error_channel_receive_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to Balling mineral dosing via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to Balling mineral dosing via the channel
     lock_error_channel_send_balling: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to ventilation control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to ventilation control via the channel
     lock_error_channel_send_ventilation: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to refill control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to refill control via the channel
     lock_error_channel_send_refill: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to heating control via channel
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send information to heating control via the channel
     lock_error_channel_send_heating: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from Balling mineral dosing
@@ -118,8 +150,8 @@ impl ScheduleCheck {
         sql_interface_schedule: SqlInterfaceSchedule,
     ) -> ScheduleCheck {
         ScheduleCheck {
-            config: config,
-            sql_interface_schedule: sql_interface_schedule,
+            config,
+            sql_interface_schedule,
             lock_error_find_balling_schedule: false,
             lock_error_find_refill_schedule: false,
             lock_error_find_ventilation_schedule: false,
@@ -143,9 +175,12 @@ impl ScheduleCheck {
     /// If the message contains the ScheduleCheck command, then the function returns a flag indicating
     /// if the thread is allowed to actuate the device.
     /// # Arguments
-    /// * `tx` - sender part of channel for communication to one of the above mentioned threads
-    /// * `rx` - receiver part of channel for communication from one of the above mentioned threads
+    /// * `tx` - sender part of the channel for communication to one of the above-mentioned threads
+    /// * `rx` - receiver part of the channel for communication from one of the above-mentioned threads
     /// * `schedule_entry` - schedule data for the specific thread
+    /// * `lock_error_channel_receive` - reference to lock variable for avoiding flooding of the log file
+    /// * `lock_error_channel_send` - reference to lock variable for avoiding flooding of the log file
+    /// * `lock_warn_inapplicable_command` - reference to lock variable for avoiding flooding of the log file
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &Sender<bool>,
@@ -210,30 +245,12 @@ impl ScheduleCheck {
         };
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
-    /// * `tx_to_ventilation` - Sender part of channel for communication to ventilation
-    /// * `rx_from_ventilation` - Receiver part of channel for communication from ventilation
-    /// * `tx_to_heating` - Sender part of channel for communication to heating
-    /// * `rx_from_heating` - Receiver part of channel for communication from heating
-    /// * `tx_to_refill` - Sender part of channel for communication to refill
-    /// * `rx_from_refill` - Receiver part of channel for communication from refill
-    /// * `tx_to_balling` - Sender part of channel for communication to Balling dosing control
-    /// * `rx_from_balling` - Receiver part of channel for communication from Balling dosing control
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * `schedule_check_channels` - Struct with all channels for communication with other components
     pub fn execute(
         &mut self,
-        tx_to_ventilation: Sender<bool>,
-        rx_from_ventilation: Receiver<InternalCommand>,
-        tx_to_heating: Sender<bool>,
-        rx_from_heating: Receiver<InternalCommand>,
-        tx_to_refill: Sender<bool>,
-        rx_from_refill: Receiver<InternalCommand>,
-        tx_to_balling: Sender<bool>,
-        rx_from_balling: Receiver<InternalCommand>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        schedule_check_channels: ScheduleCheckChannels
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -245,7 +262,7 @@ impl ScheduleCheck {
             }
 
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(&schedule_check_channels.rx_schedule_check_from_signal_handler, None);
             if quit_command_received {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(
@@ -278,8 +295,8 @@ impl ScheduleCheck {
             };
             Self::check_pending_schedule_request(
                 &self.config,
-                &tx_to_ventilation,
-                &rx_from_ventilation,
+                &schedule_check_channels.tx_schedule_check_to_ventilation,
+                &schedule_check_channels.rx_schedule_check_from_ventilation,
                 schedule_entry_ventilation_opt,
                 &mut self.lock_error_channel_receive_ventilation,
                 &mut self.lock_error_channel_send_ventilation,
@@ -309,8 +326,8 @@ impl ScheduleCheck {
             };
             Self::check_pending_schedule_request(
                 &self.config,
-                &tx_to_heating,
-                &rx_from_heating,
+                &schedule_check_channels.tx_schedule_check_to_heating,
+                &schedule_check_channels.rx_schedule_check_from_heating,
                 schedule_entry_heating_opt,
                 &mut self.lock_error_channel_receive_heating,
                 &mut self.lock_error_channel_send_heating,
@@ -340,8 +357,8 @@ impl ScheduleCheck {
             };
             Self::check_pending_schedule_request(
                 &self.config,
-                &tx_to_refill,
-                &rx_from_refill,
+                &schedule_check_channels.tx_schedule_check_to_refill,
+                &schedule_check_channels.rx_schedule_check_from_refill,
                 schedule_entry_refill_opt,
                 &mut self.lock_error_channel_receive_refill,
                 &mut self.lock_error_channel_send_refill,
@@ -371,8 +388,8 @@ impl ScheduleCheck {
             };
             Self::check_pending_schedule_request(
                 &self.config,
-                &tx_to_balling,
-                &rx_from_balling,
+                &schedule_check_channels.tx_schedule_check_to_balling,
+                &schedule_check_channels.rx_schedule_check_from_balling,
                 schedule_entry_balling_opt,
                 &mut self.lock_error_channel_receive_balling,
                 &mut self.lock_error_channel_send_balling,
@@ -390,9 +407,9 @@ impl ScheduleCheck {
             }
         }
 
-        // Application received request to terminate, that is why the loop was left.
-        // Answer to thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        // Application received the request to terminate, that is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match schedule_check_channels.tx_schedule_check_to_signal_handler.send(true) {
             Ok(()) => {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(

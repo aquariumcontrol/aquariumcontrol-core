@@ -65,11 +65,33 @@ pub struct BallingConfig {
     pub pump_switch_delay_millis: u32,
 }
 
+pub struct BallingChannels {
+    /// sender part of the channel for communication to Controllino
+    pub tx_balling_to_controllino: Sender<InternalCommand>,
+    
+    /// receiver part of the channel for communication from Controllino
+    pub rx_balling_from_controllino: Receiver<bool>,
+    
+    /// sender part of the channel for communication to the signal handler
+    pub tx_balling_to_signal_handler: Sender<bool>,
+    
+    /// receiver part of the channel for communication from the signal handler                
+    pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
+    
+    /// sender part of the channel for communication to the schedule checker
+    pub tx_balling_to_schedule_check: Sender<InternalCommand>,
+    
+    /// receiver part of the channel for communication from the schedule checker
+    pub rx_balling_from_schedule_check: Receiver<bool>,
+    
+    /// receiver part of the channel communication wrapped in Option from Messaging
+    pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the Balling dosing control.
 /// Thread communication of this component is as follows:
 /// ```mermaid
-
 /// graph LR
 ///     balling[Balling dosing control] --> signal_handler[Signal handler]
 ///     signal_handler --> balling
@@ -79,11 +101,10 @@ pub struct BallingConfig {
 ///     controllino --> mineral_injection
 ///     balling --> schedule_check[Schedule check]
 ///     schedule_check --> balling
-///	    messaging[Messaging] --> balling
+///     messaging[Messaging] --> balling
 /// ```
 /// Communication channel to and from Controllino is forwarded to implementation of MineralInjectionTrait.
 /// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
-
 pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
@@ -145,12 +166,12 @@ impl Balling {
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 4);
 
         Balling {
-            config: config,
-            sql_interface_balling: sql_interface_balling,
-            countdown_dosing_pump1: countdown_dosing_pump1,
-            countdown_dosing_pump2: countdown_dosing_pump2,
-            countdown_dosing_pump3: countdown_dosing_pump3,
-            countdown_dosing_pump4: countdown_dosing_pump4,
+            config,
+            sql_interface_balling,
+            countdown_dosing_pump1,
+            countdown_dosing_pump2,
+            countdown_dosing_pump3,
+            countdown_dosing_pump4,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
@@ -204,7 +225,7 @@ impl Balling {
                         0
                     }
                 },
-                None => target_dosing_interval.into(),
+                None => target_dosing_interval,
             },
             Err(e) => {
                 panic!(
@@ -221,10 +242,7 @@ impl Balling {
         );
 
         // limit subtraction to 0
-        let countdown = match target_dosing_interval.checked_sub(duration_since_balling_dosing) {
-            None => 0,
-            Some(diff) => diff,
-        };
+        let countdown = target_dosing_interval.saturating_sub(duration_since_balling_dosing);
 
         #[cfg(test)]
         println!(
@@ -271,16 +289,16 @@ impl Balling {
     /// * `pump_id` - id of the pump to be actuated.
     /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
     /// * `mineral_injection` - refence to struct implementing MineralInjectionTrait
-    /// * `tx_to_controllino` - sender part of channel communication to send command to Controllino
-    /// * `rx_from_controllino` - receiver part of channel communication to receive confirmation back from Controllino
+    /// * `tx_balling_to_controllino` - sender part of channel communication to send command to Controllino
+    /// * `rx_balling_from_controllino` - receiver part of channel communication to receive confirmation back from Controllino
     fn execute_dosing(
         &mut self,
         pump_id: u32,
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        rx_balling_from_signal_handler: &Receiver<InternalCommand>,
+        tx_balling_to_controllino: &Sender<InternalCommand>,
+        rx_balling_from_controllino: &Receiver<bool>,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -302,9 +320,9 @@ impl Balling {
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
-                            tx_to_controllino,
-                            rx_from_controllino,
-                            rx_from_signal_handler,
+                            tx_balling_to_controllino,
+                            rx_balling_from_controllino,
+                            rx_balling_from_signal_handler,
                             pump_device,
                             dosing_duration_millis,
                         );
@@ -343,27 +361,15 @@ impl Balling {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_controllino` - sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-    /// * `tx_to_signal_handler` - sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - receiver part of channel for communication from signal handler                
-    /// * `tx_to_schedule_check` - sender part of channel for communication to schedule checker
-    /// * `rx_from_schedule_check` - receiver part of channel for communication from schedule checker
-    /// * `rx_from_messaging_opt` - receiver part of channel communication wrapped in Option from Messaging
+    /// * `balling_channels` - struct containing channels for communication with other components
     /// * `mineral_injection`- reference to struct implementing MineralInjectionTrait
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_schedule_check: Sender<InternalCommand>,
-        rx_from_schedule_check: Receiver<bool>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        balling_channels: BallingChannels,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce frequency of channel polling
@@ -385,10 +391,10 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60secs)
 
                 // schedule check to see if actuation is allowed
-                match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                match balling_channels.tx_balling_to_schedule_check.send(InternalCommand::ScheduleCheck) {
                     Ok(_) => {
                         // now listen for response
-                        schedule_check_result = match rx_from_schedule_check.recv() {
+                        schedule_check_result = match balling_channels.rx_balling_from_schedule_check.recv() {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
                                 c
@@ -439,9 +445,9 @@ impl Balling {
                                 1,
                                 AquariumDevice::PeristalticPump1,
                                 mineral_injection,
-                                &rx_from_signal_handler,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
+                                &balling_channels.rx_balling_from_signal_handler,
+                                &balling_channels.tx_balling_to_controllino,
+                                &balling_channels.rx_balling_from_controllino,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -450,12 +456,10 @@ impl Balling {
                         }
                         self.countdown_dosing_pump1 = self.config.dosing_interval_pump1;
                     }
-                } else {
-                    if self.countdown_dosing_pump1 > 0 {
-                        self.countdown_dosing_pump1 = self
-                            .countdown_dosing_pump1
-                            .saturating_sub(self.config.schedule_check_interval);
-                    }
+                } else if self.countdown_dosing_pump1 > 0 {
+                    self.countdown_dosing_pump1 = self
+                        .countdown_dosing_pump1
+                        .saturating_sub(self.config.schedule_check_interval);
                 }
 
                 spin_sleeper.sleep(sleep_duration_pump_switch);
@@ -470,9 +474,9 @@ impl Balling {
                                 2,
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
-                                &rx_from_signal_handler,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
+                                &balling_channels.rx_balling_from_signal_handler,
+                                &balling_channels.tx_balling_to_controllino,
+                                &balling_channels.rx_balling_from_controllino,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -481,12 +485,10 @@ impl Balling {
                         }
                         self.countdown_dosing_pump2 = self.config.dosing_interval_pump2;
                     }
-                } else {
-                    if self.countdown_dosing_pump2 > 0 {
-                        self.countdown_dosing_pump2 = self
-                            .countdown_dosing_pump2
-                            .saturating_sub(self.config.schedule_check_interval);
-                    }
+                } else if self.countdown_dosing_pump2 > 0 {
+                    self.countdown_dosing_pump2 = self
+                        .countdown_dosing_pump2
+                        .saturating_sub(self.config.schedule_check_interval);
                 }
 
                 spin_sleeper.sleep(sleep_duration_pump_switch);
@@ -501,9 +503,9 @@ impl Balling {
                                 3,
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
-                                &rx_from_signal_handler,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
+                                &balling_channels.rx_balling_from_signal_handler,
+                                &balling_channels.tx_balling_to_controllino,
+                                &balling_channels.rx_balling_from_controllino,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -512,12 +514,10 @@ impl Balling {
                         }
                         self.countdown_dosing_pump3 = self.config.dosing_interval_pump3;
                     }
-                } else {
-                    if self.countdown_dosing_pump3 > 0 {
-                        self.countdown_dosing_pump3 = self
-                            .countdown_dosing_pump3
-                            .saturating_sub(self.config.schedule_check_interval);
-                    }
+                } else if self.countdown_dosing_pump3 > 0 {
+                    self.countdown_dosing_pump3 = self
+                        .countdown_dosing_pump3
+                        .saturating_sub(self.config.schedule_check_interval);
                 }
 
                 spin_sleeper.sleep(sleep_duration_pump_switch);
@@ -532,9 +532,9 @@ impl Balling {
                                 4,
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
-                                &rx_from_signal_handler,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
+                                &balling_channels.rx_balling_from_signal_handler,
+                                &balling_channels.tx_balling_to_controllino,
+                                &balling_channels.rx_balling_from_controllino,
                             );
                             *mutex_data += 1;
                         }
@@ -543,12 +543,10 @@ impl Balling {
                         }
                         self.countdown_dosing_pump4 = self.config.dosing_interval_pump4;
                     }
-                } else {
-                    if self.countdown_dosing_pump4 > 0 {
-                        self.countdown_dosing_pump4 = self
-                            .countdown_dosing_pump4
-                            .saturating_sub(self.config.schedule_check_interval);
-                    }
+                } else if self.countdown_dosing_pump4 > 0 {
+                    self.countdown_dosing_pump4 = self
+                        .countdown_dosing_pump4
+                        .saturating_sub(self.config.schedule_check_interval);
                 }
             }
 
@@ -557,7 +555,7 @@ impl Balling {
                 start_command_received,
                 stop_command_received,
             ) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
+                .process_external_request(&balling_channels.rx_balling_from_signal_handler, balling_channels.rx_balling_from_messaging_opt.as_ref());
 
             if self.execute_command_received {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
@@ -575,9 +573,9 @@ impl Balling {
                                 pump_id,
                                 pump_device,
                                 mineral_injection,
-                                &rx_from_signal_handler,
-                                &tx_to_controllino,
-                                &rx_from_controllino,
+                                &balling_channels.rx_balling_from_signal_handler,
+                                &balling_channels.tx_balling_to_controllino,
+                                &balling_channels.rx_balling_from_controllino,
                             );
                             *mutex_data += 1;
                         }
@@ -627,7 +625,7 @@ impl Balling {
         }
         // Application received request to terminate, that is why the loop was left.
         // Answer to thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        match balling_channels.tx_balling_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -642,7 +640,7 @@ impl Balling {
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match balling_channels.rx_balling_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
@@ -686,7 +684,7 @@ pub mod tests {
 
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
-    use crate::mineral::balling::{Balling, LOG_TARGET_BALLING};
+    use crate::mineral::balling::{Balling, BallingChannels, LOG_TARGET_BALLING};
     use crate::mineral::mineral_injection::MineralInjectionTrait;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{
@@ -716,9 +714,9 @@ pub mod tests {
     impl MineralInjectionTrait for MockMineralInjection {
         fn inject_mineral(
             &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
+            _tx_balling_to_controllino: &Sender<InternalCommand>,
+            _rx_balling_from_controllino: &Receiver<bool>,
+            _rx_balling_from_signal_handler: &Receiver<InternalCommand>,
             mineral_pump: AquariumDevice,
             dosing_duration_millis: u32,
         ) -> (bool, u32) {
@@ -1105,16 +1103,20 @@ pub mod tests {
             scope.spawn(move || {
                 let tx_balling_to_schedule_check_for_test_case_finish =
                     tx_balling_to_schedule_check.clone();
-
-                balling.execute(
-                    mutex_device_scheduler,
+                
+                let balling_channels = BallingChannels {
                     tx_balling_to_controllino,
                     rx_balling_from_controllino,
                     tx_balling_to_signal_handler,
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
-                    None,
+                    rx_balling_from_messaging_opt: None,
+                };
+
+                balling.execute(
+                    mutex_device_scheduler,
+                    balling_channels,
                     &mut mock_mineral_injection,
                 );
 
@@ -1510,17 +1512,21 @@ pub mod tests {
 
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
-            // thread for test object and assertions
+            // thread for the test object and assertions
             scope.spawn(move || {
-                balling.execute(
-                    mutex_device_scheduler,
+                let balling_channels = BallingChannels {
                     tx_balling_to_controllino,
                     rx_balling_from_controllino,
                     tx_balling_to_signal_handler,
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
                     rx_balling_from_schedule_check,
-                    Some(rx_balling_from_messaging),
+                    rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
+                };
+                
+                balling.execute(
+                    mutex_device_scheduler,
+                    balling_channels,
                     &mut mock_mineral_injection,
                 );
                 println!("MockMineralInjection:\n{}", mock_mineral_injection);

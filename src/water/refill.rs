@@ -72,7 +72,7 @@ pub struct RefillConfig {
     pub max_refill_volume: f64,
 
     /// Refill volume which is added to the tank in a refill operation after the application recognizes tank level position high
-    /// - Background: This volume shall avoid too frequent refill operations. Too high values may lead to unstable water level.
+    /// Background: This volume shall avoid too frequent refill operations. Too high values may lead to unstable water level.
     /// It is recommended to calibrate a value, which is a fraction of max_refill_volume.
     pub additional_refill_volume: f64,
 }
@@ -80,6 +80,36 @@ pub struct RefillConfig {
 const LOG_TARGET_REFILL: &str = "refill";
 
 const MILLIS_PER_SEC: u64 = 1000;
+
+/// Struct collects the channels for the communication between the refill control and the other components.
+pub struct RefillChannels {
+    /// Sender part of the channel for communication to Controllino
+    pub tx_refill_to_controllino: Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from Controllino
+    pub rx_refill_from_controllino: Receiver<bool>,
+
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_refill_to_signal_handler: Sender<bool>,
+
+    /// Receiver part of the channel for communication from the signal handler
+    pub rx_refill_from_signal_handler: Receiver<InternalCommand>,
+
+    /// Sender part of the channel for communication to the schedule checker
+    pub tx_refill_to_schedule_check: Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from the schedule checker
+    pub rx_refill_from_schedule_check: Receiver<bool>,
+
+    /// Sender part of the channel for communication to the data logger
+    pub tx_refill_to_data_logger: Sender<bool>,
+
+    /// Receiver part of the channel for communication from the data logger
+    pub rx_refill_from_data_logger: Receiver<InternalCommand>,
+
+    /// Receiver part of the channel for communication from the messaging
+    pub rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>,
+}
 
 /// Contains the configuration and the implementation for the refill control.
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -106,7 +136,7 @@ const MILLIS_PER_SEC: u64 = 1000;
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 /// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
-
+///
 /// Architecture of the component is as follows:
 /// ```mermaid
 /// graph LR
@@ -637,17 +667,17 @@ impl Refill {
 
     /// Communicate with the schedule checker to see if actuation is allowed.
     /// # Arguments
-    /// * `tx_to_schedule_check` - Reference to sender part of the channel for communication to the schedule checker
-    /// * `rx_from_schedule_check` - Reference to receiver part of the channel for communication from the schedule checker               
+    /// * `tx_refill_to_schedule_check` - Reference to sender part of the channel for communication to the schedule checker
+    /// * `rx_refill_from_schedule_check` - Reference to receiver part of the channel for communication from the schedule checker               
     fn check_schedule(
         &mut self,
-        tx_to_schedule_check: &Sender<InternalCommand>,
-        rx_from_schedule_check: &Receiver<bool>,
+        tx_refill_to_schedule_check: &Sender<InternalCommand>,
+        rx_refill_from_schedule_check: &Receiver<bool>,
     ) -> bool {
-        match tx_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+        match tx_refill_to_schedule_check.send(InternalCommand::ScheduleCheck) {
             Ok(_) => {
                 self.lock_error_channel_send_schedule_check = false;
-                match rx_from_schedule_check.recv() {
+                match rx_refill_from_schedule_check.recv() {
                     Ok(c) => {
                         self.lock_error_channel_receive_schedule_check = false;
                         c
@@ -680,28 +710,12 @@ impl Refill {
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_controllino` - Sender part of the channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of the channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of the channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of the channel for communication from the signal handler                
-    /// * `tx_to_schedule_check` - Sender part of the channel for communication to schedule checker
-    /// * `rx_from_schedule_check` - Receiver part of the channel for communication from schedule checker               
-    /// * `tx_to_data_logger` - Sender part of the channel for communication to data logger
-    /// * `rx_from_data_logger` - Receiver part of the channel for communication from data logger
     /// * `water_injection` - Reference to struct implementing WaterInjectionTrait
     /// * `mutex_tank_level_switch_signals_clone_for_refill` - Mutex for tank level switch signals
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
-        tx_to_controllino: Sender<InternalCommand>,
-        rx_from_controllino: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_schedule_check: Sender<InternalCommand>,
-        rx_from_schedule_check: Receiver<bool>,
-        tx_to_data_logger: Sender<bool>,
-        rx_from_data_logger: Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        refill_channels: RefillChannels,
         water_injection: &mut impl WaterInjectionTrait,
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
     ) {
@@ -747,15 +761,15 @@ impl Refill {
                     }
                 }
 
-                self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
+                self.communicate_with_data_logger(&refill_channels.tx_refill_to_data_logger, &refill_channels.rx_refill_from_data_logger, false);
 
                 (
                     quit_command_received,
                     start_command_received,
                     stop_command_received,
                 ) = self.process_external_request(
-                    &rx_from_signal_handler,
-                    rx_from_messaging_opt.as_ref(),
+                    &refill_channels.rx_refill_from_signal_handler,
+                    refill_channels.rx_refill_from_messaging_opt.as_ref(),
                 );
                 refill_inhibited = self.calc_inhibition_flag(
                     refill_inhibited,
@@ -808,55 +822,52 @@ impl Refill {
                     self.get_sql_refill_data(&mut sql_refill_data);
 
                     // execute checks before initiating refill
-                    if !self.check_volume_count_time_limits(&sql_refill_data) {
-                        if !self.refill_errors.error_switch_stuck_low
-                            && !self.refill_errors.error_sql_update_failed
-                            && !self.refill_errors.error_sql_get_historic_data_failed
+                    if !self.check_volume_count_time_limits(&sql_refill_data)
+                        && !self.refill_errors.error_switch_stuck_low
+                        && !self.refill_errors.error_sql_update_failed
+                        && !self.refill_errors.error_sql_get_historic_data_failed
+                    {
+                        schedule_check_result =
+                            self.check_schedule(&refill_channels.tx_refill_to_schedule_check, &refill_channels.rx_refill_from_schedule_check);
+
+                        if schedule_check_result
+                            && !tank_level_switch_position_stabilized
+                            && !tank_level_switch_invalid
                         {
-                            schedule_check_result =
-                                self.check_schedule(&tx_to_schedule_check, &rx_from_schedule_check);
+                            #[cfg(feature = "debug_refill")]
+                            debug!(
+                                target: LOG_TARGET_REFILL,
+                                "acquiring semaphore...",
+                            );
 
-                            if schedule_check_result {
-                                if !tank_level_switch_position_stabilized
-                                    && !tank_level_switch_invalid
-                                {
-                                    #[cfg(feature = "debug_refill")]
-                                    debug!(
-                                        target: LOG_TARGET_REFILL,
-                                        "acquiring semaphore...",
-                                    );
+                            // conditions for allowing the refill operation are given
+                            let mut mutex_data = mutex_device_scheduler_refill.lock().unwrap();
+                            // now we are given exclusive access to actuators
 
-                                    // conditions for allowing the refill operation are given
-                                    let mut mutex_data =
-                                        mutex_device_scheduler_refill.lock().unwrap();
-                                    // now we are given exclusive access to actuators
+                            #[cfg(feature = "debug_refill")]
+                            debug!(
+                                target: LOG_TARGET_REFILL,
+                                "mutex_data = {}",
+                                mutex_data
+                            );
 
-                                    #[cfg(feature = "debug_refill")]
-                                    debug!(
-                                        target: LOG_TARGET_REFILL,
-                                        "mutex_data = {}",
-                                        mutex_data
-                                    );
+                            quit_command_received = water_injection.inject_water(
+                                &refill_channels.tx_refill_to_controllino,
+                                &refill_channels.rx_refill_from_controllino,
+                                &refill_channels.rx_refill_from_signal_handler,
+                                &refill_channels.tx_refill_to_data_logger,
+                                &refill_channels.rx_refill_from_data_logger,
+                                &mut self.refill_errors,
+                                &mut self.sql_interface_refill,
+                                &mutex_tank_level_switch_signals_clone_for_refill,
+                            );
+                            *mutex_data = mutex_data.saturating_add(1);
 
-                                    quit_command_received = water_injection.inject_water(
-                                        &tx_to_controllino,
-                                        &rx_from_controllino,
-                                        &rx_from_signal_handler,
-                                        &tx_to_data_logger,
-                                        &rx_from_data_logger,
-                                        &mut self.refill_errors,
-                                        &mut self.sql_interface_refill,
-                                        &mutex_tank_level_switch_signals_clone_for_refill,
-                                    );
-                                    *mutex_data = mutex_data.saturating_add(1);
-
-                                    #[cfg(feature = "debug_refill")]
-                                    debug!(
-                                        target: LOG_TARGET_REFILL,
-                                        "releasing semaphore..."
-                                    );
-                                }
-                            }
+                            #[cfg(feature = "debug_refill")]
+                            debug!(
+                                target: LOG_TARGET_REFILL,
+                                "releasing semaphore..."
+                            );
                         }
                     }
                 }
@@ -926,8 +937,8 @@ impl Refill {
                     }
 
                     self.communicate_with_data_logger(
-                        &tx_to_data_logger,
-                        &rx_from_data_logger,
+                        &refill_channels.tx_refill_to_data_logger,
+                        &refill_channels.rx_refill_from_data_logger,
                         false,
                     );
 
@@ -936,8 +947,8 @@ impl Refill {
                         start_command_received,
                         stop_command_received,
                     ) = self.process_external_request(
-                        &rx_from_signal_handler,
-                        rx_from_messaging_opt.as_ref(),
+                        &refill_channels.rx_refill_from_signal_handler,
+                        refill_channels.rx_refill_from_messaging_opt.as_ref(),
                     );
                     refill_inhibited = self.calc_inhibition_flag(
                         refill_inhibited,
@@ -968,7 +979,7 @@ impl Refill {
             LOG_TARGET_REFILL
         );
 
-        _ = match tx_to_signal_handler.send(true) {
+        match refill_channels.tx_refill_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!("sending quit confirmation back to signal handler failed ({e:?})");
@@ -980,8 +991,8 @@ impl Refill {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, false);
-            termination_command_received = match rx_from_signal_handler.recv() {
+            self.communicate_with_data_logger(&refill_channels.tx_refill_to_data_logger, &refill_channels.rx_refill_from_data_logger, false);
+            termination_command_received = match refill_channels.rx_refill_from_signal_handler.recv() {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_command = false;
                     match c {
@@ -1034,7 +1045,7 @@ pub mod tests {
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-    use crate::water::refill::{Refill, RefillErrors};
+    use crate::water::refill::{Refill, RefillChannels, RefillErrors};
 
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
@@ -1277,8 +1288,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -1287,7 +1297,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals_for_refill,
                 );
@@ -1436,8 +1451,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -1446,7 +1460,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -1597,8 +1616,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -1607,7 +1625,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -1787,8 +1810,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -1797,7 +1819,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    Some(rx_refill_from_messaging),
+                    rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -1947,8 +1974,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -1957,7 +1983,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -2117,8 +2148,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -2127,7 +2157,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    Some(rx_refill_from_messaging),
+                    rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -2277,8 +2312,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -2287,7 +2321,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -2480,8 +2519,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -2490,7 +2528,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    Some(rx_refill_from_messaging),
+                    rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );
@@ -2634,8 +2677,7 @@ pub mod tests {
                 let tx_refill_to_schedule_check_for_test_case_finish =
                     tx_refill_to_schedule_check.clone();
 
-                refill.execute(
-                    mutex_device_scheduler,
+                let refill_channels = RefillChannels {
                     tx_refill_to_controllino,
                     rx_refill_from_controllino,
                     tx_refill_to_signal_handler,
@@ -2644,7 +2686,12 @@ pub mod tests {
                     rx_refill_from_schedule_check,
                     tx_refill_to_data_logger,
                     rx_refill_from_data_logger,
-                    None,
+                    rx_refill_from_messaging_opt: None,
+                };
+
+                refill.execute(
+                    mutex_device_scheduler,
+                    refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
                 );

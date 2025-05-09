@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{debug, error};
+use log::{debug, error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::io;
@@ -34,13 +34,43 @@ pub struct TcpConnectionConfig {
     port: u16,
 }
 
-/// Contains the error values for unsuccessful attempt of opening TCP channel.
+/// Contains the error values for unsuccessful attempts of opening a TCP channel.
 #[derive(Debug)]
 pub enum TcpCommunicationError {
-    /// value indicates that error has occurred during TCP communication
+    /// value indicates that an error has occurred during TCP communication
     #[allow(unused)]
     ConnectionFailed(io::Error),
     //ReadMessageFailed(io::Error),
+}
+
+/// Struct collects the channels for communication with other threads.
+pub struct TcpCommunicationChannels {
+    /// Receiver part of the channel for communication from Controllino wrapped in Option type
+    pub rx_tcp_communication_from_controllino_opt: Option<Receiver<InternalCommand>>,
+    
+    /// Receiver part of the channel for communication from Controllino wrapped in Option type
+    pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
+    
+    /// Sender part of the channel for communication to Ambient wrapped in Option type
+    pub tx_tcp_communication_to_ambient_opt: Option<Sender<f32>>,
+    
+    /// Receiver part of the channel for communication from AtlasScientific wrapped in Option type  
+    pub rx_tcp_communication_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
+    
+    /// Sender part of the channel for communication to AtlasScientific wrapped in Option type 
+    pub tx_tcp_communication_to_atlas_scientific_opt: Option<Sender<f32>>,
+    
+    /// Receiver part of the channel for communication from tank level switch wrapped in Option type 
+    pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
+    
+    /// Sender part of the channel for communication to tank level switch wrapped in Option type       
+    pub tx_tcp_communication_to_tank_level_switch_opt: Option<Sender<f32>>,
+    
+    /// Sender part of the channel for communication to the signal handler       
+    pub tx_tcp_communication_to_signal_handler: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the signal handler       
+    pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -54,7 +84,6 @@ pub enum TcpCommunicationError {
 ///     tcp_communication --> signal_handler[Signal handler]
 ///     signal_handler --> tcp_communication
 /// ```
-
 pub struct TcpCommunication {
     /// the raw TCP stream
     write_stream: TcpStream,
@@ -93,10 +122,10 @@ impl TcpCommunication {
         })
     }
 
-    /// Splits a string into multiple words using space as delimiter and returns the last word as type &str wrapped into type Option.
+    /// Splits a string into multiple words using space as a delimiter and returns the last word as type &str wrapped into type Option.
     /// # Arguments
     /// * `sequence` - reference to String which contains the sequence of words to be split
-    fn get_last_word(sequence: &String) -> Option<&str> {
+    fn get_last_word(sequence: &str) -> Option<&str> {
         let words = sequence.split(" ").collect::<Vec<&str>>();
         words.last().copied()
     }
@@ -104,7 +133,7 @@ impl TcpCommunication {
     /// Removes trailing newline or carriage return.
     /// Code taken over from <https://stackoverflow.com/questions/37888042/remove-single-trailing-newline-from-string-without-cloning>
     /// # Arguments
-    /// * `s` - reference to String which contains newline or carriage return.
+    /// * `s` - reference to String which contains a newline or carriage return.
     fn trim_newline(s: &mut String) {
         if s.ends_with('\n') {
             s.pop();
@@ -119,35 +148,43 @@ impl TcpCommunication {
     /// * `relay_id` - numeric id of relay for which the state shall be changed
     /// * `state` - value to be set: true represents On, false represents Off    
     fn change_relay(&mut self, relay_id: u16, state: bool) {
-        let request: String;
         let relay_id_string = relay_id.to_string();
-        if state {
+        let request: String = if state {
             debug!(
                 target: Self::LOG_TARGET_TCP_COMMUNICATION,
                 "switching on relay #{}",
                 relay_id
             );
-            request = category::CONTROLLINO.to_string()
+            category::CONTROLLINO.to_string()
                 + " "
                 + command::SETSINGLE
                 + " "
                 + &relay_id_string
-                + "\n";
+                + "\n"
         } else {
             debug!(
                 target: Self::LOG_TARGET_TCP_COMMUNICATION,
                 "switching off relay #{}",
                 relay_id
             );
-            request = category::CONTROLLINO.to_string()
+            category::CONTROLLINO.to_string()
                 + " "
                 + command::UNSETSINGLE
                 + " "
                 + &relay_id_string
-                + "\n";
-        }
+                + "\n"
+        };
         match self.write_stream.write(request.as_bytes()) {
-            Ok(_) => {}
+            Ok(amount_of_bytes_written) => {
+                if amount_of_bytes_written != request.len() {
+                    warn!(
+                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
+                        Self::LOG_TARGET_TCP_COMMUNICATION,
+                        amount_of_bytes_written,
+                        request.len(),
+                    );
+                }
+            }
             Err(e) => {
                 panic!(
                     "{}: Writing to TCP stream failed ({e:?})",
@@ -170,7 +207,7 @@ impl TcpCommunication {
         };
     }
 
-    /// Communicates with simulator to get signal value.
+    /// Communicates with the simulator to get signal value.
     /// It returns the value as type f32.
     /// # Arguments
     /// * `aquarium_signal` - enum value of type AquariumSignal which describes the signal for which the value shall be retrieved.
@@ -211,7 +248,16 @@ impl TcpCommunication {
             category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";
 
         match self.write_stream.write(request.as_bytes()) {
-            Ok(_) => {}
+            Ok(amount_of_bytes_written) => {
+                if amount_of_bytes_written != request.len() {
+                    warn!(
+                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
+                        Self::LOG_TARGET_TCP_COMMUNICATION,
+                        amount_of_bytes_written,
+                        request.len(),
+                    );
+                }
+            }
             Err(e) => {
                 panic!(
                     "{}: Writing to TCP stream failed ({e:?})",
@@ -295,75 +341,48 @@ impl TcpCommunication {
         }
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting.
+    /// Executes the main control in a loop until the signal handler commands quitting.
     /// # Arguments
-    /// * `rx_from_controllino_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
-    /// * `rx_from_gpio_opt` - Receiver part of channel for communication from Controllino wrapped in Option type
-    /// * `tx_to_gpio_opt` - Sender part of channel for communication to signal handler wrapped in Option type
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler  
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler       
+    /// * `tcp_communication_channels` - channels for communication with other threads
     pub fn execute(
         &mut self,
-        rx_from_controllino_opt: Option<Receiver<InternalCommand>>,
-        rx_from_ambient_opt: Option<Receiver<InternalCommand>>,
-        tx_to_ambient_opt: Option<Sender<f32>>,
-        rx_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
-        tx_to_atlas_scientific_opt: Option<Sender<f32>>,
-        rx_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
-        tx_to_tank_level_switch_opt: Option<Sender<f32>>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
+        tcp_communication_channels: TcpCommunicationChannels,
     ) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(&tcp_communication_channels.rx_tcp_communication_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
 
             // *** communication with Ambient ***
-            match rx_from_ambient_opt {
-                Some(ref rx_from_ambient) => match tx_to_ambient_opt {
-                    Some(ref tx_to_ambient) => {
-                        self.receive_and_answer(&rx_from_ambient, &tx_to_ambient);
-                    }
-                    None => {}
-                },
-                None => {}
+            if let Some(ref rx_tcp_communication_from_ambient) = tcp_communication_channels.rx_tcp_communication_from_ambient_opt {
+                if let Some(ref tx_tcp_communication_to_ambient) = tcp_communication_channels.tx_tcp_communication_to_ambient_opt {
+                    self.receive_and_answer(rx_tcp_communication_from_ambient, tx_tcp_communication_to_ambient);
+                }
             }
 
             // *** communication with Atlas Scientific ***
-            match rx_from_atlas_scientific_opt {
-                Some(ref rx_from_atlas_scientific) => match tx_to_atlas_scientific_opt {
-                    Some(ref tx_to_atlas_scientific) => {
-                        self.receive_and_answer(&rx_from_atlas_scientific, &tx_to_atlas_scientific);
-                    }
-                    None => {}
-                },
-                None => {}
+            if let Some(ref rx_tcp_communication_from_atlas_scientific) = tcp_communication_channels.rx_tcp_communication_from_atlas_scientific_opt {
+                if let Some(ref tx_tcp_communication_to_atlas_scientific) = tcp_communication_channels.tx_tcp_communication_to_atlas_scientific_opt {
+                    self.receive_and_answer(rx_tcp_communication_from_atlas_scientific, tx_tcp_communication_to_atlas_scientific);
+                }
             }
 
             // *** communication with Tank level switch ***
-            match rx_from_tank_level_switch_opt {
-                Some(ref rx_from_tank_level_switch) => match tx_to_tank_level_switch_opt {
-                    Some(ref tx_to_tank_level_switch) => {
-                        self.receive_and_answer(
-                            &rx_from_tank_level_switch,
-                            &tx_to_tank_level_switch,
-                        );
-                    }
-                    None => {}
-                },
-                None => {}
+            if let Some(ref rx_tcp_communication_from_tank_level_switch) = tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt {
+                if let Some(ref tx_tcp_communication_to_tank_level_switch) = tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt {
+                    self.receive_and_answer(rx_tcp_communication_from_tank_level_switch, tx_tcp_communication_to_tank_level_switch);
+                }
             }
 
             // *** communication with Controllino - no response required ***
-            match rx_from_controllino_opt {
-                Some(ref rx_from_controllino) => {
-                    match rx_from_controllino.try_recv() {
+            match tcp_communication_channels.rx_tcp_communication_from_controllino_opt {
+                Some(ref rx_tcp_communication_from_controllino) => {
+                    match rx_tcp_communication_from_controllino.try_recv() {
                         Ok(c) => match c {
                             InternalCommand::SetRelay(c) => self.change_relay(c, true),
                             InternalCommand::UnsetRelay(c) => self.change_relay(c, false),
@@ -390,13 +409,13 @@ impl TcpCommunication {
         }
 
         // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match tcp_communication_channels.tx_tcp_communication_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
                     target: Self::LOG_TARGET_TCP_COMMUNICATION,
-                    "sending confirmation back to signal handler faild ({e:?})"
+                    "sending confirmation back to signal handler failed ({e:?})"
                 );
             }
         };

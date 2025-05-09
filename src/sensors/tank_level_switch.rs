@@ -214,8 +214,8 @@ impl TankLevelSwitch {
             let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
             let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
             self.tank_level_switch_position = Self::get_response_from_simulator(
-                &tx_to_tcp,
-                &rx_from_tcp,
+                tx_to_tcp,
+                rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
             ) > 0.0;
         } else {
@@ -242,10 +242,10 @@ impl TankLevelSwitch {
     }
 
     /// Calculates a stabilized tank level switch position signal considering:
-    /// - if the invalid bit of signal is true, then use the current value of the stabilized position signal.
-    /// - if the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
-    /// - If the new signal is false (indicating low water level), then set increase the stabilization counter.
-    /// - If the stabilization counter exceeds the configured limit, then set the counter to zero and set the stabilized
+    /// If the invalid bit of signal is true, then use the current value of the stabilized position signal.
+    /// If the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
+    /// If the new signal is false (indicating low water level), then set increase the stabilization counter.
+    /// If the stabilization counter exceeds the configured limit, then set the counter to zero and set the stabilized.
     /// Signal value 'true' indicates high water level.
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
@@ -324,7 +324,7 @@ impl TankLevelSwitch {
             }
 
             // either communicate with real HW or with the simulator to get updated signal information
-            self.update_tank_level_switch_signals(&tx_to_tcp_opt, &rx_from_tcp_opt);
+            self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
 
             self.calc_tank_level_switch_position_stabilized();
             // Write calculated signals to mutex
@@ -369,7 +369,7 @@ impl TankLevelSwitch {
             start_time = SystemTime::now();
         }
 
-        _ = match tx_to_signal_handler.send(true) {
+        match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(

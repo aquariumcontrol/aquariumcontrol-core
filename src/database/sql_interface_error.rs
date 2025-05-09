@@ -38,7 +38,7 @@ pub enum SqlInterfaceError {
     InsertBallingEventFailure(String),
     FeedScheduleEntryRequestFailure(String),
     FeedScheduleEntryTimeStampConversionFailure(String),
-    SqlInterfaceErrorFeedScheduleUpdateFailure(String),
+    FeedScheduleUpdateFailure(String),
     SingleBallingSetValRequestFailure(String),
     InsertDataFrameFailure(String),
     NegativeInteger(i64),

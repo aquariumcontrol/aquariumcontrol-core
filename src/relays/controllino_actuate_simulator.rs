@@ -61,7 +61,7 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
                 warn!(
                     target: LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR,
                     "ignoring irrelevant internal command {}.",
-                    internal_command.to_string()
+                    internal_command
                 );
                 Err(ControllinoError::IrrelevantCommand(internal_command))
             }

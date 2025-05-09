@@ -121,7 +121,7 @@ impl SawToothProfile {
     /// Function receives increment as parameter
     /// It updates the counter and the normalized level of the saw tooth profile.
     pub fn execute_with(&mut self, increment: f32) {
-        // if counter exceeds final limit, reset. Otherwise increment.
+        // If the counter exceeds the final limit, reset it. Otherwise, increment.
         if self.counter >= (self.phase4_counter_limit - 3.0 * increment) {
             #[cfg(feature = "debug_sawtooth_profile")]
             debug!("saw tooth profile resetting phase");
@@ -132,7 +132,7 @@ impl SawToothProfile {
 
         // in the first phase, increase level to max.
         if self.counter < self.phase1_counter_limit {
-            self.level_normalized = self.counter as f32 / self.phase1_counter_limit as f32;
+            self.level_normalized = self.counter / self.phase1_counter_limit;
         }
         // for the next phase, keep signal at 1
         if self.counter >= self.phase1_counter_limit && self.counter <= self.phase2_counter_limit {
@@ -141,8 +141,8 @@ impl SawToothProfile {
         // for the next phase, ramp down from 1 to 0
         if self.counter > self.phase2_counter_limit && self.counter < self.phase3_counter_limit {
             self.level_normalized = 1.0
-                - (self.counter - self.phase2_counter_limit) as f32
-                    / (self.phase3_counter_limit - self.phase2_counter_limit) as f32;
+                - (self.counter - self.phase2_counter_limit)
+                    / (self.phase3_counter_limit - self.phase2_counter_limit);
         }
         // for the next phase, keep signal at 0
         if self.counter >= self.phase3_counter_limit && self.counter <= self.phase4_counter_limit {

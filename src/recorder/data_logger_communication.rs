@@ -31,7 +31,10 @@ pub trait DataLoggerCommunicationTrait {
     /// * `tx_to_data_logger` - Reference to sender part of channel for communication to data logger
     /// * `rx_from_data_logger` - Reference to Receiver part of channel for communication from Controllino
     /// * `refill_pump_status` - information if refill pump status is active (true) or inactive (false)
-    /// ...
+    /// * `lock_error_channel_receive_data_logger` - reference to lock variable to avoid log flooding
+    /// * `lock_warn_inapplicable_command_data_logger` - reference to lock variable to avoid log flooding
+    /// * `lock_error_invalid_signal_request_data_logger` - reference to lock variable to avoid log flooding
+    /// * `lock_error_send_to_data_logger` - reference to lock variable to avoid log flooding
     fn communicate_with_data_logger_generic(
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,

@@ -533,7 +533,6 @@ impl DataLogger {
     /// * `mutex_humidity` - reference to receiver part of the channel for communication from Ambient
     /// * `ambient_temperature` - reference to variable for storing signal
     /// * `humidity` - reference to variable for storing signal
-
     fn update_ambient_signals(
         &mut self,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
@@ -574,7 +573,7 @@ impl DataLogger {
     /// # Arguments
     /// * `tx_to_refill` - reference to sender part of channel for communication to Refill
     /// * `rx_from_refill` - reference to receiver part of channel for communication from Refill
-    /// * `rx_from_heating` - reference to sender part of channel for communication to Heating
+    /// * `tx_to_heating` - reference to sender part of channel for communication to Heating
     /// * `rx_from_heating` - reference to receiver part of channel for communication from Heating
     /// * `tx_to_ventilation` - reference to sender part of channel for communication to Ventilation
     /// * `rx_from_ventilation` - reference to receiver part of channel for communication from Ventilation
@@ -1154,7 +1153,7 @@ impl DataLogger {
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        _ = match tx_to_signal_handler.send(true) {
+        match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(

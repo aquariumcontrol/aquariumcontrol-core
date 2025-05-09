@@ -19,11 +19,11 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of the feed pattern.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait FoodInjectionTrait {
-    /// Actuates the refill pump for injecting water into the main tank.
+    /// Actuates the refill pump for water injection into the main tank.
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to Receiver part of channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler   
+    /// * `tx_to_controllino` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_from_controllino` - Reference to Receiver part of the channel for communication from Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler   
     /// * `config` - Reference to configuration of feed control
     /// * `feed_pattern` - Reference to struct holding the description of the feed pattern    
     fn inject_food(
@@ -33,6 +33,27 @@ pub trait FoodInjectionTrait {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
     ) -> bool;
+}
+
+/// Struct collects the target actuator states for switch_skimmer_pumps_feeder
+pub struct FoodInjectionTargetActuatorStates {
+    /// target state for protein skimmer
+    target_skimmer_state: ActuatorState,
+    
+    /// target state for main pump 1
+    target_main_pump1_state: ActuatorState,
+    
+    /// target state for main pump 2
+    target_main_pump2_state: ActuatorState,
+    
+    /// target state for aux. pump 1
+    target_aux_pump1_state: ActuatorState,
+    
+    /// target state for aux. pump 2
+    target_aux_pump2_state: ActuatorState,
+    
+    /// target state for feeder
+    target_feeder_state: ActuatorState,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -45,7 +66,6 @@ pub trait FoodInjectionTrait {
 ///     controllino --> food_injection
 ///     signal_handler[Signal handler] --> food_injection
 /// ```
-
 pub struct FoodInjection {
     skimmer_state: ActuatorState,
     main_pump1_state: ActuatorState,
@@ -78,18 +98,13 @@ impl FoodInjection {
 
     fn switch_skimmer_pumps_feeder(
         &mut self,
-        target_skimmer_state: ActuatorState,
-        target_main_pump1_state: ActuatorState,
-        target_main_pump2_state: ActuatorState,
-        target_aux_pump1_state: ActuatorState,
-        target_aux_pump2_state: ActuatorState,
-        target_feeder_state: ActuatorState,
+        target_actuator_states: FoodInjectionTargetActuatorStates,
         tx_to_controllino: &Sender<InternalCommand>,
         rx_from_controllino: &Receiver<bool>,
     ) {
-        if self.skimmer_state != target_skimmer_state {
+        if self.skimmer_state != target_actuator_states.target_skimmer_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_skimmer_state {
+            let command = match target_actuator_states.target_skimmer_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Skimmer),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Skimmer),
                 _ => {
@@ -104,7 +119,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.skimmer_state = target_skimmer_state;
+                            self.skimmer_state = target_actuator_states.target_skimmer_state;
                         }
                         Err(e) => {
                             error!(
@@ -122,9 +137,9 @@ impl FoodInjection {
                 }
             }
         }
-        if self.main_pump1_state != target_main_pump1_state {
+        if self.main_pump1_state != target_actuator_states.target_main_pump1_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_main_pump1_state {
+            let command = match target_actuator_states.target_main_pump1_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump1),
                 _ => {
@@ -139,7 +154,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.main_pump1_state = target_main_pump1_state;
+                            self.main_pump1_state = target_actuator_states.target_main_pump1_state;
                         }
                         Err(e) => {
                             error!(
@@ -157,9 +172,9 @@ impl FoodInjection {
                 }
             }
         }
-        if self.main_pump2_state != target_main_pump2_state {
+        if self.main_pump2_state != target_actuator_states.target_main_pump2_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_main_pump2_state {
+            let command = match target_actuator_states.target_main_pump2_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump2),
                 _ => {
@@ -174,7 +189,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.main_pump2_state = target_main_pump2_state;
+                            self.main_pump2_state = target_actuator_states.target_main_pump2_state;
                         }
                         Err(e) => {
                             error!(
@@ -192,9 +207,9 @@ impl FoodInjection {
                 }
             }
         }
-        if self.aux_pump1_state != target_aux_pump1_state {
+        if self.aux_pump1_state != target_actuator_states.target_aux_pump1_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_aux_pump1_state {
+            let command = match target_actuator_states.target_aux_pump1_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump1),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump1),
                 _ => {
@@ -209,7 +224,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.aux_pump1_state = target_aux_pump1_state;
+                            self.aux_pump1_state = target_actuator_states.target_aux_pump1_state;
                         }
                         Err(e) => {
                             error!(
@@ -227,9 +242,9 @@ impl FoodInjection {
                 }
             }
         }
-        if self.aux_pump2_state != target_aux_pump2_state {
+        if self.aux_pump2_state != target_actuator_states.target_aux_pump2_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_aux_pump2_state {
+            let command = match target_actuator_states.target_aux_pump2_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump2),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump2),
                 _ => {
@@ -244,7 +259,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.aux_pump2_state = target_aux_pump2_state;
+                            self.aux_pump2_state = target_actuator_states.target_aux_pump2_state;
                         }
                         Err(e) => {
                             error!(
@@ -262,9 +277,9 @@ impl FoodInjection {
                 }
             }
         }
-        if self.feeder_state != target_feeder_state {
+        if self.feeder_state != target_actuator_states.target_feeder_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_feeder_state {
+            let command = match target_actuator_states.target_feeder_state {
                 ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Feeder),
                 ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Feeder),
                 _ => {
@@ -279,7 +294,7 @@ impl FoodInjection {
                 Ok(_) => {
                     match rx_from_controllino.recv() {
                         Ok(_) => {
-                            self.feeder_state = target_feeder_state;
+                            self.feeder_state = target_actuator_states.target_feeder_state;
                         }
                         Err(e) => {
                             error!(
@@ -350,18 +365,20 @@ impl FoodInjectionTrait for FoodInjection {
                     false => ActuatorState::Off,
                 };
                 self.switch_skimmer_pumps_feeder(
-                    target_skimmer_state,
-                    target_main_pump1_state,
-                    target_main_pump2_state,
-                    target_aux_pump1_state,
-                    target_aux_pump2_state,
-                    ActuatorState::Off,
+                    FoodInjectionTargetActuatorStates {
+                        target_skimmer_state,
+                        target_main_pump1_state,
+                        target_main_pump2_state,
+                        target_aux_pump1_state,
+                        target_aux_pump2_state,
+                        target_feeder_state: ActuatorState::Off,
+                    },
                     tx_to_controllino,
                     rx_from_controllino,
                 );
             }
 
-            // wait for determined period and check quit request in between
+            // wait for a determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.pause_duration {
                 (quit_command_received, _, _) =
@@ -399,18 +416,20 @@ impl FoodInjectionTrait for FoodInjection {
                     false => ActuatorState::Off,
                 };
                 self.switch_skimmer_pumps_feeder(
-                    target_skimmer_state,
-                    target_main_pump1_state,
-                    target_main_pump2_state,
-                    target_aux_pump1_state,
-                    target_aux_pump2_state,
-                    ActuatorState::On,
+                    FoodInjectionTargetActuatorStates {
+                        target_skimmer_state,
+                        target_main_pump1_state,
+                        target_main_pump2_state,
+                        target_aux_pump1_state,
+                        target_aux_pump2_state,
+                        target_feeder_state: ActuatorState::On,
+                    },
                     tx_to_controllino,
                     rx_from_controllino,
                 );
             }
 
-            // wait for determined period and check quit request in between
+            // wait for a determined period and check quit request in between
             sleep_counter_millis = 0;
             while sleep_counter_millis < feedphase.feed_duration {
                 (quit_command_received, _, _) =
@@ -427,12 +446,14 @@ impl FoodInjectionTrait for FoodInjection {
         }
 
         self.switch_skimmer_pumps_feeder(
-            ActuatorState::On,
-            ActuatorState::On,
-            ActuatorState::On,
-            ActuatorState::On,
-            ActuatorState::On,
-            ActuatorState::Off,
+            FoodInjectionTargetActuatorStates {
+                target_skimmer_state: ActuatorState::On,
+                target_main_pump1_state: ActuatorState::On,
+                target_main_pump2_state: ActuatorState::On,
+                target_aux_pump1_state: ActuatorState::On,
+                target_aux_pump2_state: ActuatorState::On,
+                target_feeder_state: ActuatorState::Off,
+            },
             tx_to_controllino,
             rx_from_controllino,
         );
@@ -457,7 +478,7 @@ pub mod tests {
         tx_controllino_to_feed: &Sender<bool>,
         rx_controllino_from_feed: &Receiver<InternalCommand>,
     ) -> InternalCommand {
-        // receive command from test object
+        // receive command from the test object
         let (command, device) = match rx_controllino_from_feed.recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(ref d) => (c.clone(), d.clone()),
@@ -490,7 +511,7 @@ pub mod tests {
     }
 
     #[test]
-    // this test cases executes the food injection without interruption from signal handler
+    // this test case executes the food injection without interruption from the signal handler
     pub fn test_food_injection_uninterrupted() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
@@ -519,7 +540,7 @@ pub mod tests {
                             counter_switch_off += 1;
                         }
                         _ => {
-                            // Do nothing. This case is covered with panic in lower level.
+                            // Do nothing. This case is covered with panic in a lower level.
                         }
                     }
                 }
@@ -549,13 +570,13 @@ pub mod tests {
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
 
-                // After all phases are executed, feeder will be switched off
+                // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
 
                 let feedpattern = Feedpattern {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
-                    feedphases: feedphases,
+                    feedphases,
                 };
 
                 let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -581,7 +602,7 @@ pub mod tests {
     }
 
     #[test]
-    // this test cases executes the food injection with interruption from signal handler
+    // this test case executes the food injection with interruption from the signal handler
     pub fn test_food_injection_interrupted() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
@@ -610,7 +631,7 @@ pub mod tests {
                             counter_switch_off += 1;
                         }
                         _ => {
-                            // Do nothing. This case is covered with panic in lower level.
+                            // Do nothing. This case is covered with panic in a lower level.
                         }
                     }
                 }
@@ -629,7 +650,7 @@ pub mod tests {
                             counter_switch_off += 1;
                         }
                         _ => {
-                            // Do nothing. This case is covered with panic in lower level.
+                            // Do nothing. This case is covered with panic in a lower level.
                         }
                     }
                 }
@@ -659,13 +680,13 @@ pub mod tests {
                 feedphases.push(feedphase.clone());
                 feedphases.push(feedphase.clone());
 
-                // After all phases are executed, feeder will be switched off
+                // After all phases are executed, the feeder will be switched off
                 // and 5 devices will be switched on
 
                 let feedpattern = Feedpattern {
                     profile_id: 1,
                     profile_name: "Test1".to_string(),
-                    feedphases: feedphases,
+                    feedphases,
                 };
 
                 let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();

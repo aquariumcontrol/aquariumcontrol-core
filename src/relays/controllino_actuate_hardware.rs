@@ -48,8 +48,8 @@ impl ControllinoMessageContent {
     /// * `id` - identifier for relay or digital out in case status change is requested
     pub fn new(command: char, id: u8, duration_millis: u16) -> ControllinoMessageContent {
         ControllinoMessageContent {
-            command: command,
-            id: id,
+            command,
+            id,
             reserved1: 0,
             payload: duration_millis,
             reserved2: '0',
@@ -83,7 +83,7 @@ impl ControllinoMessage {
         data[6] = content.reserved2 as u8;
         data[7] = data[4] ^ data[5] ^ data[6];
 
-        ControllinoMessage { data: data }
+        ControllinoMessage { data }
     }
 }
 
@@ -209,7 +209,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
             InternalCommand::SwitchOn(ref _c)
             | InternalCommand::SwitchOff(ref _c)
             | InternalCommand::Pulse(ref _c, _) => {
-                // create message to be sent to Controllino
+                // create a message to be sent to Controllino
                 let message = match create_command_message(internal_command.clone(), config) {
                     Ok(c) => c,
                     Err(e) => {
@@ -222,10 +222,19 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 };
 
                 if config.active {
-                    // write message to Controllino
+                    // write a message to Controllino
                     let serial_port = serial_port_opt.as_mut().unwrap();
                     match serial_port.write(&message.data) {
-                        Ok(_) => { /* do nothing */ }
+                        Ok(amount_byte_written) => {
+                            if amount_byte_written != message.data.len() {
+                                warn!(
+                                    "{}: Writing to Controllino device failed. Amount of bytes written: {}. Expected: {}",
+                                    LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                    amount_byte_written,
+                                    message.data.len()
+                                );
+                            }
+                        }
                         Err(e) => {
                             error!(
                                 target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
@@ -263,7 +272,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                                     target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                                     "Received response from device with incorrect checksums"
                                 );
-                                return Err(ControllinoError::IncorrectChecksum);
+                                Err(ControllinoError::IncorrectChecksum)
                             } else {
                                 Ok(())
                             }
@@ -273,7 +282,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                                 target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                                 "receiving response from device failed."
                             );
-                            return Err(ControllinoError::ReadError);
+                            Err(ControllinoError::ReadError)
                         }
                     }
                 } else {
@@ -284,9 +293,9 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 warn!(
                     target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                     "ignoring irrelevant internal command {}.",
-                    internal_command.to_string()
+                    internal_command
                 );
-                return Err(ControllinoError::IrrelevantCommand(internal_command));
+                Err(ControllinoError::IrrelevantCommand(internal_command))
             }
         }
     }

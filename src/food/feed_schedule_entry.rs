@@ -49,7 +49,7 @@ impl FeedScheduleEntry {
         };
 
         Ok(FeedScheduleEntry {
-            timestamp: timestamp,
+            timestamp,
             profile_id: sql_feed_schedule_entry.profile_id,
             profile_name: sql_feed_schedule_entry.profile_name.clone(),
             repeat_daily: sql_feed_schedule_entry.repeat_daily != 0,

@@ -72,43 +72,113 @@ fn send_command(
     }
 }
 
+pub struct SignalHandlerChannels {
+    /// sender part of the channel for communication to messaging wrapped in Option
+    pub tx_signal_handler_to_messaging_opt: Option<Sender<InternalCommand>>,
+
+    /// receiver part of the channel for communication to messaging wrapped in Option
+    pub rx_signal_handler_from_messaging_opt: Option<Receiver<bool>>,
+
+    /// sender part of the channel for communication to refill control
+    pub tx_signal_handler_to_refill: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from refill control
+    pub rx_signal_handler_from_refill: Receiver<bool>,
+
+    /// sender part of the channel for communication to tank level switch
+    pub tx_signal_handler_to_tank_level_switch: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from tank level switch
+    pub rx_signal_handler_from_tank_level_switch: Receiver<bool>,
+
+    /// sender part of the channel for communication to heating control
+    pub tx_signal_handler_to_heating: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from heating control
+    pub rx_signal_handler_from_heating: Receiver<bool>,
+
+    /// sender part of the channel for communication to Controllino
+    pub tx_signal_handler_to_controllino: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from Controllino
+    pub rx_signal_handler_from_controllino: Receiver<bool>,
+
+    /// sender part of the channel for communication to Atlas Scientific
+    pub tx_signal_handler_to_atlas_scientific: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from Atlas Scientific
+    pub rx_signal_handler_from_atlas_scientific: Receiver<bool>,
+
+    /// sender part of the channel for communication to Ambient
+    pub tx_signal_handler_to_ambient: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from Ambient
+    pub rx_signal_handler_from_ambient: Receiver<bool>,
+
+    /// sender part of the channel for communication to data logger
+    pub tx_signal_handler_to_data_logger: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from data logger
+    pub rx_signal_handler_from_data_logger: Receiver<bool>,
+
+    /// sender part of the channel for communication to Balling dosing control
+    pub tx_signal_handler_to_balling: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from Balling dosing control
+    pub rx_signal_handler_from_balling: Receiver<bool>,
+
+    /// sender part of the channel for communication to ventilation control
+    pub tx_signal_handler_to_ventilation: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from ventilation control
+    pub rx_signal_handler_from_ventilation: Receiver<bool>,
+
+    /// sender part of the channel for communication to monitors
+    pub tx_signal_handler_to_monitors: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from monitors
+    pub rx_signal_handler_from_monitors: Receiver<bool>,
+
+    /// sender part of the channel for communication to feed control
+    pub tx_signal_handler_to_feed: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication from feed control
+    pub rx_signal_handler_from_feed: Receiver<bool>,
+
+    /// sender part of the channel for communication to schedule check
+    pub tx_signal_handler_to_schedule_check: Sender<InternalCommand>,
+
+    /// receiver part of the channel for communication schedule check
+    pub rx_signal_handler_from_schedule_check: Receiver<bool>,
+
+    /// sender part of the channel for communication to TCPCommunication wrapped in Option
+    pub tx_signal_handler_to_tcp_opt: Option<Sender<InternalCommand>>,
+
+    /// receiver part of the channel for communication to TCPCommunication wrapped in Option
+    pub rx_signal_handler_from_tcp_opt: Option<Receiver<bool>>,
+
+    /// sender part of the channel for communication to Dht wrapped in Option
+    pub tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>>,
+
+    /// sender part of the channel for communication to I2C interface wrapped in Option
+    pub tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
+
+    /// sender part of the channel for communication to watchdog
+    pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
+
+    /// sender part of the channel for communication to DS18B20 sensor reading
+    pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
+}
+
 /// Handles the termination signal from the operating system (SIGTERM).
 /// Upon receiving the termination signal, it will send the internal command for quitting
 /// to all threads in a dedicated order which allows safe shutdown.
 /// # Arguments
-/// * `tx_to_messaging` - sender part of channel for communication to messaging
-/// * `tx_to_refill` - sender part of channel for communication to refill control
-/// * `rx_from_refill` - receiver part of channel for communication from refill control
-/// * `tx_to_tank_level_switch` - sender part of channel for communication to tank level switch
-/// * `rx_from_tank_level_switch` - receiver part of channel for communication from tank level switch
-/// * `tx_to_heating` - sender part of channel for communication to heating control
-/// * `rx_from_heating` - receiver part of channel for communication from heating control
-/// * `tx_to_controllino` - sender part of channel for communication to Controllino
-/// * `rx_from_controllino` - receiver part of channel for communication from Controllino
-/// * `tx_to_atlas_scientific` - sender part of channel for communication to Atlas Scientific
-/// * `rx_from_atlas_scientific` - receiver part of channel for communication from Atlas Scientific
-/// * `tx_to_ambient` - sender part of channel for communication to Ambient
-/// * `rx_from_ambient` - receiver part of channel for communication from Ambient
-/// * `tx_to_data_logger` - sender part of channel for communication to data logger
-/// * `rx_from_data_logger` - receiver part of channel for communication from data logger
-/// * `tx_to_balling` - sender part of channel for communication to Balling dosing control
-/// * `rx_from_balling` - receiver part of channel for communication from Balling dosing control
-/// * `tx_to_ventilation` - sender part of channel for communication to ventilation control
-/// * `rx_from_ventilation` - receiver part of channel for communication from ventilation control
-/// * `tx_to_monitors` - sender part of channel for communication to monitors
-/// * `rx_from_monitors` - receiver part of channel for communication from monitors
-/// * `tx_to_feed` - sender part of channel for communication to feed control
-/// * `rx_from_feed` - receiver part of channel for communication from feed control
-/// * `tx_to_schedule_check` - sender part of channel for communication to schedule check
-/// * `rx_from_schedule_check` - receiver part of channel for communication schedule check
-/// * `tx_to_tcp_opt` - sender part of channel for communication to TCPCommunication wrapped in Option
-/// * `rx_from_tcp_opt` - receiver part of channel for communication to TCPCommunication wrapped in Option
-/// * `tx_to_dht_opt` - sender part of channel for communication to Dht wrapped in Option
-/// * `tx_to_i2c_interface_opt` - sender part of channel for communication to I2C interface wrapped in Option
-/// * `tx_to_watchdog` - sender part of channel for communication to watchdog
+/// * `term` - indicates whether the application should terminate
+/// * `signalHandlerChannels` - struct of type SignalHandlerChannels containing all channels  
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Thread communication is as follows:
+///   Thread communication is as follows:
 /// ```mermaid
 /// graph LR
 ///     signal_handler[Signal handler] --> messaging[Messaging]
@@ -143,43 +213,14 @@ fn send_command(
 ///     signal_handler --> watchdog[Watchdog]
 ///     watchdog --> signal_handler
 /// ```
-
-pub fn handle_signals(
-    term: Arc<AtomicBool>,
-    tx_to_messaging_opt: Option<Sender<InternalCommand>>,
-    rx_from_messaging_opt: Option<Receiver<bool>>,
-    tx_to_refill: Sender<InternalCommand>,
-    rx_from_refill: Receiver<bool>,
-    tx_to_tank_level_switch: Sender<InternalCommand>,
-    rx_from_tank_level_switch: Receiver<bool>,
-    tx_to_heating: Sender<InternalCommand>,
-    rx_from_heating: Receiver<bool>,
-    tx_to_controllino: Sender<InternalCommand>,
-    rx_from_controllino: Receiver<bool>,
-    tx_to_atlas_scientific: Sender<InternalCommand>,
-    rx_from_atlas_scientific: Receiver<bool>,
-    tx_to_ambient: Sender<InternalCommand>,
-    rx_from_ambient: Receiver<bool>,
-    tx_to_data_logger: Sender<InternalCommand>,
-    rx_from_data_logger: Receiver<bool>,
-    tx_to_balling: Sender<InternalCommand>,
-    rx_from_balling: Receiver<bool>,
-    tx_to_ventilation: Sender<InternalCommand>,
-    rx_from_ventilation: Receiver<bool>,
-    tx_to_monitors: Sender<InternalCommand>,
-    rx_from_monitors: Receiver<bool>,
-    tx_to_feed: Sender<InternalCommand>,
-    rx_from_feed: Receiver<bool>,
-    tx_to_schedule_check: Sender<InternalCommand>,
-    rx_from_schedule_check: Receiver<bool>,
-    tx_to_tcp_opt: Option<Sender<InternalCommand>>,
-    rx_from_tcp_opt: Option<Receiver<bool>>,
-    tx_to_dht_opt: Option<Sender<InternalCommand>>,
-    tx_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
-    tx_to_watchdog: Sender<InternalCommand>,
-    tx_to_ds18b20: Sender<InternalCommand>,
-) {
-    if tx_to_tcp_opt.is_some() != rx_from_tcp_opt.is_some() {
+pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHandlerChannels) {
+    if signal_handler_channels
+        .tx_signal_handler_to_tcp_opt
+        .is_some()
+        != signal_handler_channels
+            .rx_signal_handler_from_tcp_opt
+            .is_some()
+    {
         panic!(
             "{}: inconsistent channel parameters for TcpCommunication provided",
             LOG_TARGET_SIGNAL_HANDLER
@@ -221,20 +262,24 @@ pub fn handle_signals(
     // data logger initiates communication to heating, refill, atlas_scientific, ambient
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_data_logger),
-        Some(&rx_from_data_logger),
+        Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
+        Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
         "data_logger",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_monitors),
-        Some(&rx_from_monitors),
+        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
+        Some(&signal_handler_channels.rx_signal_handler_from_monitors),
         "monitors",
     );
     send_command(
         InternalCommand::Quit,
-        tx_to_messaging_opt.as_ref(),
-        rx_from_messaging_opt.as_ref(),
+        signal_handler_channels
+            .tx_signal_handler_to_messaging_opt
+            .as_ref(),
+        signal_handler_channels
+            .rx_signal_handler_from_messaging_opt
+            .as_ref(),
         "messaging",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -247,32 +292,32 @@ pub fn handle_signals(
     // these controls access the Controllino, Atlas Scientific and Dht
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_refill),
-        Some(&rx_from_refill),
+        Some(&signal_handler_channels.tx_signal_handler_to_refill),
+        Some(&signal_handler_channels.rx_signal_handler_from_refill),
         "refill",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_heating),
-        Some(&rx_from_heating),
+        Some(&signal_handler_channels.tx_signal_handler_to_heating),
+        Some(&signal_handler_channels.rx_signal_handler_from_heating),
         "heating",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_ventilation),
-        Some(&rx_from_ventilation),
+        Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
+        Some(&signal_handler_channels.rx_signal_handler_from_ventilation),
         "ventilation",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_feed),
-        Some(&rx_from_feed),
+        Some(&signal_handler_channels.tx_signal_handler_to_feed),
+        Some(&signal_handler_channels.rx_signal_handler_from_feed),
         "feed",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_balling),
-        Some(&rx_from_balling),
+        Some(&signal_handler_channels.tx_signal_handler_to_balling),
+        Some(&signal_handler_channels.rx_signal_handler_from_balling),
         "balling",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -285,26 +330,26 @@ pub fn handle_signals(
     // these controls receive commands from upper level controls and communicate to i2c_interface and dht
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_tank_level_switch),
-        Some(&rx_from_tank_level_switch),
+        Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
+        Some(&signal_handler_channels.rx_signal_handler_from_tank_level_switch),
         "tank_level_switch",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_atlas_scientific),
-        Some(&rx_from_atlas_scientific),
+        Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
+        Some(&signal_handler_channels.rx_signal_handler_from_atlas_scientific),
         "atlas_scientific",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_ambient),
-        Some(&rx_from_ambient),
+        Some(&signal_handler_channels.tx_signal_handler_to_ambient),
+        Some(&signal_handler_channels.rx_signal_handler_from_ambient),
         "ambient",
     );
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_schedule_check),
-        Some(&rx_from_schedule_check),
+        Some(&signal_handler_channels.tx_signal_handler_to_schedule_check),
+        Some(&signal_handler_channels.rx_signal_handler_from_schedule_check),
         "schedule_check",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -316,21 +361,34 @@ pub fn handle_signals(
     // phase 4: shut down low-level controls
     send_command(
         InternalCommand::Quit,
-        tx_to_i2c_interface_opt.as_ref(),
+        signal_handler_channels
+            .tx_signal_handler_to_i2c_interface_opt
+            .as_ref(),
         None,
         "i2c_interface",
     );
-    send_command(InternalCommand::Quit, tx_to_dht_opt.as_ref(), None, "dht");
     send_command(
         InternalCommand::Quit,
-        Some(&tx_to_controllino),
-        Some(&rx_from_controllino),
+        signal_handler_channels
+            .tx_signal_handler_to_dht_opt
+            .as_ref(),
+        None,
+        "dht",
+    );
+    send_command(
+        InternalCommand::Quit,
+        Some(&signal_handler_channels.tx_signal_handler_to_controllino),
+        Some(&signal_handler_channels.rx_signal_handler_from_controllino),
         "controllino",
     );
     send_command(
         InternalCommand::Quit,
-        tx_to_tcp_opt.as_ref(),
-        rx_from_tcp_opt.as_ref(),
+        signal_handler_channels
+            .tx_signal_handler_to_tcp_opt
+            .as_ref(),
+        signal_handler_channels
+            .rx_signal_handler_from_tcp_opt
+            .as_ref(),
         "tcp",
     );
     #[cfg(feature = "debug_signal_handler")]
@@ -342,13 +400,13 @@ pub fn handle_signals(
     // phase 5: send termination command to the highest level controls
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_data_logger),
+        Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
         None,
         "data_logger",
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_monitors),
+        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
         None,
         "monitors",
     );
@@ -361,26 +419,31 @@ pub fn handle_signals(
     // phase 6: send termination command to high-level controls
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_heating),
+        Some(&signal_handler_channels.tx_signal_handler_to_heating),
         None,
         "heating",
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_ventilation),
+        Some(&signal_handler_channels.tx_signal_handler_to_ventilation),
         None,
         "ventilation",
     );
-    send_command(InternalCommand::Terminate, Some(&tx_to_feed), None, "feed");
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_refill),
+        Some(&signal_handler_channels.tx_signal_handler_to_feed),
+        None,
+        "feed",
+    );
+    send_command(
+        InternalCommand::Terminate,
+        Some(&signal_handler_channels.tx_signal_handler_to_refill),
         None,
         "refill",
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_balling),
+        Some(&signal_handler_channels.tx_signal_handler_to_balling),
         None,
         "balling",
     );
@@ -391,22 +454,27 @@ pub fn handle_signals(
     );
 
     // phase 7: send quit/termination command to medium level controls
-    send_command(InternalCommand::Quit, Some(&tx_to_ds18b20), None, "ds18b20");
+    send_command(
+        InternalCommand::Quit,
+        Some(&signal_handler_channels.tx_signal_handler_to_ds18b20),
+        None,
+        "ds18b20",
+    );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_atlas_scientific),
+        Some(&signal_handler_channels.tx_signal_handler_to_atlas_scientific),
         None,
         "atlas_scientific",
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_ambient),
+        Some(&signal_handler_channels.tx_signal_handler_to_ambient),
         None,
         "ambient",
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_tank_level_switch),
+        Some(&signal_handler_channels.tx_signal_handler_to_tank_level_switch),
         None,
         "tank_level_switch",
     );
@@ -419,13 +487,15 @@ pub fn handle_signals(
     // phase 8: allow messaging thread and watchdog to close
     send_command(
         InternalCommand::Terminate,
-        Some(&tx_to_watchdog),
+        Some(&signal_handler_channels.tx_signal_handler_to_watchdog),
         None,
         "watchdog",
     );
     send_command(
         InternalCommand::Terminate,
-        tx_to_messaging_opt.as_ref(),
+        signal_handler_channels
+            .tx_signal_handler_to_messaging_opt
+            .as_ref(),
         None,
         "messaging",
     );
@@ -442,7 +512,7 @@ pub mod tests {
     use std::{process::Command, sync::Arc, thread};
 
     use crate::utilities::channel_content::InternalCommand;
-    use crate::utilities::signal_handler::handle_signals;
+    use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 
     // helper function to send a signal to the application
     fn send_signal(pid: u32, signal: i32) {
@@ -657,8 +727,7 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-                handle_signals(
-                    term_clone,
+                let signal_handler_channels = SignalHandlerChannels {
                     tx_signal_handler_to_messaging_opt,
                     rx_signal_handler_from_messaging_opt,
                     tx_signal_handler_to_refill,
@@ -691,7 +760,9 @@ pub mod tests {
                     tx_signal_handler_to_i2c_interface_opt,
                     tx_signal_handler_to_watchdog,
                     tx_signal_handler_to_ds18b20,
-                );
+                };
+
+                handle_signals(term_clone, signal_handler_channels);
             })
             .unwrap();
 

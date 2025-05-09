@@ -45,7 +45,6 @@ pub trait MineralInjectionTrait {
 ///     controllino --> mineral_injection
 ///     signal_handler[Signal handler] --> mineral_injection
 /// ```
-
 pub struct MineralInjection;
 
 impl MineralInjection {

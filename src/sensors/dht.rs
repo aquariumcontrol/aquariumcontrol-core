@@ -222,13 +222,13 @@ impl Dht {
     ) -> [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1] {
         let mut data_bits = [false; dht22_constants::DHT22_BYTE4_STOP_IDX + 1];
         let mut count_data_bits = 0;
-        for i in 0..(valid_ticks_received + 1) {
-            if ticks[i] > dht22_constants::DHT22_NEUTRAL_LEN_MIN
-                && ticks[i] < dht22_constants::DHT22_NEUTRAL_LEN_MAX
+        for tick in ticks.iter().take(valid_ticks_received + 1) {
+            if tick > &dht22_constants::DHT22_NEUTRAL_LEN_MIN
+                && tick < &dht22_constants::DHT22_NEUTRAL_LEN_MAX
             {
                 continue;
             }
-            if ticks[i] > dht22_constants::DHT22_BIT_TIMING_LIMIT {
+            if tick > &dht22_constants::DHT22_BIT_TIMING_LIMIT {
                 data_bits[count_data_bits] = true;
             }
             count_data_bits += 1;
@@ -249,12 +249,12 @@ impl Dht {
         stop_index: usize,
     ) -> u8 {
         let mut byte_val: u8 = 0;
-        for idx_bit in start_index..stop_index {
-            byte_val |= match data_bits[idx_bit] {
+        for bit in data_bits.iter().take(stop_index).skip(start_index) {
+            byte_val |= match bit {
                 true => 1,
                 false => 0,
             };
-            byte_val = byte_val << 1;
+            byte_val <<= 1;
         }
         byte_val |= match data_bits[stop_index] {
             true => 1,
@@ -264,7 +264,7 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// arranges bit information received from sensor into a byte array
+    /// arranges the bit information received from sensor into a byte array
     /// # Arguments
     /// * `data_bits` - array with bit data received from sensor
     pub fn calc_byte_array(
@@ -313,13 +313,13 @@ impl Dht {
         // calculate and compare checksum
         let mut checksum_intermediate: u16 =
             byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
-        checksum_intermediate = checksum_intermediate & 0xFF;
+        checksum_intermediate &= 0xFF;
         let checksum_calculated: u8 = match ((checksum_intermediate << 8) >> 8).try_into() {
             Ok(c) => c,
             Err(_) => return Err(DhtError::ChecksumCalculationError),
         };
 
-        let checksum_received: u8 = byte_vals[4].into();
+        let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
             #[cfg(not(test))]
             error!(
@@ -341,20 +341,16 @@ impl Dht {
     ) -> Result<(f32, f32), DhtError> {
         // calculate integer value for humidity * 10
         let mut hum10: u32 = byte_vals[0].into();
-        hum10 = hum10 << 8;
+        hum10 <<= 8;
         hum10 += byte_vals[1] as u32;
 
         // calculate integer value for temperature * 10
         let mut temp10: u32 = byte_vals[2].into();
-        temp10 = temp10 << 8;
+        temp10 <<= 8;
         temp10 += byte_vals[3] as u32;
 
-        //println!("hum10={}, temp10={}", hum10, temp10);
-
         // range check for temperature
-        if (temp10 < dht22_constants::DHT22_MINVAL_TEMP10)
-            || (temp10 > dht22_constants::DHT22_MAXVAL_TEMP10)
-        {
+        if temp10 > dht22_constants::DHT22_MAXVAL_TEMP10 {
             #[cfg(not(test))]
             error!(
                 "temperature is out of range (measured {}, limits are {}, {})",
@@ -366,9 +362,7 @@ impl Dht {
         }
 
         // range check for humidity
-        if (hum10 < dht22_constants::DHT22_MINVAL_HUM10)
-            || (hum10 > dht22_constants::DHT22_MAXVAL_HUM10)
-        {
+        if hum10 > dht22_constants::DHT22_MAXVAL_HUM10 {
             #[cfg(not(test))]
             error!(
                 "humidity is out of range (measured {}, limits are {}, {})",

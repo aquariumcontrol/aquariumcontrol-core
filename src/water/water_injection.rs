@@ -29,20 +29,20 @@ const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 pub trait WaterInjectionTrait {
     /// Actuates the refill pump which injects water into the main tank.
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to Receiver part of channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
-    /// * `tx_to_data_logger` - Sender part of channel for communication to data logger
+    /// * `tx_water_injection_to_controllino` - Reference to sender part of channel for communication to Controllino
+    /// * `rx_water_injection_from_controllino` - Reference to Receiver part of channel for communication from Controllino
+    /// * `rx_water_injection_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
+    /// * `tx_water_injection_to_data_logger` - Sender part of channel for communication to data logger
     /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection            
     /// * `sql_interface_refill` - Reference to SQL database interface for refill control
-    /// * `mutex_tank_level_switch - Reference to mutex for reading tank level switch signals
+    /// * `mutex_tank_level_switch` - Reference to mutex for reading tank level switch signals
     fn inject_water(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
+        tx_water_injection_to_controllino: &Sender<InternalCommand>,
+        rx_water_injection_from_controllino: &Receiver<bool>,
+        rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
+        tx_water_injection_to_data_logger: &Sender<bool>,
+        rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -101,11 +101,11 @@ impl WaterInjectionTrait for WaterInjection {
     /// this function executes the refill operation
     fn inject_water(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
-        rx_from_signal_handler: &Receiver<InternalCommand>,
-        tx_to_data_logger: &Sender<bool>,
-        rx_from_data_logger: &Receiver<InternalCommand>,
+        tx_water_injection_to_controllino: &Sender<InternalCommand>,
+        rx_water_injection_from_controllino: &Receiver<bool>,
+        rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
+        tx_water_injection_to_data_logger: &Sender<bool>,
+        rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -113,10 +113,10 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match tx_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
+        match tx_water_injection_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_water_injection_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -143,7 +143,7 @@ impl WaterInjectionTrait for WaterInjection {
         let mut tank_level_switch_invalid = false;
 
         loop {
-            self.communicate_with_data_logger(&tx_to_data_logger, &rx_from_data_logger, true);
+            self.communicate_with_data_logger(tx_water_injection_to_data_logger, rx_water_injection_from_data_logger, true);
 
             self.spin_sleeper
                 .sleep(self.sleep_duration_hundred_milli_sec);
@@ -180,7 +180,7 @@ impl WaterInjectionTrait for WaterInjection {
                 additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(rx_water_injection_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
@@ -192,10 +192,10 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match tx_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
+        match tx_water_injection_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_water_injection_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -214,7 +214,7 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // inform data logger that refill is finished
-        match tx_to_data_logger.send(false) {
+        match tx_water_injection_to_data_logger.send(false) {
             Ok(_) => { /* no listening to response */ }
             Err(e) => {
                 error!(
