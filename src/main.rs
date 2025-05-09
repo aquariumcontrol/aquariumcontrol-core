@@ -108,7 +108,7 @@ use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::ScheduleCheck;
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::sensors::dht::{Dht, DhtConfig};
+use crate::sensors::dht::Dht;
 
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
@@ -1024,14 +1024,59 @@ fn main() {
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
 
+    // Following structs have high amount of platform-specific code:
+    let mut tank_level_switch: TankLevelSwitch;
+
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            // clone GPIO numbers
+            let dht_opt: Option<Dht>;
+
+            // clone information from config before giving config to GpioHandler
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
+            let use_simulator = config.gpio_handler.use_simulator;
 
-            let gpio_handler = GpioHandler::new(config.gpio_handler);
+            let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
+
+            if use_simulator {
+                // use simulator-version for TankLevelSwitch
+                tank_level_switch = TankLevelSwitch::new(
+                    config.tank_level_switch,
+                    true,
+                    None,
+                    gpio_tank_level_switch
+                );
+                // no DHT sensor required
+                dht_opt = None;
+            }
+            else {
+                if gpio_handler_opt.is_none() {
+                    // defensive programming - this case should not occurr
+                    panic!("{}: Configuration error: GPIO handler not initialized.", LOG_TARGET_MAIN);
+                }
+                else {
+                    let gpio_handler = gpio_handler_opt.unwrap();
+                    let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.unwrap();
+                    let gpio_lib_handle_cloned = gpio_lib_handle.clone();
+
+                    tank_level_switch = TankLevelSwitch::new(
+                        config.tank_level_switch,
+                        true,
+                        Some(gpio_lib_handle_cloned),
+                        gpio_tank_level_switch
+                    );
+                    dht_opt = Some(
+                        Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
+                    );
+                }
+            }
+        }
+        else {
+            tank_level_switch = TankLevelSwitch::new(
+                config.tank_level_switch,
+                true,
+            );
         }
     }
 
@@ -1051,45 +1096,6 @@ fn main() {
 
     let mut data_injection = DataInjection;
     let mut data_logger = DataLogger::new(config.data_logger);
-
-    let mut tank_level_switch: TankLevelSwitch;
-    cfg_if::cfg_if! {
-        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            if config.gpio.use_simulator {
-                tank_level_switch = TankLevelSwitch::new(
-                    config.tank_level_switch,
-                    true
-                );
-            }
-            else {
-                tank_level_switch = TankLevelSwitch::new(
-                    config.tank_level_switch,
-                    true,
-                    gpio_handler.gpio_lib_handle.clone(),
-                    gpio_tank_level_switch
-                );
-            }
-        }
-        else {
-            tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
-        }
-    }
-
-    cfg_if::cfg_if! {
-        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            let mut dht_opt: Option<Dht>;
-
-            if config.dht.use_simulator {
-                dht_opt = None;
-            }
-            else {
-                dht_opt = Some(
-                    Dht::new(config.dht, gpio_handler.gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
-                );
-            }
-        }
-    }
-
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
     let mut heating = Heating::new(config.heating, sql_interface_heating);

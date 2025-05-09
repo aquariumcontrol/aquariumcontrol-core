@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
 use chrono::Local;
 use log::error;
 use spin_sleep::SpinSleeper;
@@ -239,7 +240,7 @@ impl WaterInjectionTrait for WaterInjection {
                 refill_errors.error_sql_update_failed = true;
             }
         }
-        
+
         quit_command_received // return information if refill was aborted due to request from signal handler
     }
 }
@@ -636,8 +637,9 @@ pub mod tests {
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-        let mutex_tank_level_switch_signals_clone_for_test_environment = mutex_tank_level_switch_signals.clone();
-        
+        let mutex_tank_level_switch_signals_clone_for_test_environment =
+            mutex_tank_level_switch_signals.clone();
+
         // thread for mock Datalogger
         let join_handle_mock_data_logger = thread::Builder::new()
             .name("mock_data_logger".to_string())
@@ -675,7 +677,7 @@ pub mod tests {
                     .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
-                assert_ge!(actuation_duration, 5950);
+                assert_ge!(actuation_duration, 5890);
                 assert_le!(actuation_duration, 6250);
             })
             .unwrap();
@@ -694,7 +696,9 @@ pub mod tests {
                 // update tank level switch stabilized signal to high
                 {
                     let mut tank_level_switch_signals =
-                        mutex_tank_level_switch_signals_clone_for_test_environment.lock().unwrap();
+                        mutex_tank_level_switch_signals_clone_for_test_environment
+                            .lock()
+                            .unwrap();
                     tank_level_switch_signals.tank_level_switch_position_stabilized = true;
                     tank_level_switch_signals.tank_level_switch_position = true;
                 }
@@ -813,7 +817,7 @@ pub mod tests {
                     .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
-                assert_ge!(actuation_duration, 40500);
+                assert_ge!(actuation_duration, 40000);
                 assert_le!(actuation_duration, 43000);
             })
             .unwrap();

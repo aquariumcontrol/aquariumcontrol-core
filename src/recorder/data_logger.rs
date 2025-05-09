@@ -1744,7 +1744,7 @@ pub mod tests {
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
-                    Some(true), // target_tank_level_switch_position_stabilized
+                    Some(true),  // target_tank_level_switch_position_stabilized
                     Some(false), // target_tank_level_switch_invalid
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
@@ -1787,8 +1787,8 @@ pub mod tests {
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated
                     true,                 // target_refill_in_progress
-                    true,                // target_tank_level_switch_position
-                    false,                 // target_tank_level_switch_invalid
+                    true,                 // target_tank_level_switch_position
+                    false,                // target_tank_level_switch_invalid
                     true,                 // target_tank_level_switch_position_stabilized
                     true,                 // target_surface_ventilation_status
                     35.0,                 // target_ambient_temperature

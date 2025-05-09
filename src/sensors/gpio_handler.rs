@@ -6,17 +6,15 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use std::collections::HashSet;
 #[cfg(not(test))]
 use log::error;
+use std::collections::HashSet;
 
 use serde_derive::Deserialize;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            use rppal::gpio::{Gpio, InputPin};
-            use crate::sensors::dht::DhtConfig;
-            use crate::sensors::dht::Dht;
+            use rppal::gpio::{Gpio};
     }
 }
 
@@ -43,38 +41,38 @@ pub struct GpioHandlerConfig {
     pub skimmer: u8,
 
     /// GPIO of the main pump #1
-    pub main_pump1: u8, 
+    pub main_pump1: u8,
 
     /// GPIO of the main pump #2
     pub main_pump2: u8,
 
     /// GPIO of the auxiliary pump #1
-    pub aux_pump1: u8, 
+    pub aux_pump1: u8,
 
     /// GPIO of the auxiliary pump #2
-    pub aux_pump2: u8, 
+    pub aux_pump2: u8,
 
     /// GPIO of the feeder
-    pub feeder: u8, 
+    pub feeder: u8,
 
     /// GPIO of the refill pump
-    pub refill_pump: u8, 
+    pub refill_pump: u8,
 
     /// GPIO of the heater
-    pub heater: u8, 
+    pub heater: u8,
 
     /// GPIO of the surface ventilation
-    pub ventilation: u8, 
+    pub ventilation: u8,
 
     /// GPIO of the peristaltic pump #1
     pub peristaltic_pump1: u8,
-    
+
     /// GPIO of the peristaltic pump #2
     pub peristaltic_pump2: u8,
-    
+
     /// GPIO of the peristaltic pump #3
     pub peristaltic_pump3: u8,
-    
+
     /// GPIO of the peristaltic pump #4
     pub peristaltic_pump4: u8,
 }
@@ -85,7 +83,7 @@ pub struct GpioHandlerConfig {
 pub struct GpioHandler {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// GPIO interface wrapped in Option
-    pub gpio_lib_handle_opt: Option<gpio>
+    pub gpio_lib_handle_opt: Option<Gpio>,
 }
 
 impl GpioHandler {
@@ -148,9 +146,7 @@ impl GpioHandler {
     /// This function returns a struct of type GpioHandler after opening the interface to GPIO and I2C.
     /// # Arguments
     /// * `config` - configuration data for GPIO handler
-    pub fn new(
-        config: GpioHandlerConfig,
-    ) -> Option<GpioHandler> {
+    pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
         let use_simulator = config.use_simulator; // create copy because the struct is moved
 
         // check if GPIO pin configuration is valid
@@ -172,16 +168,14 @@ impl GpioHandler {
                     );
                 }
             };
-            
-            (
-                GpioHandler {
-                    gpio_lib_handle_opt: Some(gpio_lib_handle)
-                },
-            )
+
+            Some(GpioHandler {
+                gpio_lib_handle_opt: Some(gpio_lib_handle),
+            })
         } else {
-            GpioHandler {
-                None,
-            }
+            Some(GpioHandler {
+                gpio_lib_handle_opt: None,
+            })
         }
     }
 

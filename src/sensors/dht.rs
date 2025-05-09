@@ -202,17 +202,12 @@ impl Dht {
     /// * `config` - configuration for communication with DHT sensor
     /// * `gpio` - reference to GPIO interface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    pub fn new(
-        config: DhtConfig,
-        gpio: Gpio,
-        gpio_pin_number_dht22_io: u8,
-        gpio_pin_number_dht22_vcc: u8,
-    ) -> Dht {
+    pub fn new(config: DhtConfig, gpio: Gpio, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
         Dht {
-            config: config,
-            gpio: gpio,
-            gpio_pin_number_dht22_io: gpio_pin_number_dht22_io,
-            gpio_pin_number_dht22_vcc: gpio_pin_number_dht22_vcc,
+            config,
+            gpio,
+            gpio_dht22_io,
+            gpio_dht22_vcc,
         }
     }
 
@@ -399,14 +394,14 @@ impl Dht {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
         // get pin for providing supply voltage to DHT sensor
-        let mut dht_vcc_pin = match self.gpio.get(self.gpio_pin_number_dht22_vcc) {
+        let mut dht_vcc_pin = match self.gpio.get(self.gpio_dht22_vcc) {
             Ok(c) => c.into_output(),
             #[cfg(not(test))]
             Err(e) => {
                 error!(
                     target: LOG_TARGET_DHT,
                     "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
-                    self.gpio_pin_number_dht22_vcc
+                    self.gpio_dht22_vcc
                 );
                 return Err(DhtError::VccPinAcquisitionFailed);
             }
@@ -419,14 +414,14 @@ impl Dht {
         // scope to force the drop of the output pin
         {
             // get pin for triggering DHT sensor
-            let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {
+            let mut data_pin = match self.gpio.get(self.gpio_dht22_io) {
                 Ok(c) => c.into_output(),
                 #[cfg(not(test))]
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_DHT,
                         "failed to aquire pin {} for triggering DHT sensor ({e:?})",
-                        self.gpio_pin_number_dht22_io,
+                        self.gpio_dht22_io,
                     );
                     return Err(DhtError::DataPinOutputAcquisitionFailed);
                 }
@@ -466,12 +461,12 @@ impl Dht {
         }
 
         // get pin for reading from DHT sensor
-        let mut data_pin = match self.gpio.get(self.gpio_pin_number_dht22_io) {
+        let mut data_pin = match self.gpio.get(self.gpio_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 error!(
                     "failed to aquire pin {} for reading from DHT sensor ({e:?})",
-                    self.gpio_pin_number_dht22_io,
+                    self.gpio_dht22_io,
                 );
                 return Err(DhtError::DataPinInputAcquisitionFailed);
             }

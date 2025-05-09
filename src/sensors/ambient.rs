@@ -16,7 +16,10 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
+
 use std::time::Duration;
 
 use crate::sensors::dht::DhtError;

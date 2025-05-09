@@ -11,7 +11,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
+
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

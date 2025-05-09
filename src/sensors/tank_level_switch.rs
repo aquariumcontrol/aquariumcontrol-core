@@ -19,7 +19,6 @@ use std::time::{Duration, SystemTime};
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             use rppal::gpio::{Gpio, InputPin};
-            use rppal::gpio::InputPin;
     }
 }
 
@@ -118,7 +117,7 @@ pub struct TankLevelSwitch {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
-    
+
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     lock_error_input_pin_none: bool,
@@ -158,33 +157,35 @@ impl TankLevelSwitch {
     /// # Arguments
     /// * `config` - configuration data for TankLevelSwitch
     /// * `initial_position_stabilized` - assumed initial position of tank level before the first measurement
-    /// * `gpio_lib_handle` - interface to GPIO
-    /// * `gpio_tank_level` - GPIO of tank level
+    /// * `gpio_lib_handle_opt` - interface to GPIO lib wrapped in Option
+    /// * `gpio_tank_level` - GPIO number of tank level
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
-        gpio_lib_handle: gpio,
+        gpio_lib_handle_opt: Option<Gpio>,
         gpio_tank_level: u8,
     ) -> TankLevelSwitch {
-        if !config.use_simulator && !input_pin_opt.is_some() {
+        if !config.use_simulator && gpio_lib_handle_opt.is_none() {
             panic!(
-                "{}: application shall use real HW, but GPIO pin interface not provided.",
+                "{}: application shall use real HW, but GPIO lib interface not provided.",
                 LOG_TARGET_TANK_LEVEL_SWITCH
             );
         }
-        
+
+        let gpio_lib_handle = gpio_lib_handle_opt.unwrap();
+
         // get pin for tank level monitoring
-        let tank_level_pin = match gpio.get(gpio_tank_level) {
+        let tank_level_pin = match gpio_lib_handle.get(gpio_tank_level) {
             Ok(c) => c,
             Err(e) => {
                 panic!(
                     "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
-                    LOG_TARGET_GPIO_HANDLER,
-                    config.gpio_pin_number_tank_level
+                    LOG_TARGET_TANK_LEVEL_SWITCH,
+                    gpio_tank_level
                 );
             }
         };
-        
+
         TankLevelSwitch {
             config: config,
             tank_level_switch_position: true, // initialization value assuming no error
@@ -193,18 +194,6 @@ impl TankLevelSwitch {
             tank_level_switch_position_low_stabilization_counter: 0,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
-            lock_error_invalid_signal_request_refill: false,
-            lock_warn_inapplicable_command_refill: false,
-            lock_error_channel_receive_refill: false,
-            lock_error_refill_response: false,
-            lock_error_invalid_signal_request_heating: false,
-            lock_warn_inapplicable_command_heating: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_heating_response: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_error_data_logger_response: false,
             lock_error_input_pin_none: false,
             input_pin_opt: Some(tank_level_pin.into_input_pullup()),
         }
