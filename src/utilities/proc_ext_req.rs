@@ -362,6 +362,7 @@ impl ProcessExternalRequestTrait for TcpCommunication {
 fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
+            InternalCommand::Terminate => true,
             InternalCommand::Quit => true,
             _ => {
                 warn!(

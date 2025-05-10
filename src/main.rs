@@ -791,10 +791,14 @@ fn main() {
     ) = mpsc::channel();
     // **************************************
 
-    // *** signal handler => watchdog ***
+    // *** signal handler <=> watchdog ***
     let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
+    ) = mpsc::channel();
+    let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
+        Sender<bool>,
+        Receiver<bool>,
     ) = mpsc::channel();
     // **************************************
 
@@ -1255,6 +1259,7 @@ fn main() {
         tx_signal_handler_to_dht_opt,
         tx_signal_handler_to_i2c_interface_opt,
         tx_signal_handler_to_watchdog,
+        rx_signal_handler_from_watchdog,
         tx_signal_handler_to_ds18b20,
     };
 
@@ -1577,6 +1582,7 @@ fn main() {
         // Watchdog communication
         scope.spawn(move || {
             watchdog.execute(
+                tx_watchdog_to_signal_handler,
                 rx_watchdog_from_signal_handler,
                 rx_watchdog_from_messaging_opt,
                 &mut petting,
