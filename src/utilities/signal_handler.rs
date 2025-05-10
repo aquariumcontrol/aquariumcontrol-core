@@ -166,6 +166,9 @@ pub struct SignalHandlerChannels {
     /// sender part of the channel for communication to watchdog
     pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
 
+    /// receiver part of the channel for communication from watchdog
+    pub rx_signal_handler_from_watchdog: Receiver<bool>,
+
     /// sender part of the channel for communication to DS18B20 sensor reading
     pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
 }
@@ -488,7 +491,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     send_command(
         InternalCommand::Terminate,
         Some(&signal_handler_channels.tx_signal_handler_to_watchdog),
-        None,
+        Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
         "watchdog",
     );
     send_command(
@@ -720,6 +723,10 @@ pub mod tests {
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
+        let (_tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
 
         let term_clone = Arc::clone(&term);
 
@@ -759,6 +766,7 @@ pub mod tests {
                     tx_signal_handler_to_dht_opt,
                     tx_signal_handler_to_i2c_interface_opt,
                     tx_signal_handler_to_watchdog,
+                    rx_signal_handler_from_watchdog,
                     tx_signal_handler_to_ds18b20,
                 };
 

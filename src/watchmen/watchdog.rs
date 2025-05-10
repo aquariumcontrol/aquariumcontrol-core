@@ -12,8 +12,9 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::watchmen::petting::PettingTrait;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+use log::error;
 
 const LOG_TARGET_WATCHDOG: &str = "watchdog";
 
@@ -88,6 +89,7 @@ impl Watchdog {
     /// * `rx_from_messaging_opt` - receiver part of the channel communication wrapped in Option from Messaging
     pub fn execute(
         &mut self,
+        tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         petting: &mut impl PettingTrait,
@@ -108,6 +110,7 @@ impl Watchdog {
                 );
             }
             spin_sleeper.sleep(sleep_duration);
+            println!("Checking channel.");
             (
                 quit_command_received,
                 start_command_received,
@@ -117,6 +120,7 @@ impl Watchdog {
 
             if quit_command_received {
                 // Deactivate the watchdog functionality
+                println!("Received quit command, sending watchdog deactivation signal.");
                 petting.pet(
                     &self.config.watchdog_filename,
                     &self.config.watchdog_deactivation,
@@ -133,6 +137,19 @@ impl Watchdog {
                 inhibited = true;
             }
         }
+        
+        // Application received the request to terminate, that is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_WATCHDOG,
+                    "Error in trying to send quit confirmation back to signal handler: {e:?}"
+                );
+            }
+        };
+
     }
 }
 
@@ -214,6 +231,7 @@ pub mod tests {
     pub fn test_watchdog_execute_petting() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
 
         let min_duration = Duration::from_millis(config.watchdog.heartbeat_duration_millis - 50);
@@ -235,16 +253,18 @@ pub mod tests {
                 tx_signal_handler_to_watchdog
                     .send(InternalCommand::Terminate)
                     .unwrap();
+                rx_signal_handler_from_watchdog.recv().unwrap();
             });
 
             // thread for the test object
             scope.spawn(move || {
                 watchdog.execute(
+                    tx_watchdog_to_signal_handler,
                     rx_watchdog_from_signal_handler,
                     None,
                     &mut mock_petting
                 );
-
+                
                 assert_eq!(
                     mock_petting.petting_recorder.len(),
                     5
