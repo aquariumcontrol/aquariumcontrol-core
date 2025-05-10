@@ -81,7 +81,7 @@ pub enum MessagingDomain {
     /// watchdog communication
     Watchdog,
 
-    /// in case numeric value in message could not be assigned to one of the above
+    /// in case the numeric value in the message could not be assigned to one of the above
     Unknown,
 }
 
@@ -129,7 +129,7 @@ pub struct Message {
 }
 
 impl Message {
-    /// Provides empty message initialized with zeros
+    /// Provides an empty message initialized with zeros
     pub fn new() -> Message {
         Message {
             domain: 0,
@@ -140,7 +140,7 @@ impl Message {
     }
 
     #[cfg(test)]
-    /// create message represented as raw byte array for testing
+    /// create a message represented as a raw byte array for testing
     pub fn create_message_buf(&self) -> Vec<u8> {
         let mut buf = vec![0; 20];
         let domain_buf = self.domain.to_le_bytes();
@@ -148,7 +148,7 @@ impl Message {
         let command_param1_buf = self.command_param1.to_le_bytes();
         let command_param2_buf = self.command_param2.to_le_bytes();
 
-        // transfer partial arrays to array for complete message
+        // transfer partial arrays to array for a complete message
         buf[4] = domain_buf[0];
         buf[5] = domain_buf[1];
         buf[6] = domain_buf[2];
@@ -175,7 +175,7 @@ impl Message {
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct MessagingConfig {
-    /// filename used for generating the messsage queue identifier
+    /// filename used for generating the message queue identifier
     mq_filename: String,
 
     /// timeout for receiving messages in milliseconds
@@ -235,11 +235,11 @@ impl Messaging {
         };
 
         Messaging {
-            config: config,
+            config,
 
             #[cfg(target_os = "linux")]
             mq: mq,
-            mq_max_msg_len: mq_max_msg_len,
+            mq_max_msg_len,
         }
     }
 
@@ -306,7 +306,7 @@ impl Messaging {
                             msg.command_param2
                         );
 
-                        // interpret domain in message
+                        // interpret the domain in a message
                         let domain: MessagingDomain = match msg.domain {
                             messaging_domains::REFILL => MessagingDomain::Refill,
                             messaging_domains::VENTILATION => MessagingDomain::Ventilation,
@@ -325,7 +325,7 @@ impl Messaging {
                             }
                         };
 
-                        // interpret command in message
+                        // interpret command in a message
                         let command: InternalCommand = match msg.command {
                             messaging_commands::RESET => InternalCommand::ResetAllErrors,
                             messaging_commands::STOP => InternalCommand::Stop,
@@ -466,6 +466,48 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
 
     #[cfg(target_os = "linux")]
+    fn create_test_environment(
+        msg_start: &'static Message,
+        msg_stop: &'static Message,
+        tx_environment_to_object: Sender<InternalCommand>,
+        tx_signal_handler_to_messaging: Sender<InternalCommand>,
+        rx_signal_handler_from_messaging: Receiver<InternalCommand>,
+        tx_test_environment_to_ventilation: Sender<InternalCommand>,
+        mq_stimuli: &'static MessageQueue
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_100_millis = Duration::from_millis(100);
+                let spin_sleeper = SpinSleeper::default();
+
+                spin_sleeper.sleep(sleep_duration_100_millis);
+
+                // sending an IPC message requesting the stop of ventilation control
+                let _ = mq_stimuli.send(0, msg_stop.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millis);
+
+                // sending an IPC message requesting the stop of ventilation control
+                let _ = mq_stimuli.send(0, msg_start.create_message_buf());
+
+                spin_sleeper.sleep(sleep_duration_100_millis);
+
+                // requesting mock ventilation to quit
+                let _ = tx_test_environment_to_ventilation.send(InternalCommand::Quit);
+
+                // requesting messaging to quit
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Quit);
+
+                // waiting for confirmation from messaging
+                let _ = rx_signal_handler_from_messaging.recv();
+
+                let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
+            })
+            .unwrap();        
+    }
+    
+    #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_ventilation() {
@@ -473,15 +515,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.5UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::VENTILATION;
@@ -511,35 +545,37 @@ pub mod tests {
                 let mut commands_received =
                     mock_message_command_receiver(rx_ventilation_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
 
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of first message sent from test environment:
+                // assert the content of the first message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
 
         // thread for controlling duration of test run
+        let join_handle_test_environment = create_test_environment();
+        /*
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of ventilation control
+                // sending an IPC message requesting the stop of ventilation control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of ventilation control
+                // sending an IPC message requesting the stop of ventilation control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock ventilation to quit
                 let _ = tx_test_environment_to_ventilation.send(InternalCommand::Quit);
@@ -553,8 +589,9 @@ pub mod tests {
                 let _ = tx_signal_handler_to_messaging.send(InternalCommand::Terminate);
             })
             .unwrap();
-
-        // thread for test object
+        */
+        
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -591,15 +628,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::HEATING;
@@ -629,13 +658,13 @@ pub mod tests {
                 let mut commands_received =
                     mock_message_command_receiver(rx_heating_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
 
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of first message sent from test environment:
+                // assert the content of the first message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
@@ -644,20 +673,20 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of heating control
+                // sending the IPC message requesting stop of heating control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of heating control
+                // sending the IPC message requesting stop of heating control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock heating to quit
                 let _ = tx_test_environment_to_heating.send(InternalCommand::Quit);
@@ -672,7 +701,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -702,6 +731,19 @@ pub mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    fn open_posixmq_test_file(filename: &str) -> PosixMq {
+        match PosixMq::open(filename) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "{}: failure to open message queue for test using {}, error={e:?}",
+                    LOG_TARGET_MESSAGING, filename
+                );
+            }
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
     // Test case checks if messages for refill control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_refill() {
@@ -709,15 +751,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.7UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_reset = Message::new();
         msg_reset.domain = messaging_domains::REFILL;
@@ -750,16 +784,16 @@ pub mod tests {
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(rx_refill_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
 
-                // assert content of last message sent from test environment:
+                // assert the content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of second message sent from test environment:
+                // assert the content of the second message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
 
-                // assert content of first message sent from test environment:
+                // assert the content of the first message sent from the test environment:
                 assert_eq!(
                     InternalCommand::ResetAllErrors,
                     commands_received.pop().unwrap()
@@ -771,25 +805,25 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting reset of all errors
+                // sending the IPC message requesting reset of all errors
                 let _ = mq_stimuli.send(0, &msg_reset.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of refill control
+                // sending the IPC message requesting stop of refill control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of refill control
+                // sending the IPC message requesting stop of refill control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock refill to quit
                 let _ = tx_test_environment_to_refill.send(InternalCommand::Quit);
@@ -804,7 +838,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -841,15 +875,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.8UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_exec = Message::new();
         msg_exec.domain = messaging_domains::FEED;
@@ -883,16 +909,16 @@ pub mod tests {
             .spawn(move || {
                 let mut commands_received = mock_message_command_receiver(rx_feed_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
 
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of second message sent from test environment:
+                // assert the content of the second message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
 
-                // assert content of first message sent from test environment:
+                // assert the content of the first message sent from the test environment:
                 assert_eq!(
                     InternalCommand::Execute(13),
                     commands_received.pop().unwrap()
@@ -904,25 +930,25 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting execution of feed profile
+                // sending the IPC message requesting execution of feed profile
                 let _ = mq_stimuli.send(0, &msg_exec.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of feed control
+                // sending an IPC message requesting stop of the feed control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of feed control
+                // sending an IPC message requesting stop of the feed control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock feed to quit
                 let _ = tx_test_environment_to_feed.send(InternalCommand::Quit);
@@ -937,7 +963,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -974,15 +1000,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::BALLING;
@@ -1012,13 +1030,13 @@ pub mod tests {
                 let mut commands_received =
                     mock_message_command_receiver(rx_balling_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
 
                 // assert content of last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of second message sent from test environment:
+                // assert the content of the second message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
@@ -1027,20 +1045,20 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of Balling dosing control
+                // sending an IPC message requesting the stop of Balling dosing control
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of Balling dosing control
+                // sending an IPC message requesting the stop of Balling dosing control
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock Balling to quit
                 let _ = tx_test_environment_to_balling.send(InternalCommand::Quit);
@@ -1055,7 +1073,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -1092,15 +1110,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
 
-        let mq_stimuli = match PosixMq::open(&config.messaging.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, &config.messaging.mq_filename
-                );
-            }
-        };
+        open_posixmq_test_file(&config.messaging.mq_filename);
 
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::WATCHDOG;
@@ -1130,13 +1140,13 @@ pub mod tests {
                 let mut commands_received =
                     mock_message_command_receiver(rx_watchdog_from_messaging);
 
-                // assert number of commands sent/received are identical
+                // assert the number of commands sent/received are identical
                 assert_eq!(2, commands_received.len());
 
-                // assert content of last message sent from test environment:
+                // assert the content of the last message sent from the test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
-                // assert content of second message sent from test environment:
+                // assert the content of the second message sent from the test environment:
                 assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
             })
             .unwrap();
@@ -1145,20 +1155,20 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_100_millisec = Duration::from_millis(100);
+                let sleep_duration_100_millis = Duration::from_millis(100);
                 let spin_sleeper = SpinSleeper::default();
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting stop of Watchdog communication
+                // sending an IPC message requesting the stop of Watchdog communication
                 let _ = mq_stimuli.send(0, &msg_stop.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending IPC message requesting start of Watchdog communication
+                // sending an IPC message requesting the start of Watchdog communication
                 let _ = mq_stimuli.send(0, &msg_start.create_message_buf());
 
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // requesting mock Watchdog communication to quit
                 let _ = tx_test_environment_to_watchdog.send(InternalCommand::Quit);
@@ -1173,7 +1183,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
