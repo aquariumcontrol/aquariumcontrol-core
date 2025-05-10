@@ -79,7 +79,8 @@ fn switch_on_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation)) {
+    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+    {
         Ok(_) => {
             // now listen for the response
             match rx_ventilation_from_controllino.recv() {
@@ -120,7 +121,9 @@ fn switch_off_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Ventilation)) {
+    match tx_ventilation_to_controllino
+        .send(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
+    {
         Ok(_) => {
             // now listen for the response
             match rx_ventilation_from_controllino.recv() {
@@ -147,28 +150,28 @@ fn switch_off_ventilation(
 pub struct VentilationChannels {
     /// Sender part of the channel for communication to Controllino
     pub tx_ventilation_to_controllino: Sender<InternalCommand>,
-    
+
     /// Receiver part of the channel for communication from Controllino
     pub rx_ventilation_from_controllino: Receiver<bool>,
-    
+
     /// Sender part of the channel for communication to the signal handler
     pub tx_ventilation_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_ventilation_from_signal_handler: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to the data logger
     pub tx_ventilation_to_data_logger: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the data logger
     pub rx_ventilation_from_data_logger: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to the schedule checker
     pub tx_ventilation_to_schedule_check: Sender<InternalCommand>,
-    
+
     /// Receiver part of the channel for communication from the schedule checker                   
     pub rx_ventilation_from_schedule_check: Receiver<bool>,
-    
+
     /// Receiver part of the channel for communication from the messaging                   
     pub rx_ventilation_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
@@ -354,7 +357,12 @@ impl Ventilation {
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
-                .process_external_request(&ventilation_channels.rx_ventilation_from_signal_handler, ventilation_channels.rx_ventilation_from_messaging_opt.as_ref());
+                .process_external_request(
+                    &ventilation_channels.rx_ventilation_from_signal_handler,
+                    ventilation_channels
+                        .rx_ventilation_from_messaging_opt
+                        .as_ref(),
+                );
             if quit_command_received {
                 break;
             }
@@ -391,11 +399,17 @@ impl Ventilation {
                 }
 
                 // schedule check to see if actuation is allowed
-                match ventilation_channels.tx_ventilation_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                match ventilation_channels
+                    .tx_ventilation_to_schedule_check
+                    .send(InternalCommand::ScheduleCheck)
+                {
                     Ok(_) => {
                         self.lock_error_channel_send_schedule_check = false;
                         // now listen for the response
-                        schedule_check_result = match ventilation_channels.rx_ventilation_from_schedule_check.recv() {
+                        schedule_check_result = match ventilation_channels
+                            .rx_ventilation_from_schedule_check
+                            .recv()
+                        {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
                                 c
@@ -601,7 +615,10 @@ impl Ventilation {
 
         // The application received a request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match ventilation_channels.tx_ventilation_to_signal_handler.send(true) {
+        match ventilation_channels
+            .tx_ventilation_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -616,7 +633,10 @@ impl Ventilation {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match ventilation_channels.rx_ventilation_from_signal_handler.recv() {
+            termination_command_received = match ventilation_channels
+                .rx_ventilation_from_signal_handler
+                .recv()
+            {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_signal = false;
                     match c {
@@ -786,7 +806,7 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
-                
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
@@ -921,7 +941,7 @@ pub mod tests {
                     tx_ventilation_to_schedule_check.clone();
                 let tx_ventilation_to_controllino_for_test_case_finish =
                     tx_ventilation_to_controllino.clone();
-                
+
                 let ventilation_channels = VentilationChannels {
                     tx_ventilation_to_controllino,
                     rx_ventilation_from_controllino,
@@ -933,7 +953,7 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
-                
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,

@@ -61,16 +61,16 @@ pub struct FeedConfig {
 pub struct FeedChannels {
     /// Sender part of the channel for communication to Controllino
     pub tx_feed_to_controllino: Sender<InternalCommand>,
-    
+
     /// Receiver part of the channel for communication from Controllino
     pub rx_feed_from_controllino: Receiver<bool>,
-    
+
     /// Sender part of the channel for communication to the signal handler
     pub tx_feed_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler  
     pub rx_feed_from_signal_handler: Receiver<InternalCommand>,
-    
+
     /// Receiver part of the channel wrapped in Option for communication from the messaging  
     pub rx_feed_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
@@ -430,8 +430,10 @@ impl Feed {
                 quit_command_received,  // request to end the application has been received
                 start_command_received, // request to (re-)start feed has been received
                 stop_command_received,  // request to (temporarily) stop feed has been received
-            ) = self
-                .process_external_request(&feed_channels.rx_feed_from_signal_handler, feed_channels.rx_feed_from_messaging_opt.as_ref());
+            ) = self.process_external_request(
+                &feed_channels.rx_feed_from_signal_handler,
+                feed_channels.rx_feed_from_messaging_opt.as_ref(),
+            );
             if quit_command_received {
                 break;
             }
@@ -765,7 +767,7 @@ pub mod tests {
                 rx_feed_from_signal_handler,
                 rx_feed_from_messaging_opt: None,
             };
-            
+
             // thread for test object
             scope.spawn(move || {
                 feed.execute(
@@ -950,7 +952,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
@@ -1039,7 +1040,6 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
-
                 let feed_channels = FeedChannels {
                     tx_feed_to_controllino,
                     rx_feed_from_controllino,
@@ -1315,7 +1315,7 @@ pub mod tests {
             });
 
             spin_sleeper.sleep(sleep_duration_100_millisec);
-            
+
             // thread for the test object
             scope.spawn(move || {
                 let feed_channels = FeedChannels {
@@ -1325,7 +1325,7 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: None,
                 };
-                
+
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
                     feed_channels,
@@ -1462,7 +1462,7 @@ pub mod tests {
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: None,
                 };
-                
+
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
                     feed_channels,

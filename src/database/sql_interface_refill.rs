@@ -25,7 +25,10 @@ pub trait DatabaseInterfaceRefillTrait {
     /// It provides wrapped into Result type either
     /// - the integer value as u64
     /// - or a value from enum SqlInterfaceError
-    fn get_positive_integer_value_from_database(&mut self, sql_query_string: &str) -> Result<u64, SqlInterfaceError>;
+    fn get_positive_integer_value_from_database(
+        &mut self,
+        sql_query_string: &str,
+    ) -> Result<u64, SqlInterfaceError>;
 
     fn check_empty(&mut self) -> Result<u64, SqlInterfaceError>;
 
@@ -108,11 +111,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// It provides wrapped into Result type either
     /// - the integer value as u64
     /// - or a value from enum SqlInterfaceError
-    fn get_positive_integer_value_from_database(&mut self, sql_query_string: &str) -> Result<u64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_string
-        ) {
+    fn get_positive_integer_value_from_database(
+        &mut self,
+        sql_query_string: &str,
+    ) -> Result<u64, SqlInterfaceError> {
+        match SqlInterface::get_single_integer_from_database(&mut self.conn, sql_query_string) {
             Ok(c) => {
                 if c >= 0 {
                     Ok(c as u64)
@@ -123,7 +126,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             Err(e) => Err(e),
         }
     }
-    
+
     /// Checks if the SQL table of refill events is empty.
     /// It returns wrapped into Result type either
     /// - a value of one if there is at least one entry in the table or
@@ -141,7 +144,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// - or a value from enum SqlInterfaceError
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
-            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
         )
     }
 
@@ -151,7 +154,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// - or a value from enum SqlInterfaceError    
     fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
-            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
         )
     }
 

@@ -113,7 +113,9 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match tx_water_injection_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump)) {
+        match tx_water_injection_to_controllino
+            .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
+        {
             Ok(_) => {
                 // now listen for the response
                 match rx_water_injection_from_controllino.recv() {
@@ -143,7 +145,11 @@ impl WaterInjectionTrait for WaterInjection {
         let mut tank_level_switch_invalid = false;
 
         loop {
-            self.communicate_with_data_logger(tx_water_injection_to_data_logger, rx_water_injection_from_data_logger, true);
+            self.communicate_with_data_logger(
+                tx_water_injection_to_data_logger,
+                rx_water_injection_from_data_logger,
+                true,
+            );
 
             self.spin_sleeper
                 .sleep(self.sleep_duration_hundred_milli_sec);
@@ -192,7 +198,9 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match tx_water_injection_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::RefillPump)) {
+        match tx_water_injection_to_controllino
+            .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
+        {
             Ok(_) => {
                 // now listen for the response
                 match rx_water_injection_from_controllino.recv() {

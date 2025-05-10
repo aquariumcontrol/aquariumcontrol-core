@@ -761,7 +761,11 @@ impl Refill {
                     }
                 }
 
-                self.communicate_with_data_logger(&refill_channels.tx_refill_to_data_logger, &refill_channels.rx_refill_from_data_logger, false);
+                self.communicate_with_data_logger(
+                    &refill_channels.tx_refill_to_data_logger,
+                    &refill_channels.rx_refill_from_data_logger,
+                    false,
+                );
 
                 (
                     quit_command_received,
@@ -827,8 +831,10 @@ impl Refill {
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
                     {
-                        schedule_check_result =
-                            self.check_schedule(&refill_channels.tx_refill_to_schedule_check, &refill_channels.rx_refill_from_schedule_check);
+                        schedule_check_result = self.check_schedule(
+                            &refill_channels.tx_refill_to_schedule_check,
+                            &refill_channels.rx_refill_from_schedule_check,
+                        );
 
                         if schedule_check_result
                             && !tank_level_switch_position_stabilized
@@ -991,8 +997,15 @@ impl Refill {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            self.communicate_with_data_logger(&refill_channels.tx_refill_to_data_logger, &refill_channels.rx_refill_from_data_logger, false);
-            termination_command_received = match refill_channels.rx_refill_from_signal_handler.recv() {
+            self.communicate_with_data_logger(
+                &refill_channels.tx_refill_to_data_logger,
+                &refill_channels.rx_refill_from_data_logger,
+                false,
+            );
+            termination_command_received = match refill_channels
+                .rx_refill_from_signal_handler
+                .recv()
+            {
                 Ok(c) => {
                     self.lock_error_channel_receive_termination_command = false;
                     match c {

@@ -85,8 +85,8 @@ use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels}
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
-use crate::thermal::heating::{Heating, HeatingChannels};
 use crate::thermal::heating::HeatingStatsDataTransfer;
+use crate::thermal::heating::{Heating, HeatingChannels};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
@@ -814,8 +814,10 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_signal_handler, rx_signal_handler_from_tcp): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_tcp_communication_to_signal_handler, rx_signal_handler_from_tcp): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** signal handler => ds18b20 ***
@@ -837,7 +839,8 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_ambient, rx_ambient_from_tcp): (Sender<f32>, Receiver<f32>) = mpsc::channel();
+    let (tx_tcp_communication_to_ambient, rx_ambient_from_tcp): (Sender<f32>, Receiver<f32>) =
+        mpsc::channel();
     // **********************
 
     // *** atlas_scientific <=> tcp ***
@@ -845,8 +848,10 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_atlas_scientific, rx_atlas_scientific_from_tcp): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
+    let (tx_tcp_communication_to_atlas_scientific, rx_atlas_scientific_from_tcp): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
     // **********************
 
     // *** tank_level_switch <=> tcp ***
@@ -854,8 +859,10 @@ fn main() {
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_tank_level_switch, rx_tank_level_switch_from_tcp): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
+    let (tx_tcp_communication_to_tank_level_switch, rx_tank_level_switch_from_tcp): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
     // **********************
 
     // wrapping sender/receiver for communication with TCP thread
@@ -917,10 +924,11 @@ fn main() {
             false => None,
         };
 
-    let tx_tcp_communication_to_ambient_opt: Option<Sender<f32>> = match config.ambient.use_simulator {
-        true => Some(tx_tcp_communication_to_ambient),
-        false => None,
-    };
+    let tx_tcp_communication_to_ambient_opt: Option<Sender<f32>> =
+        match config.ambient.use_simulator {
+            true => Some(tx_tcp_communication_to_ambient),
+            false => None,
+        };
 
     let rx_ambient_from_tcp_opt: Option<Receiver<f32>> = match config.ambient.use_simulator {
         true => Some(rx_ambient_from_tcp),
@@ -1110,8 +1118,8 @@ fn main() {
     let initial_value_ds18b20_ambient_temperature =
         config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
-    
-    let controllino_channels = ControllinoChannels{
+
+    let controllino_channels = ControllinoChannels {
         tx_controllino_to_tcp_opt,
         tx_controllino_to_refill,
         rx_controllino_from_refill,
@@ -1127,7 +1135,7 @@ fn main() {
         rx_controllino_from_signal_handler,
     };
 
-    let atlas_scientific_channels = AtlasScientificChannels{
+    let atlas_scientific_channels = AtlasScientificChannels {
         tx_atlas_scientific_to_tcp_opt,
         rx_atlas_scientific_from_tcp_opt,
         tx_atlas_scientific_to_i2c_interface_opt,
@@ -1135,7 +1143,7 @@ fn main() {
         tx_atlas_scientific_to_signal_handler,
         rx_atlas_scientific_from_signal_handler,
     };
-    
+
     let refill_channels = RefillChannels {
         tx_refill_to_controllino,
         rx_refill_from_controllino,
@@ -1147,7 +1155,7 @@ fn main() {
         rx_refill_from_data_logger,
         rx_refill_from_messaging_opt,
     };
-    
+
     let balling_channels = BallingChannels {
         tx_balling_to_controllino,
         rx_balling_from_controllino,
@@ -1157,7 +1165,7 @@ fn main() {
         rx_balling_from_schedule_check,
         rx_balling_from_messaging_opt,
     };
-    
+
     let ventilation_channels = VentilationChannels {
         tx_ventilation_to_controllino,
         rx_ventilation_from_controllino,
@@ -1167,7 +1175,7 @@ fn main() {
         rx_ventilation_from_data_logger,
         tx_ventilation_to_schedule_check,
         rx_ventilation_from_schedule_check,
-        rx_ventilation_from_messaging_opt,                
+        rx_ventilation_from_messaging_opt,
     };
 
     let feed_channels = FeedChannels {
@@ -1189,7 +1197,7 @@ fn main() {
         rx_heating_from_schedule_check,
         rx_heating_from_messaging_opt,
     };
-    
+
     let tcp_communication_channels = TcpCommunicationChannels {
         rx_tcp_communication_from_controllino_opt,
         rx_tcp_communication_from_ambient_opt,
@@ -1214,7 +1222,7 @@ fn main() {
         tx_schedule_check_to_signal_handler,
         rx_schedule_check_from_signal_handler,
     };
-    
+
     let signal_handler_channels = SignalHandlerChannels {
         tx_signal_handler_to_messaging_opt,
         rx_signal_handler_from_messaging_opt,
@@ -1296,7 +1304,7 @@ fn main() {
             mutex_tank_level_switch_signals.clone();
         let mutex_tank_level_switch_signals_clone_for_refill =
             mutex_tank_level_switch_signals.clone();
-        
+
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_communication = match TcpCommunication::new(&config.tcp_connection) {
@@ -1309,31 +1317,22 @@ fn main() {
                 }
             };
             scope.spawn(move || {
-                tcp_communication.execute(
-                    tcp_communication_channels
-                );
+                tcp_communication.execute(tcp_communication_channels);
             });
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "TcpCommunication terminated.");
         };
-        
+
         if config.controllino.use_simulator {
             scope.spawn(move || {
-                
-                controllino.execute(
-                    controllino_channels,
-                    &mut ControllinoActuateSimulator,
-                );
+                controllino.execute(controllino_channels, &mut ControllinoActuateSimulator);
 
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
-                controllino.execute(
-                    controllino_channels,
-                    &mut ControllinoActuateHardware,
-                );
+                controllino.execute(controllino_channels, &mut ControllinoActuateHardware);
 
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
@@ -1342,7 +1341,7 @@ fn main() {
 
         scope.spawn(move || {
             let term = Arc::new(AtomicBool::new(false));
-            
+
             handle_signals(term, signal_handler_channels);
 
             #[cfg(feature = "debug_main")]
@@ -1350,9 +1349,7 @@ fn main() {
         });
 
         scope.spawn(move || {
-            schedule_check.execute(
-                schedule_check_channels,
-            );
+            schedule_check.execute(schedule_check_channels);
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
@@ -1466,7 +1463,6 @@ fn main() {
         let mutex_device_scheduler_refill = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            
             refill.execute(
                 mutex_device_scheduler_refill,
                 refill_channels,
@@ -1482,7 +1478,7 @@ fn main() {
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
         let mut heating_stats_transfer = HeatingStatsDataTransfer;
-        
+
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,

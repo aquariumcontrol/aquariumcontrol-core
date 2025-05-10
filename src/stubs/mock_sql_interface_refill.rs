@@ -25,10 +25,13 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_positive_integer_value_from_database(&mut self, _sql_query_string: &str) -> Result<u64, SqlInterfaceError> {
+        fn get_positive_integer_value_from_database(
+            &mut self,
+            _sql_query_string: &str,
+        ) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
-        
+
         fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }

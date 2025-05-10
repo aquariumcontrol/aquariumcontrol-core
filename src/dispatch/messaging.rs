@@ -456,8 +456,8 @@ impl Messaging {
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender};
     use std::{sync::mpsc, thread, time::Duration};
-    use std::sync::mpsc::{Sender, Receiver};
 
     use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING,
@@ -478,14 +478,14 @@ pub mod tests {
             }
         }
     }
-    
+
     #[cfg(target_os = "linux")]
     fn create_test_environment(
         msg_commands: Vec<Message>,
         tx_environment_to_object: Sender<InternalCommand>,
         tx_signal_handler_to_messaging: Sender<InternalCommand>,
         rx_signal_handler_from_messaging: Receiver<bool>,
-        mq_filename: String
+        mq_filename: String,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -496,14 +496,14 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_100_millis);
 
                 let mq_stimuli = open_posixmq_test_file(&mq_filename);
-                
+
                 for msg_command in msg_commands {
                     // sending an IPC message requesting the command to (sub-)test object
                     let _ = mq_stimuli.send(0, &msg_command.create_message_buf());
 
                     spin_sleeper.sleep(sleep_duration_100_millis);
                 }
-                
+
                 // requesting mock control to quit
                 let _ = tx_environment_to_object.send(InternalCommand::Quit);
 
@@ -517,7 +517,19 @@ pub mod tests {
             })
             .unwrap()
     }
-    
+
+    #[cfg(target_os = "linux")]
+    fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
+        // assert the number of commands sent/received are identical
+        assert_eq!(2, commands_received.len());
+
+        // assert content of last message sent from test environment:
+        assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
+
+        // assert the content of the first message sent from the test environment:
+        assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+    }
+
     #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
     #[test]
@@ -526,7 +538,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.5UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
-        
+
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::VENTILATION;
         msg_start.command = messaging_commands::START;
@@ -552,29 +564,21 @@ pub mod tests {
         let join_handle_mock_ventilation = thread::Builder::new()
             .name("mock_ventilation".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(rx_ventilation_from_messaging);
-
-                // assert the number of commands sent/received are identical
-                assert_eq!(2, commands_received.len());
-
-                // assert content of last message sent from test environment:
-                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-
-                // assert the content of the first message sent from the test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+                assert_stop_start_sequence(mock_message_command_receiver(
+                    rx_ventilation_from_messaging,
+                ));
             })
             .unwrap();
 
         // thread for controlling duration of test run
         let join_handle_test_environment = create_test_environment(
-            vec![msg_stop, msg_start],	// first stop, then start ventilation
+            vec![msg_stop, msg_start], // first stop, then start ventilation
             tx_test_environment_to_ventilation,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_filename_for_test_environment
+            mq_filename_for_test_environment,
         );
-        
+
         // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
@@ -612,7 +616,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
-        
+
         let mut msg_start = Message::new();
         msg_start.domain = messaging_domains::HEATING;
         msg_start.command = messaging_commands::START;
@@ -638,17 +642,9 @@ pub mod tests {
         let join_handle_mock_heating = thread::Builder::new()
             .name("mock_heating".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(rx_heating_from_messaging);
-
-                // assert the number of commands sent/received are identical
-                assert_eq!(2, commands_received.len());
-
-                // assert content of last message sent from test environment:
-                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-
-                // assert the content of the first message sent from the test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+                assert_stop_start_sequence(mock_message_command_receiver(
+                    rx_heating_from_messaging,
+                ));
             })
             .unwrap();
 
@@ -658,7 +654,7 @@ pub mod tests {
             tx_test_environment_to_heating,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_filename_for_test_environment
+            mq_filename_for_test_environment,
         );
 
         // thread for the test object
@@ -754,7 +750,7 @@ pub mod tests {
             tx_test_environment_to_refill,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_file_name_for_test_environment
+            mq_file_name_for_test_environment,
         );
 
         // thread for the test object
@@ -850,7 +846,7 @@ pub mod tests {
             tx_test_environment_to_feed,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_filename_for_test_environment
+            mq_filename_for_test_environment,
         );
 
         // thread for the test object
@@ -918,17 +914,9 @@ pub mod tests {
         let join_handle_mock_balling = thread::Builder::new()
             .name("mock_balling".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(rx_balling_from_messaging);
-
-                // assert the number of commands sent/received are identical
-                assert_eq!(2, commands_received.len());
-
-                // assert content of last message sent from test environment:
-                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-
-                // assert the content of the second message sent from the test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+                assert_stop_start_sequence(mock_message_command_receiver(
+                    rx_balling_from_messaging,
+                ));
             })
             .unwrap();
 
@@ -938,7 +926,7 @@ pub mod tests {
             tx_test_environment_to_balling,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_filename_for_test_environment
+            mq_filename_for_test_environment,
         );
 
         // thread for the test object
@@ -1004,17 +992,9 @@ pub mod tests {
         let join_handle_mock_watchdog = thread::Builder::new()
             .name("mock_watchdog".to_string())
             .spawn(move || {
-                let mut commands_received =
-                    mock_message_command_receiver(rx_watchdog_from_messaging);
-
-                // assert the number of commands sent/received are identical
-                assert_eq!(2, commands_received.len());
-
-                // assert the content of the last message sent from the test environment:
-                assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
-
-                // assert the content of the second message sent from the test environment:
-                assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
+                assert_stop_start_sequence(mock_message_command_receiver(
+                    rx_watchdog_from_messaging,
+                ));
             })
             .unwrap();
 
@@ -1024,7 +1004,7 @@ pub mod tests {
             tx_test_environment_to_watchdog,
             tx_signal_handler_to_messaging,
             rx_signal_handler_from_messaging,
-            mq_filename_for_test_environment
+            mq_filename_for_test_environment,
         );
 
         // thread for the test object

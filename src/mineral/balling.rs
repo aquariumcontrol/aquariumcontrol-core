@@ -68,22 +68,22 @@ pub struct BallingConfig {
 pub struct BallingChannels {
     /// sender part of the channel for communication to Controllino
     pub tx_balling_to_controllino: Sender<InternalCommand>,
-    
+
     /// receiver part of the channel for communication from Controllino
     pub rx_balling_from_controllino: Receiver<bool>,
-    
+
     /// sender part of the channel for communication to the signal handler
     pub tx_balling_to_signal_handler: Sender<bool>,
-    
+
     /// receiver part of the channel for communication from the signal handler                
     pub rx_balling_from_signal_handler: Receiver<InternalCommand>,
-    
+
     /// sender part of the channel for communication to the schedule checker
     pub tx_balling_to_schedule_check: Sender<InternalCommand>,
-    
+
     /// receiver part of the channel for communication from the schedule checker
     pub rx_balling_from_schedule_check: Receiver<bool>,
-    
+
     /// receiver part of the channel communication wrapped in Option from Messaging
     pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
@@ -391,10 +391,16 @@ impl Balling {
                 // and the monitoring period has passed (usually every 60secs)
 
                 // schedule check to see if actuation is allowed
-                match balling_channels.tx_balling_to_schedule_check.send(InternalCommand::ScheduleCheck) {
+                match balling_channels
+                    .tx_balling_to_schedule_check
+                    .send(InternalCommand::ScheduleCheck)
+                {
                     Ok(_) => {
                         // now listen for response
-                        schedule_check_result = match balling_channels.rx_balling_from_schedule_check.recv() {
+                        schedule_check_result = match balling_channels
+                            .rx_balling_from_schedule_check
+                            .recv()
+                        {
                             Ok(c) => {
                                 self.lock_error_channel_receive_schedule_check = false;
                                 c
@@ -554,8 +560,10 @@ impl Balling {
                 quit_command_received,
                 start_command_received,
                 stop_command_received,
-            ) = self
-                .process_external_request(&balling_channels.rx_balling_from_signal_handler, balling_channels.rx_balling_from_messaging_opt.as_ref());
+            ) = self.process_external_request(
+                &balling_channels.rx_balling_from_signal_handler,
+                balling_channels.rx_balling_from_messaging_opt.as_ref(),
+            );
 
             if self.execute_command_received {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
@@ -640,34 +648,35 @@ impl Balling {
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match balling_channels.rx_balling_from_signal_handler.recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-                    match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
+            termination_command_received =
+                match balling_channels.rx_balling_from_signal_handler.recv() {
+                    Ok(c) => {
+                        self.lock_error_channel_receive_termination_signal = false;
+                        match c {
+                            InternalCommand::Terminate => {
+                                self.lock_warn_inapplicable_command = false;
+                                true
+                            }
+                            _ => {
+                                if !self.lock_warn_inapplicable_command {
+                                    warn!(
                                     target: LOG_TARGET_BALLING,
                                     "ignoring inapplicable command {} from signal handler.", c);
-                                self.lock_warn_inapplicable_command = true;
+                                    self.lock_warn_inapplicable_command = true;
+                                }
+                                false
                             }
-                            false
                         }
                     }
-                }
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(target: LOG_TARGET_BALLING,
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_termination_signal {
+                            error!(target: LOG_TARGET_BALLING,
                             "error when trying to receive termination signal. ({e:?})");
-                        self.lock_error_channel_receive_termination_signal = true;
+                            self.lock_error_channel_receive_termination_signal = true;
+                        }
+                        false
                     }
-                    false
-                }
-            };
+                };
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
@@ -1103,7 +1112,7 @@ pub mod tests {
             scope.spawn(move || {
                 let tx_balling_to_schedule_check_for_test_case_finish =
                     tx_balling_to_schedule_check.clone();
-                
+
                 let balling_channels = BallingChannels {
                     tx_balling_to_controllino,
                     rx_balling_from_controllino,
@@ -1523,7 +1532,7 @@ pub mod tests {
                     rx_balling_from_schedule_check,
                     rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
                 };
-                
+
                 balling.execute(
                     mutex_device_scheduler,
                     balling_channels,

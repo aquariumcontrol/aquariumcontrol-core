@@ -416,8 +416,10 @@ impl Controllino {
         actuator: &mut impl RelayActuationTrait,
     ) {
         loop {
-            let (quit_command_received, _, _) =
-                self.process_external_request(&controllino_channels.rx_controllino_from_signal_handler, None);
+            let (quit_command_received, _, _) = self.process_external_request(
+                &controllino_channels.rx_controllino_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
@@ -563,7 +565,10 @@ impl Controllino {
             // **********************************
 
             // *** communication with ventilation control ***
-            match controllino_channels.rx_controllino_from_ventilation.try_recv() {
+            match controllino_channels
+                .rx_controllino_from_ventilation
+                .try_recv()
+            {
                 Ok(c) => {
                     if Self::SW_LOG_SENDER {
                         println!(
@@ -594,7 +599,10 @@ impl Controllino {
                             }
                         }
                     }
-                    match &controllino_channels.tx_controllino_to_ventilation.send(true) {
+                    match &controllino_channels
+                        .tx_controllino_to_ventilation
+                        .send(true)
+                    {
                         Ok(()) => {
                             self.lock_error_channel_send_ventilation = false;
                         }
@@ -772,7 +780,10 @@ impl Controllino {
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match &controllino_channels.tx_controllino_to_signal_handler.send(true) {
+        match &controllino_channels
+            .tx_controllino_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
@@ -796,7 +807,9 @@ pub mod tests {
     use std::sync::mpsc::{self, Sender};
     use std::{thread::scope, time::Duration};
 
-    use crate::relays::controllino::{Controllino, ControllinoChannels, ControllinoConfig, ControllinoError, RelayActuationTrait};
+    use crate::relays::controllino::{
+        Controllino, ControllinoChannels, ControllinoConfig, ControllinoError, RelayActuationTrait,
+    };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -1098,11 +1111,8 @@ pub mod tests {
                     tx_controllino_to_signal_handler,
                     rx_controllino_from_signal_handler,
                 };
-                
-                controllino.execute(
-                    controllino_channels,
-                    &mut mock_actuator,
-                );
+
+                controllino.execute(controllino_channels, &mut mock_actuator);
 
                 // Test object thread has ended. Assertion checks the number of calls to the actuator.
                 assert_eq!(mock_actuator.get_execution_count(), 24);

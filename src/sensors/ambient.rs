@@ -284,14 +284,17 @@ impl Ambient {
         // initialize countdown
         let mut measurement_countdown: i32 = 0;
 
-        if (self.config.use_simulator) && (tx_ambient_to_tcp_opt.is_none() | rx_ambient_from_tcp_opt.is_none()) {
+        if (self.config.use_simulator)
+            && (tx_ambient_to_tcp_opt.is_none() | rx_ambient_from_tcp_opt.is_none())
+        {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
                 LOG_TARGET_AMBIENT
             );
         }
 
-        if (self.config.use_simulator) && ((tx_ambient_to_dht_opt.is_some()) | (rx_ambient_from_dht_opt.is_some()))
+        if (self.config.use_simulator)
+            && ((tx_ambient_to_dht_opt.is_some()) | (rx_ambient_from_dht_opt.is_some()))
         {
             panic!(
                 "{}: configured to run with simulator, but channels to Dht thread provided",
@@ -352,7 +355,8 @@ impl Ambient {
                                 // read from the channel if a measurement result is available from Dht thread
                                 let rx_ambient_from_dht = rx_ambient_from_dht_opt.as_ref().unwrap();
 
-                                state_send_receive = self.receive_response_from_dht(rx_ambient_from_dht);
+                                state_send_receive =
+                                    self.receive_response_from_dht(rx_ambient_from_dht);
 
                                 if !state_send_receive {
                                     // data could be received successfully

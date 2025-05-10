@@ -121,21 +121,18 @@ impl SqlInterface {
 
     /// Execute the SQL statement given as a parameter and evaluates if the result is ok.
     /// In the error case, an error of type SqlInterfaceError is returned.
-    fn get_string_array_from_database(conn: &mut PooledConn, sql_query_string: &str) -> Result<Vec<SingleString>, SqlInterfaceError> {
-        match conn.query_map(
-            sql_query_string, |single_string| {
-                SingleString { single_string }
-            }
-        ) {
+    fn get_string_array_from_database(
+        conn: &mut PooledConn,
+        sql_query_string: &str,
+    ) -> Result<Vec<SingleString>, SqlInterfaceError> {
+        match conn.query_map(sql_query_string, |single_string| SingleString {
+            single_string,
+        }) {
             Ok(c) => Ok(c),
-            Err(_) => {
-                Err(
-                    SqlInterfaceError::SingleStringRequestFailure(
-                        "Could not get single string from the database using query:".to_string()
-                            + sql_query_string,
-                    )
-                )
-            }
+            Err(_) => Err(SqlInterfaceError::SingleStringRequestFailure(
+                "Could not get single string from the database using query:".to_string()
+                    + sql_query_string,
+            )),
         }
     }
 
@@ -170,7 +167,7 @@ impl SqlInterface {
         }
         Ok(single_string_array[0].single_string.clone())
     }
-    
+
     /// Executes an SQL statement given as a parameter and evaluates if the response is a single string value.
     /// Empty response is allowed.
     /// Depending on the result of the query, the function provides wrapped in a result type either
@@ -186,7 +183,7 @@ impl SqlInterface {
     ) -> Result<Option<String>, SqlInterfaceError> {
         // Get a single string value from the database
         let single_string_array = Self::get_string_array_from_database(conn, sql_query_string)?;
-        
+
         // return an empty response if there is no response from the database
         if single_string_array.is_empty() {
             return Ok(Option::None);
@@ -667,9 +664,8 @@ impl SqlInterface {
         hours_in_past: i64,
         seconds_in_past: i64,
     ) -> NaiveDateTime {
-        let timestamp_from_past = Local::now()
-            - Duration::hours(hours_in_past)
-            - Duration::seconds(seconds_in_past);
+        let timestamp_from_past =
+            Local::now() - Duration::hours(hours_in_past) - Duration::seconds(seconds_in_past);
         timestamp_from_past.naive_local()
     }
 
@@ -752,10 +748,7 @@ pub mod tests {
             Err(_) => panic!("Could not get current date from the database."),
         };
         let sql_date_string = sql_date.format("%Y-%m-%d").to_string();
-        let local_date_string = Local::now()
-            .trunc_subsecs(0)
-            .format("%Y-%m-%d")
-            .to_string();
+        let local_date_string = Local::now().trunc_subsecs(0).format("%Y-%m-%d").to_string();
         assert_eq!(sql_date_string, local_date_string);
         println!("* checking current date (PASS) succeeded.");
         // **************************************************************************************

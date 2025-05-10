@@ -47,28 +47,28 @@ pub enum TcpCommunicationError {
 pub struct TcpCommunicationChannels {
     /// Receiver part of the channel for communication from Controllino wrapped in Option type
     pub rx_tcp_communication_from_controllino_opt: Option<Receiver<InternalCommand>>,
-    
+
     /// Receiver part of the channel for communication from Controllino wrapped in Option type
     pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
-    
+
     /// Sender part of the channel for communication to Ambient wrapped in Option type
     pub tx_tcp_communication_to_ambient_opt: Option<Sender<f32>>,
-    
+
     /// Receiver part of the channel for communication from AtlasScientific wrapped in Option type  
     pub rx_tcp_communication_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
-    
-    /// Sender part of the channel for communication to AtlasScientific wrapped in Option type 
+
+    /// Sender part of the channel for communication to AtlasScientific wrapped in Option type
     pub tx_tcp_communication_to_atlas_scientific_opt: Option<Sender<f32>>,
-    
-    /// Receiver part of the channel for communication from tank level switch wrapped in Option type 
+
+    /// Receiver part of the channel for communication from tank level switch wrapped in Option type
     pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
-    
+
     /// Sender part of the channel for communication to tank level switch wrapped in Option type       
     pub tx_tcp_communication_to_tank_level_switch_opt: Option<Sender<f32>>,
-    
+
     /// Sender part of the channel for communication to the signal handler       
     pub tx_tcp_communication_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler       
     pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
 }
@@ -344,38 +344,58 @@ impl TcpCommunication {
     /// Executes the main control in a loop until the signal handler commands quitting.
     /// # Arguments
     /// * `tcp_communication_channels` - channels for communication with other threads
-    pub fn execute(
-        &mut self,
-        tcp_communication_channels: TcpCommunicationChannels,
-    ) {
+    pub fn execute(&mut self, tcp_communication_channels: TcpCommunicationChannels) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
         loop {
-            let (quit_command_received, _, _) =
-                self.process_external_request(&tcp_communication_channels.rx_tcp_communication_from_signal_handler, None);
+            let (quit_command_received, _, _) = self.process_external_request(
+                &tcp_communication_channels.rx_tcp_communication_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 break;
             }
 
             // *** communication with Ambient ***
-            if let Some(ref rx_tcp_communication_from_ambient) = tcp_communication_channels.rx_tcp_communication_from_ambient_opt {
-                if let Some(ref tx_tcp_communication_to_ambient) = tcp_communication_channels.tx_tcp_communication_to_ambient_opt {
-                    self.receive_and_answer(rx_tcp_communication_from_ambient, tx_tcp_communication_to_ambient);
+            if let Some(ref rx_tcp_communication_from_ambient) =
+                tcp_communication_channels.rx_tcp_communication_from_ambient_opt
+            {
+                if let Some(ref tx_tcp_communication_to_ambient) =
+                    tcp_communication_channels.tx_tcp_communication_to_ambient_opt
+                {
+                    self.receive_and_answer(
+                        rx_tcp_communication_from_ambient,
+                        tx_tcp_communication_to_ambient,
+                    );
                 }
             }
 
             // *** communication with Atlas Scientific ***
-            if let Some(ref rx_tcp_communication_from_atlas_scientific) = tcp_communication_channels.rx_tcp_communication_from_atlas_scientific_opt {
-                if let Some(ref tx_tcp_communication_to_atlas_scientific) = tcp_communication_channels.tx_tcp_communication_to_atlas_scientific_opt {
-                    self.receive_and_answer(rx_tcp_communication_from_atlas_scientific, tx_tcp_communication_to_atlas_scientific);
+            if let Some(ref rx_tcp_communication_from_atlas_scientific) =
+                tcp_communication_channels.rx_tcp_communication_from_atlas_scientific_opt
+            {
+                if let Some(ref tx_tcp_communication_to_atlas_scientific) =
+                    tcp_communication_channels.tx_tcp_communication_to_atlas_scientific_opt
+                {
+                    self.receive_and_answer(
+                        rx_tcp_communication_from_atlas_scientific,
+                        tx_tcp_communication_to_atlas_scientific,
+                    );
                 }
             }
 
             // *** communication with Tank level switch ***
-            if let Some(ref rx_tcp_communication_from_tank_level_switch) = tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt {
-                if let Some(ref tx_tcp_communication_to_tank_level_switch) = tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt {
-                    self.receive_and_answer(rx_tcp_communication_from_tank_level_switch, tx_tcp_communication_to_tank_level_switch);
+            if let Some(ref rx_tcp_communication_from_tank_level_switch) =
+                tcp_communication_channels.rx_tcp_communication_from_tank_level_switch_opt
+            {
+                if let Some(ref tx_tcp_communication_to_tank_level_switch) =
+                    tcp_communication_channels.tx_tcp_communication_to_tank_level_switch_opt
+                {
+                    self.receive_and_answer(
+                        rx_tcp_communication_from_tank_level_switch,
+                        tx_tcp_communication_to_tank_level_switch,
+                    );
                 }
             }
 
@@ -410,7 +430,10 @@ impl TcpCommunication {
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tcp_communication_channels.tx_tcp_communication_to_signal_handler.send(true) {
+        match tcp_communication_channels
+            .tx_tcp_communication_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {}
             Err(e) => {
                 error!(

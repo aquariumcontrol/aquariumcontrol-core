@@ -37,31 +37,31 @@ pub struct ScheduleCheckConfig {
 pub struct ScheduleCheckChannels {
     /// Sender part of the channel for communication to ventilation
     pub tx_schedule_check_to_ventilation: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from ventilation
     pub rx_schedule_check_from_ventilation: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to heating
     pub tx_schedule_check_to_heating: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from heating
     pub rx_schedule_check_from_heating: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to refill
     pub tx_schedule_check_to_refill: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from refill
     pub rx_schedule_check_from_refill: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to the Balling dosing control
     pub tx_schedule_check_to_balling: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the Balling dosing control
     pub rx_schedule_check_from_balling: Receiver<InternalCommand>,
-    
+
     /// Sender part of the channel for communication to the signal handler
     pub tx_schedule_check_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_schedule_check_from_signal_handler: Receiver<InternalCommand>,
 }
@@ -248,10 +248,7 @@ impl ScheduleCheck {
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `schedule_check_channels` - Struct with all channels for communication with other components
-    pub fn execute(
-        &mut self,
-        schedule_check_channels: ScheduleCheckChannels
-    ) {
+    pub fn execute(&mut self, schedule_check_channels: ScheduleCheckChannels) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
@@ -261,8 +258,10 @@ impl ScheduleCheck {
                 _ = self.sql_interface_schedule.read_schedule();
             }
 
-            let (quit_command_received, _, _) =
-                self.process_external_request(&schedule_check_channels.rx_schedule_check_from_signal_handler, None);
+            let (quit_command_received, _, _) = self.process_external_request(
+                &schedule_check_channels.rx_schedule_check_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(
@@ -409,7 +408,10 @@ impl ScheduleCheck {
 
         // Application received the request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match schedule_check_channels.tx_schedule_check_to_signal_handler.send(true) {
+        match schedule_check_channels
+            .tx_schedule_check_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(

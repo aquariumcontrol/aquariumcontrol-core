@@ -50,7 +50,7 @@ pub struct AtlasScientificConfig {
     pub replacement_value_conductivity: f32,
 }
 
-/// Struct collects the channels for the communication between AtlasScientific and other components. 
+/// Struct collects the channels for the communication between AtlasScientific and other components.
 pub struct AtlasScientificChannels {
     /// Sender part of the channel for communication via TCP wrapped as optional
     pub tx_atlas_scientific_to_tcp_opt: Option<Sender<InternalCommand>>,
@@ -62,13 +62,12 @@ pub struct AtlasScientificChannels {
     pub tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
 
     /// Receiver part of the channel for communication from I2CInterface   
-    pub rx_atlas_scientific_from_i2c_interface_opt: Option<
-        Receiver<AtlasScientificMeasurementResult>,
-    >,
-    
+    pub rx_atlas_scientific_from_i2c_interface_opt:
+        Option<Receiver<AtlasScientificMeasurementResult>>,
+
     /// Sender part of the channel for communication to the signal handler
     pub tx_atlas_scientific_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_atlas_scientific_from_signal_handler: Receiver<InternalCommand>,
 }
@@ -316,8 +315,12 @@ impl AtlasScientific {
         }
 
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        if atlas_scientific_channels.tx_atlas_scientific_to_i2c_interface_opt.is_some()
-            || atlas_scientific_channels.rx_atlas_scientific_from_i2c_interface_opt.is_some()
+        if atlas_scientific_channels
+            .tx_atlas_scientific_to_i2c_interface_opt
+            .is_some()
+            || atlas_scientific_channels
+                .rx_atlas_scientific_from_i2c_interface_opt
+                .is_some()
         {
             warn!(target: LOG_TARGET_ATLAS_SCIENTIFIC,
                 "Sender/Receiver to I2cInterface are not 'None'");
@@ -331,7 +334,14 @@ impl AtlasScientific {
         // initialize countdown
         let mut measurement_countdown: i32 = MEASUREMENT_INTERVAL_SECS * 100;
 
-        if (self.config.use_simulator) && (atlas_scientific_channels.tx_atlas_scientific_to_tcp_opt.is_none() | atlas_scientific_channels.rx_atlas_scientific_from_tcp_opt.is_none()) {
+        if (self.config.use_simulator)
+            && (atlas_scientific_channels
+                .tx_atlas_scientific_to_tcp_opt
+                .is_none()
+                | atlas_scientific_channels
+                    .rx_atlas_scientific_from_tcp_opt
+                    .is_none())
+        {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
                 LOG_TARGET_ATLAS_SCIENTIFIC
@@ -343,7 +353,10 @@ impl AtlasScientific {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&atlas_scientific_channels.rx_atlas_scientific_from_signal_handler, None);
+            ) = self.process_external_request(
+                &atlas_scientific_channels.rx_atlas_scientific_from_signal_handler,
+                None,
+            );
 
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -372,15 +385,17 @@ impl AtlasScientific {
                             let tx_atlas_scientific_to_i2c_interface =
                                 tx_atlas_scientific_to_i2c_interface_opt.as_ref().unwrap();
 
-                            state_send_receive =
-                                self.send_request_to_i2c_interface(&tx_atlas_scientific_to_i2c_interface);
+                            state_send_receive = self.send_request_to_i2c_interface(
+                                &tx_atlas_scientific_to_i2c_interface,
+                            );
                         } else {
                             // read from the channel if the measurement result is available from I2cInterface thread
                             let rx_atlas_scientific_from_i2c_interface =
                                 rx_atlas_scientific_from_i2c_interface_opt.as_ref().unwrap();
 
-                            state_send_receive =
-                                self.receive_response_from_i2c_interface(&rx_atlas_scientific_from_i2c_interface);
+                            state_send_receive = self.receive_response_from_i2c_interface(
+                                &rx_atlas_scientific_from_i2c_interface,
+                            );
 
                             if !state_send_receive {
                                 // data could be received successfully
@@ -403,7 +418,10 @@ impl AtlasScientific {
                     }
                 }
             } else {
-                self.communicate_with_simulator(&atlas_scientific_channels.tx_atlas_scientific_to_tcp_opt, &atlas_scientific_channels.rx_atlas_scientific_from_tcp_opt);
+                self.communicate_with_simulator(
+                    &atlas_scientific_channels.tx_atlas_scientific_to_tcp_opt,
+                    &atlas_scientific_channels.rx_atlas_scientific_from_tcp_opt,
+                );
                 {
                     let mut mutex_water_temperature =
                         mutex_atlas_scientific_water_temperature.lock().unwrap();
@@ -420,7 +438,10 @@ impl AtlasScientific {
             spin_sleeper.sleep(sleep_duration_ten_millis);
         }
 
-        match atlas_scientific_channels.tx_atlas_scientific_to_signal_handler.send(true) {
+        match atlas_scientific_channels
+            .tx_atlas_scientific_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -435,7 +456,10 @@ impl AtlasScientific {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match atlas_scientific_channels.rx_atlas_scientific_from_signal_handler.recv() {
+            termination_command_received = match atlas_scientific_channels
+                .rx_atlas_scientific_from_signal_handler
+                .recv()
+            {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command_signal_handler = false;

@@ -39,19 +39,19 @@ pub trait FoodInjectionTrait {
 pub struct FoodInjectionTargetActuatorStates {
     /// target state for protein skimmer
     target_skimmer_state: ActuatorState,
-    
+
     /// target state for main pump 1
     target_main_pump1_state: ActuatorState,
-    
+
     /// target state for main pump 2
     target_main_pump2_state: ActuatorState,
-    
+
     /// target state for aux. pump 1
     target_aux_pump1_state: ActuatorState,
-    
+
     /// target state for aux. pump 2
     target_aux_pump2_state: ActuatorState,
-    
+
     /// target state for feeder
     target_feeder_state: ActuatorState,
 }
