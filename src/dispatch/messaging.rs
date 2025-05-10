@@ -481,6 +481,7 @@ pub mod tests {
 
     #[cfg(target_os = "linux")]
     fn create_test_object(
+        mut messaging: Messaging,
         tx_messaging_to_signal_handler: Sender<bool>,
         rx_messaging_from_signal_handler: Receiver<InternalCommand>,
         tx_messaging_to_refill: Sender<InternalCommand>,
@@ -506,7 +507,7 @@ pub mod tests {
                     tx_messaging_to_watchdog,
                 );
             })
-            .unwrap();        
+            .unwrap()        
     }
     
     #[cfg(target_os = "linux")]
@@ -577,7 +578,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::VENTILATION;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -611,6 +612,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
@@ -650,7 +652,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::HEATING;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -684,6 +686,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
@@ -727,7 +730,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::REFILL;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
@@ -775,6 +778,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
@@ -819,7 +823,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::FEED;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -866,6 +870,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
@@ -907,7 +912,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::BALLING;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -941,6 +946,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
@@ -980,7 +986,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::WATCHDOG;
         msg_stop.command = messaging_commands::STOP;
 
-        let mut messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging);
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -1014,6 +1020,7 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_test_object(
+            messaging,
             tx_messaging_to_signal_handler,
             rx_messaging_from_signal_handler,
             tx_messaging_to_refill,
