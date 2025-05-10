@@ -30,16 +30,16 @@ use crate::water::{refill::Refill, water_injection::WaterInjection};
 
 const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
 
-/// The trait implements processing of repeated patterns of channel communication from signal handler and from messaging.
-/// Default implementation is used by heating control, ventilation control and monitors.
+/// The trait implements processing for repeated patterns of the channel communication from signal handler and from messaging.
+/// The default implementation is used by heating control, ventilation control and monitors.
 /// The following modules use specific implementations of this trait: Refill control, Data logger, Balling,
 /// Food injection, Water injection, Mineral injection, Schedule check, Controllino, Gpio handler,
 /// Feed, Messaging, TCP communication.
 pub trait ProcessExternalRequestTrait {
     /// Checks if there are new messages in the channels.
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging wrapped in Option
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
+    /// * `rx_from_messaging` - reference to the receiver part of the channel for communication from messaging wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -92,7 +92,7 @@ pub trait ProcessExternalRequestTrait {
                                 #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
-                                    "receiving command from messaging failed ({e:?})"
+                                    "(standard) receiving command from messaging failed ({e:?})"
                                 );
                             }
                         }
@@ -116,8 +116,8 @@ impl ProcessExternalRequestTrait for Refill {
     /// Implementation for Refill
     /// If the message contains the command to reset all errors, the function will reset all error bits.
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to receiver part of channel for communication from messaging wrapped in Option
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
+    /// * `rx_from_messaging` - reference to the receiver part of the channel for communication from messaging wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -179,7 +179,7 @@ impl ProcessExternalRequestTrait for Refill {
                                 #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
-                                    "receiving command from messaging failed ({e:?})"
+                                    "(refill) receiving command from messaging failed ({e:?})"
                                 );
                             }
                         }
@@ -197,10 +197,11 @@ impl ProcessExternalRequestTrait for Refill {
         )
     }
 }
+
 /// Checks if there are new messages in the channel.
 /// Associated function used by implementation for structs which only use signal handler and no messaging
 /// # Arguments
-/// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+/// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
 fn process_external_request_without_messaging(
     rx_from_signal_handler: &Receiver<InternalCommand>,
 ) -> (bool, bool, bool) {
@@ -222,7 +223,7 @@ fn process_external_request_without_messaging(
                     #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_PROC_EXT_REQ,
-                        "receiving command from messaging failed ({e:?})"
+                        "(process_external_request_without_messaging) receiving command from messaging failed ({e:?})"
                     );
                 }
             }
@@ -237,7 +238,7 @@ impl ProcessExternalRequestTrait for DataLogger {
     /// Checks if there are new messages in the channel.
     /// Implementation for DataLogger
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -252,7 +253,7 @@ impl ProcessExternalRequestTrait for FoodInjection {
     /// Checks if there are new messages in the channel.
     /// Implementation for FoodInjection
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -267,7 +268,7 @@ impl ProcessExternalRequestTrait for MineralInjection {
     /// Checks if there are new messages in the channel.
     /// Implementation for MineralInjection
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -282,7 +283,7 @@ impl ProcessExternalRequestTrait for WaterInjection {
     /// Checks if there are new messages in the channel.
     /// Implementation for WaterInjection
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -297,7 +298,7 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
     /// Checks if there are new messages in the channel.
     /// Implementation for ScheduleCheck
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -312,7 +313,7 @@ impl ProcessExternalRequestTrait for Controllino {
     /// Checks if there are new messages in the channel.
     /// Implementation for Controllino
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -328,7 +329,7 @@ impl ProcessExternalRequestTrait for Messaging {
     /// Checks if there are new messages in the channel.
     /// Implementation for Messaging
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -343,7 +344,7 @@ impl ProcessExternalRequestTrait for TcpCommunication {
     /// Checks if there are new messages in the channel.
     /// Implementation for TcpCommunication
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel for communication from signal handler
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
     /// * `_` - ignored
     fn process_external_request(
         &mut self,
@@ -354,43 +355,51 @@ impl ProcessExternalRequestTrait for TcpCommunication {
     }
 }
 
+/// Checks if there are new messages in the channel.
+/// Associated function used by implementation for structs which only use signal handler and no messaging
+/// # Arguments
+/// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
+fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
+    match rx_from_signal_handler.try_recv() {
+        Ok(c) => match c {
+            InternalCommand::Quit => true,
+            _ => {
+                warn!(
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "ignoring inapplicable command {} from signal handler.",
+                        c
+                    );
+                false
+            }
+        },
+        Err(e) => {
+            match e {
+                TryRecvError::Empty => { /* empty buffer - no action required */ }
+                TryRecvError::Disconnected => {
+                    #[cfg(not(test))]
+                    error!(
+                            target: LOG_TARGET_PROC_EXT_REQ,
+                            "receiving command from signal handler failed ({e:?})"
+                        );
+                }
+            }
+            false
+        }
+    }
+}
+
 impl ProcessExternalRequestTrait for Feed {
     /// Checks if there are new messages in the channels.
     /// Implementation for Feed
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel    
-    /// * `rx_from_messaging_opt` - reference to receiver part of channel wrapped in Option
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
+    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        let quit_command_received = match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Quit => true,
-                _ => {
-                    warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring inapplicable command {} from signal handler.",
-                        c
-                    );
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        #[cfg(not(test))]
-                        error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
-                    }
-                }
-                false
-            }
-        };
+        let quit_command_received = process_standard_request(rx_from_signal_handler);
 
         self.execute_command_received = false;
         self.profile_id_requested = -1;
@@ -427,7 +436,7 @@ impl ProcessExternalRequestTrait for Feed {
                                     #[cfg(not(test))]
                                     error!(
                                         target: LOG_TARGET_PROC_EXT_REQ,
-                                        "receiving command from messaging failed ({e:?})"
+                                        "(feed) - receiving command from messaging failed ({e:?})"
                                     );
                                 }
                             }
@@ -453,39 +462,14 @@ impl ProcessExternalRequestTrait for Balling {
     /// Checks if there are new messages in the channels.
     /// Implementation for Balling
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to receiver part of channel    
-    /// * `rx_from_messaging_opt` - reference to receiver part of channel wrapped in Option
+    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
+    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        let quit_command_received = match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Quit => true,
-                _ => {
-                    warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring inapplicable command {} from signal handler.",
-                        c
-                    );
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        #[cfg(not(test))]
-                        error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
-                    }
-                }
-                false
-            }
-        };
+        let quit_command_received = process_standard_request(rx_from_signal_handler);
 
         self.execute_command_received = false;
         self.pump_id_requested = -1;
@@ -513,7 +497,7 @@ impl ProcessExternalRequestTrait for Balling {
                                     #[cfg(not(test))]
                                     error!(
                                         target: LOG_TARGET_PROC_EXT_REQ,
-                                        "receiving command from messaging failed ({e:?})"
+                                        "(balling) receiving command from messaging failed ({e:?})"
                                     );
                                 }
                             }
@@ -546,32 +530,7 @@ impl ProcessExternalRequestTrait for Watchdog {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         rx_from_messaging_opt: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        let quit_command_received = match rx_from_signal_handler.try_recv() {
-            Ok(c) => match c {
-                InternalCommand::Terminate => true,
-                _ => {
-                    warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring inapplicable command {} from signal handler.",
-                        c
-                    );
-                    false
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => { /* empty buffer - no action required */ }
-                    TryRecvError::Disconnected => {
-                        #[cfg(not(test))]
-                        error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
-                    }
-                }
-                false
-            }
-        };
+        let quit_command_received = process_standard_request(rx_from_signal_handler);
 
         let (start_command_received, stop_command_received) = match rx_from_messaging_opt {
             Some(rx_from_messaging) => {
@@ -595,7 +554,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                                 #[cfg(not(test))]
                                 error!(
                                     target: LOG_TARGET_PROC_EXT_REQ,
-                                    "receiving command from messaging failed ({e:?})"
+                                    "(watchdog) receiving command from messaging failed ({e:?})"
                                 );
                             }
                         }
