@@ -480,6 +480,36 @@ pub mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    fn create_test_object(
+        tx_messaging_to_signal_handler: Sender<bool>,
+        rx_messaging_from_signal_handler: Receiver<InternalCommand>,
+        tx_messaging_to_refill: Sender<InternalCommand>,
+        tx_messaging_to_ventilation: Sender<InternalCommand>,
+        tx_messaging_to_heating: Sender<InternalCommand>,
+        tx_messaging_to_feed: Sender<InternalCommand>,
+        tx_messaging_to_balling: Sender<InternalCommand>,
+        tx_messaging_to_monitors: Sender<InternalCommand>,
+        tx_messaging_to_watchdog: Sender<InternalCommand>,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                messaging.execute(
+                    tx_messaging_to_signal_handler,
+                    rx_messaging_from_signal_handler,
+                    tx_messaging_to_refill,
+                    tx_messaging_to_ventilation,
+                    tx_messaging_to_heating,
+                    tx_messaging_to_feed,
+                    tx_messaging_to_balling,
+                    tx_messaging_to_monitors,
+                    tx_messaging_to_watchdog,
+                );
+            })
+            .unwrap();        
+    }
+    
+    #[cfg(target_os = "linux")]
     fn create_test_environment(
         msg_commands: Vec<Message>,
         tx_environment_to_object: Sender<InternalCommand>,
@@ -498,7 +528,7 @@ pub mod tests {
                 let mq_stimuli = open_posixmq_test_file(&mq_filename);
 
                 for msg_command in msg_commands {
-                    // sending an IPC message requesting the command to (sub-)test object
+                    // sending an IPC message requesting the command to the (sub-)test object
                     let _ = mq_stimuli.send(0, &msg_command.create_message_buf());
 
                     spin_sleeper.sleep(sleep_duration_100_millis);
@@ -580,23 +610,18 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
-
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
+        
         join_handle_mock_ventilation
             .join()
             .expect("Mock ventilation thread did not finish.");
@@ -658,22 +683,17 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
 
         join_handle_mock_heating
             .join()
@@ -754,22 +774,17 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
 
         join_handle_mock_refill
             .join()
@@ -850,22 +865,17 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
 
         join_handle_mock_feed
             .join()
@@ -930,22 +940,17 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
 
         join_handle_mock_balling
             .join()
@@ -1008,22 +1013,17 @@ pub mod tests {
         );
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_messaging_to_signal_handler,
+            rx_messaging_from_signal_handler,
+            tx_messaging_to_refill,
+            tx_messaging_to_ventilation,
+            tx_messaging_to_heating,
+            tx_messaging_to_feed,
+            tx_messaging_to_balling,
+            tx_messaging_to_monitors,
+            tx_messaging_to_watchdog,
+        );
 
         join_handle_mock_watchdog
             .join()
