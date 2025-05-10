@@ -110,7 +110,6 @@ impl Watchdog {
                 );
             }
             spin_sleeper.sleep(sleep_duration);
-            println!("Checking channel.");
             (
                 quit_command_received,
                 start_command_received,
@@ -120,7 +119,6 @@ impl Watchdog {
 
             if quit_command_received {
                 // Deactivate the watchdog functionality
-                println!("Received quit command, sending watchdog deactivation signal.");
                 petting.pet(
                     &self.config.watchdog_filename,
                     &self.config.watchdog_deactivation,
