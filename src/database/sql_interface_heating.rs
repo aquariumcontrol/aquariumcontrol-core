@@ -17,7 +17,7 @@ use crate::database::{
 };
 
 /// Holds the statistical data of heating for one day.
-/// It is filled with post-processed data from SQL query which is then updated by the control application.
+/// It is filled with post-processed data from a database query which is then updated by the control application.
 #[derive(Clone)]
 pub struct HeatingStatsEntry {
     /// calendar date of the entry after having postprocessed the SQL data read as String
@@ -38,12 +38,12 @@ pub struct HeatingStatsEntry {
     /// counter how many samples were used to calculate the average value    
     pub water_temperature_average_counter: i64,
 
-    /// counter how many seconds the heating control was active on a specific dates
+    /// counter how many seconds the heating control was active on a specific date
     pub heating_control_runtime: i64,
 }
 
 impl HeatingStatsEntry {
-    /// provides struct of type HeatingStatsEntry - used in case database has not entry for current date
+    /// provides a struct of type HeatingStatsEntry - used in case the database has no entry for the current date
     pub fn new() -> HeatingStatsEntry {
         let now = Local::now();
         let year = now.year();
@@ -70,7 +70,7 @@ impl HeatingStatsEntry {
         ambient_temperature_opt: Option<f64>,
         energy_increment: f64,
     ) {
-        // add energy to sum of heating energy
+        // add energy to the sum of heating energy
         self.energy += energy_increment;
 
         // calculate new average water temperature value
@@ -87,7 +87,7 @@ impl HeatingStatsEntry {
                 }
             }
             None => {
-                // do nothing - wait for next valid sample
+                // do nothing - wait for the next valid sample
                 self.water_temperature_average_value
             }
         };
@@ -106,7 +106,7 @@ impl HeatingStatsEntry {
                 }
             }
             None => {
-                // do nothing - wait for next valid sample
+                // do nothing - wait for the next valid sample
                 self.ambient_temperature_average_value
             }
         };
@@ -138,8 +138,8 @@ impl fmt::Display for HeatingStatsEntry {
     }
 }
 
-/// Holds the statistical data of heating for one day as retrieved from SQL database.
-/// In next step, date is postprocessed to NaiveData type.
+/// Holds the statistical data of heating for one day as retrieved from the database.
+/// In the next step, date is postprocessed to NaiveData type.
 pub struct HeatingStatsStringEntry {
     /// calendar date of the entry before postprocessing to NaiveDate
     pub date: String,
@@ -159,7 +159,7 @@ pub struct HeatingStatsStringEntry {
     /// counter how many samples were used to calculate the average value    
     pub water_temperature_average_counter: i64,
 
-    /// counter how many seconds the heating control was active on a specific dates
+    /// counter how many seconds the heating control was active on a specific date
     pub heating_control_runtime: i64,
 }
 
@@ -170,7 +170,7 @@ pub trait SqlInterfaceHeatingMidnightCalculatorTrait {
 }
 
 pub struct SqlInterfaceHeatingMidnightCalculator {
-    /// Connection to database
+    /// Connection to the database
     pub conn: PooledConn,
 }
 
@@ -191,7 +191,7 @@ impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMidnightC
 }
 
 impl SqlInterfaceHeatingMidnightCalculator {
-    /// Provides a struct of type SqlInterfaceHeatingMidnigtCalculator
+    /// Provides a struct of type SqlInterfaceHeatingMidnightCalculator
     /// # Arguments
     /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceHeatingMidnightCalculator {
@@ -201,10 +201,10 @@ impl SqlInterfaceHeatingMidnightCalculator {
 
 /// Contains the configuration and the implementation of the SQL interface for heating.
 pub struct SqlInterfaceHeating {
-    /// Connection to database
+    /// Connection to the database
     pub conn: PooledConn,
 
-    /// Struct with implementation of trait for calculation of time interval until midnight in seconds
+    /// Struct with implementation of trait for calculation of the time interval until midnight in seconds
     pub sql_interface_heating_midnight_calculator:
         Box<dyn SqlInterfaceHeatingMidnightCalculatorTrait + Sync + Send>,
 }
@@ -225,7 +225,7 @@ impl SqlInterfaceHeating {
         }
     }
 
-    /// Retrieves a single heating stats entry from SQL database.
+    /// Retrieves a single heating stats entry from the database.
     /// It provides wrapped into Result type either
     /// - struct of type HeatingStatsEntry in case of success
     /// - or a value from enum SqlInterfaceError
@@ -400,7 +400,7 @@ pub mod tests {
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #36.
     pub fn test_sql_interface_heating() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -442,7 +442,7 @@ pub mod tests {
         // **************************************************************************************
 
         // *** insert heating stats - PASS ******************************************************
-        // prepare data for inserting into database
+        // prepare data for inserting into the database
         let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date."),

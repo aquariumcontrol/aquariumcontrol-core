@@ -8,11 +8,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// Provides version information to check if the current application is listed in the table of supported versions.
-/// It informs wether the version is supported and which hash is stored in the database for the version.
+/// It informs whether the version is supported and which hash is stored in the database for the version.
 pub const SQL_QUERY_VERSION_INFORMATION: &str =
     "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build;";
 
-/// Provides the current data base name.
+/// Provides the current database name.
 pub const SQL_QUERY_DATABASE: &str = "select database();";
 
 /// Provides all tables from the database.
@@ -63,22 +63,22 @@ pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str =
 pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
     "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
 
-/// Provides the refill volume of the last hour from the data base.
+/// Provides the refill volume of the last hour from the database.
 /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
 pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR: &str =
         "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
 
-/// Provides the number of refill events of the last hour from the data base.
+/// Provides the number of refill events from the last hour from the database.
 /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
 pub const SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 HOUR LIMIT 1;";
 
-/// Provides the refill volume of the last day from the data base.
+/// Provides the refill volume of the last day from the database.
 /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
 pub const SQL_QUERY_READ_REFILL_VOLUME_LAST_24H: &str =
         "SELECT COALESCE(SUM(Volume), 0) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
 
-/// Provides the number of refill events of the last day from the data base.
+/// Provides the number of refill events from the last day from the database.
 /// It does not need to use the COALESCE function because the query returns 0 if there is no refill event in the last 24h.    
 pub const SQL_QUERY_READ_REFILL_COUNT_LAST_24H: &str =
         "SELECT COUNT(Volume) from refill WHERE Timestamp > CURRENT_TIMESTAMP() - INTERVAL 1 DAY LIMIT 1;";
@@ -117,7 +117,7 @@ pub const SQL_QUERY_DELETE_FEED_SCHEDULE_ENTRY: &str =
     "DELETE FROM feedschedule WHERE Timestamp = :timestamp;";
 
 /// Writes the heating statistical data into the database.
-/// If there is already data for the given date, the data will not be insert. Instead, the existing entry will be updated.
+/// If there is already data for the given date, the data will not be inserted. Instead, the existing entry will be updated.
 pub const SQL_QUERY_WRITE_HEATING_STATS: &str = "insert into heatingstats \
         (Date, Energy, AmbientTempAverage, AmbientTempCounter, WaterTempAverage, WaterTempCounter, HeatingControlRuntime) \
         values (:date, :energy, \
@@ -162,7 +162,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
 // Deletes the content of a specific table.
-// This query is used for testing by multiple modules, therefore it resides here and not in the test module.
+// This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
 #[cfg(test)]
 pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 

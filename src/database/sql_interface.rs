@@ -29,10 +29,10 @@ pub struct SqlInterfaceConfig {
     /// database password
     pub db_password: String,
 
-    /// hostname of database
+    /// hostname of the database
     pub db_host: String,
 
-    /// port name of database
+    /// port name of the database
     pub db_port: u16,
 
     /// database name
@@ -42,17 +42,17 @@ pub struct SqlInterfaceConfig {
     pub db_tables: Vec<String>,
 }
 
-/// Struct is used to retrieve a single integer value from SQL database.
+/// Struct is used to retrieve a single integer value from the SQL database.
 struct SingleInteger {
     single_integer: i64,
 }
 
-/// Struct is used to retrieve a single string value from SQL database.
+/// Struct is used to retrieve a single string value from the SQL database.
 struct SingleString {
     single_string: String,
 }
 
-/// Struct is used to retrieve a single float value from SQL database.
+/// Struct is used to retrieve a single float value from the SQL database.
 struct SingleFloat {
     single_float: f64,
 }
@@ -65,7 +65,7 @@ pub struct SqlInterface {
     /// Connection pool
     pool: Pool,
 
-    /// Connection to database (public because accessed from within test cases)
+    /// Connection to the database (public because accessed from within test cases)
     pub conn: PooledConn,
 }
 
@@ -76,7 +76,7 @@ impl SqlInterface {
     /// # Arguments
     /// * `config` - configuration data for SqlInterface
     pub fn new(config: SqlInterfaceConfig) -> Result<SqlInterface, SqlInterfaceError> {
-        // Create connection pool
+        // Create the connection pool
         let url = "mysql://".to_owned()
             + &config.db_user
             + ":"
@@ -99,7 +99,7 @@ impl SqlInterface {
             }
         };
 
-        // Get connection for requests of main thread
+        // Get connection for requests of the main thread
         let conn = match pool.get_conn() {
             Ok(c) => c,
             Err(_) => {
@@ -119,7 +119,27 @@ impl SqlInterface {
         }
     }
 
-    /// Executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    /// Execute the SQL statement given as a parameter and evaluates if the result is ok.
+    /// In the error case, an error of type SqlInterfaceError is returned.
+    fn get_string_array_from_database(conn: &mut PooledConn, sql_query_string: &str) -> Result<Vec<SingleString>, SqlInterfaceError> {
+        match conn.query_map(
+            sql_query_string, |single_string| {
+                SingleString { single_string }
+            }
+        ) {
+            Ok(c) => Ok(c),
+            Err(_) => {
+                Err(
+                    SqlInterfaceError::SingleStringRequestFailure(
+                        "Could not get single string from the database using query:".to_string()
+                            + sql_query_string,
+                    )
+                )
+            }
+        }
+    }
+
+    /// Executes an SQL statement given as a parameter and evaluates if the response is a single string value.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as String
     /// - or an error code from the enum SqlInterfaceError
@@ -130,18 +150,8 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<String, SqlInterfaceError> {
-        // Get single string value from database
-        let single_string_array = match conn.query_map(sql_query_string, |single_string| {
-            SingleString { single_string }
-        }) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleStringRequestFailure(
-                    "Could not get single string from SQL database using query:".to_string()
-                        + sql_query_string,
-                ));
-            }
-        };
+        // Get a single string value from the database
+        let single_string_array = Self::get_string_array_from_database(conn, sql_query_string)?;
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
@@ -160,8 +170,8 @@ impl SqlInterface {
         }
         Ok(single_string_array[0].single_string.clone())
     }
-
-    /// Executes an SQL statement given as parameter and evaluates if the response is a single string value.
+    
+    /// Executes an SQL statement given as a parameter and evaluates if the response is a single string value.
     /// Empty response is allowed.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as String as Optional
@@ -174,19 +184,9 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Option<String>, SqlInterfaceError> {
-        // Get single string value from database
-        let single_string_array = match conn.query_map(sql_query_string, |single_string| {
-            SingleString { single_string }
-        }) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleStringRequestFailure(
-                    "Could not get single string from SQL database using query:".to_string()
-                        + sql_query_string,
-                ));
-            }
-        };
-
+        // Get a single string value from the database
+        let single_string_array = Self::get_string_array_from_database(conn, sql_query_string)?;
+        
         // return an empty response if there is no response from the database
         if single_string_array.is_empty() {
             return Ok(Option::None);
@@ -212,7 +212,7 @@ impl SqlInterface {
         &mut self,
         version_information: &VersionInformation,
     ) -> Result<String, SqlInterfaceError> {
-        // Get single string value from database
+        // Get a single string value from the database
         let sql_query_string_major_replaced = str::replace(
             sql_query_strings::SQL_QUERY_VERSION_INFORMATION,
             "#major",
@@ -237,7 +237,7 @@ impl SqlInterface {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleVersionRequestFailure(
-                    "Could not get single string from SQL database using query:".to_string()
+                    "Could not get single string from the database using query:".to_string()
                         + &sql_query_string,
                 ));
             }
@@ -264,7 +264,7 @@ impl SqlInterface {
         }
     }
 
-    /// Executes an SQL statement given as parameter and evaluates if the response consists of multiple (> 1) rows.
+    /// Executes an SQL statement given as a parameter and evaluates if the response consists of multiple (> 1) rows.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as vector of type String
     /// - or an error code from the enum SqlInterfaceError
@@ -274,7 +274,7 @@ impl SqlInterface {
         &mut self,
         sql_query_string: &str,
     ) -> Result<Vec<String>, SqlInterfaceError> {
-        // Get multiple string values from database
+        // Get multiple string values from the database
         let single_string_array =
             match self
                 .conn
@@ -284,7 +284,7 @@ impl SqlInterface {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::SingleStringRequestFailure(
-                        "Could not get multiple strings from SQL database using query:".to_string()
+                        "Could not get multiple strings from the database using query:".to_string()
                             + sql_query_string,
                     ));
                 }
@@ -306,7 +306,7 @@ impl SqlInterface {
         Ok(response_array)
     }
 
-    /// Executes an SQL statement given as parameter and evaluates if the response is a single integer value.
+    /// Executes an SQL statement given as a parameter and evaluates if the response is a single integer value.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as i64
     /// - or an error code from the enum SqlInterfaceError
@@ -317,14 +317,14 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<i64, SqlInterfaceError> {
-        // Get single integer value from database
+        // Get a single integer value from the database
         let single_integer_array = match conn.query_map(sql_query_string, |single_integer| {
             SingleInteger { single_integer }
         }) {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleIntegerRequestFailure(
-                    "Could not get single integer from SQL database using query:".to_string()
+                    "Could not get single integer from the database using query:".to_string()
                         + sql_query_string,
                 ));
             }
@@ -348,7 +348,7 @@ impl SqlInterface {
         Ok(single_integer_array[0].single_integer)
     }
 
-    /// Executes an SQL statement given as parameter and evaluates if the response is a single float value.
+    /// Executes an SQL statement given as a parameter and evaluates if the response is a single float value.
     /// Depending on the result of the query, the function provides wrapped in a result type either
     /// - the response of the query as i64
     /// - or an error code from the enum SqlInterfaceError
@@ -359,14 +359,14 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<f64, SqlInterfaceError> {
-        // Get single float value from database
+        // Get a single float value from the database
         let single_float_array = match conn.query_map(sql_query_string, |single_float| {
             SingleFloat { single_float }
         }) {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleFloatRequestFailure(
-                    "Could not get single float value from SQL database using query:".to_string()
+                    "Could not get single float value from the database using query:".to_string()
                         + sql_query_string,
                 ));
             }
@@ -390,7 +390,7 @@ impl SqlInterface {
         Ok(single_float_array[0].single_float)
     }
 
-    /// The function triggers SQL call for a single value for retrieving the current database name.
+    /// The function triggers the SQL call for a single value for retrieving the current database name.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
         match Self::get_single_string_from_database(
@@ -408,7 +408,7 @@ impl SqlInterface {
         }
     }
 
-    /// Executes an SQL statement given as parameter to get a single String value
+    /// Executes an SQL statement given as a parameter to get a single String value
     /// and tries to convert it to timestamp of type NaiveDateTime.
     /// Depending on the result of the query and the conversion to NaiveDateTime,
     /// the function provides wrapped in a result type either
@@ -428,7 +428,7 @@ impl SqlInterface {
                 if !cfg!(test) {
                     error!(
                         target: Self::LOG_TARGET_SQL_INTERFACE,
-                        "could not retrieve timestamp from database ({e:?})"
+                        "could not retrieve timestamp from the database ({e:?})"
                     );
                 }
                 return Err(e);
@@ -444,7 +444,7 @@ impl SqlInterface {
         }
     }
 
-    /// Executes an SQL statement given as parameter to get a single String value
+    /// Executes an SQL statement given as a parameter to get a single String value
     /// and tries to convert it to timestamp of type NaiveDateTime.
     /// Result may be empty.
     /// Depending on the result of the query and the conversion to NaiveDateTime,
@@ -467,7 +467,7 @@ impl SqlInterface {
                     if !cfg!(test) {
                         error!(
                             target: Self::LOG_TARGET_SQL_INTERFACE,
-                            "could not retrieve optional timestamp from database ({e:?})"
+                            "could not retrieve optional timestamp from the database ({e:?})"
                         );
                     }
                     return Err(e);
@@ -493,7 +493,7 @@ impl SqlInterface {
         Ok(result_opt)
     }
 
-    /// Retrieves the current timestamp from SQL database and provides wrapped in Result type either
+    /// Retrieves the current timestamp from the database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDateTime
     /// - or an error code from the enum SqlInterfaceError
     /// # Arguments
@@ -504,7 +504,7 @@ impl SqlInterface {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
 
-    /// Retrieves the current timestamp plus an offset in seconds from SQL database
+    /// Retrieves the current timestamp plus an offset in seconds from the database
     /// and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDateTime
     /// - or an error code from the enum SqlInterfaceError
@@ -526,7 +526,7 @@ impl SqlInterface {
         Self::get_timestamp(conn, &sql_query_with_offset_resolved)
     }
 
-    /// Executes an SQL statement given as parameter to get a single String value
+    /// Executes an SQL statement given as a parameter to get a single String value
     /// and tries to convert it to timestamp of type NaiveDate.
     /// Depending on the result of the query and the conversion to NaiveDate,
     /// the function provides wrapped in a result type either
@@ -544,7 +544,7 @@ impl SqlInterface {
             Err(e) => {
                 error!(
                     target: Self::LOG_TARGET_SQL_INTERFACE,
-                    "could not retrieve date from database ({e:?})"
+                    "could not retrieve date from the database ({e:?})"
                 );
                 return Err(e);
             }
@@ -565,14 +565,14 @@ impl SqlInterface {
         }
     }
 
-    /// Retrieves the current date from SQL database and provides wrapped in Result type either
+    /// Retrieves the current date from the database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDate
     /// - or an error code from the enum SqlInterfaceError
     pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
 
-    /// Retrieves the date of tomorrow from SQL database and provides wrapped in Result type either
+    /// Retrieves the date of tomorrow from the database and provides wrapped in Result type either
     /// - tomorrow's timestamp as type NaiveDate
     /// - or an error code from the enum SqlInterfaceError
     pub fn get_tomorrow_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
@@ -586,14 +586,14 @@ impl SqlInterface {
         match self.get_multiple_strings_from_database(sql_query_strings::SQL_QUERY_READ_TABLES) {
             Ok(c) => Ok(c),
             Err(_) => Err(SqlInterfaceError::ShowTablesWithoutProperResult(
-                "Error when reading tables from database, expected more than one result."
+                "Error when reading tables from the database, expected more than one result."
                     .to_string(),
             )),
         }
     }
 
     /// Compares two vectors of strings.
-    /// The function checks if all of the strings of the first vector are contained within the second vector and
+    /// The function checks if all the strings of the first vector are contained within the second vector and
     /// returns a boolean value if this is the case.
     /// # Arguments
     /// * `required_tables` - vector of type String which contains the tables which shall exist
@@ -667,7 +667,7 @@ impl SqlInterface {
         hours_in_past: i64,
         seconds_in_past: i64,
     ) -> NaiveDateTime {
-        let timestamp_from_past = chrono::Local::now()
+        let timestamp_from_past = Local::now()
             - Duration::hours(hours_in_past)
             - Duration::seconds(seconds_in_past);
         timestamp_from_past.naive_local()
@@ -679,7 +679,7 @@ impl SqlInterface {
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
     ) -> Option<i64> {
-        let reference_current_timestamp = chrono::Local::now();
+        let reference_current_timestamp = Local::now();
         let timestamp_dt: DateTime<Local> = match Local.from_local_datetime(&timestamp_naive) {
             Single(t) => t,
             Ambiguous(_t1, _t2) => {
@@ -749,10 +749,10 @@ pub mod tests {
         // *** check if current date is local date - PASS ***************************************
         let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
-            Err(_) => panic!("Could not get current date from SQL database."),
+            Err(_) => panic!("Could not get current date from the database."),
         };
         let sql_date_string = sql_date.format("%Y-%m-%d").to_string();
-        let local_date_string = chrono::offset::Local::now()
+        let local_date_string = Local::now()
             .trunc_subsecs(0)
             .format("%Y-%m-%d")
             .to_string();
@@ -763,10 +763,10 @@ pub mod tests {
         // *** check if current timestamp is local timestamp - PASS *****************************
         let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
             Ok(c) => c,
-            Err(_) => panic!("Could not get current timestamp from SQL database."),
+            Err(_) => panic!("Could not get current timestamp from the database."),
         };
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
-        assert_eq!(date_time, chrono::offset::Local::now().trunc_subsecs(0));
+        assert_eq!(date_time, Local::now().trunc_subsecs(0));
         println!("* checking current timestamp (PASS) succeeded.");
         // **************************************************************************************
     }
@@ -856,7 +856,7 @@ pub mod tests {
             }
         }
 
-        // *** check error response when hash is incorrect - FAIL ********************************
+        // *** check error response when the hash is incorrect - FAIL ********************************
         let version_information_with_wrong_hash = VersionInformation {
             major: version_information.major,
             minor: version_information.minor,
@@ -884,7 +884,7 @@ pub mod tests {
                 assert_eq!(&c, reference_hash);
             }
             Err(e) => {
-                panic!("Error retrieving version information from database: {e:?}");
+                panic!("Error retrieving version information from the database: {e:?}");
             }
         }
         // ***************************************************************************************

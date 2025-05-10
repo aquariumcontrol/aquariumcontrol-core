@@ -16,8 +16,8 @@ use std::str::FromStr;
 
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 
-/// List of all modules which are subject to limitations by schedule.
-/// Background: This activities cause noise - user shall be able to inhibit these noises during nighttime.
+/// List of all modules that are subject to limitations by schedule.
+/// Background: These activities cause noise - user shall be able to inhibit these noises during nighttime.
 #[derive(PartialEq)]
 pub enum ScheduleType {
     Balling,
@@ -51,7 +51,7 @@ impl fmt::Display for ScheduleType {
     }
 }
 
-/// Contains one schedule data set as read from SQL database
+/// Contains one schedule data set as read from the database
 pub struct SqlScheduleEntry {
     /// Schedule type (either Balling, Refill, Ventilation or Heating)
     schedule_type: String,
@@ -59,14 +59,14 @@ pub struct SqlScheduleEntry {
     /// Time of day from which on the control shall be active
     start_time: String,
 
-    /// Time of day from which on the controll shall not be active
+    /// Time of day from which on the control shall not be active
     stop_time: String,
 
     /// Flag describing if the schedule entry is active
     is_active: u32,
 }
 
-/// Contains one schedule data set after post processing
+/// Contains one schedule data set after post-processing
 pub struct ScheduleEntry {
     /// Schedule type (either Balling, Refill, Ventilation or Heating)
     schedule_type: ScheduleType,
@@ -74,7 +74,7 @@ pub struct ScheduleEntry {
     /// Time of day from which on the control shall be active
     start_time: NaiveTime,
 
-    /// Time of day from which on the controll shall not be active
+    /// Time of day from which on the control shall not be active
     stop_time: NaiveTime,
 
     /// Flag describing if the schedule entry is active
@@ -141,10 +141,10 @@ impl ScheduleEntry {
 
 /// Contains the configuration and the implementation of the SQL interface for Schedule.
 pub struct SqlInterfaceSchedule {
-    /// Connection to database
+    /// Connection to the database
     conn: PooledConn,
 
-    /// Result of post-processed SQL query    
+    /// Result of the post-processed SQL query    
     schedules: Vec<ScheduleEntry>,
 }
 
@@ -161,11 +161,11 @@ impl SqlInterfaceSchedule {
         }
     }
 
-    /// Reads the schedule entries from SQL database and updates the struct with postprocessed data.
+    /// Reads the schedule entries from the SQL database and updates the struct with postprocessed data.
     /// In case of success, the function returns an empty Ok value.
     /// In case of failure, the function returns a value of type SqlInterfaceError.
     pub fn read_schedule(&mut self) -> Result<(), SqlInterfaceError> {
-        // Get all schedule entries from database
+        // Get all schedule entries from the database
         let schedule_string_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_SCHEDULE,
             |(schedule_type, start_time, stop_time, is_active)| SqlScheduleEntry {
@@ -194,7 +194,7 @@ impl SqlInterfaceSchedule {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE,
-                        "reading schedule faild ({e:?})"
+                        "reading schedule failed ({e:?})"
                     );
                     return Err(e);
                 }
@@ -227,8 +227,8 @@ pub mod tests {
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
-    // Test case reads entries from SQL database.
-    // Since schedule data in SQL database is not modified by application,
+    // Test case reads entries from the SQL database.
+    // Since the application does not modify schedule data in the SQL database,
     // results are compared to fixed references.
     // Test case uses test database #38.
     pub fn test_sql_interface_schedule() {

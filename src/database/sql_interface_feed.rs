@@ -28,8 +28,8 @@ pub struct SqlFeedpatternHeader {
 }
 
 #[derive(Clone)]
-/// Holds the data of one phase of a feed pattern as retrieved from SQL data base.
-/// The numeric data is post-processed to boolean in a subsequent step.
+/// Holds the data of one feed pattern phase as retrieved from the database.
+/// The numeric data is post-processed to boolean in a further step.
 pub struct SqlFeedPhase {
     /// duration of the pause before switching on the feeder motor in milliseconds
     pub pause_duration: i16,
@@ -68,8 +68,8 @@ pub struct SqlFeedPhase {
     pub feed_aux_pump_2: i16,
 }
 
-/// Holds the data of a feed schedule entry as retrieved from SQL data base.
-/// It is post-processed in a subsequent step.
+/// Holds the data of a feed schedule entry as retrieved from the database.
+/// It is post-processed in a further step.
 pub struct SqlFeedScheduleEntry {
     pub timestamp: String,
     pub profile_id: i32,
@@ -78,7 +78,7 @@ pub struct SqlFeedScheduleEntry {
 }
 
 /// Trait for interfacing between feed and SQL database
-/// This trait is prerequiste to use mock implementation for testing
+/// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceFeedTrait {
     fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError>;
 
@@ -122,14 +122,14 @@ pub struct SqlInterfaceFeed {
 }
 
 impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
-    /// Provides current timestamp using its own connection
+    /// Provides the current timestamp using its own connection
     fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_current_timestamp(&mut self.conn)
     }
 
-    /// Retrieve from SQL database the feed schedule entries which lies in the past.
-    /// Function provides wrapped into Result type either
-    /// - Feedschedule entries as vector of type FeedScheduleEntry or None value wrapped in type Option
+    /// Retrieve from the database the feed schedule entries which lies in the past.
+    /// Function provides wrapped into a Result type either
+    /// - Feed schedule entries as vector of type FeedScheduleEntry or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
     fn get_past_feedschedule_entries_from_database(
         &mut self,
@@ -137,58 +137,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         self.get_feedschedule_entries_from_database(
             sql_query_strings::SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY,
         )
-    }
-
-    /// The function retrieves the header and all phases of a feed pattern from the SQL database.
-    /// It provides wrapped into Result type either
-    /// - the result of type Feedpattern
-    /// - or a value of enum SqlInterfaceError
-    /// # Arguments
-    /// * `profile_id` - ID of the feed profile    
-    fn get_single_feedpattern_from_database(
-        &mut self,
-        profile_id: i32,
-    ) -> Result<Feedpattern, SqlInterfaceError> {
-        let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
-            Ok(c) => c,
-            Err(e) => {
-                #[cfg(not(test))]
-                error!(
-                    target: LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not retrieve feed pattern from database ({e:?})"
-                );
-                return Err(e);
-            }
-        };
-        let mut feed_phases = Vec::new();
-        for nr in 1..11 {
-            let sql_feed_phase = match self.get_feed_phase_from_database(profile_id, nr) {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            let feed_phase = FeedPhase {
-                pause_duration: sql_feed_phase.pause_duration,
-                pause_skimmer: sql_feed_phase.pause_skimmer > 0,
-                pause_main_pump_1: sql_feed_phase.pause_main_pump_1 > 0,
-                pause_main_pump_2: sql_feed_phase.pause_main_pump_2 > 0,
-                pause_aux_pump_1: sql_feed_phase.pause_aux_pump_1 > 0,
-                pause_aux_pump_2: sql_feed_phase.pause_aux_pump_2 > 0,
-                feed_duration: sql_feed_phase.feed_duration,
-                feed_skimmer: sql_feed_phase.feed_skimmer > 0,
-                feed_main_pump_1: sql_feed_phase.feed_main_pump_1 > 0,
-                feed_main_pump_2: sql_feed_phase.feed_main_pump_2 > 0,
-                feed_aux_pump_1: sql_feed_phase.feed_aux_pump_1 > 0,
-                feed_aux_pump_2: sql_feed_phase.feed_aux_pump_2 > 0,
-            };
-            feed_phases.push(feed_phase);
-        }
-        Ok(Feedpattern {
-            profile_id: sql_feedpattern_header.profile_id,
-            profile_name: sql_feedpattern_header.profile_name,
-            feedphases: feed_phases,
-        })
     }
 
     /// Inserts one dataset of feed event into the database.
@@ -228,6 +176,58 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         }
     }
 
+    /// The function retrieves the header and all phases of a feed pattern from the SQL database.
+    /// It provides wrapped into Result type either
+    /// - the result of type Feedpattern
+    /// - or a value of enum SqlInterfaceError
+    /// # Arguments
+    /// * `profile_id` - ID of the feed profile    
+    fn get_single_feedpattern_from_database(
+        &mut self,
+        profile_id: i32,
+    ) -> Result<Feedpattern, SqlInterfaceError> {
+        let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
+            Ok(c) => c,
+            Err(e) => {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_SQL_INTERFACE_FEED,
+                    "could not retrieve feed pattern from the database ({e:?})"
+                );
+                return Err(e);
+            }
+        };
+        let mut feed_phases = Vec::new();
+        for nr in 1..11 {
+            let sql_feed_phase = match self.get_feed_phase_from_database(profile_id, nr) {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+            let feed_phase = FeedPhase {
+                pause_duration: sql_feed_phase.pause_duration,
+                pause_skimmer: sql_feed_phase.pause_skimmer > 0,
+                pause_main_pump_1: sql_feed_phase.pause_main_pump_1 > 0,
+                pause_main_pump_2: sql_feed_phase.pause_main_pump_2 > 0,
+                pause_aux_pump_1: sql_feed_phase.pause_aux_pump_1 > 0,
+                pause_aux_pump_2: sql_feed_phase.pause_aux_pump_2 > 0,
+                feed_duration: sql_feed_phase.feed_duration,
+                feed_skimmer: sql_feed_phase.feed_skimmer > 0,
+                feed_main_pump_1: sql_feed_phase.feed_main_pump_1 > 0,
+                feed_main_pump_2: sql_feed_phase.feed_main_pump_2 > 0,
+                feed_aux_pump_1: sql_feed_phase.feed_aux_pump_1 > 0,
+                feed_aux_pump_2: sql_feed_phase.feed_aux_pump_2 > 0,
+            };
+            feed_phases.push(feed_phase);
+        }
+        Ok(Feedpattern {
+            profile_id: sql_feedpattern_header.profile_id,
+            profile_name: sql_feedpattern_header.profile_name,
+            feedphases: feed_phases,
+        })
+    }
+
     /// Triggers the SQL queries to either update the existing feed schedule entry with
     /// tomorrow's date or delete the entry.
     /// # Arguments
@@ -239,9 +239,9 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         let mut result = Ok(()); // initial value - will be overwritten by any error occurred
         for feedschedule_entry in feedschedule_entries {
             if feedschedule_entry.repeat_daily {
-                // feed schedule shall be repeated daily, so update the entry with
+                // the feed schedule shall be repeated daily, so update the entry with
                 // - tomorrow's date
-                // - same time of day as the entry
+                // - the same time of day as the entry
                 let sql_query_string =
                     sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
 
@@ -356,14 +356,14 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
 }
 
 impl SqlInterfaceFeed {
-    /// Provides a tuple of struct of type SqlInterfaceFeed and connection to database
+    /// Provides a tuple of struct of type SqlInterfaceFeed and connection to the database
     /// # Arguments
     /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
         SqlInterfaceFeed { conn }
     }
 
-    /// Retrieve from SQL database feed schedule entries.
+    /// Retrieve from the database feed schedule entries.
     /// Function provides wrapped into Result type either
     /// - Vector of feedschedule entries of type FeedScheduleEntry or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
@@ -385,7 +385,7 @@ impl SqlInterfaceFeed {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
-                    "Could not get feed schedule entry from SQL database with query:".to_string()
+                    "Could not get feed schedule entry from the database with query:".to_string()
                         + sql_query,
                 ));
             }
@@ -409,7 +409,7 @@ impl SqlInterfaceFeed {
 
         if feedschedule_entries.is_empty() {
             Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
-                "Could not convert any feedschedule entry timestamp string read from SQL database".to_string(),
+                "Could not convert any feedschedule entry timestamp string read from the database".to_string(),
             ))
         } else {
             Ok(Some(feedschedule_entries))
@@ -417,7 +417,7 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    /// Retrieve from SQL database the feed schedule entry which lies furthest in the future.
+    /// Retrieve from the database the feed schedule entry which lies furthest in the future.
     /// Function provides wrapped into Result type either
     /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
@@ -437,7 +437,7 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    /// Retrieve from SQL database the feed schedule entries scheduled in the future
+    /// Retrieve from the database the feed schedule entries scheduled in the future
     /// Function provides wrapped into Result type either
     /// - Vector of feedschedule entries or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
@@ -449,7 +449,7 @@ impl SqlInterfaceFeed {
         )
     }
 
-    /// Retrieves the header of a feed pattern from SQL database.
+    /// Retrieves the header of a feed pattern from the database.
     /// It provides wrapped into Result type either
     /// - the result of type SqlFeedpatternHeader
     /// - or a value of enum SqlInterfaceError
@@ -459,7 +459,7 @@ impl SqlInterfaceFeed {
         &mut self,
         profile_id: i32,
     ) -> Result<SqlFeedpatternHeader, SqlInterfaceError> {
-        // prepare query for header
+        // prepare the query for header
         let sql_query = str::replace(
             sql_query_strings::SQL_QUERY_READ_FEEDPATTERN_HEADER,
             "profile_id",
@@ -477,7 +477,7 @@ impl SqlInterfaceFeed {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                        "Could not get feed pattern header from SQL database with query:"
+                        "Could not get feed pattern header from the database with query:"
                             .to_string()
                             + sql_query.as_str(),
                     ));
@@ -503,7 +503,7 @@ impl SqlInterfaceFeed {
         Ok(feedpattern_header.clone())
     }
 
-    /// Retrieves the feed pattern data of a specific phase from SQL database.
+    /// Retrieves the feed pattern data of a specific phase from the database.
     /// # Arguments
     /// * `profile_id` - ID of the feed profile    
     /// * `phase_nr` - phase number of the feed profile   
@@ -512,7 +512,7 @@ impl SqlInterfaceFeed {
         profile_id: i32,
         phase_nr: i32,
     ) -> Result<SqlFeedPhase, SqlInterfaceError> {
-        // prepare query for header
+        // prepare the query header
         let sql_query_pre = str::replace(
             sql_query_strings::SQL_QUERY_READ_FEED_PHASE,
             "profile_id",
@@ -553,7 +553,7 @@ impl SqlInterfaceFeed {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                    "Could not get feed pattern phase from SQL database with query: ".to_string()
+                    "Could not get feed pattern phase from the database with query: ".to_string()
                         + sql_query.as_str(),
                 ));
             }
@@ -644,7 +644,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #33.
     pub fn test_sql_interface_feedpattern() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -656,7 +656,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
 
-        //*** check retrieving of feed pattern from empty table - FAIL **************************
+        //*** check retrieving of the feed pattern from empty table - FAIL **************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedpatterns".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -836,7 +836,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #34.
     pub fn test_sql_interface_feedlog() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -858,7 +858,7 @@ pub mod tests {
             Ok(_) => {}
             Err(e) => panic!("Could not insert feed event into database: {e:?}"),
         }
-        // Read back feed log entry from data base
+        // Read back feed log entry from the database
         let single_feed_event_entry_array = match sql_interface_feed.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_LAST_FEED_EVENT,
             |(timestamp, feeder_run_time, feed_profile_name, feed_profile_id)| SqlFeedEvent {
@@ -873,7 +873,7 @@ pub mod tests {
                 panic!("Could not read feed event from data base: {e:?}");
             }
         };
-        // check if SQL response has right structure
+        // check if SQL response has the right structure
         assert_eq!(single_feed_event_entry_array.len(), 1);
         // check if SQL response contains the correct data
         let feed_event = FeedEvent {
@@ -895,7 +895,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #35.
     pub fn test_sql_interface_feedschedule() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -963,7 +963,7 @@ pub mod tests {
                             .unwrap()
                     );
                     println!(
-                        "timestamp read from database: {}",
+                        "timestamp read from the database: {}",
                         feedschedule_entry.timestamp
                     );
                     assert_eq!(feedschedule_entry.profile_id, profile_id_reference);
@@ -982,7 +982,7 @@ pub mod tests {
         println!("* reading existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************
 
-        // *** check updating feed schedule with repetion ***************************************
+        // *** check updating feed schedule with repetition ***************************************
         println!(
             "Feed schedule entry before database update: {}",
             feedschedule_entry_before_update
@@ -1004,7 +1004,7 @@ pub mod tests {
         {
             Ok(()) => {}
             Err(e) => {
-                panic!("Error occurred when trying to update feedschule entry which is marked for repetition: {e:?}");
+                panic!("Error occurred when trying to update feedschedule entry which is marked for repetition: {e:?}");
             }
         }
 
@@ -1034,8 +1034,8 @@ pub mod tests {
         println!("* update existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************
 
-        // *** check updating feed schedule without repetion ************************************
-        // modify existing feed schedule entry -> it shall be deleted with call to update
+        // *** test updating feed schedule without repetition ************************************
+        // modify existing feed schedule entry -> it shall be deleted with a call to update
         feedschedule_entry_after_update.repeat_daily = false;
         let mut feedschedule_entries_after_update: Vec<FeedScheduleEntry> = Vec::new();
         feedschedule_entries_after_update.push(feedschedule_entry_after_update);
@@ -1045,7 +1045,7 @@ pub mod tests {
         {
             Ok(()) => {}
             Err(e) => {
-                panic!("Error occurred when trying to update feedschule entry which is not marked for repetition: {e:?}");
+                panic!("Error occurred when trying to update feedschedule entry which is not marked for repetition: {e:?}");
             }
         }
 
@@ -1060,7 +1060,7 @@ pub mod tests {
         println!("* deleting existing entry from feed schedule (PASS) succeeded.");
         // **************************************************************************************
 
-        // *** check updating multiple feed schedule entries with repetion **********************
+        // *** check updating multiple feed schedule entries with repetition **********************
         // calculate dynamic reference
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
             Ok(_) => {}
@@ -1150,7 +1150,7 @@ pub mod tests {
         {
             Ok(()) => {}
             Err(e) => {
-                panic!("Error occurred when trying to update feedschule entry which is marked for repetition: {e:?}");
+                panic!("Error occurred when trying to update feedschedule entry which is marked for repetition: {e:?}");
             }
         }
 

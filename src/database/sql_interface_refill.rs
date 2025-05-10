@@ -17,9 +17,15 @@ use crate::database::{
 };
 
 /// Trait for interfacing between refill and SQL database
-/// This trait is prerequiste to use mock implementation for testing
+/// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
+    /// Executes an SQL query which provides an integer value and returns the result as u64
+    /// if it is positive.
+    /// It provides wrapped into Result type either
+    /// - the integer value as u64
+    /// - or a value from enum SqlInterfaceError
+    fn get_positive_integer_value_from_database(&mut self, sql_query_string: &str) -> Result<u64, SqlInterfaceError>;
 
     fn check_empty(&mut self) -> Result<u64, SqlInterfaceError>;
 
@@ -42,7 +48,7 @@ pub trait DatabaseInterfaceRefillTrait {
 
 /// Contains the configuration and the implementation of the SQL interface for Refill.
 pub struct SqlInterfaceRefill {
-    /// Connection to database
+    /// Connection to the database
     pub conn: PooledConn,
 }
 
@@ -56,9 +62,9 @@ impl SqlInterfaceRefill {
         SqlInterfaceRefill { conn }
     }
 
-    /// Retrieves the timestamp of the last refill event from SQL database.
+    /// Retrieves the timestamp of the last refill event from the database.
     /// It provides wrapped into Result type either
-    /// - timestamp of last refill event as type NaiveDateTime
+    /// - timestamp of the last refill event as type NaiveDateTime
     /// - or a value from enum SqlInterfaceError
     fn get_last_refill_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_timestamp(
@@ -69,9 +75,9 @@ impl SqlInterfaceRefill {
 }
 
 impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
-    /// Requests current timestamp and timestamp of last refill event and calculates the difference between them in seconds.
+    /// Requests current timestamp and timestamp of the last refill event and calculates the difference between them in seconds.
     /// It provides wrapped into Result type either
-    /// - number of seconds since last refill event
+    /// - number of seconds since the last refill event
     /// - or a value from enum SqlInterfaceError    
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
@@ -97,15 +103,15 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Checks if the SQL table of refill events is empty.
-    /// It returns wrapped into Result type either
-    /// - a value of one if there is at least one entry in the table or
-    /// - a value of zero if there is not entry in the table or
-    /// - a value from enum SqlInterfaceError
-    fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
+    /// Executes an SQL query which provides an integer value and returns the result as u64
+    /// if it is positive.
+    /// It provides wrapped into Result type either
+    /// - the integer value as u64
+    /// - or a value from enum SqlInterfaceError
+    fn get_positive_integer_value_from_database(&mut self, sql_query_string: &str) -> Result<u64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
-            sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
+            sql_query_string
         ) {
             Ok(c) => {
                 if c >= 0 {
@@ -117,51 +123,42 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
             Err(e) => Err(e),
         }
     }
-
-    /// Retrieves the number of water refill events in the last 24 hours.
+    
+    /// Checks if the SQL table of refill events is empty.
     /// It returns wrapped into Result type either
-    /// - the number of refill events in the last 24 hours
-    /// - a value from enum SqlInterfaceError    
-    fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
-        ) {
-            Ok(c) => {
-                if c >= 0 {
-                    Ok(c as u64)
-                } else {
-                    Err(SqlInterfaceError::NegativeInteger(c))
-                }
-            }
-            Err(e) => Err(e),
-        }
+    /// - a value of one if there is at least one entry in the table or
+    /// - a value of zero if there is no entry in the table or
+    /// - a value from enum SqlInterfaceError
+    fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
+        self.get_positive_integer_value_from_database(
+            sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
+        )
     }
 
     /// Retrieves the number of water refill events in the last hour.
     /// It returns wrapped into Result type either
     /// - the number of refill events in the last hour
-    /// - a value from enum SqlInterfaceError
+    /// - or a value from enum SqlInterfaceError
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
-        ) {
-            Ok(c) => {
-                if c >= 0 {
-                    Ok(c as u64)
-                } else {
-                    Err(SqlInterfaceError::NegativeInteger(c))
-                }
-            }
-            Err(e) => Err(e),
-        }
+        self.get_positive_integer_value_from_database(
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR
+        )
+    }
+
+    /// Retrieves the number of water refill events in the last 24 hours.
+    /// It returns wrapped into Result type either
+    /// - the number of refill events in the last 24 hours
+    /// - or a value from enum SqlInterfaceError    
+    fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
+        self.get_positive_integer_value_from_database(
+            sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H
+        )
     }
 
     /// Retrieves the water volume refilled in the last 24 hours
     /// It returns wrapped into Result type either
-    /// - the refill volume in literes of the last 24 hours
-    /// - a value from enum SqlInterfaceError
+    /// - the refill volume in liters of the last 24 hours
+    /// - or a value from enum SqlInterfaceError
     fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -180,8 +177,8 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
 
     /// Retrieves the water volume refilled in the last hour
     /// It returns wrapped into Result type either
-    /// - the refill volume in literes of the last hour
-    /// - a value from enum SqlInterfaceError
+    /// - the refill volume in liters of the last hour
+    /// - or a value from enum SqlInterfaceError
     fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -205,7 +202,7 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// # Arguments
     /// * `timestamp` - timestamp of refill event to be inserted as type NaiveDateTime
     /// * `duration` - duration of refill event to be inserted in seconds
-    /// * `volume` - volume of refill event to be inserted in literser
+    /// * `volume` - volume of refill event to be inserted in liters
     /// * `error_code` - numerical error code of refill event to be inserted in liters    
     fn insert_refill_event(
         &mut self,
@@ -264,7 +261,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    // Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #37.
     pub fn test_sql_interface_refill() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -387,7 +384,7 @@ pub mod tests {
         let refill_volume_of_last_24h_one =
             match sql_interface_refill.get_refill_volume_of_last_24h() {
                 Ok(c) => c,
-                Err(e) => panic!("Could not get refill volue from last 24h (target=0.25): {e:?}"),
+                Err(e) => panic!("Could not get refill volume from last 24h (target=0.25): {e:?}"),
             };
         assert_eq!(refill_volume_of_last_24h_one, 0.25);
         println!("* checking refill volume (target non-zero) succeeded.");
@@ -414,14 +411,14 @@ pub mod tests {
         let refill_volume_of_last_hour_one =
             match sql_interface_refill.get_refill_volume_of_last_hour() {
                 Ok(c) => c,
-                Err(e) => panic!("Could not get refill volue from last hour (target=0.25): {e:?}"),
+                Err(e) => panic!("Could not get refill volume from last hour (target=0.25): {e:?}"),
             };
         assert_eq!(refill_volume_of_last_hour_one, 0.25);
         println!("* checking refill volume (target non-zero) succeeded.");
         // **************************************************************************************
 
         // *** check content of last refill event - PASS ****************************************
-        // Read back refill event entry from data base
+        // Read back refill event entry from the database
         let single_refill_event_entry_array = match sql_interface_refill.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_REFILL_EVENT,
             |(timestamp, duration, volume, error_code)| SqlRefillEvent {
@@ -436,7 +433,7 @@ pub mod tests {
                 panic!("Could not read refill event from data base: {e:?}");
             }
         };
-        // check if SQL response has right structure
+        // check if SQL response has the right structure
         assert_eq!(single_refill_event_entry_array.len(), 1);
         // check if SQL response contains the correct data
         let refill_event = RefillEvent {

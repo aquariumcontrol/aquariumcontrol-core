@@ -18,14 +18,14 @@ use crate::database::{
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
-    /// Connection to database
+    /// Connection to the database
     conn: PooledConn,
 }
 
 /// Contains set value data for each pump.
 pub struct BallingSetVal {
     /// ID of the pump
-    /// Attribute is public becaused access from within test cases.
+    /// Attribute is public because access from within test cases.
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
     pub pump_id: i32,
@@ -36,8 +36,8 @@ pub struct BallingSetVal {
     /// dosing volume in ml which the pump shall deliver each hour
     pub dosing_volume: f32,
 
-    /// label which describes the fluid that the pump is delivering
-    /// Attribute is public becaused access from within test cases.
+    /// Label which describes the fluid that the pump is delivering
+    /// Attribute is public because access from within test cases.
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
     pub label: String,
@@ -53,7 +53,7 @@ impl SqlInterfaceBalling {
         SqlInterfaceBalling { conn }
     }
 
-    /// Retrieves the timestamp of the last Balling dosing event from SQL database and returns wrapped
+    /// Retrieves the timestamp of the last Balling dosing event from the database and returns wrapped
     /// into a Result type either:
     /// - result as type NaiveDateTime or
     /// - value of enum SqlInterfaceError
@@ -69,7 +69,7 @@ impl SqlInterfaceBalling {
         SqlInterface::get_optional_timestamp(&mut self.conn, &sql_query)
     }
 
-    /// Requests current timestamp and timestamp of last balling dosing event and calculates the difference between them in seconds.
+    /// Requests the current timestamp and timestamp of the last balling dosing event and calculates the difference between them in seconds.
     pub fn get_duration_since_last_balling_dosing(
         &mut self,
         pump_id: i64,
@@ -94,7 +94,7 @@ impl SqlInterfaceBalling {
                 let delta_time = current_datetime - last_balling_dosing_datetime;
                 Some(delta_time.num_seconds())
             }
-            None => Option::None,
+            None => None,
         };
 
         Ok(result_opt)
@@ -104,7 +104,7 @@ impl SqlInterfaceBalling {
     /// # Arguments
     /// * `timestamp` - timestamp to be inserted as NaiveDateTime
     /// * `pump_id` - id of the pump for which the Balling dosing event shall be logged
-    /// * `dosing_volue` - volume in ml which has been dosed into the aquarium
+    /// * `dosing_volume` - volume in ml which has been dosed into the aquarium
     pub fn insert_balling_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -133,7 +133,7 @@ impl SqlInterfaceBalling {
         }
     }
 
-    /// Retrieves Balling set values from SQL database for a given pump id
+    /// Retrieves Balling set values from the database for a given pump id
     /// and evaluates if the response is a single data set.
     /// * `pump_id` - id of the pump for which the Balling dosing event shall be retrieved
     pub fn get_single_balling_setval_from_database(
@@ -145,7 +145,7 @@ impl SqlInterfaceBalling {
             "#pump_id",
             &pump_id.to_string(),
         );
-        // Get single data set from database
+        // Get a single data set from the database
         let mut single_balling_setval_array = match self.conn.query_map(
             sql_query_string.clone(),
             |(pump_id, dosing_speed, dosing_volume, label)| BallingSetVal {
@@ -158,7 +158,7 @@ impl SqlInterfaceBalling {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
-                    "Could not get single Balling set value from SQL database using query:"
+                    "Could not get single Balling set value from the database using query:"
                         .to_string()
                         + &sql_query_string,
                 ));
@@ -242,7 +242,7 @@ pub mod tests {
         "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) values(:pump_id, :dosing_speed, :dosing_volume, :label);";
 
     #[test]
-    /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    /// Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #30.
     pub fn test_sql_interface_balling_events() {
         let pump_id = 1;
@@ -255,7 +255,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
-        // *** check timestamp of last Balling dosing - FAIL ************************************
+        // *** check the timestamp of last Balling dosing - FAIL ************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -281,8 +281,8 @@ pub mod tests {
         println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
         // **************************************************************************************
 
-        // *** check content of last Balling dosing - PASS **************************************
-        // Read back Balling dosing event entry from data base
+        // *** check the content of last Balling dosing - PASS **************************************
+        // Read back Balling dosing event entry from the database
         let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
             |(timestamp, pump_id, dosing_volume)| SqlBallingEvent {
@@ -296,7 +296,7 @@ pub mod tests {
                 panic!("Could not read Balling dosing event from data base: {e:?}");
             }
         };
-        // check if SQL response has right structure
+        // check if SQL response has the right structure
         assert_eq!(single_balling_event_entry_array.len(), 1);
         // check if SQL response contains the correct data
         let balling_event = BallingEvent {
@@ -331,7 +331,7 @@ pub mod tests {
     }
 
     #[test]
-    /// Test case includes all checks for this table combined in one function to limit amount of additional databases.
+    /// Test case includes all checks for this table combined in one function to limit the number of additional databases.
     // Test case uses test database #31.
     pub fn test_sql_interface_balling_setvals() {
         let config: ConfigData = read_config_file_with_test_database(
