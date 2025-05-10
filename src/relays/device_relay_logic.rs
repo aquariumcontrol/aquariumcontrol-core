@@ -206,3 +206,55 @@ pub fn get_relay_command(
         },
     }
 }
+
+fn get_relay_command_normally_open(command: &InternalCommand) -> Result<bool, ControllinoError> {
+    match command {
+        InternalCommand::SwitchOn(_) => Ok(true),
+        InternalCommand::SwitchOff(_) => Ok(false),
+        InternalCommand::Pulse(d, _) => {
+            Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+        }
+        _ => Err(ControllinoError::IrrelevantCommand(
+            command.clone(),
+        ))
+    }
+}
+
+fn get_relay_command_normally_closed(command: &InternalCommand) -> Result<bool, ControllinoError> {
+    match command {
+        InternalCommand::SwitchOn(_) => Ok(false),
+        InternalCommand::SwitchOff(_) => Ok(true),
+        InternalCommand::Pulse(d, _) => {
+            Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+        }
+        _ => Err(ControllinoError::IrrelevantCommand(
+            command.clone(),
+        ))
+    }
+}
+
+/// Provides boolean value for switching the relay according to relay logic when using GPIO.
+/// # Arguments
+/// * `internal_command` - enum value which is interpreted
+/// * `device` - enum value for which the function shall provide the relay id
+pub fn get_relay_command_gpio(
+    internal_command: &InternalCommand,
+    device: AquariumDevice,
+) -> Result<bool, ControllinoError> {
+    match device {
+        AquariumDevice::Skimmer => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::MainPump1 => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::MainPump2 => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::AuxPump1 => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::AuxPump2 => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::Heater => get_relay_command_normally_open(internal_command),
+        AquariumDevice::Ventilation => get_relay_command_normally_closed(internal_command),
+        AquariumDevice::RefillPump => get_relay_command_normally_open(internal_command),
+        AquariumDevice::Feeder => get_relay_command_normally_open(internal_command),
+        AquariumDevice::PeristalticPump1 => get_relay_command_normally_open(internal_command),
+        AquariumDevice::PeristalticPump2 => get_relay_command_normally_open(internal_command),
+        AquariumDevice::PeristalticPump3 => get_relay_command_normally_open(internal_command),
+        AquariumDevice::PeristalticPump4 => get_relay_command_normally_open(internal_command),
+    }
+}
+

@@ -17,9 +17,11 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{fmt, time::Duration};
-
+use crate::sensors::dht::DhtError;
+use crate::sensors::gpio_handler::GpioHandlerConfig;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+const LOG_TARGET_CONTROLLINO: &str = "controllino";
 
 /// Contains constants for communication with Controllino
 #[allow(unused)]
@@ -102,7 +104,6 @@ impl fmt::Debug for ControllinoError {
         }
     }
 }
-
 /// Holds the configuration data for the Controllino interface.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -211,6 +212,66 @@ pub struct ControllinoChannels {
     /// receiver part of the channel for communication from the signal handler
     pub rx_controllino_from_signal_handler: Receiver<InternalCommand>,
 }
+fn controllino_open_serial_port(port_name: String, baud_rate: u32, timeout_millis: u64) -> Box<dyn SerialPort> {
+    let spin_sleeper = SpinSleeper::default();
+
+    let mut serial_port =
+        match serialport::new(port_name.clone(), baud_rate).open() {
+            Ok(c) => c,
+            Err(e) => {
+                panic!(
+                    "{}: failed to open serial port ({e:?})",
+                    LOG_TARGET_CONTROLLINO
+                );
+            }
+        };
+
+    let timeout_duration = Duration::from_millis(timeout_millis);
+    match serial_port.set_timeout(timeout_duration) {
+        Ok(()) => { /* do nothing */ }
+        Err(_) => {
+            panic!(
+                "{}: could not set timeout of {} milliseconds.",
+                LOG_TARGET_CONTROLLINO,
+                timeout_millis
+            );
+        }
+    }
+
+    // write to Data Terminal Ready pin: clear the signal
+    match serial_port.write_data_terminal_ready(false) {
+        Ok(_) => { /* could reset DTR - do nothing */ }
+        Err(e) => {
+            panic!(
+                "{}: error when clearing DTR ({e:?})",
+                LOG_TARGET_CONTROLLINO
+            );
+        }
+    }
+
+    // wait for the device
+    let sleep_duration_after_dtr_reset =
+        Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
+    spin_sleeper.sleep(sleep_duration_after_dtr_reset);
+
+    // flush the buffer
+    match serial_port.clear(ClearBuffer::All) {
+        Ok(_) => { /* could clear buffer - do nothing */ }
+        Err(e) => {
+            panic!(
+                "{}: error when clearing buffer ({e:?})",
+                LOG_TARGET_CONTROLLINO
+            );
+        }
+    }
+
+    // wait for the device
+    let sleep_duration_after_buffer_clear =
+        Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
+    spin_sleeper.sleep(sleep_duration_after_buffer_clear);
+    
+    serial_port
+}
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation of the Controllino interface
@@ -291,12 +352,65 @@ pub struct Controllino {
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via the channel
     lock_error_channel_receive_balling: bool,
+    
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the protein skimmer
+    pub output_pin_skimmer_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the main pump #1
+    pub output_pin_main_pump1_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the main pump #2
+    pub output_pin_main_pump2_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the auxiliary pump #1
+    pub output_pin_aux_pump1_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the auxiliary pump #2
+    pub output_pin_aux_pump2_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the feeder
+    pub output_pin_feeder_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the refill pump
+    pub output_pin_refill_pump_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the heater
+    pub output_pin_heater_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the surface ventilation
+    pub output_pin_ventilation_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the peristaltic pump #1
+    pub output_pin_peristaltic_pump1_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the peristaltic pump #2
+    pub output_pin_peristaltic_pump2_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the peristaltic pump #3
+    pub output_pin_peristaltic_pump3_opt: Option<Pin<Output>>,
+
+    #[cfg(feature = "target_hw")]
+    /// GPIO of the peristaltic pump #4
+    pub output_pin_peristaltic_pump4_opt: Option<Pin<Output>>,
 }
 
+
 impl Controllino {
-    const LOG_TARGET_CONTROLLINO: &'static str = "controllino";
     const SW_LOG_SENDER: bool = false;
 
+    #[cfg(not(feature = "target_hw"))]
     /// Provides a struct of type Controllino
     /// # Arguments
     /// * `config` - configuration data for Controllino
@@ -306,7 +420,8 @@ impl Controllino {
         let serial_port_opt: Option<Box<dyn SerialPort>>;
 
         if config.use_simulator {
-            spin_sleeper_opt = None;
+            let spin_sleeper = SpinSleeper::default();
+            spin_sleeper_opt = Some(spin_sleeper);
             controllino_processing_duration_opt = None;
             serial_port_opt = None;
         } else {
@@ -314,61 +429,7 @@ impl Controllino {
             spin_sleeper_opt = Some(spin_sleeper);
 
             if config.active {
-                let mut serial_port =
-                    match serialport::new(config.port_name.clone(), config.baud_rate).open() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            panic!(
-                                "{}: failed to open serial port ({e:?})",
-                                Self::LOG_TARGET_CONTROLLINO
-                            );
-                        }
-                    };
-
-                let timeout_duration = Duration::from_millis(config.timeout_millis);
-                match serial_port.set_timeout(timeout_duration) {
-                    Ok(()) => { /* do nothing */ }
-                    Err(_) => {
-                        panic!(
-                            "{}: could not set timeout of {} milliseconds.",
-                            Self::LOG_TARGET_CONTROLLINO,
-                            config.timeout_millis
-                        );
-                    }
-                }
-
-                // write to Data Terminal Ready pin: clear the signal
-                match serial_port.write_data_terminal_ready(false) {
-                    Ok(_) => { /* could reset DTR - do nothing */ }
-                    Err(e) => {
-                        panic!(
-                            "{}: error when clearing DTR ({e:?})",
-                            Self::LOG_TARGET_CONTROLLINO
-                        );
-                    }
-                }
-
-                // wait for the device
-                let sleep_duration_after_dtr_reset =
-                    Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
-                spin_sleeper.sleep(sleep_duration_after_dtr_reset);
-
-                // flush the buffer
-                match serial_port.clear(ClearBuffer::All) {
-                    Ok(_) => { /* could clear buffer - do nothing */ }
-                    Err(e) => {
-                        panic!(
-                            "{}: error when clearing buffer ({e:?})",
-                            Self::LOG_TARGET_CONTROLLINO
-                        );
-                    }
-                }
-
-                // wait for the device
-                let sleep_duration_after_buffer_clear =
-                    Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
-                spin_sleeper.sleep(sleep_duration_after_buffer_clear);
-
+                let serial_port = controllino_open_serial_port(config.port_name.clone(), config.baud_rate, config.timeout_millis);
                 let controllino_processing_millis = config.controllino_processing_millis;
                 let controllino_processing_duration =
                     Duration::from_millis(controllino_processing_millis);
@@ -403,6 +464,186 @@ impl Controllino {
             lock_error_channel_receive_feed: false,
         }
     }
+    #[cfg(feature = "target_hw")]
+    /// Provides a struct of type Controllino
+    /// # Arguments
+    /// * `config` - configuration data for Controllino
+    pub fn new(config: ControllinoConfig, gpio: Gpio, gpio_config: GpioHandlerConfig) -> Controllino {
+        let spin_sleeper_opt: Option<SpinSleeper>;
+        let controllino_processing_duration_opt: Option<Duration>;
+        let serial_port_opt: Option<Box<dyn SerialPort>>;
+
+        let mut output_skimmer_pin_opt: Option<Pin<Output>> = None;
+        let mut output_main_pump1_pin_opt: Option<Pin<Output>> = None;
+        let mut output_main_pump2_pin_opt: Option<Pin<Output>> = None;
+        let mut output_aux_pump1_pin_opt: Option<Pin<Output>> = None;
+        let mut output_aux_pump2_pin_opt: Option<Pin<Output>> = None;
+        let mut output_pin_heater_opt: Option<Pin<Output>> = None;
+        let mut output_pin_ventilation_opt: Option<Pin<Output>> = None;
+        let mut output_pin_refill_pump_opt: Option<Pin<Output>> = None;
+        let mut output_pin_balling_pump1_opt: Option<Pin<Output>> = None;
+        let mut output_pin_balling_pump2_opt: Option<Pin<Output>> = None;
+        let mut output_pin_balling_pump3_opt: Option<Pin<Output>> = None;
+        let mut output_pin_balling_pump4_opt: Option<Pin<Output>> = None;
+        let mut output_pin_feeder_opt: Option<Pin<Output>> = None;
+        
+        if config.use_simulator {
+            let spin_sleeper = SpinSleeper::default();
+            spin_sleeper_opt = Some(spin_sleeper);
+            controllino_processing_duration_opt = None;
+            serial_port_opt = None;
+        } else {
+            let spin_sleeper = SpinSleeper::default();
+            spin_sleeper_opt = Some(spin_sleeper);
+
+            if config.active {
+                // configure output pins here
+
+                // GPIO for actuation of skimmer
+                output_skimmer_pin_opt = match gpio.get(gpio_config.skimmer_pin) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for skimmer ({e:?})", gpio_config.skimmer_pin, e);
+                    }
+                };
+
+                // GPIO for actuation of main pump 1
+                output_main_pump1_pin_opt = match gpio.get(gpio_config.main_pump1_pin) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for main pump 1 ({e:?})", gpio_config.main_pump1_pin, e);
+                    }
+                };
+
+                // GPIO for actuation of main pump 2
+                output_main_pump2_pin_opt = match gpio.get(gpio_config.main_pump2_pin) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for main pump 2 ({e:?})", gpio_config.main_pump2, e);
+                    }
+                };
+
+                // GPIO for actuation of aux. pump 1
+                output_aux_pump1_pin_opt = match gpio.get(gpio_config.aux_pump1_pin) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for aux. pump 1 ({e:?})", gpio_config.aux_pump1_pin, e);
+                    }
+                };
+
+                // GPIO for actuation of aux. pump 2
+                output_aux_pump2_opt = match gpio.get(gpio_config.aux_pump2) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for aux. pump 2 ({e:?})", gpio_config.aux_pump2_pin, e);
+                    }
+                };
+
+                // GPIO for actuation of heater
+                output_pin_heater_opt = match gpio.get(gpio_config.heater) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for heater ({e:?})", gpio_config.heater, e);
+                    }
+                };
+
+                // GPIO for actuation of ventilation
+                output_pin_ventilation_opt = match gpio.get(gpio_config.ventilation) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for ventilation ({e:?})", gpio_config.ventilation, e);
+                    }
+                };
+
+                // GPIO for actuation of refill pump
+                output_pin_refill_pump_opt = match gpio.get(gpio_config.refill_pump) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for refill pump ({e:?})", gpio_config.refill_pump, e);
+                    }
+                };
+
+                // GPIO for actuation of Balling dosing pump #1
+                output_pin_balling_pump1_opt = match gpio.get(gpio_config.balling_pump1) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for Balling pump #1 ({e:?})", gpio_config.peristaltic_pump1, e);
+                    }
+                };
+
+                // GPIO for actuation of Balling dosing pump #2
+                output_pin_balling_pump2_opt = match gpio.get(gpio_config.balling_pump2) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for Balling pump #2 ({e:?})", gpio_config.peristaltic_pump2, e);
+                    }
+                };
+
+                // GPIO for actuation of Balling dosing pump #3
+                output_pin_balling_pump3_opt = match gpio.get(gpio_config.balling_pump3) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for Balling pump #3 ({e:?})", gpio_config.peristaltic_pump3, e);
+                    }
+                };
+
+                // GPIO for actuation of Balling dosing pump #4
+                output_pin_balling_pump4_opt = match gpio.get(gpio_config.balling_pump4) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for Balling pump #4 ({e:?})", gpio_config.peristaltic_pump4, e);
+                    }
+                };
+
+                // GPIO for actuation of feeder
+                output_pin_feeder_opt = match gpio.get(gpio_config.feeder) {
+                    Ok(c) => Some(c.into_output()),
+                    Err(e) => {
+                        panic!("could not get pin {} from GPIO interface for feeder ({e:?})", gpio_config.feeder, e);
+                    }
+                };
+
+            } else {
+                controllino_processing_duration_opt = None;
+                serial_port_opt = None;
+            }
+        }
+
+        Controllino {
+            config,
+            spin_sleeper_opt,
+            controllino_processing_duration_opt,
+            serial_port_opt,
+            lock_error_actuate_refill: false,
+            lock_error_actuate_ventilation: false,
+            lock_error_actuate_heating: false,
+            lock_error_actuate_feed: false,
+            lock_error_actuate_balling: false,
+            lock_error_channel_send_refill: false,
+            lock_error_channel_receive_refill: false,
+            lock_error_channel_send_heating: false,
+            lock_error_channel_receive_heating: false,
+            lock_error_channel_send_ventilation: false,
+            lock_error_channel_receive_ventilation: false,
+            lock_error_channel_send_balling: false,
+            lock_error_channel_receive_balling: false,
+            lock_error_channel_send_feed: false,
+            lock_error_channel_receive_feed: false,
+            output_pin_skimmer_opt,
+            output_pin_main_pump1_opt,
+            output_pin_main_pump2_opt,
+            output_pin_aux_pump1_opt,
+            output_pin_aux_pump2_opt,
+            output_pin_heater_opt,
+            output_pin_ventilation_opt,
+            output_pin_refill_pump_opt,
+            output_pin_balling_pump1_opt,
+            output_pin_balling_pump2_opt,
+            output_pin_balling_pump3_opt,
+            output_pin_balling_pump4_opt,
+            output_pin_feeder_opt,
+        }
+    }
 
     /// Executes the main control in a loop until the signal handler commands quitting.
     /// This function receives request from other threads and either actuates on real HW
@@ -423,7 +664,7 @@ impl Controllino {
             if quit_command_received {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
-                    target: Self::LOG_TARGET_CONTROLLINO,
+                    target: LOG_TARGET_CONTROLLINO,
                     "received QUIT command"
                 );
 
@@ -436,7 +677,7 @@ impl Controllino {
                     if Self::SW_LOG_SENDER {
                         println!(
                             "{}: received command from Refill: {}",
-                            Self::LOG_TARGET_CONTROLLINO,
+                            LOG_TARGET_CONTROLLINO,
                             c
                         );
                     }
@@ -455,7 +696,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_actuate_refill {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "actuation of refill pump. ({e:?})"
                                 );
                                 self.lock_error_actuate_refill = true;
@@ -469,7 +710,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_channel_send_refill {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "responding to refill control ({e:?})"
                                 );
                                 self.lock_error_channel_send_refill = true;
@@ -487,7 +728,7 @@ impl Controllino {
                             if !self.lock_error_channel_receive_refill {
                                 error!(
                                     "{}: error when trying to receive command from refill control ({e:?})",
-                                    Self::LOG_TARGET_CONTROLLINO
+                                    LOG_TARGET_CONTROLLINO
                                 );
                                 self.lock_error_channel_receive_refill = true;
                             }
@@ -503,7 +744,7 @@ impl Controllino {
                     if Self::SW_LOG_SENDER {
                         println!(
                             "{}: received command from heating: {}",
-                            Self::LOG_TARGET_CONTROLLINO,
+                            LOG_TARGET_CONTROLLINO,
                             c
                         );
                     }
@@ -522,7 +763,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_actuate_heating {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "actuation of heater ({e:?})"
                                 );
                                 self.lock_error_actuate_heating = true;
@@ -536,7 +777,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_channel_send_heating {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "responding to heating control: {e:?}"
                                 );
                                 self.lock_error_channel_send_heating = true;
@@ -554,7 +795,7 @@ impl Controllino {
                             if !self.lock_error_channel_receive_heating {
                                 error!(
                                     "{}: Error in trying to receive command from heating control {e:?}",
-                                    Self::LOG_TARGET_CONTROLLINO
+                                    LOG_TARGET_CONTROLLINO
                                 );
                                 self.lock_error_channel_receive_heating = true;
                             }
@@ -573,7 +814,7 @@ impl Controllino {
                     if Self::SW_LOG_SENDER {
                         println!(
                             "{}: received command from ventilation: {}",
-                            Self::LOG_TARGET_CONTROLLINO,
+                            LOG_TARGET_CONTROLLINO,
                             c
                         );
                     }
@@ -592,7 +833,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_actuate_ventilation {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "actuation of ventilation ({e:?})"
                                 );
                                 self.lock_error_actuate_ventilation = true;
@@ -609,7 +850,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_channel_send_ventilation {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "responding to ventilation control ({e:?})"
                                 );
                                 self.lock_error_channel_send_ventilation = true;
@@ -627,7 +868,7 @@ impl Controllino {
                             if !self.lock_error_channel_receive_ventilation {
                                 error!(
                                     "{}: Error in trying to receive command from ventilation control {e:?}",
-                                    Self::LOG_TARGET_CONTROLLINO
+                                    LOG_TARGET_CONTROLLINO
                                 );
                                 self.lock_error_channel_receive_ventilation = true;
                             }
@@ -643,7 +884,7 @@ impl Controllino {
                     if Self::SW_LOG_SENDER {
                         println!(
                             "{}: received command from Balling: {}",
-                            Self::LOG_TARGET_CONTROLLINO,
+                            LOG_TARGET_CONTROLLINO,
                             c
                         );
                     }
@@ -662,7 +903,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_actuate_balling {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "actuation of Balling dosing ({e:?})"
                                 );
                                 self.lock_error_actuate_balling = true;
@@ -676,7 +917,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_channel_send_balling {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "responding to Balling dosing control ({e:?})"
                                 );
                                 self.lock_error_channel_send_balling = true;
@@ -694,7 +935,7 @@ impl Controllino {
                             if !self.lock_error_channel_receive_balling {
                                 error!(
                                     "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
-                                    Self::LOG_TARGET_CONTROLLINO
+                                    LOG_TARGET_CONTROLLINO
                                 );
                                 self.lock_error_channel_receive_balling = true;
                             }
@@ -710,7 +951,7 @@ impl Controllino {
                     if Self::SW_LOG_SENDER {
                         println!(
                             "{}: received command from Feed: {}",
-                            Self::LOG_TARGET_CONTROLLINO,
+                            LOG_TARGET_CONTROLLINO,
                             c
                         );
                     }
@@ -729,7 +970,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_actuate_feed {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "actuation of feeder ({e:?})"
                                 );
                                 self.lock_error_actuate_feed = true;
@@ -743,7 +984,7 @@ impl Controllino {
                         Err(e) => {
                             if !self.lock_error_channel_send_feed {
                                 error!(
-                                    target: Self::LOG_TARGET_CONTROLLINO,
+                                    target: LOG_TARGET_CONTROLLINO,
                                     "responding to feed control ({e:?})"
                                 );
                                 self.lock_error_channel_send_feed = true;
@@ -761,7 +1002,7 @@ impl Controllino {
                             if !self.lock_error_channel_receive_feed {
                                 error!(
                                     "{}: Error in trying to receive command from feed control ({e:?})",
-                                    Self::LOG_TARGET_CONTROLLINO
+                                    LOG_TARGET_CONTROLLINO
                                 );
                                 self.lock_error_channel_receive_feed = true;
                             }
@@ -774,7 +1015,7 @@ impl Controllino {
 
         #[cfg(feature = "debug_controllino")]
         debug!(
-            target: Self::LOG_TARGET_CONTROLLINO,
+            target: LOG_TARGET_CONTROLLINO,
             "exited loop, sending back confirmation to signal handler"
         );
 
@@ -787,12 +1028,12 @@ impl Controllino {
             Ok(()) => {
                 #[cfg(feature = "debug_controllino")]
                 debug!(
-                    target: Self::LOG_TARGET_CONTROLLINO,
+                    target: LOG_TARGET_CONTROLLINO,
                     "sent back confirmation to signal handler"
                 );
             }
             Err(e) => {
-                error!(target: Self::LOG_TARGET_CONTROLLINO,
+                error!(target: LOG_TARGET_CONTROLLINO,
                     "sending confirmation to signal handler ({e:?})"
                 );
             }

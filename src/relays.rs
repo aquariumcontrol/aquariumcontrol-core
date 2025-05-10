@@ -18,3 +18,4 @@ pub mod controllino_actuate_simulator;
 
 /// Contains the functionality to translate an actuator command into the relay actuation command
 pub mod device_relay_logic;
+mod relaymanager_actuate_gpio;

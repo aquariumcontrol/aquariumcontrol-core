@@ -403,8 +403,8 @@ impl Feed {
                         }
                         None => { /* do nothing - no feed schedule entry in the past */ }
                     },
-                    #[cfg(not(test))]
                     Err(e) => {
+                        #[cfg(not(test))]
                         if !self.lock_error_get_feedschedule_entry {
                             error!(
                                 target: LOG_TARGET_FEED,
@@ -412,9 +412,8 @@ impl Feed {
                             );
                             self.lock_error_get_feedschedule_entry = true;
                         }
-                    }
-                    #[cfg(test)]
-                    Err(_) => {
+                        #[cfg(test)]
+                        let _e = e; // Explicitly declare and "use" with an underscore
                         self.lock_error_get_feedschedule_entry = true;
                     }
                 };
