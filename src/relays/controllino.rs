@@ -17,10 +17,15 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{fmt, time::Duration};
-use crate::sensors::dht::DhtError;
-use crate::sensors::gpio_handler::GpioHandlerConfig;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+
+#[cfg(feature = "target_hw")]
+use rppal::gpio::Gpio;
+
+#[cfg(feature = "target_hw")]
+use crate::sensors::gpio_handler::GpioHandlerConfig;
+
 const LOG_TARGET_CONTROLLINO: &str = "controllino";
 
 /// Contains constants for communication with Controllino
@@ -352,7 +357,7 @@ pub struct Controllino {
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to receive from balling mineral dosing via the channel
     lock_error_channel_receive_balling: bool,
-    
+/*    
     #[cfg(feature = "target_hw")]
     /// GPIO of the protein skimmer
     pub output_pin_skimmer_opt: Option<Pin<Output>>,
@@ -404,6 +409,7 @@ pub struct Controllino {
     #[cfg(feature = "target_hw")]
     /// GPIO of the peristaltic pump #4
     pub output_pin_peristaltic_pump4_opt: Option<Pin<Output>>,
+*/
 }
 
 
@@ -464,16 +470,17 @@ impl Controllino {
             lock_error_channel_receive_feed: false,
         }
     }
+    
     #[cfg(feature = "target_hw")]
     /// Provides a struct of type Controllino
     /// # Arguments
     /// * `config` - configuration data for Controllino
-    pub fn new(config: ControllinoConfig, gpio: Gpio, gpio_config: GpioHandlerConfig) -> Controllino {
+    pub fn new(config: ControllinoConfig) -> Controllino {
         let spin_sleeper_opt: Option<SpinSleeper>;
-        let controllino_processing_duration_opt: Option<Duration>;
-        let serial_port_opt: Option<Box<dyn SerialPort>>;
+        let mut controllino_processing_duration_opt: Option<Duration>;
+        let mut serial_port_opt: Option<Box<dyn SerialPort>>;
 
-        let mut output_skimmer_pin_opt: Option<Pin<Output>> = None;
+/*        let mut output_skimmer_pin_opt: Option<Pin<Output>> = None;
         let mut output_main_pump1_pin_opt: Option<Pin<Output>> = None;
         let mut output_main_pump2_pin_opt: Option<Pin<Output>> = None;
         let mut output_aux_pump1_pin_opt: Option<Pin<Output>> = None;
@@ -486,7 +493,7 @@ impl Controllino {
         let mut output_pin_balling_pump3_opt: Option<Pin<Output>> = None;
         let mut output_pin_balling_pump4_opt: Option<Pin<Output>> = None;
         let mut output_pin_feeder_opt: Option<Pin<Output>> = None;
-        
+*/        
         if config.use_simulator {
             let spin_sleeper = SpinSleeper::default();
             spin_sleeper_opt = Some(spin_sleeper);
@@ -495,10 +502,13 @@ impl Controllino {
         } else {
             let spin_sleeper = SpinSleeper::default();
             spin_sleeper_opt = Some(spin_sleeper);
+            controllino_processing_duration_opt = None;
+            serial_port_opt = None;
 
             if config.active {
                 // configure output pins here
 
+/*
                 // GPIO for actuation of skimmer
                 output_skimmer_pin_opt = match gpio.get(gpio_config.skimmer_pin) {
                     Ok(c) => Some(c.into_output()),
@@ -602,7 +612,7 @@ impl Controllino {
                         panic!("could not get pin {} from GPIO interface for feeder ({e:?})", gpio_config.feeder, e);
                     }
                 };
-
+*/
             } else {
                 controllino_processing_duration_opt = None;
                 serial_port_opt = None;
@@ -629,7 +639,7 @@ impl Controllino {
             lock_error_channel_receive_balling: false,
             lock_error_channel_send_feed: false,
             lock_error_channel_receive_feed: false,
-            output_pin_skimmer_opt,
+/*            output_pin_skimmer_opt,
             output_pin_main_pump1_opt,
             output_pin_main_pump2_opt,
             output_pin_aux_pump1_opt,
@@ -641,7 +651,7 @@ impl Controllino {
             output_pin_balling_pump2_opt,
             output_pin_balling_pump3_opt,
             output_pin_balling_pump4_opt,
-            output_pin_feeder_opt,
+            output_pin_feeder_opt,*/
         }
     }
 

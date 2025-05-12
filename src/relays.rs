@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Contains the main functionality for the actuator control
 pub mod controllino;
 
-/// Containts the trait implementation for the communication with real hardware
+/// Contains the trait implementation for the communication with real hardware
 pub mod controllino_actuate_hardware;
 
 /// Contains the trait implementation for the communication with the test server
@@ -18,4 +18,6 @@ pub mod controllino_actuate_simulator;
 
 /// Contains the functionality to translate an actuator command into the relay actuation command
 pub mod device_relay_logic;
-mod relaymanager_actuate_gpio;
+
+/// Contains the trait implementation for the relay actuation via GPIO
+pub mod relay_manager_actuate_gpio;

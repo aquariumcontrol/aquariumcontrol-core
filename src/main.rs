@@ -77,8 +77,9 @@ use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::DataLogger;
 use crate::relays::controllino::{Controllino, ControllinoChannels};
-use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
+//use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
 use crate::relays::controllino_actuate_simulator::ControllinoActuateSimulator;
+use crate::relays::relay_manager_actuate_gpio::RelayManagerActuateGpio;
 use crate::sensors::ambient::Ambient;
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
@@ -1035,7 +1036,8 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
-
+    let mut relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
+    
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
@@ -1047,8 +1049,8 @@ fn main() {
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
+            let gpio_skimmer = config.gpio_handler.skimmer;
             let use_simulator = config.gpio_handler.use_simulator;
-
             let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
 
             if use_simulator {
@@ -1070,17 +1072,19 @@ fn main() {
                 else {
                     let gpio_handler = gpio_handler_opt.unwrap();
                     let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.unwrap();
-                    let gpio_lib_handle_cloned = gpio_lib_handle.clone();
-
+                    let gpio_lib_handle_cloned_for_tank_level_switch = gpio_lib_handle.clone();
+                    let gpio_lib_handle_cloned_for_relay_manager = gpio_lib_handle.clone();
+                    
                     tank_level_switch = TankLevelSwitch::new(
                         config.tank_level_switch,
                         true,
-                        Some(gpio_lib_handle_cloned),
+                        Some(gpio_lib_handle_cloned_for_tank_level_switch),
                         gpio_tank_level_switch
                     );
                     dht_opt = Some(
                         Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
                     );
+                    relay_manager_actuate_gpio_opt = Some(RelayManagerActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, gpio_skimmer));
                 }
             }
         }
@@ -1331,14 +1335,20 @@ fn main() {
         if config.controllino.use_simulator {
             scope.spawn(move || {
                 controllino.execute(controllino_channels, &mut ControllinoActuateSimulator);
-
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
-                controllino.execute(controllino_channels, &mut ControllinoActuateHardware);
-
+                if !relay_manager_actuate_gpio_opt.is_some() {
+                    panic!("{}: aquarium control not configured correctly. Missing instantiation of RelayManagerActuateGpio.", LOG_TARGET_MAIN);     
+                }
+                else {
+                    controllino.execute(controllino_channels, &mut relay_manager_actuate_gpio_opt.unwrap());
+                }
+                // todo: remove/adapt this call:
+                // controllino.execute(controllino_channels, &mut ControllinoActuateHardware);
+                
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
             });

@@ -11,19 +11,40 @@ use log::warn;
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
-#[cfg(feature = "target_hw")]
-use rppal::gpio::Gpio;
+use rppal::gpio::{Gpio, OutputPin};
 
 use crate::relays::controllino::{ControllinoConfig, ControllinoError, RelayActuationTrait};
-use crate::relays::device_relay_logic::{get_relay_command, get_relay_command_gpio};
+use crate::relays::device_relay_logic::{get_relay_command_gpio};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::sensors::gpio_handler::GpioHandlerConfig;
 
 const LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO: &str = "relay_manager_actuate_gpio";
 
 /// Contains trait implementation for actuation of relays via GPIO
 pub struct RelayManagerActuateGpio {
-    pub output_pin_skimmer: Pin<Output>
-};
+    pub output_pin_skimmer: OutputPin,
+}
+
+impl RelayManagerActuateGpio {
+    pub fn new(gpio: Gpio, gpio_skimmer: u8) -> RelayManagerActuateGpio {
+        // get pin for actuating skimmer
+        let mut output_pin_skimmer = match gpio.get(gpio_skimmer) {
+            Ok(c) => c.into_output(),
+            #[cfg(not(test))]
+            Err(e) => {
+                panic!(
+                    "{}: could not get pin {} from GPIO interface for skimmer relay ({e:?})",
+                    LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO,
+                    gpio_skimmer
+                );
+            }
+        };
+        
+        RelayManagerActuateGpio {
+            output_pin_skimmer,
+        }
+    }
+}
 
 impl RelayActuationTrait for RelayManagerActuateGpio {
     /// Triggers actuation of relays via GPIO
@@ -42,21 +63,26 @@ impl RelayActuationTrait for RelayManagerActuateGpio {
     ) -> Result<(), ControllinoError> {
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let gpio_target_state = match get_relay_command_gpio(&internal_command, c.clone());
+                let gpio_target_state = get_relay_command_gpio(&internal_command, c.clone());
                 match c {
-                    AquariumDevice::Skimmer => { self.gp },
-                    AquariumDevice::MainPump1 => {}
-                    AquariumDevice::MainPump2 => {}
-                    AquariumDevice::AuxPump1 => {}
-                    AquariumDevice::AuxPump2 => {}
-                    AquariumDevice::Heater => {}
-                    AquariumDevice::Ventilation => {}
-                    AquariumDevice::RefillPump => {}
-                    AquariumDevice::Feeder => {}
-                    AquariumDevice::PeristalticPump1 => {}
-                    AquariumDevice::PeristalticPump2 => {}
-                    AquariumDevice::PeristalticPump3 => {}
-                    AquariumDevice::PeristalticPump4 => {}
+                    AquariumDevice::Skimmer => {
+                        match gpio_target_state.unwrap() { // @todo: replace unwrap
+                            true => { self.output_pin_skimmer.set_low(); Ok(()) }
+                            false => { self.output_pin_skimmer.set_high(); Ok(()) }
+                        }
+                    },
+                    AquariumDevice::MainPump1 => {Ok(())}
+                    AquariumDevice::MainPump2 => {Ok(())}
+                    AquariumDevice::AuxPump1 => {Ok(())}
+                    AquariumDevice::AuxPump2 => {Ok(())}
+                    AquariumDevice::Heater => {Ok(())}
+                    AquariumDevice::Ventilation => {Ok(())}
+                    AquariumDevice::RefillPump => {Ok(())}
+                    AquariumDevice::Feeder => {Ok(())}
+                    AquariumDevice::PeristalticPump1 => {Ok(())}
+                    AquariumDevice::PeristalticPump2 => {Ok(())}
+                    AquariumDevice::PeristalticPump3 => {Ok(())}
+                    AquariumDevice::PeristalticPump4 => {Ok(())}
                 }
             }
             _ => {
