@@ -1036,8 +1036,12 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
+    
+    #[cfg(not(feature = "target_hw"))]
     let relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
-
+    #[cfg(feature = "target_hw")]
+    let mut relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
+    
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 

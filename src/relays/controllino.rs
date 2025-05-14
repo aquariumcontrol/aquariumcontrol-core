@@ -21,10 +21,6 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{fmt, time::Duration};
 
 use crate::relays::controllino_actuate_hardware::controllino_constants;
-#[cfg(feature = "target_hw")]
-use crate::sensors::gpio_handler::GpioHandlerConfig;
-#[cfg(feature = "target_hw")]
-use rppal::gpio::Gpio;
 
 const LOG_TARGET_CONTROLLINO: &str = "controllino";
 
@@ -138,6 +134,7 @@ pub struct ControllinoChannels {
     /// receiver part of the channel for communication from the signal handler
     pub rx_controllino_from_signal_handler: Receiver<InternalCommand>,
 }
+
 fn controllino_open_serial_port(
     port_name: String,
     baud_rate: u32,
@@ -338,7 +335,6 @@ pub struct Controllino {
 impl Controllino {
     const SW_LOG_SENDER: bool = false;
 
-    #[cfg(not(feature = "target_hw"))]
     /// Provides a struct of type Controllino
     /// # Arguments
     /// * `config` - configuration data for Controllino
@@ -395,17 +391,8 @@ impl Controllino {
             lock_error_channel_send_feed: false,
             lock_error_channel_receive_feed: false,
         }
-    }
 
-    #[cfg(feature = "target_hw")]
-    /// Provides a struct of type Controllino
-    /// # Arguments
-    /// * `config` - configuration data for Controllino
-    pub fn new(config: ControllinoConfig) -> Controllino {
-        let spin_sleeper_opt: Option<SpinSleeper>;
-        let mut controllino_processing_duration_opt: Option<Duration>;
-        let mut serial_port_opt: Option<Box<dyn SerialPort>>;
-
+                // @todo: configure output pins somewhere
         /*        let mut output_skimmer_pin_opt: Option<Pin<Output>> = None;
                 let mut output_main_pump1_pin_opt: Option<Pin<Output>> = None;
                 let mut output_main_pump2_pin_opt: Option<Pin<Output>> = None;
@@ -420,19 +407,6 @@ impl Controllino {
                 let mut output_pin_balling_pump4_opt: Option<Pin<Output>> = None;
                 let mut output_pin_feeder_opt: Option<Pin<Output>> = None;
         */
-        if config.use_simulator {
-            let spin_sleeper = SpinSleeper::default();
-            spin_sleeper_opt = Some(spin_sleeper);
-            controllino_processing_duration_opt = None;
-            serial_port_opt = None;
-        } else {
-            let spin_sleeper = SpinSleeper::default();
-            spin_sleeper_opt = Some(spin_sleeper);
-            controllino_processing_duration_opt = None;
-            serial_port_opt = None;
-
-            if config.active {
-                // configure output pins here
 
                 /*
                                 // GPIO for actuation of skimmer
@@ -539,46 +513,7 @@ impl Controllino {
                                     }
                                 };
                 */
-            } else {
-                controllino_processing_duration_opt = None;
-                serial_port_opt = None;
-            }
-        }
 
-        Controllino {
-            config,
-            spin_sleeper_opt,
-            controllino_processing_duration_opt,
-            serial_port_opt,
-            lock_error_actuate_refill: false,
-            lock_error_actuate_ventilation: false,
-            lock_error_actuate_heating: false,
-            lock_error_actuate_feed: false,
-            lock_error_actuate_balling: false,
-            lock_error_channel_send_refill: false,
-            lock_error_channel_receive_refill: false,
-            lock_error_channel_send_heating: false,
-            lock_error_channel_receive_heating: false,
-            lock_error_channel_send_ventilation: false,
-            lock_error_channel_receive_ventilation: false,
-            lock_error_channel_send_balling: false,
-            lock_error_channel_receive_balling: false,
-            lock_error_channel_send_feed: false,
-            lock_error_channel_receive_feed: false,
-            /*            output_pin_skimmer_opt,
-            output_pin_main_pump1_opt,
-            output_pin_main_pump2_opt,
-            output_pin_aux_pump1_opt,
-            output_pin_aux_pump2_opt,
-            output_pin_heater_opt,
-            output_pin_ventilation_opt,
-            output_pin_refill_pump_opt,
-            output_pin_balling_pump1_opt,
-            output_pin_balling_pump2_opt,
-            output_pin_balling_pump3_opt,
-            output_pin_balling_pump4_opt,
-            output_pin_feeder_opt,*/
-        }
     }
 
     /// Executes the main control in a loop until the signal handler commands quitting.

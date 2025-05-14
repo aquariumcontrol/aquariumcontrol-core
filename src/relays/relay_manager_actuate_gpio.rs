@@ -30,7 +30,7 @@ impl RelayManagerActuateGpio {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn new(gpio: Gpio, gpio_skimmer: u8) -> RelayManagerActuateGpio {
         // get pin for actuating skimmer
-        let mut output_pin_skimmer = match gpio.get(gpio_skimmer) {
+        let output_pin_skimmer = match gpio.get(gpio_skimmer) {
             Ok(c) => c.into_output(),
             Err(e) => {
                 panic!(
