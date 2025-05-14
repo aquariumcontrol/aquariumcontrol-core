@@ -366,10 +366,10 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
             InternalCommand::Quit => true,
             _ => {
                 warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring inapplicable command {} from signal handler.",
-                        c
-                    );
+                    target: LOG_TARGET_PROC_EXT_REQ,
+                    "ignoring inapplicable command {} from signal handler.",
+                    c
+                );
                 false
             }
         },
@@ -379,9 +379,9 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
                 TryRecvError::Disconnected => {
                     #[cfg(not(test))]
                     error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "receiving command from signal handler failed ({e:?})"
+                    );
                 }
             }
             false

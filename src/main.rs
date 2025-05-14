@@ -107,7 +107,7 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
-
+use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::dht::Dht;
 
@@ -1036,8 +1036,8 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
-    let mut relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
-    
+    let relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
+
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
@@ -1074,7 +1074,7 @@ fn main() {
                     let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.unwrap();
                     let gpio_lib_handle_cloned_for_tank_level_switch = gpio_lib_handle.clone();
                     let gpio_lib_handle_cloned_for_relay_manager = gpio_lib_handle.clone();
-                    
+
                     tank_level_switch = TankLevelSwitch::new(
                         config.tank_level_switch,
                         true,
@@ -1334,21 +1334,24 @@ fn main() {
 
         if config.controllino.use_simulator {
             scope.spawn(move || {
-                controllino.execute(controllino_channels, &mut ControllinoActuateSimulator);
+                let mut controllino_actuate_simulator = ControllinoActuateSimulator::new(config.controllino_relay);
+                controllino.execute(controllino_channels, &mut controllino_actuate_simulator);
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
-                if !relay_manager_actuate_gpio_opt.is_some() {
-                    panic!("{}: aquarium control not configured correctly. Missing instantiation of RelayManagerActuateGpio.", LOG_TARGET_MAIN);     
-                }
-                else {
+                if config.controllino.use_gpio {
+                    if !relay_manager_actuate_gpio_opt.is_some() {
+                        panic!("{}: aquarium control not configured correctly. Missing instantiation of RelayManagerActuateGpio.", LOG_TARGET_MAIN);
+                    }
                     controllino.execute(controllino_channels, &mut relay_manager_actuate_gpio_opt.unwrap());
                 }
-                // todo: remove/adapt this call:
-                // controllino.execute(controllino_channels, &mut ControllinoActuateHardware);
-                
+                else {
+                    let mut controllino_actuate_hardware = ControllinoActuateHardware::new(config.controllino_relay);
+                    controllino.execute(controllino_channels, &mut controllino_actuate_hardware);
+                }
+
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
             });

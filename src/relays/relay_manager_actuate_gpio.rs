@@ -8,39 +8,40 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::warn;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use rppal::gpio::{Gpio, OutputPin};
 use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
-use rppal::gpio::{Gpio, OutputPin};
 
-use crate::relays::controllino::{ControllinoConfig, ControllinoError, RelayActuationTrait};
-use crate::relays::device_relay_logic::{get_relay_command_gpio};
-use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
-use crate::sensors::gpio_handler::GpioHandlerConfig;
+use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
+use crate::relays::device_relay_logic::get_relay_command_gpio;
+use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO: &str = "relay_manager_actuate_gpio";
 
 /// Contains trait implementation for actuation of relays via GPIO
 pub struct RelayManagerActuateGpio {
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub output_pin_skimmer: OutputPin,
 }
 
 impl RelayManagerActuateGpio {
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn new(gpio: Gpio, gpio_skimmer: u8) -> RelayManagerActuateGpio {
         // get pin for actuating skimmer
         let mut output_pin_skimmer = match gpio.get(gpio_skimmer) {
             Ok(c) => c.into_output(),
-            #[cfg(not(test))]
             Err(e) => {
                 panic!(
                     "{}: could not get pin {} from GPIO interface for skimmer relay ({e:?})",
-                    LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO,
-                    gpio_skimmer
+                    LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO, gpio_skimmer
                 );
             }
         };
-        
+
         RelayManagerActuateGpio {
+            #[cfg(all(target_os = "linux", feature = "target_hw"))]
             output_pin_skimmer,
         }
     }
@@ -59,30 +60,24 @@ impl RelayActuationTrait for RelayManagerActuateGpio {
         _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
         _spin_sleeper_opt: &Option<SpinSleeper>,
         _controllino_processing_duration_opt: &Option<Duration>,
-        _config: &ControllinoConfig,
     ) -> Result<(), ControllinoError> {
         match internal_command {
-            InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let gpio_target_state = get_relay_command_gpio(&internal_command, c.clone());
-                match c {
-                    AquariumDevice::Skimmer => {
-                        match gpio_target_state.unwrap() { // @todo: replace unwrap
-                            true => { self.output_pin_skimmer.set_low(); Ok(()) }
-                            false => { self.output_pin_skimmer.set_high(); Ok(()) }
+            InternalCommand::SwitchOn(ref aquarium_device)
+            | InternalCommand::SwitchOff(ref aquarium_device) => {
+                match get_relay_command_gpio(&internal_command, aquarium_device.clone()) {
+                    Ok(gpio_target_state) => match gpio_target_state {
+                        true => {
+                            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                            self.output_pin_skimmer.set_low();
+                            Ok(())
+                        }
+                        false => {
+                            #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                            self.output_pin_skimmer.set_high();
+                            Ok(())
                         }
                     },
-                    AquariumDevice::MainPump1 => {Ok(())}
-                    AquariumDevice::MainPump2 => {Ok(())}
-                    AquariumDevice::AuxPump1 => {Ok(())}
-                    AquariumDevice::AuxPump2 => {Ok(())}
-                    AquariumDevice::Heater => {Ok(())}
-                    AquariumDevice::Ventilation => {Ok(())}
-                    AquariumDevice::RefillPump => {Ok(())}
-                    AquariumDevice::Feeder => {Ok(())}
-                    AquariumDevice::PeristalticPump1 => {Ok(())}
-                    AquariumDevice::PeristalticPump2 => {Ok(())}
-                    AquariumDevice::PeristalticPump3 => {Ok(())}
-                    AquariumDevice::PeristalticPump4 => {Ok(())}
+                    Err(e) => Err(e),
                 }
             }
             _ => {

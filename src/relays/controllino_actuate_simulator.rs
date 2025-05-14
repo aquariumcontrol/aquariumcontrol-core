@@ -12,14 +12,16 @@ use serialport::SerialPort;
 use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
 
-use crate::relays::controllino::{ControllinoConfig, ControllinoError, RelayActuationTrait};
-use crate::relays::device_relay_logic::get_relay_command;
+use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
+use crate::relays::controllino_actuate_hardware::{get_relay_command, ControllinoRelayConfig};
 use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";
 
 /// Contains trait implementation for system testing purposes.
-pub struct ControllinoActuateSimulator;
+pub struct ControllinoActuateSimulator {
+    config: ControllinoRelayConfig,
+}
 
 impl RelayActuationTrait for ControllinoActuateSimulator {
     /// Triggers actuation on simulator via TCP communication
@@ -36,12 +38,11 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
         _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
         _spin_sleeper_opt: &Option<SpinSleeper>,
         _controllino_processing_duration_opt: &Option<Duration>,
-        config: &ControllinoConfig,
     ) -> Result<(), ControllinoError> {
         let tx_to_tcp = tx_to_tcp_opt.unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let relay_command = match get_relay_command(&internal_command, c.clone(), config) {
+                let relay_command = match get_relay_command(&internal_command, c.clone(), &self.config) {
                     Ok(c) => c,
                     Err(e) => {
                         panic!("Controllino: Error in preparation of communication to simulator: {e:?}");
@@ -66,5 +67,11 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
                 Err(ControllinoError::IrrelevantCommand(internal_command))
             }
         }
+    }
+}
+
+impl ControllinoActuateSimulator {
+    pub fn new(config: ControllinoRelayConfig) -> Self {
+        Self { config }
     }
 }

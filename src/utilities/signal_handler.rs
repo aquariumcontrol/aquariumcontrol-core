@@ -494,6 +494,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
         "watchdog",
     );
+    
     send_command(
         InternalCommand::Terminate,
         signal_handler_channels
@@ -723,7 +724,7 @@ pub mod tests {
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
-        let (_tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
+        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
             Sender<bool>,
             Receiver<bool>,
         ) = mpsc::channel();
@@ -948,8 +949,8 @@ pub mod tests {
             rx_watchdog_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
-        // no response to termination request
-
+        _ = tx_watchdog_to_signal_handler.send(true);
+        
         assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
