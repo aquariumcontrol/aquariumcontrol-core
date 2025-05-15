@@ -10,9 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use rppal::gpio::{Gpio, OutputPin};
-use serialport::SerialPort;
-use spin_sleep::SpinSleeper;
-use std::{sync::mpsc::Sender, time::Duration};
+use std::{sync::mpsc::Sender};
 
 use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
 use crate::relays::device_relay_logic::get_relay_command_gpio;
@@ -57,9 +55,6 @@ impl RelayActuationTrait for RelayManagerActuateGpio {
         &mut self,
         internal_command: InternalCommand,
         _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        _spin_sleeper_opt: &Option<SpinSleeper>,
-        _controllino_processing_duration_opt: &Option<Duration>,
     ) -> Result<(), ControllinoError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)

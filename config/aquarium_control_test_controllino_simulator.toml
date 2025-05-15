@@ -2,12 +2,12 @@
 active = true						                    # used for testing purposes
 use_simulator = true                                    # if true, then do not use real HW
 use_gpio = false                                        # if true, then use GPIO instead of Controllino
+
+[controllino_relay]
 baud_rate = 9600                                        # baud rate for communication via serial port
 port_name = "dummy"                                     # port name for communication via serial port
 timeout_millis = 10                                     # timeout in milliseconds for serial port communication
 controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
-
-[controllino_relay]
 skimmer_id = 3                                          # relay id for protein skimmer
 main_pump1_id = 4                                       # relay id for main pump #1
 main_pump2_id = 5                                       # relay id for main pump #2

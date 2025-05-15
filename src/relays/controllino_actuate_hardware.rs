@@ -12,7 +12,7 @@ use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageC
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use log::{error, warn};
 use serde_derive::Deserialize;
-use serialport::SerialPort;
+use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::{sync::mpsc::Sender, time::Duration};
 
@@ -79,6 +79,18 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct ControllinoRelayConfig {
+    /// Baud rate for communication via serial port
+    baud_rate: u32,
+
+    /// Port name for communication via serial port
+    port_name: String,
+
+    /// timeout in milliseconds for serial port communication
+    timeout_millis: u64,
+
+    /// time in milliseconds to wait for response
+    controllino_processing_millis: u64,
+    
     /// Relay id of the protein skimmer
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub skimmer_id: u8,
@@ -127,6 +139,18 @@ pub struct ControllinoRelayConfig {
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
 pub struct ControllinoActuateHardware {
     config: ControllinoRelayConfig,
+
+    /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
+    /// Attribute is public because access from within test cases.
+    pub spin_sleeper: SpinSleeper,
+
+    /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
+    /// Attribute is public because access from within test cases.
+    pub controllino_processing_duration: Duration,
+
+    /// Interface to serial port for communication via USB
+    /// Attribute is public because access from within test cases.
+    pub serial_port: Box<dyn SerialPort>,
 }
 
 /// Creates the message to be sent to Controllino
@@ -385,21 +409,12 @@ impl RelayActuationTrait for ControllinoActuateHardware {
     /// # Arguments
     /// * `internal_command` - enum value used for identifying content which shall be sent
     /// * `_tx_to_tcp_opt` - channel for communication with simulator wrapped in Option - not used in this implementation of the trait
-    /// * `serial_port_opt` - serial port interface for communication via USB wrapped in Option
-    /// * `spin_sleeper_opt` - spin sleeper object for precise waiting wrapped in Option
-    /// * `controllino_processing_duration_opt` - spin sleeper object for precise waiting wrapped in Option
-    /// * `config` - Controllino configuration    
+  
     fn actuate(
         &mut self,
         internal_command: InternalCommand,
         _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        spin_sleeper_opt: &Option<SpinSleeper>,
-        controllino_processing_duration_opt: &Option<Duration>,
     ) -> Result<(), ControllinoError> {
-        // if unwrap panics, panic shall happen
-        let spin_sleeper = spin_sleeper_opt.unwrap();
-
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
             | InternalCommand::SwitchOff(ref _c)
@@ -417,8 +432,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 };
 
                 // write a message to Controllino
-                let serial_port = serial_port_opt.as_mut().unwrap();
-                match serial_port.write(&message.data) {
+                match self.serial_port.write(&message.data) {
                     Ok(amount_byte_written) => {
                         if amount_byte_written != message.data.len() {
                             warn!(
@@ -439,22 +453,20 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                 }
 
                 // give Controllino some time to process the command
-                let controllino_processing_duration = controllino_processing_duration_opt.unwrap();
-                spin_sleeper.sleep(controllino_processing_duration);
+                self.spin_sleeper.sleep(self.controllino_processing_duration);
 
                 // for pulse command, also wait the pulse duration
                 match internal_command {
                     InternalCommand::Pulse(_, t) => {
                         let pulse_duration = Duration::from_millis(t as u64);
-                        spin_sleeper.sleep(pulse_duration);
+                        self.spin_sleeper.sleep(pulse_duration);
                     }
                     _ => { /* do nothing */ }
                 }
 
                 // read response from Controllino
                 let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
-                let serial_port = serial_port_opt.as_mut().unwrap();
-                match serial_port.read_exact(serial_buf.as_mut_slice()) {
+                match self.serial_port.read_exact(serial_buf.as_mut_slice()) {
                     Ok(()) => {
                         if !check_controllino_checksums(serial_buf.as_slice()) {
                             warn!(
@@ -487,9 +499,83 @@ impl RelayActuationTrait for ControllinoActuateHardware {
     }
 }
 
+fn controllino_open_serial_port(
+    port_name: String,
+    baud_rate: u32,
+    timeout_millis: u64,
+) -> Box<dyn SerialPort> {
+    let spin_sleeper = SpinSleeper::default();
+
+    let mut serial_port = match serialport::new(port_name.clone(), baud_rate).open() {
+        Ok(c) => c,
+        Err(e) => {
+            panic!(
+                "{}: failed to open serial port ({e:?})",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
+        }
+    };
+
+    let timeout_duration = Duration::from_millis(timeout_millis);
+    match serial_port.set_timeout(timeout_duration) {
+        Ok(()) => { /* do nothing */ }
+        Err(_) => {
+            panic!(
+                "{}: could not set timeout of {} milliseconds.",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE, timeout_millis
+            );
+        }
+    }
+
+    // write to Data Terminal Ready pin: clear the signal
+    match serial_port.write_data_terminal_ready(false) {
+        Ok(_) => { /* could reset DTR - do nothing */ }
+        Err(e) => {
+            panic!(
+                "{}: error when clearing DTR ({e:?})",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
+        }
+    }
+
+    // wait for the device
+    let sleep_duration_after_dtr_reset =
+        Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
+    spin_sleeper.sleep(sleep_duration_after_dtr_reset);
+
+    // flush the buffer
+    match serial_port.clear(ClearBuffer::All) {
+        Ok(_) => { /* could clear buffer - do nothing */ }
+        Err(e) => {
+            panic!(
+                "{}: error when clearing buffer ({e:?})",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
+        }
+    }
+
+    // wait for the device
+    let sleep_duration_after_buffer_clear =
+        Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
+    spin_sleeper.sleep(sleep_duration_after_buffer_clear);
+
+    serial_port
+}
+
 impl ControllinoActuateHardware {
     pub fn new(config: ControllinoRelayConfig) -> ControllinoActuateHardware {
-        ControllinoActuateHardware { config }
+        let spin_sleeper = SpinSleeper::default();
+
+        let serial_port = controllino_open_serial_port(
+            config.port_name.clone(),
+            config.baud_rate,
+            config.timeout_millis,
+        );
+        let controllino_processing_millis = config.controllino_processing_millis;
+        let controllino_processing_duration =
+            Duration::from_millis(controllino_processing_millis);
+        
+        ControllinoActuateHardware { config, spin_sleeper, controllino_processing_duration, serial_port }
     }
 }
 

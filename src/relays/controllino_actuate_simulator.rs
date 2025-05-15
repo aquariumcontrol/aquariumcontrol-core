@@ -8,9 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::warn;
-use serialport::SerialPort;
-use spin_sleep::SpinSleeper;
-use std::{sync::mpsc::Sender, time::Duration};
+use std::{sync::mpsc::Sender};
 
 use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
 use crate::relays::controllino_actuate_hardware::{get_relay_command, ControllinoRelayConfig};
@@ -35,9 +33,6 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
         &mut self,
         internal_command: InternalCommand,
         tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        _spin_sleeper_opt: &Option<SpinSleeper>,
-        _controllino_processing_duration_opt: &Option<Duration>,
     ) -> Result<(), ControllinoError> {
         let tx_to_tcp = tx_to_tcp_opt.unwrap();
         match internal_command {

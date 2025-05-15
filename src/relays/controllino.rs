@@ -15,12 +15,8 @@ use log::debug;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
-use serialport::{ClearBuffer, SerialPort};
-use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::{fmt, time::Duration};
-
-use crate::relays::controllino_actuate_hardware::controllino_constants;
+use std::{fmt};
 
 const LOG_TARGET_CONTROLLINO: &str = "controllino";
 
@@ -31,9 +27,6 @@ pub trait RelayActuationTrait {
         &mut self,
         internal_command: InternalCommand,
         tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        spin_sleeper_opt: &Option<SpinSleeper>,
-        controllino_processing_duration_opt: &Option<Duration>,
     ) -> Result<(), ControllinoError>;
 }
 
@@ -80,18 +73,6 @@ pub struct ControllinoConfig {
 
     /// Flag to determine if the application shall use GPIO or Controllino
     pub use_gpio: bool,
-    
-    /// Baud rate for communication via serial port
-    baud_rate: u32,
-
-    /// Port name for communication via serial port
-    port_name: String,
-
-    /// timeout in milliseconds for serial port communication
-    timeout_millis: u64,
-
-    /// time in milliseconds to wait for response
-    controllino_processing_millis: u64,
 }
 
 pub struct ControllinoChannels {
@@ -135,69 +116,6 @@ pub struct ControllinoChannels {
     pub rx_controllino_from_signal_handler: Receiver<InternalCommand>,
 }
 
-fn controllino_open_serial_port(
-    port_name: String,
-    baud_rate: u32,
-    timeout_millis: u64,
-) -> Box<dyn SerialPort> {
-    let spin_sleeper = SpinSleeper::default();
-
-    let mut serial_port = match serialport::new(port_name.clone(), baud_rate).open() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!(
-                "{}: failed to open serial port ({e:?})",
-                LOG_TARGET_CONTROLLINO
-            );
-        }
-    };
-
-    let timeout_duration = Duration::from_millis(timeout_millis);
-    match serial_port.set_timeout(timeout_duration) {
-        Ok(()) => { /* do nothing */ }
-        Err(_) => {
-            panic!(
-                "{}: could not set timeout of {} milliseconds.",
-                LOG_TARGET_CONTROLLINO, timeout_millis
-            );
-        }
-    }
-
-    // write to Data Terminal Ready pin: clear the signal
-    match serial_port.write_data_terminal_ready(false) {
-        Ok(_) => { /* could reset DTR - do nothing */ }
-        Err(e) => {
-            panic!(
-                "{}: error when clearing DTR ({e:?})",
-                LOG_TARGET_CONTROLLINO
-            );
-        }
-    }
-
-    // wait for the device
-    let sleep_duration_after_dtr_reset =
-        Duration::from_millis(controllino_constants::SLEEP_AFTER_DTR_RESET_MILLIS);
-    spin_sleeper.sleep(sleep_duration_after_dtr_reset);
-
-    // flush the buffer
-    match serial_port.clear(ClearBuffer::All) {
-        Ok(_) => { /* could clear buffer - do nothing */ }
-        Err(e) => {
-            panic!(
-                "{}: error when clearing buffer ({e:?})",
-                LOG_TARGET_CONTROLLINO
-            );
-        }
-    }
-
-    // wait for the device
-    let sleep_duration_after_buffer_clear =
-        Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
-    spin_sleeper.sleep(sleep_duration_after_buffer_clear);
-
-    serial_port
-}
-
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation of the Controllino interface
 /// Thread communication of this component is as follows:
@@ -220,18 +138,6 @@ fn controllino_open_serial_port(
 pub struct Controllino {
     /// configuration data for Controllino
     config: ControllinoConfig,
-
-    /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    /// Attribute is public because access from within test cases.
-    pub spin_sleeper_opt: Option<SpinSleeper>,
-
-    /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
-    /// Attribute is public because access from within test cases.
-    pub controllino_processing_duration_opt: Option<Duration>,
-
-    /// Interface to serial port for communication via USB
-    /// Attribute is public because access from within test cases.
-    pub serial_port_opt: Option<Box<dyn SerialPort>>,
 
     /// inhibition flag to avoid flooding the log file with repeated messages of failure to actuate refill pump
     lock_error_actuate_refill: bool,
@@ -339,42 +245,9 @@ impl Controllino {
     /// # Arguments
     /// * `config` - configuration data for Controllino
     pub fn new(config: ControllinoConfig) -> Controllino {
-        let spin_sleeper_opt: Option<SpinSleeper>;
-        let controllino_processing_duration_opt: Option<Duration>;
-        let serial_port_opt: Option<Box<dyn SerialPort>>;
-
-        if config.use_simulator {
-            let spin_sleeper = SpinSleeper::default();
-            spin_sleeper_opt = Some(spin_sleeper);
-            controllino_processing_duration_opt = None;
-            serial_port_opt = None;
-        } else {
-            let spin_sleeper = SpinSleeper::default();
-            spin_sleeper_opt = Some(spin_sleeper);
-
-            if config.active {
-                let serial_port = controllino_open_serial_port(
-                    config.port_name.clone(),
-                    config.baud_rate,
-                    config.timeout_millis,
-                );
-                let controllino_processing_millis = config.controllino_processing_millis;
-                let controllino_processing_duration =
-                    Duration::from_millis(controllino_processing_millis);
-                controllino_processing_duration_opt = Some(controllino_processing_duration);
-
-                serial_port_opt = Some(serial_port);
-            } else {
-                controllino_processing_duration_opt = None;
-                serial_port_opt = None;
-            }
-        }
 
         Controllino {
             config,
-            spin_sleeper_opt,
-            controllino_processing_duration_opt,
-            serial_port_opt,
             lock_error_actuate_refill: false,
             lock_error_actuate_ventilation: false,
             lock_error_actuate_heating: false,
@@ -556,9 +429,6 @@ impl Controllino {
                         match actuator.actuate(
                             c,
                             controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                            &mut self.serial_port_opt,
-                            &self.spin_sleeper_opt,
-                            &self.controllino_processing_duration_opt,
                         ) {
                             Ok(()) => {
                                 self.lock_error_actuate_refill = false;
@@ -622,9 +492,6 @@ impl Controllino {
                     match actuator.actuate(
                         c,
                         controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                        &mut self.serial_port_opt,
-                        &self.spin_sleeper_opt,
-                        &self.controllino_processing_duration_opt,
                     ) {
                         Ok(()) => {
                             self.lock_error_actuate_heating = false;
@@ -690,9 +557,6 @@ impl Controllino {
                     match actuator.actuate(
                         c,
                         controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                        &mut self.serial_port_opt,
-                        &self.spin_sleeper_opt,
-                        &self.controllino_processing_duration_opt,
                     ) {
                         Ok(()) => {
                             self.lock_error_actuate_ventilation = false;
@@ -758,9 +622,6 @@ impl Controllino {
                     match actuator.actuate(
                         c,
                         controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                        &mut self.serial_port_opt,
-                        &self.spin_sleeper_opt,
-                        &self.controllino_processing_duration_opt,
                     ) {
                         Ok(()) => {
                             self.lock_error_actuate_balling = false;
@@ -823,9 +684,6 @@ impl Controllino {
                     match actuator.actuate(
                         c,
                         controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                        &mut self.serial_port_opt,
-                        &self.spin_sleeper_opt,
-                        &self.controllino_processing_duration_opt,
                     ) {
                         Ok(()) => {
                             self.lock_error_actuate_feed = false;
@@ -906,10 +764,8 @@ impl Controllino {
 
 #[cfg(test)]
 pub mod tests {
-    use serialport::SerialPort;
-    use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{self, Sender};
-    use std::{thread::scope, time::Duration};
+    use std::{thread::scope};
 
     use crate::relays::controllino::{
         Controllino, ControllinoChannels, ControllinoError, RelayActuationTrait,
@@ -929,9 +785,6 @@ pub mod tests {
             &mut self,
             _internal_command: InternalCommand,
             _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-            _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-            _spin_sleeper_opt: &Option<SpinSleeper>,
-            _controllino_processing_duration_opt: &Option<Duration>,
         ) -> Result<(), ControllinoError> {
             self.execution_counter += 1;
             Ok(())
