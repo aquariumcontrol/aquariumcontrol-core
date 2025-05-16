@@ -93,7 +93,7 @@ pub struct Feed {
     /// configuration data for Feed control
     config: FeedConfig,
 
-    /// interface to SQL data base (trait object)
+    /// interface to SQL database (trait object)
     sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
 
     /// communication from trait implementation: request to execute a certain feed profile has been received
@@ -651,11 +651,23 @@ pub mod tests {
         }
     }
 
+    fn create_mock_signal_handler(
+        tx_signal_handler_to_feed: &Sender<InternalCommand>,
+        rx_signal_handler_from_feed: &Receiver<bool>,
+        spin_sleeper: SpinSleeper,
+        sleep_duration: Duration,
+    ) {
+        spin_sleeper.sleep(sleep_duration);
+        let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
+        rx_signal_handler_from_feed.recv().unwrap();
+        let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+    }
+
     #[test]
     // "happy" case executing a set of feed schedule entries
     // Test case uses test database #07.
     pub fn test_feed_schedule_execution() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
@@ -715,35 +727,25 @@ pub mod tests {
             };
 
         // manipulation of database: inserting feed schedule entries with future timestamp
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_one_time,
-            1,
-            "testOneTime".to_string(),
-            false,
-            false,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_one_time,
+                1,
+                "testOneTime".to_string(),
+                false,
+                false,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_repeat,
-            2,
-            "testRepeat".to_string(),
-            false,
-            true,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_repeat,
+                2,
+                "testRepeat".to_string(),
+                false,
+                true,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
@@ -752,13 +754,15 @@ pub mod tests {
 
             // thread for mock signal handler
             scope.spawn(move || {
-                spin_sleeper.sleep(sleep_duration_8_seconds);
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                rx_signal_handler_from_feed.recv().unwrap();
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+                create_mock_signal_handler(
+                    &tx_signal_handler_to_feed,
+                    &rx_signal_handler_from_feed,
+                    spin_sleeper,
+                    sleep_duration_8_seconds,
+                );
             });
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+            spin_sleeper.sleep(sleep_duration_100_millis);
 
             let feed_channels = FeedChannels {
                 tx_feed_to_controllino,
@@ -788,11 +792,11 @@ pub mod tests {
     // Test case runs feed control and triggers inhibition by sending stop message via channel.
     // After verification that feed is stopped,
     // test case sends start message via channel and verifies if feed control
-    // resumes operation. Afterwards test case triggers execution of a specific feed profile
+    // resumes operation. Afterward, test case triggers execution of a specific feed profile
     // by sending "execute" message via channel.
     // Test case uses test database #08.
     pub fn test_messaging_stops_starts_execute_feed() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_2_secs = Duration::from_secs(2);
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
@@ -837,20 +841,15 @@ pub mod tests {
             };
 
         // manipulation of database: inserting feed schedule entries with future timestamp
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry,
-            1,
-            "testOneTime".to_string(),
-            false,
-            false,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry,
+                1,
+                "testOneTime".to_string(),
+                false,
+                false,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         // create test object
         let mut feed = Feed::new(config.feed, sql_interface_feed);
@@ -872,7 +871,7 @@ pub mod tests {
             .name("test_environment".to_string())
             .spawn(move || {
                 // wait to make sure test object can receive message
-                spin_sleeper.sleep(sleep_duration_100_millisec);
+                spin_sleeper.sleep(sleep_duration_100_millis);
 
                 // sending message requesting stop of feed control
                 match tx_messaging_to_feed.send(InternalCommand::Stop) {
@@ -892,7 +891,7 @@ pub mod tests {
                 let actuation_count_1 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check amount of actuations (after stop request)
+                // check number of actuation (after stop request)
                 assert_eq!(actuation_count_1, 0);
 
                 // sending message requesting restart of feed control
@@ -914,7 +913,7 @@ pub mod tests {
                 let actuation_count_2 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check amount of actuations (after start request)
+                // check number of actuation (after start request)
                 assert_eq!(actuation_count_2, 1);
 
                 // sending message requesting execution of feed profile
@@ -936,7 +935,7 @@ pub mod tests {
                 let actuation_count_3 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check amount of actuations (after execute request)
+                // check number of actuation (after execute request)
                 assert_eq!(actuation_count_3, 2);
 
                 // requesting feed control to quit
@@ -946,7 +945,7 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for test object
         let join_handle_test_object = thread::Builder::new()
@@ -986,7 +985,7 @@ pub mod tests {
     // Test case runs feed control and triggers inhibition by using mock SQL interface which returns only errors.
     // This test case does not require any communication with SQL database.
     pub fn test_messaging_sql_error_inhibition_feed() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1017,14 +1016,14 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                // wait for 10 seconds to be able to afterwards check
+                // wait for 10 seconds to be able to afterward check
                 // if test object still managed to execute a feed operation
                 spin_sleeper.sleep(sleep_duration_10_secs);
 
                 let actuation_count_1 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check amount of actuations (after stop request)
+                // check number of actuation (after stop request)
                 assert_eq!(actuation_count_1, 0);
 
                 // requesting feed control to quit
@@ -1034,7 +1033,7 @@ pub mod tests {
             })
             .unwrap();
 
-        spin_sleeper.sleep(sleep_duration_100_millisec);
+        spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for test object
         let join_handle_test_object = thread::Builder::new()
@@ -1209,7 +1208,7 @@ pub mod tests {
     // The youngest feed schedule entry shall be selected.
     // Test case uses test database #09.
     pub fn test_feed_schedule_execution_past_entries_select_youngest() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1271,35 +1270,25 @@ pub mod tests {
             };
 
         // manipulation of database: inserting feed schedule entries with future timestamp
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_one_time,
-            1,
-            "testOneTimePast".to_string(),
-            false,
-            false,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_one_time,
+                1,
+                "testOneTimePast".to_string(),
+                false,
+                false,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_repeat,
-            2,
-            "testRepeatPast".to_string(),
-            false,
-            true,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_repeat,
+                2,
+                "testRepeatPast".to_string(),
+                false,
+                true,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
@@ -1308,13 +1297,15 @@ pub mod tests {
 
             // thread for mock signal handler
             scope.spawn(move || {
-                spin_sleeper.sleep(sleep_duration_8_seconds);
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                rx_signal_handler_from_feed.recv().unwrap();
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+                create_mock_signal_handler(
+                    &tx_signal_handler_to_feed,
+                    &rx_signal_handler_from_feed,
+                    spin_sleeper,
+                    sleep_duration_8_seconds,
+                );
             });
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+            spin_sleeper.sleep(sleep_duration_100_millis);
 
             // thread for the test object
             scope.spawn(move || {
@@ -1344,7 +1335,7 @@ pub mod tests {
     // The oldest feed schedule entry shall be selected.
     // Test case uses test database #10.
     pub fn test_feed_schedule_execution_past_entries_select_oldest() {
-        let sleep_duration_100_millisec = Duration::from_millis(100);
+        let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_8_seconds = Duration::from_millis(10000);
         let spin_sleeper = SpinSleeper::default();
 
@@ -1408,35 +1399,25 @@ pub mod tests {
             };
 
         // manipulation of database: inserting feed schedule entries with future timestamp
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_one_time,
-            1,
-            "testOneTimePast".to_string(),
-            false,
-            false,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_one_time,
+                1,
+                "testOneTimePast".to_string(),
+                false,
+                false,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        match sql_interface_feed.insert_feed_schedule_entry(
-            time_stamp_feed_schedule_entry_repeat,
-            2,
-            "testRepeatPast".to_string(),
-            false,
-            true,
-        ) {
-            Ok(()) => { /* do nothing */ }
-            Err(e) => {
-                panic!(
-                    "test_feed_schedule_execution: Could not insert stimuli into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_feed
+            .insert_feed_schedule_entry(
+                time_stamp_feed_schedule_entry_repeat,
+                2,
+                "testRepeatPast".to_string(),
+                false,
+                true,
+            )
+            .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
@@ -1445,13 +1426,15 @@ pub mod tests {
 
             // thread for mock signal handler
             scope.spawn(move || {
-                spin_sleeper.sleep(sleep_duration_8_seconds);
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
-                rx_signal_handler_from_feed.recv().unwrap();
-                let _ = tx_signal_handler_to_feed.send(InternalCommand::Terminate);
+                create_mock_signal_handler(
+                    &tx_signal_handler_to_feed,
+                    &rx_signal_handler_from_feed,
+                    spin_sleeper,
+                    sleep_duration_8_seconds,
+                );
             });
 
-            spin_sleeper.sleep(sleep_duration_100_millisec);
+            spin_sleeper.sleep(sleep_duration_100_millis);
 
             // thread for the test object
             scope.spawn(move || {
