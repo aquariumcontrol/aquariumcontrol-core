@@ -17,7 +17,7 @@ use crate::database::{
 
 const LOG_TARGET_FEED_SCHEDULE_ENTRY: &str = "feed_schedule_entry";
 
-/// Holds the data of a feed schedule entry derived from data read from SQL data base.
+/// Holds the data of a feed schedule entry derived from data read from SQL database.
 #[derive(Debug, PartialEq, Clone)]
 pub struct FeedScheduleEntry {
     pub timestamp: NaiveDateTime,
@@ -27,6 +27,9 @@ pub struct FeedScheduleEntry {
 }
 
 impl FeedScheduleEntry {
+    /// Provides a struct of type FeedPhase - used only for testing
+    /// # Arguments
+    /// * `sql_feed_schedule_entry` - reference to a feed schedule entry of type SqlFeedScheduleEntry
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
@@ -66,9 +69,9 @@ impl FeedScheduleEntry {
         FeedScheduleEntry {
             timestamp: NaiveDateTime::parse_from_str(timestamp_string, "%Y-%m-%d %H:%M:%S")
                 .unwrap(),
-            profile_id: profile_id,
+            profile_id,
             profile_name: profile_name.to_string(),
-            repeat_daily: repeat_daily,
+            repeat_daily,
         }
     }
 }
