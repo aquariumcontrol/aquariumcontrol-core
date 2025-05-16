@@ -1132,7 +1132,6 @@ fn main() {
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     let controllino_channels = ControllinoChannels {
-        tx_controllino_to_tcp_opt,
         tx_controllino_to_refill,
         rx_controllino_from_refill,
         tx_controllino_to_heating,
@@ -1338,7 +1337,7 @@ fn main() {
 
         if config.controllino.use_simulator {
             scope.spawn(move || {
-                let mut controllino_actuate_simulator = ControllinoActuateSimulator::new(config.controllino_relay);
+                let mut controllino_actuate_simulator = ControllinoActuateSimulator::new(tx_controllino_to_tcp_opt, config.controllino_relay);
                 controllino.execute(controllino_channels, &mut controllino_actuate_simulator);
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");

@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use rppal::gpio::{Gpio, OutputPin};
-use std::{sync::mpsc::Sender};
 
 use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
 use crate::relays::device_relay_logic::get_relay_command_gpio;
@@ -54,7 +53,6 @@ impl RelayActuationTrait for RelayManagerActuateGpio {
     fn actuate(
         &mut self,
         internal_command: InternalCommand,
-        _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
     ) -> Result<(), ControllinoError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)

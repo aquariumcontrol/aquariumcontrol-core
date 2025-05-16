@@ -14,7 +14,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
-use std::{sync::mpsc::Sender, time::Duration};
+use std::time::Duration;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
 /// Contains constants for communication with Controllino
@@ -413,7 +413,6 @@ impl RelayActuationTrait for ControllinoActuateHardware {
     fn actuate(
         &mut self,
         internal_command: InternalCommand,
-        _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
     ) -> Result<(), ControllinoError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
@@ -645,7 +644,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Skimmer),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -657,7 +655,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Ventilation),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -669,7 +666,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Heater),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -681,7 +677,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -693,7 +688,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -705,7 +699,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -717,7 +710,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -729,7 +721,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -741,7 +732,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -753,7 +743,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump3),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -765,7 +754,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump4),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -777,7 +765,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -789,7 +776,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Skimmer),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -801,7 +787,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Ventilation),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -813,7 +798,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Heater),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -825,7 +809,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -837,7 +820,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -849,7 +831,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -861,7 +842,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -873,7 +853,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -885,7 +864,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -897,7 +875,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump3),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -909,7 +886,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump4),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -921,7 +897,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -935,7 +910,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump1, 500),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -947,7 +921,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump2, 500),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -959,7 +932,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump3, 500),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -971,7 +943,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump4, 500),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1461,7 +1432,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1473,7 +1443,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1485,7 +1454,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1497,7 +1465,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1509,7 +1476,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1521,7 +1487,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1533,7 +1498,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1545,7 +1509,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1557,7 +1520,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump2),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,
@@ -1569,7 +1531,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump1),
-                None,
                 &mut Some(serial_port.try_clone().expect(expect_info)),
                 &controllino.spin_sleeper_opt,
                 &controllino.controllino_processing_duration_opt,

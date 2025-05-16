@@ -19,22 +19,22 @@ const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simu
 /// Contains trait implementation for system testing purposes.
 pub struct ControllinoActuateSimulator {
     config: ControllinoRelayConfig,
+    tx_to_tcp_opt: Option<Sender<InternalCommand>>
 }
 
 impl RelayActuationTrait for ControllinoActuateSimulator {
     /// Triggers actuation on simulator via TCP communication
-    /// This function is used for development purposes only.
+    /// This function is used for development only.
     /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
     /// considering relay id and relay logic.
     /// # Arguments
-    /// * `tx_to_tcp` - Reference to Sender part of communication channel with TcpCommunication
+    /// * `tx_to_tcp` - Reference to Sender part of the communication channel with TcpCommunication
     /// * `internal_command` - enum value used for identifying content which shall be sent
     fn actuate(
         &mut self,
         internal_command: InternalCommand,
-        tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
     ) -> Result<(), ControllinoError> {
-        let tx_to_tcp = tx_to_tcp_opt.unwrap();
+        let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
                 let relay_command = match get_relay_command(&internal_command, c.clone(), &self.config) {
@@ -66,7 +66,10 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
 }
 
 impl ControllinoActuateSimulator {
-    pub fn new(config: ControllinoRelayConfig) -> Self {
-        Self { config }
+    pub fn new(tx_to_tcp_opt: Option<Sender<InternalCommand>>, config: ControllinoRelayConfig) -> Self {
+        Self { 
+            tx_to_tcp_opt,
+            config
+        }
     }
 }

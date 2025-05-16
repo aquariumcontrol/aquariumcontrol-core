@@ -26,7 +26,6 @@ pub trait RelayActuationTrait {
     fn actuate(
         &mut self,
         internal_command: InternalCommand,
-        tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
     ) -> Result<(), ControllinoError>;
 }
 
@@ -76,9 +75,6 @@ pub struct ControllinoConfig {
 }
 
 pub struct ControllinoChannels {
-    /// receiver part of the channel for communication to the signal handler
-    pub tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>>,
-
     /// sender part of the channel for communication to the refill thread
     pub tx_controllino_to_refill: Sender<bool>,
 
@@ -239,8 +235,6 @@ pub struct Controllino {
 }
 
 impl Controllino {
-    const SW_LOG_SENDER: bool = false;
-
     /// Provides a struct of type Controllino
     /// # Arguments
     /// * `config` - configuration data for Controllino
@@ -418,18 +412,9 @@ impl Controllino {
             // *** communication with refill control ***
             match controllino_channels.rx_controllino_from_refill.try_recv() {
                 Ok(c) => {
-                    if Self::SW_LOG_SENDER {
-                        println!(
-                            "{}: received command from Refill: {}",
-                            LOG_TARGET_CONTROLLINO, c
-                        );
-                    }
                     self.lock_error_channel_receive_refill = false;
                     if self.config.active {
-                        match actuator.actuate(
-                            c,
-                            controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                        ) {
+                        match actuator.actuate(c) {
                             Ok(()) => {
                                 self.lock_error_actuate_refill = false;
                             }
@@ -482,17 +467,8 @@ impl Controllino {
             // *** communication with heating control ***
             match controllino_channels.rx_controllino_from_heating.try_recv() {
                 Ok(c) => {
-                    if Self::SW_LOG_SENDER {
-                        println!(
-                            "{}: received command from heating: {}",
-                            LOG_TARGET_CONTROLLINO, c
-                        );
-                    }
                     self.lock_error_channel_receive_heating = false;
-                    match actuator.actuate(
-                        c,
-                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                    ) {
+                    match actuator.actuate(c) {
                         Ok(()) => {
                             self.lock_error_actuate_heating = false;
                         }
@@ -547,17 +523,8 @@ impl Controllino {
                 .try_recv()
             {
                 Ok(c) => {
-                    if Self::SW_LOG_SENDER {
-                        println!(
-                            "{}: received command from ventilation: {}",
-                            LOG_TARGET_CONTROLLINO, c
-                        );
-                    }
                     self.lock_error_channel_receive_ventilation = false;
-                    match actuator.actuate(
-                        c,
-                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                    ) {
+                    match actuator.actuate(c) {
                         Ok(()) => {
                             self.lock_error_actuate_ventilation = false;
                         }
@@ -612,17 +579,8 @@ impl Controllino {
             // *** communication with Balling dosing control ***
             match controllino_channels.rx_controllino_from_balling.try_recv() {
                 Ok(c) => {
-                    if Self::SW_LOG_SENDER {
-                        println!(
-                            "{}: received command from Balling: {}",
-                            LOG_TARGET_CONTROLLINO, c
-                        );
-                    }
                     self.lock_error_channel_receive_balling = false;
-                    match actuator.actuate(
-                        c,
-                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                    ) {
+                    match actuator.actuate(c) {
                         Ok(()) => {
                             self.lock_error_actuate_balling = false;
                         }
@@ -674,17 +632,8 @@ impl Controllino {
             // *** communication with feed control ***
             match controllino_channels.rx_controllino_from_feed.try_recv() {
                 Ok(c) => {
-                    if Self::SW_LOG_SENDER {
-                        println!(
-                            "{}: received command from Feed: {}",
-                            LOG_TARGET_CONTROLLINO, c
-                        );
-                    }
                     self.lock_error_channel_receive_feed = false;
-                    match actuator.actuate(
-                        c,
-                        controllino_channels.tx_controllino_to_tcp_opt.as_ref(),
-                    ) {
+                    match actuator.actuate(c) {
                         Ok(()) => {
                             self.lock_error_actuate_feed = false;
                         }
@@ -764,7 +713,7 @@ impl Controllino {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::mpsc::{self, Sender};
+    use std::sync::mpsc;
     use std::{thread::scope};
 
     use crate::relays::controllino::{
@@ -784,7 +733,6 @@ pub mod tests {
         fn actuate(
             &mut self,
             _internal_command: InternalCommand,
-            _tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
         ) -> Result<(), ControllinoError> {
             self.execution_counter += 1;
             Ok(())
@@ -807,7 +755,6 @@ pub mod tests {
 
         let mut controllino = Controllino::new(config.controllino);
 
-        let (tx_controllino_to_tcp, _) = mpsc::channel();
         let (tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel();
         let (tx_refill_to_controllino, rx_controllino_from_refill) = mpsc::channel();
         let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
@@ -1053,7 +1000,6 @@ pub mod tests {
                 };
 
                 let controllino_channels = ControllinoChannels {
-                    tx_controllino_to_tcp_opt: Some(tx_controllino_to_tcp),
                     tx_controllino_to_refill,
                     rx_controllino_from_refill,
                     tx_controllino_to_heating,
