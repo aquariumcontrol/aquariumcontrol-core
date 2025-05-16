@@ -11,7 +11,7 @@ const LOG_TARGET_LOGGER: &str = "logger";
 
 /// setup of logging
 pub fn setup_logger() {
-    // open file for logging
+    // open the file for logging
     let log_file = match fern::log_file("/var/log/aquarium.log") {
         Ok(c) => c,
         Err(e) => {

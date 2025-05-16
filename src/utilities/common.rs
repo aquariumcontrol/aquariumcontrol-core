@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use std::sync::{Arc, Mutex};
 
 /// Function checks if a mutex is already blocked.
-/// The result of this function is used to reduce probability of false triggering a thread timing warning.
+/// The result of this function is used to reduce the probability of a false triggering a thread timing warning.
 /// # Arguments
 /// * `mutex` - reference to the mutex for avoiding parallel device actuation.
 pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
@@ -27,10 +27,10 @@ pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    // Function checks if a given value is exceeding previous maximum value or
-    // if the given value is below previous minimum.
+    // Function checks if a given value is exceeding a previous maximum value or
+    // if the given value is below a previous minimum.
     // Depending on the result, either previous minimum/maximum values are returned
-    // or one of the threholds is updated with the given value.
+    // or one of the thresholds is updated with the given value.
     pub fn update_min_max_actuation_duration(
         min_actuation_duration: u128,
         max_actuation_duration: u128,

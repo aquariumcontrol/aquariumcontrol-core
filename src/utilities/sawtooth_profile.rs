@@ -44,10 +44,10 @@ impl SawToothProfileConfig {
         phase4_length: u32,
     ) -> SawToothProfileConfig {
         SawToothProfileConfig {
-            phase1_length: phase1_length,
-            phase2_length: phase2_length,
-            phase3_length: phase3_length,
-            phase4_length: phase4_length,
+            phase1_length,
+            phase2_length,
+            phase3_length,
+            phase4_length,
         }
     }
 }
@@ -63,7 +63,7 @@ pub struct SawToothProfile {
     /// This variable is set to the same value as the length of the first phase.
     phase1_counter_limit: f32,
 
-    /// This variable is set to the cumulated length of first and second phase.
+    /// This variable is set to the cumulated length of the first and second phase.
     phase2_counter_limit: f32,
 
     /// This variable is set to the cumulated length of the first three phases.
@@ -118,7 +118,7 @@ impl SawToothProfile {
     }
 
     /// Calculates the current value of the saw tooth profile.
-    /// Function receives increment as parameter
+    /// Function receives increment as a parameter
     /// It updates the counter and the normalized level of the saw tooth profile.
     pub fn execute_with(&mut self, increment: f32) {
         // If the counter exceeds the final limit, reset it. Otherwise, increment.
@@ -134,7 +134,7 @@ impl SawToothProfile {
         if self.counter < self.phase1_counter_limit {
             self.level_normalized = self.counter / self.phase1_counter_limit;
         }
-        // for the next phase, keep signal at 1
+        // for the next phase, keep the signal at 1
         if self.counter >= self.phase1_counter_limit && self.counter <= self.phase2_counter_limit {
             self.level_normalized = 1.0;
         }
@@ -144,7 +144,7 @@ impl SawToothProfile {
                 - (self.counter - self.phase2_counter_limit)
                     / (self.phase3_counter_limit - self.phase2_counter_limit);
         }
-        // for the next phase, keep signal at 0
+        // for the next phase, keep the signal at 0
         if self.counter >= self.phase3_counter_limit && self.counter <= self.phase4_counter_limit {
             self.level_normalized = 0.0;
         }
@@ -175,7 +175,7 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 0.0);
 
-        // iterate to the middle of first interval
+        // iterate to the middle of the first interval
         for _ in 0..5 {
             saw_tooth_profile.execute_with(1.0);
         }
@@ -183,7 +183,7 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.5);
         assert_eq!(saw_tooth_profile.counter, 5.0);
 
-        // iterate to the end of first interval
+        // iterate to the end of the first interval
         for _ in 0..5 {
             saw_tooth_profile.execute_with(1.0);
         }
@@ -191,19 +191,19 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 1.0);
         assert_eq!(saw_tooth_profile.counter, 10.0);
 
-        // iterate to the middle of second interval
+        // iterate to the middle of the second interval
         saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 1.0);
         assert_eq!(saw_tooth_profile.counter, 11.0);
 
-        // iterate to the end of second interval
+        // iterate to the end of the second interval
         saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 1.0);
         assert_eq!(saw_tooth_profile.counter, 12.0);
 
-        // iterate to the middle of third interval
+        // iterate to the middle of the third interval
         for _ in 0..5 {
             saw_tooth_profile.execute_with(1.0);
         }
@@ -211,7 +211,7 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.5);
         assert_eq!(saw_tooth_profile.counter, 17.0);
 
-        // iterate to the end of third interval
+        // iterate to the end of the third interval
         for _ in 0..5 {
             saw_tooth_profile.execute_with(1.0);
         }
@@ -219,7 +219,7 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.0);
         assert_eq!(saw_tooth_profile.counter, 0.0);
 
-        // iterate to the middle of fourth interval
+        // iterate to the middle of the fourth interval
         saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.1);
@@ -231,7 +231,7 @@ pub mod tests {
         assert_eq!(saw_tooth_profile.level_normalized, 0.2);
         assert_eq!(saw_tooth_profile.counter, 2.0);
 
-        // check if new cycle continues as expected
+        // check if the new cycle continues as expected
         saw_tooth_profile.execute_with(1.0);
         println!("{}", saw_tooth_profile);
         assert_eq!(saw_tooth_profile.level_normalized, 0.3);
