@@ -120,14 +120,14 @@ impl SqlInterfaceData {
             },
         );
 
-        let tank_level_switch_position_string: String;
-        let sql_query_main_tank_level_switch_position_replaced = str::replace(
+        let tank_level_switch_position_stabilized_string: String;
+        let sql_query_main_tank_level_switch_position_stabilized_replaced = str::replace(
             &sql_query_refill_in_progress_replaced,
-            "#TankLevelSwitchPosition",
-            match data.tank_level_switch_position {
+            "#TankLevelSwitchPositionStabilized",
+            match data.tank_level_switch_position_stabilized {
                 Some(c) => {
-                    tank_level_switch_position_string = c.to_string();
-                    &tank_level_switch_position_string
+                    tank_level_switch_position_stabilized_string = c.to_string();
+                    &tank_level_switch_position_stabilized_string
                 }
                 None => &null_string,
             },
@@ -135,7 +135,7 @@ impl SqlInterfaceData {
 
         let tank_level_switch_invalid_string: String;
         let sql_query_main_tank_level_switch_invalid_replaced = str::replace(
-            &sql_query_main_tank_level_switch_position_replaced,
+            &sql_query_main_tank_level_switch_position_stabilized_replaced,
             "#TankLevelSwitchInvalid",
             match data.tank_level_switch_invalid {
                 Some(c) => {
@@ -146,9 +146,22 @@ impl SqlInterfaceData {
             },
         );
 
+        let tank_level_switch_position_string: String;
+        let sql_query_main_tank_level_switch_position_replaced = str::replace(
+            &sql_query_main_tank_level_switch_invalid_replaced,
+            "#TankLevelSwitchPosition",
+            match data.tank_level_switch_position {
+                Some(c) => {
+                    tank_level_switch_position_string = c.to_string();
+                    &tank_level_switch_position_string
+                }
+                None => &null_string,
+            },
+        );
+
         let surface_ventilation_string: String;
         let sql_query_surface_ventilation_status_replaced = str::replace(
-            &sql_query_main_tank_level_switch_invalid_replaced,
+            &sql_query_main_tank_level_switch_position_replaced,
             "#SurfaceVentilation",
             match data.surface_ventilation_status {
                 Some(c) => {
@@ -258,6 +271,7 @@ pub mod tests {
         pub refill_in_progress: bool,
         pub tank_level_switch_position: bool,
         pub tank_level_switch_invalid: bool,
+        pub tank_level_switch_position_stabilized: bool,
         pub surface_ventilation_status: bool,
         pub ambient_temperature: f32,
         pub ambient_humidity: f32,
@@ -273,7 +287,8 @@ pub mod tests {
         FROM data WHERE Timestamp='#timestamp';";
 
     pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
-        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
+        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
@@ -281,7 +296,8 @@ pub mod tests {
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
         Conductivity, ConductivityFiltered, ConductivityCompensated \
-        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation, \
+        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
+        TankLevelSwitchPositionStabilized, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
@@ -331,6 +347,7 @@ pub mod tests {
                 refill_in_progress,
                 tank_level_switch_position,
                 tank_level_switch_invalid,
+                tank_level_switch_position_stabilized,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
@@ -341,6 +358,7 @@ pub mod tests {
                 refill_in_progress,
                 tank_level_switch_position,
                 tank_level_switch_invalid,
+                tank_level_switch_position_stabilized,
                 surface_ventilation_status,
                 ambient_temperature,
                 ambient_humidity,
@@ -383,7 +401,7 @@ pub mod tests {
             refill_in_progress: Some(data_frame_2.refill_in_progress),
             tank_level_switch_position: Some(data_frame_2.tank_level_switch_position),
             tank_level_switch_invalid: Some(data_frame_2.tank_level_switch_invalid),
-            tank_level_switch_position_stabilized: None,
+            tank_level_switch_position_stabilized: Some(data_frame_2.tank_level_switch_position_stabilized),
             surface_ventilation_status: Some(data_frame_2.surface_ventilation_status),
             ambient_temperature: Some(data_frame_2.ambient_temperature),
             ambient_humidity: Some(data_frame_2.ambient_humidity),
