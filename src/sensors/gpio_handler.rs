@@ -87,8 +87,8 @@ pub struct GpioHandler {
 
 impl GpioHandler {
     #[allow(unused)]
-    /// checks if the GPIO pin configuration valid:
-    /// - GPIOs shall be within permissible range
+    /// Checks if the GPIO pin configuration is valid:
+    /// - GPIOs shall be within a permissible range
     /// - GPIOs shall be distinct
     /// # Arguments
     /// * `config` - configuration of GPIO handler
@@ -130,10 +130,10 @@ impl GpioHandler {
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_GPIO_HANDLER,
-                    "Not all GPIOs distinct - duplicate values found."
+                    "Not all GPIOs are distinct - duplicate values found."
                 );
                 #[cfg(test)]
-                println!("Not all GPIOs distinct - duplicate values found.");
+                println!("Not all GPIOs are distinct - duplicate values found.");
                 return false; // Duplicate value found
             }
         }

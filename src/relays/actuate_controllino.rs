@@ -6,7 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use std::collections::HashSet;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
@@ -17,6 +17,10 @@ use spin_sleep::SpinSleeper;
 use std::time::Duration;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
+
+const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
+const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
+
 /// Contains constants for communication with Controllino
 #[allow(unused)]
 pub mod controllino_constants {
@@ -514,8 +518,70 @@ fn controllino_open_serial_port(
 }
 
 impl ActuateControllino {
+    /// Checks if the relay ID configuration is valid:
+    /// - IDs shall be within a permissible range.
+    /// - IDs shall be distinct.
+    /// # Arguments
+    /// * `config` - configuration of Controllino relays
+    pub fn check_valid_relay_id_config(config: &ActuateControllinoConfig) -> bool {
+        // check if relay ids are in valid range and if they are distinct
+        let mut seen_values = HashSet::new();
+
+        let relay_id_values = [
+            config.aux_pump1_id,
+            config.aux_pump2_id,
+            config.feeder_id,
+            config.heater_id,
+            config.main_pump1_id,
+            config.main_pump2_id,
+            config.peristaltic_pump1_id,
+            config.peristaltic_pump2_id,
+            config.peristaltic_pump3_id,
+            config.peristaltic_pump4_id,
+            config.refill_pump_id,
+            config.ventilation_id,
+        ];
+
+        for &value in &relay_id_values {
+            if value < CONTROLLINO_MIN_RELAY_ID || value > CONTROLLINO_MAX_RELAY_ID {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "Not all relay IDs are inside permissible range."
+                );
+                #[cfg(test)]
+                println!("Not all relay IDs are inside permissible range.");
+                return false; // Value is out of the allowed range
+            }
+            if !seen_values.insert(value) {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "Not all relay IDs are distinct - duplicate values found."
+                );
+                #[cfg(test)]
+                println!("Not all relay IDs are distinct - duplicate values found.");
+                return false; // Duplicate value found
+            }
+        }
+
+        true
+    }
+
+    /// Creates a struct of type ActuateControllino which is used from the relay manager.
+    /// # Arguments
+    /// * `config` - configuration of Controllino relays
     pub fn new(config: ActuateControllinoConfig) -> ActuateControllino {
         let spin_sleeper = SpinSleeper::default();
+
+        // check validity of configuration
+        if Self::check_valid_relay_id_config(&config) {
+            panic!("{}: Relay ID configuration is invalid.", LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE);
+        }
+
+        if config.port_name.is_empty() {
+            panic!("{}: Port name for communication with Controllino is empty.", LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE);
+        }
 
         let serial_port = controllino_open_serial_port(
             config.port_name.clone(),
@@ -553,10 +619,41 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
-    use crate::relays::actuate_controllino::{controllino_constants, create_command_message};
+    use crate::relays::actuate_controllino::{controllino_constants, create_command_message, ActuateControllino, CONTROLLINO_MIN_RELAY_ID, CONTROLLINO_MAX_RELAY_ID};
     use crate::relays::relay_manager::RelayError;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_id_config_low() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MIN_RELAY_ID - 1;
+
+        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+    }
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_id_config_high() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID + 1;
+
+        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+    }
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_config_duplicate() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID;
+        config.controllino_relay.main_pump2_id = CONTROLLINO_MAX_RELAY_ID;
+
+        let _gpio_handler = ActuateControllino::new(config.controllino_relay);
+    }
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
     fn get_platform_specific_configuration_file() -> String {
