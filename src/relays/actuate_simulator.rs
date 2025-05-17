@@ -10,8 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 use std::sync::mpsc::Sender;
 
-use crate::relays::relay_manager::{RelayError, RelayActuationTrait};
 use crate::relays::actuate_controllino::{get_relay_command, ActuateControllinoConfig};
+use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";

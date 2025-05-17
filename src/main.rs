@@ -76,10 +76,12 @@ use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::DataLogger;
-use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
-//use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
+
 use crate::relays::actuate_simulator::ActuateSimulator;
-use crate::relays::actuate_gpio::ActuateGpio;
+use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
 use crate::sensors::ambient::Ambient;
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
@@ -202,8 +204,8 @@ fn check_argument_for_valid_config_file_name(
 /// graph LR
 ///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
 ///     tank_level_switch --> refill
-///     refill --> controllino[Controllino]
-///     controllino --> refill
+///     refill --> relay_manager[Controllino]
+///     relay_manager --> refill
 ///     ambient[Ambient] --> data_logger[DataLogger]
 ///     data_logger --> ambient
 ///     refill --> data_logger
@@ -214,8 +216,8 @@ fn check_argument_for_valid_config_file_name(
 ///     tank_level_switch --> signal_handler
 ///     signal_handler --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> signal_handler
-///     signal_handler --> controllino
-///     controllino --> signal_handler
+///     signal_handler --> relay_manager
+///     relay_manager --> signal_handler
 ///     balling[Balling] --> signal_handler
 ///     signal_handler --> balling
 ///     feed[Feed] --> signal_handler
@@ -224,25 +226,25 @@ fn check_argument_for_valid_config_file_name(
 ///     signal_handler --> heating
 ///     ventilation[Ventilation] --> signal_handler
 ///     signal_handler --> ventilation
-///     controllino --> tcp_communication
+///     relay_manager --> tcp_communication
 ///     ambient --> tcp_communication
 ///     tcp_communication --> ambient
 ///     atlas_scientific --> tcp_communication
 ///     tcp_communication --> atlas_scientific
 ///     tank_level_switch --> tcp_communication
 ///     tcp_communication --> tank_level_switch
-///     balling --> controllino
-///     controllino --> balling
-///     feed --> controllino
-///     controllino --> feed
+///     balling --> relay_manager
+///     relay_manager --> balling
+///     feed --> relay_manager
+///     relay_manager --> feed
 ///     atlas_scientific --> data_logger
 ///     data_logger --> atlas_scientific
 ///     heating --> data_logger
 ///     data_logger --> heating
 ///     heating --> atlas_scientific[AtlasScientific]
 ///     atlas_scientific --> heating
-///     heating --> controllino
-///     controllino --> heating
+///     heating --> relay_manager
+///     relay_manager --> heating
 ///     heating --> tank_level_switch
 ///     tank_level_switch --> heating
 ///     heating --> ambient
@@ -253,12 +255,12 @@ fn check_argument_for_valid_config_file_name(
 ///     data_logger --> ventilation
 ///     signal_handler --> data_logger
 ///     data_logger --> signal_handler
-///     ventilation --> controllino
+///     ventilation --> relay_manager
 ///     ventilation --> atlas_scientific
 ///     atlas_scientific --> ventilation
-///     controllino --> ventilation
-///     monitors[Monitors] --> controllino
-///     controllino --> monitors
+///     relay_manager --> ventilation
+///     monitors[Monitors] --> relay_manager
+///     relay_manager --> monitors
 ///     monitors --> refill
 ///     refill --> monitors
 ///     monitors --> signal_handler
@@ -571,12 +573,12 @@ fn main() {
     ) = mpsc::channel();
     // *****************************
 
-    // *** refill <=> controllino ***
-    let (tx_refill_to_controllino, rx_controllino_from_refill): (
+    // *** refill <=> relay_manager ***
+    let (tx_refill_to_relay_manager, rx_relay_manager_from_refill): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_refill, rx_refill_from_controllino): (Sender<bool>, Receiver<bool>) =
+    let (tx_relay_manager_to_refill, rx_refill_from_relay_manager): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
 
@@ -591,13 +593,15 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
-    // *** heating <=> controllino ***
-    let (tx_heating_to_controllino, rx_controllino_from_heating): (
+    // *** heating <=> relay_manager ***
+    let (tx_heating_to_relay_manager, rx_relay_manager_from_heating): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_heating, rx_heating_from_controllino): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_relay_manager_to_heating, rx_heating_from_relay_manager): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** heating <=> schedule_check ***
@@ -611,12 +615,12 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
-    // *** ventilation <=> controllino ***
-    let (tx_ventilation_to_controllino, rx_controllino_from_ventilation): (
+    // *** ventilation <=> relay_manager ***
+    let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_ventilation, rx_ventilation_from_controllino): (
+    let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -633,22 +637,24 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
-    // *** feed <=> controllino ***
-    let (tx_feed_to_controllino, rx_controllino_from_feed): (
+    // *** feed <=> relay_manager ***
+    let (tx_feed_to_relay_manager, rx_relay_manager_from_feed): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_feed, rx_feed_from_controllino): (Sender<bool>, Receiver<bool>) =
+    let (tx_relay_manager_to_feed, rx_feed_from_relay_manager): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
     // *******************************
 
-    // *** balling <=> controllino ***
-    let (tx_balling_to_controllino, rx_controllino_from_balling): (
+    // *** balling <=> relay_manager ***
+    let (tx_balling_to_relay_manager, rx_relay_manager_from_balling): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_balling, rx_balling_from_controllino): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
+    let (tx_relay_manager_to_balling, rx_balling_from_relay_manager): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
     // *******************************
 
     // *** balling <=> schedule_check ***
@@ -662,12 +668,12 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
-    // *** monitors <=> controllino ***
-    let (tx_monitors_to_controllino, _rx_controllino_from_monitors): (
+    // *** monitors <=> relay_manager ***
+    let (tx_monitors_to_relay_manager, _rx_relay_manager_from_monitors): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (_tx_controllino_to_monitors, rx_monitors_from_controllino): (
+    let (_tx_relay_manager_to_monitors, rx_monitors_from_relay_manager): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -759,12 +765,12 @@ fn main() {
     ) = mpsc::channel();
     // *********************************
 
-    // *** signal handler <=> controllino ***
-    let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler): (
+    // *** signal handler <=> relay_manager ***
+    let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_controllino_to_signal_handler, rx_signal_handler_from_controllino): (
+    let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -832,8 +838,8 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
-    // *** controllino => tcp ***
-    let (tx_controllino_to_tcp, rx_tcp_communication_from_controllino): (
+    // *** relay_manager => tcp ***
+    let (tx_relay_manager_to_tcp, rx_tcp_communication_from_relay_manager): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
@@ -883,13 +889,13 @@ fn main() {
 
     let tx_relay_manager_to_tcp_opt: Option<Sender<InternalCommand>> =
         match config.relay_manager.use_simulator {
-            true => Some(tx_controllino_to_tcp),
+            true => Some(tx_relay_manager_to_tcp),
             false => None,
         };
 
     let rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>> =
         match config.relay_manager.use_simulator {
-            true => Some(rx_tcp_communication_from_controllino),
+            true => Some(rx_tcp_communication_from_relay_manager),
             false => None,
         };
 
@@ -1037,23 +1043,19 @@ fn main() {
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
 
-    #[cfg(not(feature = "target_hw"))]
-    let relay_manager_actuate_gpio_opt: Option<ActuateGpio> = None;
-    #[cfg(feature = "target_hw")]
-    let mut relay_manager_actuate_gpio_opt: Option<ActuateGpio> = None;
-
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            let mut actuate_gpio_opt: Option<ActuateGpio> = None;
             let dht_opt: Option<Dht>;
 
             // clone information from config before giving config to GpioHandler
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
-            let actuate_gpio_config = ActuateGpioConfig::new(config.gpio_handler);
+            let actuate_gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
             let use_simulator = config.gpio_handler.use_simulator;
             let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
 
@@ -1088,7 +1090,7 @@ fn main() {
                     dht_opt = Some(
                         Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
                     );
-                    relay_manager_actuate_gpio_opt = Some(RelayManagerActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
+                    actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
                 }
             }
         }
@@ -1111,7 +1113,7 @@ fn main() {
     let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
     let mut ambient = Ambient::new(config.ambient);
 
-    let mut controllino = RelayManager::new(config.relay_manager.clone());
+    let mut relay_manager = RelayManager::new(config.relay_manager.clone());
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
 
     let mut data_injection = DataInjection;
@@ -1131,19 +1133,19 @@ fn main() {
         config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
-    let controllino_channels = RelayManagerChannels {
-        tx_relay_manager_to_refill: tx_controllino_to_refill,
-        rx_relay_manager_from_refill: rx_controllino_from_refill,
-        tx_relay_manager_to_heating: tx_controllino_to_heating,
-        rx_relay_manager_from_heating: rx_controllino_from_heating,
-        tx_relay_manager_to_ventilation: tx_controllino_to_ventilation,
-        rx_relay_manager_from_ventilation: rx_controllino_from_ventilation,
-        tx_relay_manager_to_balling: tx_controllino_to_balling,
-        rx_relay_manager_from_balling: rx_controllino_from_balling,
-        tx_relay_manager_to_feed: tx_controllino_to_feed,
-        rx_relay_manager_from_feed: rx_controllino_from_feed,
-        tx_relay_manager_to_signal_handler: tx_controllino_to_signal_handler,
-        rx_relay_manager_from_signal_handler: rx_controllino_from_signal_handler,
+    let relay_manager_channels = RelayManagerChannels {
+        tx_relay_manager_to_refill: tx_relay_manager_to_refill,
+        rx_relay_manager_from_refill: rx_relay_manager_from_refill,
+        tx_relay_manager_to_heating: tx_relay_manager_to_heating,
+        rx_relay_manager_from_heating: rx_relay_manager_from_heating,
+        tx_relay_manager_to_ventilation: tx_relay_manager_to_ventilation,
+        rx_relay_manager_from_ventilation: rx_relay_manager_from_ventilation,
+        tx_relay_manager_to_balling: tx_relay_manager_to_balling,
+        rx_relay_manager_from_balling: rx_relay_manager_from_balling,
+        tx_relay_manager_to_feed: tx_relay_manager_to_feed,
+        rx_relay_manager_from_feed: rx_relay_manager_from_feed,
+        tx_relay_manager_to_signal_handler: tx_relay_manager_to_signal_handler,
+        rx_relay_manager_from_signal_handler: rx_relay_manager_from_signal_handler,
     };
 
     let atlas_scientific_channels = AtlasScientificChannels {
@@ -1156,8 +1158,8 @@ fn main() {
     };
 
     let refill_channels = RefillChannels {
-        tx_refill_to_controllino,
-        rx_refill_from_controllino,
+        tx_refill_to_relay_manager,
+        rx_refill_from_relay_manager,
         tx_refill_to_signal_handler,
         rx_refill_from_signal_handler,
         tx_refill_to_schedule_check,
@@ -1168,8 +1170,8 @@ fn main() {
     };
 
     let balling_channels = BallingChannels {
-        tx_balling_to_controllino,
-        rx_balling_from_controllino,
+        tx_balling_to_relay_manager,
+        rx_balling_from_relay_manager,
         tx_balling_to_signal_handler,
         rx_balling_from_signal_handler,
         tx_balling_to_schedule_check,
@@ -1178,8 +1180,8 @@ fn main() {
     };
 
     let ventilation_channels = VentilationChannels {
-        tx_ventilation_to_controllino,
-        rx_ventilation_from_controllino,
+        tx_ventilation_to_relay_manager,
+        rx_ventilation_from_relay_manager,
         tx_ventilation_to_signal_handler,
         rx_ventilation_from_signal_handler,
         tx_ventilation_to_data_logger,
@@ -1190,16 +1192,16 @@ fn main() {
     };
 
     let feed_channels = FeedChannels {
-        tx_feed_to_controllino,
-        rx_feed_from_controllino,
+        tx_feed_to_relay_manager,
+        rx_feed_from_relay_manager,
         tx_feed_to_signal_handler,
         rx_feed_from_signal_handler,
         rx_feed_from_messaging_opt,
     };
 
     let heating_channels = HeatingChannels {
-        tx_heating_to_controllino,
-        rx_heating_from_controllino,
+        tx_heating_to_relay_manager,
+        rx_heating_from_relay_manager,
         tx_heating_to_signal_handler,
         rx_heating_from_signal_handler,
         tx_heating_to_data_logger,
@@ -1210,7 +1212,7 @@ fn main() {
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
-        rx_tcp_communication_from_controllino_opt: rx_tcp_communication_from_relay_manager_opt,
+        rx_tcp_communication_from_relay_manager_opt: rx_tcp_communication_from_relay_manager_opt,
         rx_tcp_communication_from_ambient_opt,
         tx_tcp_communication_to_ambient_opt,
         rx_tcp_communication_from_atlas_scientific_opt,
@@ -1243,8 +1245,8 @@ fn main() {
         rx_signal_handler_from_tank_level_switch,
         tx_signal_handler_to_heating,
         rx_signal_handler_from_heating,
-        tx_signal_handler_to_controllino,
-        rx_signal_handler_from_controllino,
+        tx_signal_handler_to_relay_manager,
+        rx_signal_handler_from_relay_manager,
         tx_signal_handler_to_atlas_scientific,
         rx_signal_handler_from_atlas_scientific,
         tx_signal_handler_to_ambient,
@@ -1337,25 +1339,23 @@ fn main() {
 
         if config.relay_manager.use_simulator {
             scope.spawn(move || {
-                let mut controllino_actuate_simulator = ActuateSimulator::new(
-                    tx_relay_manager_to_tcp_opt,
-                    config.controllino_relay,
-                );
-                controllino.execute(controllino_channels, &mut controllino_actuate_simulator);
+                let mut actuate_simulator =
+                    ActuateSimulator::new(tx_relay_manager_to_tcp_opt, config.controllino_relay);
+                relay_manager.execute(relay_manager_channels, &mut actuate_simulator);
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
                 if config.relay_manager.use_gpio {
-                    if !relay_manager_actuate_gpio_opt.is_some() {
-                        panic!("{}: aquarium control not configured correctly. Missing instantiation of RelayManagerActuateGpio.", LOG_TARGET_MAIN);
-                    }
-                    controllino.execute(controllino_channels, &mut relay_manager_actuate_gpio_opt.unwrap());
-                }
-                else {
-                    let mut controllino_actuate_hardware = ActuateControllino::new(config.controllino_relay);
-                    controllino.execute(controllino_channels, &mut controllino_actuate_hardware);
+                    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+                    relay_manager.execute(
+                        relay_manager_channels,
+                        &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
+                    );
+                } else {
+                    let mut actuate_controllino = ActuateControllino::new(config.controllino_relay);
+                    relay_manager.execute(relay_manager_channels, &mut actuate_controllino);
                 }
 
                 #[cfg(feature = "debug_main")]
@@ -1537,8 +1537,8 @@ fn main() {
         scope.spawn(move || {
             monitors.execute(
                 mutex_device_scheduler_monitors,
-                tx_monitors_to_controllino,
-                rx_monitors_from_controllino,
+                tx_monitors_to_relay_manager,
+                rx_monitors_from_relay_manager,
                 tx_monitors_to_signal_handler,
                 rx_monitors_from_signal_handler,
                 rx_monitors_from_messaging_opt,

@@ -66,11 +66,11 @@ pub struct BallingConfig {
 }
 
 pub struct BallingChannels {
-    /// sender part of the channel for communication to Controllino
-    pub tx_balling_to_controllino: Sender<InternalCommand>,
+    /// sender part of the channel for communication to relay manager
+    pub tx_balling_to_relay_manager: Sender<InternalCommand>,
 
-    /// receiver part of the channel for communication from Controllino
-    pub rx_balling_from_controllino: Receiver<bool>,
+    /// receiver part of the channel for communication from relay manager
+    pub rx_balling_from_relay_manager: Receiver<bool>,
 
     /// sender part of the channel for communication to the signal handler
     pub tx_balling_to_signal_handler: Sender<bool>,
@@ -93,17 +93,17 @@ pub struct BallingChannels {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     balling[Balling dosing control] --> signal_handler[Signal handler]
+///     balling[Balling Dosing Control] --> signal_handler[Signal Handler]
 ///     signal_handler --> balling
-///     signal_handler --> mineral_injection[Mineral injection]
+///     signal_handler --> mineral_injection[Mineral Injection]
 ///     balling --> mineral_injection
-///     mineral_injection --> controllino[Controllino]
-///     controllino --> mineral_injection
-///     balling --> schedule_check[Schedule check]
+///     mineral_injection --> relay_manager[Relay Manager]
+///     relay_manager --> mineral_injection
+///     balling --> schedule_check[Schedule Check]
 ///     schedule_check --> balling
 ///     messaging[Messaging] --> balling
 /// ```
-/// Communication channel to and from Controllino is forwarded to implementation of MineralInjectionTrait.
+/// Communication channel to and from relay manager is forwarded to implementation of MineralInjectionTrait.
 /// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
 pub struct Balling {
     /// configuration data for Balling dosing control
@@ -289,16 +289,16 @@ impl Balling {
     /// * `pump_id` - id of the pump to be actuated.
     /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
     /// * `mineral_injection` - refence to struct implementing MineralInjectionTrait
-    /// * `tx_balling_to_controllino` - sender part of channel communication to send command to Controllino
-    /// * `rx_balling_from_controllino` - receiver part of channel communication to receive confirmation back from Controllino
+    /// * `tx_balling_to_relay_manager` - sender part of channel communication to send command to relay manager
+    /// * `rx_balling_from_relay_manager` - receiver part of channel communication to receive confirmation back from relay manager
     fn execute_dosing(
         &mut self,
         pump_id: u32,
         pump_device: AquariumDevice,
         mineral_injection: &mut impl MineralInjectionTrait,
         rx_balling_from_signal_handler: &Receiver<InternalCommand>,
-        tx_balling_to_controllino: &Sender<InternalCommand>,
-        rx_balling_from_controllino: &Receiver<bool>,
+        tx_balling_to_relay_manager: &Sender<InternalCommand>,
+        rx_balling_from_relay_manager: &Receiver<bool>,
     ) -> bool {
         let mut quit_command_received: bool = false;
         let actual_dosing_duration_millis: u32;
@@ -320,8 +320,8 @@ impl Balling {
                 if dosing_duration_millis > 0 {
                     (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                         .inject_mineral(
-                            tx_balling_to_controllino,
-                            rx_balling_from_controllino,
+                            tx_balling_to_relay_manager,
+                            rx_balling_from_relay_manager,
                             rx_balling_from_signal_handler,
                             pump_device,
                             dosing_duration_millis,
@@ -452,8 +452,8 @@ impl Balling {
                                 AquariumDevice::PeristalticPump1,
                                 mineral_injection,
                                 &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_controllino,
-                                &balling_channels.rx_balling_from_controllino,
+                                &balling_channels.tx_balling_to_relay_manager,
+                                &balling_channels.rx_balling_from_relay_manager,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -481,8 +481,8 @@ impl Balling {
                                 AquariumDevice::PeristalticPump2,
                                 mineral_injection,
                                 &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_controllino,
-                                &balling_channels.rx_balling_from_controllino,
+                                &balling_channels.tx_balling_to_relay_manager,
+                                &balling_channels.rx_balling_from_relay_manager,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -510,8 +510,8 @@ impl Balling {
                                 AquariumDevice::PeristalticPump3,
                                 mineral_injection,
                                 &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_controllino,
-                                &balling_channels.rx_balling_from_controllino,
+                                &balling_channels.tx_balling_to_relay_manager,
+                                &balling_channels.rx_balling_from_relay_manager,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
                         }
@@ -539,8 +539,8 @@ impl Balling {
                                 AquariumDevice::PeristalticPump4,
                                 mineral_injection,
                                 &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_controllino,
-                                &balling_channels.rx_balling_from_controllino,
+                                &balling_channels.tx_balling_to_relay_manager,
+                                &balling_channels.rx_balling_from_relay_manager,
                             );
                             *mutex_data += 1;
                         }
@@ -582,8 +582,8 @@ impl Balling {
                                 pump_device,
                                 mineral_injection,
                                 &balling_channels.rx_balling_from_signal_handler,
-                                &balling_channels.tx_balling_to_controllino,
-                                &balling_channels.rx_balling_from_controllino,
+                                &balling_channels.tx_balling_to_relay_manager,
+                                &balling_channels.rx_balling_from_relay_manager,
                             );
                             *mutex_data += 1;
                         }
@@ -643,7 +643,7 @@ impl Balling {
             }
         };
 
-        // This thread has channel connection to underlying threads (Controllino).
+        // This thread has channel connection to underlying threads (relay manager).
         // These threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by signal_handler module.
         let mut termination_command_received = false;
@@ -723,8 +723,8 @@ pub mod tests {
     impl MineralInjectionTrait for MockMineralInjection {
         fn inject_mineral(
             &mut self,
-            _tx_balling_to_controllino: &Sender<InternalCommand>,
-            _rx_balling_from_controllino: &Receiver<bool>,
+            _tx_balling_to_relay_manager: &Sender<InternalCommand>,
+            _rx_balling_from_relay_manager: &Receiver<bool>,
             _rx_balling_from_signal_handler: &Receiver<InternalCommand>,
             mineral_pump: AquariumDevice,
             dosing_duration_millis: u32,
@@ -1060,8 +1060,8 @@ pub mod tests {
         );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
-        let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
-        let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
+        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
@@ -1114,8 +1114,8 @@ pub mod tests {
                     tx_balling_to_schedule_check.clone();
 
                 let balling_channels = BallingChannels {
-                    tx_balling_to_controllino,
-                    rx_balling_from_controllino,
+                    tx_balling_to_relay_manager,
+                    rx_balling_from_relay_manager,
                     tx_balling_to_signal_handler,
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,
@@ -1423,8 +1423,8 @@ pub mod tests {
         // create test objects
         let mut balling = Balling::new(config.balling, sql_interface_balling);
 
-        let (tx_balling_to_controllino, _rx_controllino_from_balling) = mpsc::channel();
-        let (_tx_controllino_to_balling, rx_balling_from_controllino) = mpsc::channel();
+        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
+        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
         let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
         let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
@@ -1524,8 +1524,8 @@ pub mod tests {
             // thread for the test object and assertions
             scope.spawn(move || {
                 let balling_channels = BallingChannels {
-                    tx_balling_to_controllino,
-                    rx_balling_from_controllino,
+                    tx_balling_to_relay_manager,
+                    rx_balling_from_relay_manager,
                     tx_balling_to_signal_handler,
                     rx_balling_from_signal_handler,
                     tx_balling_to_schedule_check,

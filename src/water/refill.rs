@@ -83,11 +83,11 @@ const MILLIS_PER_SEC: u64 = 1000;
 
 /// Struct collects the channels for the communication between the refill control and the other components.
 pub struct RefillChannels {
-    /// Sender part of the channel for communication to Controllino
-    pub tx_refill_to_controllino: Sender<InternalCommand>,
+    /// Sender part of the channel for communication to relay manager
+    pub tx_refill_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from Controllino
-    pub rx_refill_from_controllino: Receiver<bool>,
+    /// Receiver part of the channel for communication from relay manager
+    pub rx_refill_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_refill_to_signal_handler: Sender<bool>,
@@ -116,23 +116,23 @@ pub struct RefillChannels {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-/// refill[Refill control] --> tank_level_switch[TankLevelSwitch]
-/// refill --> water_injection[Water injection]
+/// refill[Refill Control] --> tank_level_switch[Tank Level Switch]
+/// refill --> water_injection[Water Injection]
 /// water_injection --> tank_level_switch
 /// tank_level_switch --> refill
 /// tank_level_switch --> water_injection
-/// water_injection --> controllino[Controllino]
-/// controllino --> water_injection
-/// refill --> signal_handler[Signal handler]
+/// water_injection --> relay_manager[Relay Manager]
+/// relay_manager --> water_injection
+/// refill --> signal_handler[Signal Handler]
 /// signal_handler --> refill
 /// signal_handler --> water_injection
-/// refill --> schedule_check[Schedule check]
+/// refill --> schedule_check[Schedule Check]
 /// schedule_check --> refill
-/// refill --> data_logger[Data logger]
+/// refill --> data_logger[Data Logger]
 /// data_logger --> refill
 /// messaging[Messaging] --> refill
 /// ```
-/// Communication channel to and from Controllino is forwarded to implementation of WaterInjectionTrait.
+/// Communication channel to and from relay manager is forwarded to implementation of WaterInjectionTrait.
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 /// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
@@ -858,8 +858,8 @@ impl Refill {
                             );
 
                             quit_command_received = water_injection.inject_water(
-                                &refill_channels.tx_refill_to_controllino,
-                                &refill_channels.rx_refill_from_controllino,
+                                &refill_channels.tx_refill_to_relay_manager,
+                                &refill_channels.rx_refill_from_relay_manager,
                                 &refill_channels.rx_refill_from_signal_handler,
                                 &refill_channels.tx_refill_to_data_logger,
                                 &refill_channels.rx_refill_from_data_logger,
@@ -992,7 +992,7 @@ impl Refill {
             }
         };
 
-        // This thread has channel connections to underlying threads (Controllino, Tank level switch).
+        // This thread has channel connections to underlying threads (relay manager, tank level switch).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
@@ -1187,9 +1187,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1302,8 +1302,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -1351,9 +1351,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1465,8 +1465,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -1516,8 +1516,8 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _) = mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (tx_refill_to_relay_manager, _) = mpsc::channel::<InternalCommand>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1630,8 +1630,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -1684,9 +1684,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1824,8 +1824,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -1880,9 +1880,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1988,8 +1988,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -2055,9 +2055,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -2162,8 +2162,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -2219,9 +2219,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -2326,8 +2326,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -2382,9 +2382,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -2533,8 +2533,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
@@ -2591,9 +2591,9 @@ pub mod tests {
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
             mpsc::channel::<InternalCommand>();
-        let (tx_refill_to_controllino, _rx_controllino_from_refill) =
+        let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (_tx_controllino_to_refill, rx_refill_from_controllino) = mpsc::channel::<bool>();
+        let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -2691,8 +2691,8 @@ pub mod tests {
                     tx_refill_to_schedule_check.clone();
 
                 let refill_channels = RefillChannels {
-                    tx_refill_to_controllino,
-                    rx_refill_from_controllino,
+                    tx_refill_to_relay_manager,
+                    rx_refill_from_relay_manager,
                     tx_refill_to_signal_handler,
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,

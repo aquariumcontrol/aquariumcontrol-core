@@ -59,11 +59,11 @@ pub struct FeedConfig {
 
 /// Struct collects the channels for communication between the feed control and the other components.
 pub struct FeedChannels {
-    /// Sender part of the channel for communication to Controllino
-    pub tx_feed_to_controllino: Sender<InternalCommand>,
+    /// Sender part of the channel for communication to relay manager
+    pub tx_feed_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from Controllino
-    pub rx_feed_from_controllino: Receiver<bool>,
+    /// Receiver part of the channel for communication from relay manager
+    pub rx_feed_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_feed_to_signal_handler: Sender<bool>,
@@ -80,9 +80,9 @@ pub struct FeedChannels {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     feed[Feed control] --> food_injection[Food injection] --> controllino[Controllino]
-///     controllino --> food_injection
-///     feed --> signal_handler[Signal handler]
+///     feed[Feed Control] --> food_injection[Food Injection] --> relay_manager[Relay Manager]]
+///     relay_manager --> food_injection
+///     feed --> signal_handler[Signal Handler]
 ///     signal_handler --> feed
 ///     signal_handler --> food_injection
 ///     messaging[Messaging] --> feed
@@ -153,15 +153,15 @@ impl Feed {
     /// # Arguments
     /// * `profile_id` - ID of feed profile to be executed
     /// * `food_injection` - Trait method for actuation to execute the feed profile
-    /// * `tx_feed_to_controllino` - Reference to sender part of the channel for communication to Controllino
-    /// * `rx_feed_from_controllino` - Reference to receiver part of the channel for communication from Controllino
+    /// * `tx_feed_to_relay_manager` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_feed_from_relay_manager` - Reference to receiver part of the channel for communication from Controllino
     /// * `rx_feed_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler  
     fn execute_feed(
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_feed_to_controllino: &Sender<InternalCommand>,
-        rx_feed_from_controllino: &Receiver<bool>,
+        tx_feed_to_relay_manager: &Sender<InternalCommand>,
+        rx_feed_from_relay_manager: &Receiver<bool>,
         rx_feed_from_signal_handler: &Receiver<InternalCommand>,
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
@@ -174,8 +174,8 @@ impl Feed {
             Ok(feed_pattern) => {
                 //*** execute feed pattern ***
                 quit_command_received = food_injection.inject_food(
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
+                    tx_feed_to_relay_manager,
+                    rx_feed_from_relay_manager,
                     rx_feed_from_signal_handler,
                     &feed_pattern,
                 );
@@ -260,16 +260,16 @@ impl Feed {
     /// Execute the feed profile and update the SQL database.
     /// # Arguments
     /// * `profile_id` - Numeric ID of the feed profile to be executed
-    /// * `tx_feed_to_controllino` - Reference to sender part of the channel for communication to Controllino
-    /// * `rx_feed_from_controllino` - Reference to receiver part of the channel for communication from Controllino
+    /// * `tx_feed_to_relay_manager` - Reference to sender part of the channel for communication to Controllino
+    /// * `rx_feed_from_relay_manager` - Reference to receiver part of the channel for communication from Controllino
     /// * `rx_feed_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler  
     /// * `food_injection` - Trait method for actuation to execute the feed profile  
     fn execute_profile_update_database(
         &mut self,
         profile_id: i32,
         food_injection: &mut impl FoodInjectionTrait,
-        tx_feed_to_controllino: &Sender<InternalCommand>,
-        rx_feed_from_controllino: &Receiver<bool>,
+        tx_feed_to_relay_manager: &Sender<InternalCommand>,
+        rx_feed_from_relay_manager: &Receiver<bool>,
         rx_feed_from_signal_handler: &Receiver<InternalCommand>,
         feed_schedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> bool {
@@ -283,8 +283,8 @@ impl Feed {
         let (result, quit_command_received_during_feed) = self.execute_feed(
             profile_id,
             food_injection,
-            tx_feed_to_controllino,
-            rx_feed_from_controllino,
+            tx_feed_to_relay_manager,
+            rx_feed_from_relay_manager,
             rx_feed_from_signal_handler,
         );
 
@@ -387,8 +387,8 @@ impl Feed {
                                                 .execute_profile_update_database(
                                                     feed_schedule_entry.profile_id,
                                                     food_injection,
-                                                    &feed_channels.tx_feed_to_controllino,
-                                                    &feed_channels.rx_feed_from_controllino,
+                                                    &feed_channels.tx_feed_to_relay_manager,
+                                                    &feed_channels.rx_feed_from_relay_manager,
                                                     &feed_channels.rx_feed_from_signal_handler,
                                                     &mut feed_schedule_entries,
                                                 );
@@ -483,8 +483,8 @@ impl Feed {
                     let (result, quit_command_received_during_requested_feed) = self.execute_feed(
                         self.profile_id_requested,
                         food_injection,
-                        &feed_channels.tx_feed_to_controllino,
-                        &feed_channels.rx_feed_from_controllino,
+                        &feed_channels.tx_feed_to_relay_manager,
+                        &feed_channels.rx_feed_from_relay_manager,
                         &feed_channels.rx_feed_from_signal_handler,
                     );
                     match result {
@@ -616,8 +616,8 @@ pub mod tests {
     impl FoodInjectionTrait for MockFoodInjection {
         fn inject_food(
             &mut self,
-            _tx_feed_to_controllino: &Sender<InternalCommand>,
-            _rx_feed_from_controllino: &Receiver<bool>,
+            _tx_feed_to_relay_manager: &Sender<InternalCommand>,
+            _rx_feed_from_relay_manager: &Receiver<bool>,
             _rx_feed_from_signal_handler: &Receiver<InternalCommand>,
             feed_pattern: &Feedpattern,
         ) -> bool {
@@ -659,8 +659,8 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         // channels for the test object
-        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
-        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
+        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
@@ -760,8 +760,8 @@ pub mod tests {
             spin_sleeper.sleep(sleep_duration_100_millisec);
 
             let feed_channels = FeedChannels {
-                tx_feed_to_controllino,
-                rx_feed_from_controllino,
+                tx_feed_to_relay_manager,
+                rx_feed_from_relay_manager,
                 tx_feed_to_signal_handler,
                 rx_feed_from_signal_handler,
                 rx_feed_from_messaging_opt: None,
@@ -854,8 +854,8 @@ pub mod tests {
         // create test object
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
-        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
-        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
+        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
         let (tx_messaging_to_feed, rx_feed_from_messaging) = mpsc::channel();
@@ -952,8 +952,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let feed_channels = FeedChannels {
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
+                    tx_feed_to_relay_manager,
+                    rx_feed_from_relay_manager,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: Some(rx_feed_from_messaging),
@@ -1001,8 +1001,8 @@ pub mod tests {
         // create test object
         let mut feed = Feed::new(config.feed, mock_sql_interface_feed);
 
-        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
-        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
+        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
@@ -1040,8 +1040,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let feed_channels = FeedChannels {
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
+                    tx_feed_to_relay_manager,
+                    rx_feed_from_relay_manager,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: None,
@@ -1213,8 +1213,8 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         // channels for the test object
-        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
-        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
+        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
@@ -1318,8 +1318,8 @@ pub mod tests {
             // thread for the test object
             scope.spawn(move || {
                 let feed_channels = FeedChannels {
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
+                    tx_feed_to_relay_manager,
+                    rx_feed_from_relay_manager,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: None,
@@ -1348,8 +1348,8 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         // channels for the test object
-        let (_tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
-        let (tx_feed_to_controllino, _rx_controllino_from_feed) = mpsc::channel();
+        let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
+        let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
@@ -1455,8 +1455,8 @@ pub mod tests {
             // thread for the test object
             scope.spawn(move || {
                 let feed_channels = FeedChannels {
-                    tx_feed_to_controllino,
-                    rx_feed_from_controllino,
+                    tx_feed_to_relay_manager,
+                    rx_feed_from_relay_manager,
                     tx_feed_to_signal_handler,
                     rx_feed_from_signal_handler,
                     rx_feed_from_messaging_opt: None,

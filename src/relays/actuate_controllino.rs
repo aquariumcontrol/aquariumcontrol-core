@@ -7,8 +7,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::relays::relay_manager::{RelayError, RelayActuationTrait};
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
+use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use log::{error, warn};
 use serde_derive::Deserialize;
@@ -224,12 +224,8 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::MainPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -238,12 +234,8 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::MainPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -252,12 +244,8 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::AuxPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -266,12 +254,8 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::AuxPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -280,24 +264,16 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::Heater => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.heater_id as u16)),
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.heater_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::Ventilation => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -306,12 +282,8 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.ventilation_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::RefillPump => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -320,24 +292,16 @@ pub fn get_relay_command(
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.refill_pump_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::Feeder => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(config.feeder_id as u16)),
             InternalCommand::SwitchOff(_) => {
                 Ok(InternalCommand::UnsetRelay(config.feeder_id as u16))
             }
-            InternalCommand::Pulse(d, _) => {
-                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
-            }
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::PeristalticPump1 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -350,9 +314,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump1_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::PeristalticPump2 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -365,9 +327,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump2_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::PeristalticPump3 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -380,9 +340,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump3_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
         AquariumDevice::PeristalticPump4 => match internal_command {
             InternalCommand::SwitchOn(_) => Ok(InternalCommand::SetRelay(
@@ -395,9 +353,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump4_id as u16,
                 *t,
             )),
-            _ => Err(RelayError::IrrelevantCommand(
-                internal_command.clone(),
-            )),
+            _ => Err(RelayError::IrrelevantCommand(internal_command.clone())),
         },
     }
 }
@@ -597,10 +553,8 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
+    use crate::relays::actuate_controllino::{controllino_constants, create_command_message};
     use crate::relays::relay_manager::RelayError;
-    use crate::relays::actuate_controllino::{
-        controllino_constants, create_command_message,
-    };
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -642,200 +596,138 @@ pub mod tests {
 
         // Request Controllino to switch on and off all relays sequentially
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Skimmer),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(Skimmer),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Ventilation),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(Ventilation),),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millis);
+        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Heater),), Ok(()));
+        spin_sleeper.sleep(sleep_duration_500_millis);
+        assert_eq!(
+            actuator.actuate(InternalCommand::SwitchOn(MainPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Heater),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(MainPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(MainPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(AuxPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(MainPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(AuxPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(AuxPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(AuxPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(PeristalticPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump3),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(PeristalticPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(PeristalticPump4),),
+            Ok(())
+        );
+        spin_sleeper.sleep(sleep_duration_500_millis);
+        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
+        spin_sleeper.sleep(sleep_duration_500_millis);
+        assert_eq!(
+            actuator.actuate(InternalCommand::SwitchOff(Skimmer),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(PeristalticPump3),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(Ventilation),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(PeristalticPump4),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(Heater),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Feeder),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(MainPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Skimmer),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(MainPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Ventilation),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(AuxPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Heater),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(AuxPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(MainPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(MainPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(AuxPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump3),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(AuxPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(PeristalticPump4),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(PeristalticPump1),
-            ),
-            Ok(())
-        );
-        spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(PeristalticPump2),
-            ),
-            Ok(())
-        );
-        spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(PeristalticPump3),
-            ),
-            Ok(())
-        );
-        spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(PeristalticPump4),
-            ),
-            Ok(())
-        );
-        spin_sleeper.sleep(sleep_duration_500_millis);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Feeder),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
 
         // Request Controllino to pulse all relays for peristaltic pumps
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::Pulse(PeristalticPump1, 500),
-            ),
+            actuator.actuate(InternalCommand::Pulse(PeristalticPump1, 500),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::Pulse(PeristalticPump2, 500),
-            ),
+            actuator.actuate(InternalCommand::Pulse(PeristalticPump2, 500),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::Pulse(PeristalticPump3, 500),
-            ),
+            actuator.actuate(InternalCommand::Pulse(PeristalticPump3, 500),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::Pulse(PeristalticPump4, 500),
-            ),
+            actuator.actuate(InternalCommand::Pulse(PeristalticPump4, 500),),
             Ok(())
         );
     }
@@ -844,7 +736,7 @@ pub mod tests {
     /// Test case tests if an invalid command is rejected when preparing the message for Controllino.
     pub fn test_create_message_invalid_command() {
         let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
+            "/config/aquarium_control_test_simulator.toml".to_string(),
         );
         assert_eq!(
             create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay),
@@ -860,7 +752,7 @@ pub mod tests {
     // if relay needs to bet set or unset to switch on/off a device.
     pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {
         let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
+            "/config/aquarium_control_test_simulator.toml".to_string(),
         );
 
         // switching on all devices
@@ -1155,7 +1047,7 @@ pub mod tests {
     // Pulse command is only permitted for a subset of the devices (e.g., peristaltic pumps).
     pub fn test_create_message_pulse() {
         let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_controllino_simulator.toml".to_string(),
+            "/config/aquarium_control_test_simulator.toml".to_string(),
         );
 
         let mut error_message = create_command_message(
@@ -1318,72 +1210,46 @@ pub mod tests {
 
         // Request Controllino to switch on and off all relays sequentially
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(MainPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(MainPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(MainPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(MainPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(AuxPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(AuxPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_8_secs);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Feeder),
-            ),
-            Ok(())
-        );
+        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
         spin_sleeper.sleep(sleep_duration_6_secs);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Feeder),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_8_secs);
-        assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(Feeder),
-            ),
-            Ok(())
-        );
+        assert_eq!(actuator.actuate(InternalCommand::SwitchOn(Feeder),), Ok(()));
         spin_sleeper.sleep(sleep_duration_6_secs);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOff(Feeder),
-            ),
+            actuator.actuate(InternalCommand::SwitchOff(Feeder),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_8_secs);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(MainPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(MainPump1),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(MainPump2),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(MainPump2),),
             Ok(())
         );
         spin_sleeper.sleep(sleep_duration_500_millis);
         assert_eq!(
-            actuator.actuate(
-                InternalCommand::SwitchOn(AuxPump1),
-            ),
+            actuator.actuate(InternalCommand::SwitchOn(AuxPump1),),
             Ok(())
         );
     }

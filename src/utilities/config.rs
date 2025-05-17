@@ -18,8 +18,8 @@ use std::env;
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
-use crate::relays::relay_manager::RelayManagerConfig;
 use crate::relays::actuate_controllino::ActuateControllinoConfig;
+use crate::relays::relay_manager::RelayManagerConfig;
 use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
 

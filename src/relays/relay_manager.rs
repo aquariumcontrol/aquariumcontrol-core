@@ -231,7 +231,10 @@ impl RelayManager {
             }
 
             // *** communication with refill control ***
-            match relay_manager_channels.rx_relay_manager_from_refill.try_recv() {
+            match relay_manager_channels
+                .rx_relay_manager_from_refill
+                .try_recv()
+            {
                 Ok(c) => {
                     self.lock_error_channel_receive_refill = false;
                     if self.config.active {
@@ -286,7 +289,10 @@ impl RelayManager {
             // **********************************
 
             // *** communication with heating control ***
-            match relay_manager_channels.rx_relay_manager_from_heating.try_recv() {
+            match relay_manager_channels
+                .rx_relay_manager_from_heating
+                .try_recv()
+            {
                 Ok(c) => {
                     self.lock_error_channel_receive_heating = false;
                     match actuator.actuate(c) {
@@ -303,7 +309,10 @@ impl RelayManager {
                             }
                         }
                     }
-                    match &relay_manager_channels.tx_relay_manager_to_heating.send(true) {
+                    match &relay_manager_channels
+                        .tx_relay_manager_to_heating
+                        .send(true)
+                    {
                         Ok(()) => {
                             self.lock_error_channel_send_heating = false;
                         }
@@ -398,7 +407,10 @@ impl RelayManager {
             // **********************************
 
             // *** communication with Balling dosing control ***
-            match relay_manager_channels.rx_relay_manager_from_balling.try_recv() {
+            match relay_manager_channels
+                .rx_relay_manager_from_balling
+                .try_recv()
+            {
                 Ok(c) => {
                     self.lock_error_channel_receive_balling = false;
                     match actuator.actuate(c) {
@@ -415,7 +427,10 @@ impl RelayManager {
                             }
                         }
                     }
-                    match &relay_manager_channels.tx_relay_manager_to_balling.send(true) {
+                    match &relay_manager_channels
+                        .tx_relay_manager_to_balling
+                        .send(true)
+                    {
                         Ok(()) => {
                             self.lock_error_channel_send_balling = false;
                         }
@@ -538,7 +553,7 @@ pub mod tests {
     use std::thread::scope;
 
     use crate::relays::relay_manager::{
-        RelayManager, RelayManagerChannels, RelayError, RelayActuationTrait,
+        RelayActuationTrait, RelayError, RelayManager, RelayManagerChannels,
     };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -567,9 +582,8 @@ pub mod tests {
     #[test]
     // Test case tests the channel communication for the .execute function of relay manager.
     pub fn test_relay_manager_channel_communication() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_simulator.toml".to_string(),
-        );
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
 
         let mut relay_manager = RelayManager::new(config.relay_manager);
 

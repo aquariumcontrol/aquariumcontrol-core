@@ -125,16 +125,16 @@ pub struct HeatingConfig {
     switch_on_when_external_stop: bool,
 }
 
-/// Communicates to Controllino thread via the channel to switch on the heater.
+/// Communicates to relay manager thread via the channel to switch on the heater.
 /// # Arguments
 /// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
-/// * `tx_heating_to_controllino` - sender part of the channel for communication to Controllino
-/// * `rx_heating_from_controllino` - receiver part of the channel for communication from Controllino
+/// * `tx_heating_to_relay_manager` - sender part of the channel for communication to relay manager
+/// * `rx_heating_from_relay_manager` - receiver part of the channel for communication from relay manager
 /// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_heating_to_controllino: &Sender<InternalCommand>,
-    rx_heating_from_controllino: &Receiver<bool>,
+    tx_heating_to_relay_manager: &Sender<InternalCommand>,
+    rx_heating_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
@@ -144,15 +144,15 @@ fn switch_on_heater(
 
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-        match tx_heating_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
+        match tx_heating_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Heater)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_heating_from_controllino.recv() {
+                match rx_heating_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_HEATING,
-                            "receiving answer from Controllino when switching on heater failed ({e:?})"
+                            "receiving answer from relay manager when switching on heater failed ({e:?})"
                         );
                     }
                 };
@@ -160,7 +160,7 @@ fn switch_on_heater(
             Err(e) => {
                 error!(
                     target: LOG_TARGET_HEATING,
-                    "channel communication to Controllino when switching on heater failed ({e:?})"
+                    "channel communication to relay manager when switching on heater failed ({e:?})"
                 );
             }
         }
@@ -169,16 +169,16 @@ fn switch_on_heater(
     }
 }
 
-/// Communicates to Controllino thread via the channel to switch off the heater.
+/// Communicates to relay manager thread via the channel to switch off the heater.
 /// # Arguments
 /// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
-/// * `tx_heating_to_controllino` - sender part of the channel for communication to Controllino
-/// * `rx_heating_from_controllino` - receiver part of the channel for communication from Controllino
+/// * `tx_heating_to_relay_manager` - sender part of the channel for communication to relay manager
+/// * `rx_heating_from_relay_manager` - receiver part of the channel for communication from relay manager
 /// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
-    tx_heating_to_controllino: &Sender<InternalCommand>,
-    rx_heating_from_controllino: &Receiver<bool>,
+    tx_heating_to_relay_manager: &Sender<InternalCommand>,
+    rx_heating_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
@@ -188,15 +188,15 @@ fn switch_off_heater(
 
         // avoid electrical overloads through parallel device actuation
         let mut mutex_data = mutex_device_scheduler_heating.lock().unwrap();
-        match tx_heating_to_controllino.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
+        match tx_heating_to_relay_manager.send(InternalCommand::SwitchOff(AquariumDevice::Heater)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_heating_from_controllino.recv() {
+                match rx_heating_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_HEATING,
-                            "receiving answer from Controllino when switching off the heater failed ({e:?})"
+                            "receiving answer from relay manager when switching off the heater failed ({e:?})"
                         );
                     }
                 };
@@ -204,7 +204,7 @@ fn switch_off_heater(
             Err(e) => {
                 error!(
                     target: LOG_TARGET_HEATING,
-                    "channel communication to Controllino when switching off the heater failed ({e:?})"
+                    "channel communication to relay manager when switching off the heater failed ({e:?})"
                 );
             }
         }
@@ -212,13 +212,13 @@ fn switch_off_heater(
     }
 }
 
-/// Struct collects the channels for communication to Controllino, signal handler, data logger, schedule check and messaging.
+/// Struct collects the channels for communication to relay manager, signal handler, data logger, schedule check and messaging.
 pub struct HeatingChannels {
-    /// Sender part of the channel for communication to the Controllino
-    pub tx_heating_to_controllino: Sender<InternalCommand>,
+    /// Sender part of the channel for communication to the relay manager
+    pub tx_heating_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from the Controllino
-    pub rx_heating_from_controllino: Receiver<bool>,
+    /// Receiver part of the channel for communication from the relay manager
+    pub rx_heating_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_heating_to_signal_handler: Sender<bool>,
@@ -249,15 +249,15 @@ pub struct HeatingChannels {
 /// graph LR
 ///     heating --> ambient[Ambient]
 ///     ambient --> heating
-///     heating --> tank_level_switch[TankLevelSwitch]
+///     heating --> tank_level_switch[Tank Level Switch]
 ///     tank_level_switch --> heating
-///     heating --> controllino[Controllino]
-///     controllino --> heating
-///     heating --> signal_handler[Signal handler]
+///     heating --> relay_manager[Relay Manager]
+///     relay_manager --> heating
+///     heating --> signal_handler[Signal Handler]
 ///     signal_handler --> heating
-///     heating --> data_logger[Data logger]
+///     heating --> data_logger[Data Logger]
 ///     data_logger --> heating
-///     heating --> schedule_check[Schedule check]
+///     heating --> schedule_check[Schedule Check]
 ///     schedule_check --> heating
 ///     messaging[Messaging] --> heating
 /// ```
@@ -422,7 +422,7 @@ impl Heating {
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
-    /// * `heating_channels` - struct containing channels for communication to Controllino, signal handler, data logger, schedule check and messaging.
+    /// * `heating_channels` - struct containing channels for communication to relay manager, signal handler, data logger, schedule check and messaging.
     /// * `heating_stats_transfer` - generic struct for transfer of statistical data to the database
     /// * `mutex_water_temperature` - Mutex for water temperature
     /// * `mutex_ambient_temperature` - Mutex for ambient temperature
@@ -600,8 +600,8 @@ impl Heating {
                     if heater_state != ActuatorState::Off {
                         switch_off_heater(
                             &mutex_device_scheduler_heating,
-                            &heating_channels.tx_heating_to_controllino,
-                            &heating_channels.rx_heating_from_controllino,
+                            &heating_channels.tx_heating_to_relay_manager,
+                            &heating_channels.rx_heating_from_relay_manager,
                             &mut mutex_was_blocked_during_actuation,
                         );
                         heater_state = ActuatorState::Off;
@@ -624,8 +624,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
@@ -635,8 +635,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
@@ -649,8 +649,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
@@ -661,8 +661,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
@@ -677,8 +677,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
@@ -689,8 +689,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
@@ -705,8 +705,8 @@ impl Heating {
                                 if heater_state != ActuatorState::On {
                                     switch_on_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
@@ -717,8 +717,8 @@ impl Heating {
                                 if heater_state != ActuatorState::Off {
                                     switch_off_heater(
                                         &mutex_device_scheduler_heating,
-                                        &heating_channels.tx_heating_to_controllino,
-                                        &heating_channels.rx_heating_from_controllino,
+                                        &heating_channels.tx_heating_to_relay_manager,
+                                        &heating_channels.rx_heating_from_relay_manager,
                                         &mut mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
@@ -818,8 +818,8 @@ impl Heating {
         if heater_state != ActuatorState::Off {
             switch_off_heater(
                 &mutex_device_scheduler_heating,
-                &heating_channels.tx_heating_to_controllino,
-                &heating_channels.rx_heating_from_controllino,
+                &heating_channels.tx_heating_to_relay_manager,
+                &heating_channels.rx_heating_from_relay_manager,
                 &mut mutex_was_blocked_during_actuation,
             );
         }
@@ -851,7 +851,7 @@ impl Heating {
             }
         };
 
-        // This thread has channel connections to underlying threads (Controllino, AtlasScientific, TankLevelSwitch).
+        // This thread has channel connections to underlying threads (relay manager, AtlasScientific, TankLevelSwitch).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
@@ -908,8 +908,8 @@ pub mod tests {
     };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
 
@@ -1035,8 +1035,8 @@ pub mod tests {
         let (tx_tank_level_switch_to_heating, _rx_heating_from_tank_level_switch) = mpsc::channel();
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -1100,12 +1100,14 @@ pub mod tests {
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -1140,12 +1142,12 @@ pub mod tests {
                     tx_heating_to_schedule_check.clone();
                 let tx_heating_to_tank_level_switch_for_test_case_finish =
                     tx_heating_to_tank_level_switch.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -1170,7 +1172,8 @@ pub mod tests {
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
                 let _ = tx_heating_to_tank_level_switch_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("* [Heating] checking reaction to high temperature succeeded.");
             })
@@ -1185,9 +1188,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1210,8 +1213,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -1256,12 +1259,14 @@ pub mod tests {
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -1299,12 +1304,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -1327,7 +1332,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("* [Heating] checking reaction to low temperature succeeded.");
             })
@@ -1339,9 +1345,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1368,8 +1374,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -1414,14 +1420,16 @@ pub mod tests {
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 println!(
-                    "Mock Controllino received {} commands:",
+                    "Mock relay manager received {} commands:",
                     actuation_events.len()
                 );
                 for actuation_event in actuation_events.clone() {
@@ -1576,14 +1584,14 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -1605,7 +1613,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("* [Heating] checking reaction to medium temperature succeeded.");
             })
@@ -1617,9 +1626,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1641,8 +1650,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -1689,14 +1698,16 @@ pub mod tests {
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 println!(
-                    "Mock Controllino received {} commands.",
+                    "Mock relay manager received {} commands.",
                     actuation_events.len()
                 );
                 assert_eq!(actuation_events.len(), 1);
@@ -1727,14 +1738,14 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -1755,7 +1766,7 @@ heating_channels,                    &mut heating_stats_transfer,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 // check if heater actuation has taken place
                 let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
@@ -1775,9 +1786,9 @@ heating_channels,                    &mut heating_stats_transfer,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1798,8 +1809,8 @@ heating_channels,                    &mut heating_stats_transfer,
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -1861,11 +1872,11 @@ heating_channels,                    &mut heating_stats_transfer,
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                mock_relay_manager(&tx_relay_manager_to_heating, &rx_relay_manager_from_heating);
             })
             .unwrap();
 
@@ -1891,14 +1902,14 @@ heating_channels,                    &mut heating_stats_transfer,
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -1920,7 +1931,7 @@ heating_channels,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!(
                     "test_heating_wait_for_midnight_calc_stats_heater_on (previous): {}",
@@ -2040,9 +2051,9 @@ heating_channels,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2063,8 +2074,8 @@ heating_channels,
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -2126,11 +2137,11 @@ heating_channels,
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                mock_relay_manager(&tx_relay_manager_to_heating, &rx_relay_manager_from_heating);
             })
             .unwrap();
 
@@ -2156,14 +2167,14 @@ heating_channels,
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -2185,7 +2196,7 @@ heating_channels,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!(
                     "test_heating_wait_for_midnight_calc_stats_heater_on (previous): {}",
@@ -2305,9 +2316,9 @@ heating_channels,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2328,8 +2339,8 @@ heating_channels,
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -2374,12 +2385,14 @@ heating_channels,
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -2412,14 +2425,14 @@ heating_channels,
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -2441,7 +2454,8 @@ heating_channels,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
                 println!("* [Heating] checking if schedule checker can block actuation.");
             })
             .unwrap();
@@ -2452,9 +2466,9 @@ heating_channels,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2474,9 +2488,9 @@ heating_channels,
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
@@ -2521,12 +2535,14 @@ heating_channels,
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
                 assert_eq!(
@@ -2564,14 +2580,14 @@ heating_channels,
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -2593,7 +2609,8 @@ heating_channels,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("* [Heating] checking if schedule checker can block actuation.");
             })
@@ -2605,9 +2622,9 @@ heating_channels,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2627,8 +2644,8 @@ heating_channels,
 
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_controllino, rx_controllino_from_heating) = mpsc::channel();
-        let (tx_controllino_to_heating, rx_heating_from_controllino) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
@@ -2675,12 +2692,14 @@ heating_channels,
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events =
-                    mock_controllino(&tx_controllino_to_heating, &rx_controllino_from_heating);
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_heating,
+                    &rx_relay_manager_from_heating,
+                );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
                     println!("{}", actuation_event);
@@ -2794,14 +2813,14 @@ heating_channels,
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_heating_to_schedule_check_for_test_case_finish =
                     tx_heating_to_schedule_check.clone();
-                let tx_heating_to_controllino_for_test_case_finish =
-                    tx_heating_to_controllino.clone();
+                let tx_heating_to_relay_manager_for_test_case_finish =
+                    tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
 
                 let heating_channels = HeatingChannels {
-                    tx_heating_to_controllino,
-                    rx_heating_from_controllino,
+                    tx_heating_to_relay_manager,
+                    rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
                     tx_heating_to_data_logger,
@@ -2822,7 +2841,8 @@ heating_channels,
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
-                let _ = tx_heating_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ =
+                    tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("* [Heating] checking if messaging can block and restart actuation.");
             })
@@ -2834,9 +2854,9 @@ heating_channels,
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");

@@ -19,6 +19,6 @@ pub mod actuate_simulator;
 /// Contains the functionality to translate an actuator command into the relay actuation command
 pub mod device_relay_logic;
 
-mod controllino_message;
 /// Contains the trait implementation for the relay actuation via GPIO
 pub mod actuate_gpio;
+mod controllino_message;

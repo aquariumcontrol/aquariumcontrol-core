@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod actuation_event;
 pub mod mock_ambient;
 pub mod mock_atlas_scientific;
-pub mod mock_controllino;
+pub mod mock_relay_manager;
 pub mod mock_data_injection;
 pub mod mock_data_logger;
 pub mod mock_heating;

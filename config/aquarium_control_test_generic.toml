@@ -1,5 +1,5 @@
-[controllino]
-active = true						                    # used for testing purposes
+[relay_manager]
+active = true			                    	# used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
 use_gpio = false                                        # if true, then use GPIO instead of Controllino
 
