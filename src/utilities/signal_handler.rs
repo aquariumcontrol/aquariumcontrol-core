@@ -494,7 +494,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
         "watchdog",
     );
-    
+
     send_command(
         InternalCommand::Terminate,
         signal_handler_channels
@@ -950,7 +950,7 @@ pub mod tests {
             InternalCommand::Terminate
         );
         _ = tx_watchdog_to_signal_handler.send(true);
-        
+
         assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate

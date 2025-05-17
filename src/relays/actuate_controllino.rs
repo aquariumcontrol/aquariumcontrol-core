@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::relays::controllino::{ControllinoError, RelayActuationTrait};
+use crate::relays::relay_manager::{RelayError, RelayActuationTrait};
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use log::{error, warn};
@@ -78,7 +78,7 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
 }
 
 #[derive(Clone, Deserialize, Debug)]
-pub struct ControllinoRelayConfig {
+pub struct ActuateControllinoConfig {
     /// Baud rate for communication via serial port
     baud_rate: u32,
 
@@ -90,7 +90,7 @@ pub struct ControllinoRelayConfig {
 
     /// time in milliseconds to wait for response
     controllino_processing_millis: u64,
-    
+
     /// Relay id of the protein skimmer
     /// - Caution: relay login (true/false) and device logic (off/on) is reverse.
     pub skimmer_id: u8,
@@ -137,8 +137,8 @@ pub struct ControllinoRelayConfig {
 }
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
-pub struct ControllinoActuateHardware {
-    config: ControllinoRelayConfig,
+pub struct ActuateControllino {
+    config: ActuateControllinoConfig,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
     /// Attribute is public because access from within test cases.
@@ -159,8 +159,8 @@ pub struct ControllinoActuateHardware {
 /// * `config` - configuration of Controllino
 fn create_command_message(
     internal_command: InternalCommand,
-    config: &ControllinoRelayConfig,
-) -> Result<ControllinoMessage, ControllinoError> {
+    config: &ActuateControllinoConfig,
+) -> Result<ControllinoMessage, RelayError> {
     match internal_command {
         InternalCommand::SwitchOn(ref c)
         | InternalCommand::SwitchOff(ref c)
@@ -193,7 +193,7 @@ fn create_command_message(
                     )
                 }
                 _ => {
-                    return Err(ControllinoError::IrrelevantCommand(internal_command));
+                    return Err(RelayError::IrrelevantCommand(internal_command));
                 }
             };
             let controllino_message_content =
@@ -201,7 +201,7 @@ fn create_command_message(
             let controllino_message = ControllinoMessage::new(controllino_message_content);
             Ok(controllino_message)
         }
-        _ => Err(ControllinoError::IrrelevantCommand(internal_command)),
+        _ => Err(RelayError::IrrelevantCommand(internal_command)),
     }
 }
 
@@ -214,8 +214,8 @@ fn create_command_message(
 pub fn get_relay_command(
     internal_command: &InternalCommand,
     device: AquariumDevice,
-    config: &ControllinoRelayConfig,
-) -> Result<InternalCommand, ControllinoError> {
+    config: &ActuateControllinoConfig,
+) -> Result<InternalCommand, RelayError> {
     match device {
         AquariumDevice::Skimmer => match internal_command {
             InternalCommand::SwitchOn(_) => {
@@ -225,9 +225,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::SetRelay(config.skimmer_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -239,9 +239,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::SetRelay(config.main_pump1_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -253,9 +253,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::SetRelay(config.main_pump2_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -267,9 +267,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::SetRelay(config.aux_pump1_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -281,9 +281,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::SetRelay(config.aux_pump2_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -293,9 +293,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::UnsetRelay(config.heater_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -307,9 +307,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::UnsetRelay(config.ventilation_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -321,9 +321,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::UnsetRelay(config.refill_pump_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -333,9 +333,9 @@ pub fn get_relay_command(
                 Ok(InternalCommand::UnsetRelay(config.feeder_id as u16))
             }
             InternalCommand::Pulse(d, _) => {
-                Err(ControllinoError::PulseNotAllowedForDevice(d.clone()))
+                Err(RelayError::PulseNotAllowedForDevice(d.clone()))
             }
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -350,7 +350,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump1_id as u16,
                 *t,
             )),
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -365,7 +365,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump2_id as u16,
                 *t,
             )),
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -380,7 +380,7 @@ pub fn get_relay_command(
                 config.peristaltic_pump3_id as u16,
                 *t,
             )),
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
@@ -395,25 +395,20 @@ pub fn get_relay_command(
                 config.peristaltic_pump4_id as u16,
                 *t,
             )),
-            _ => Err(ControllinoError::IrrelevantCommand(
+            _ => Err(RelayError::IrrelevantCommand(
                 internal_command.clone(),
             )),
         },
     }
 }
 
-impl RelayActuationTrait for ControllinoActuateHardware {
-    /// Triggers actuation on real hardware via serial port communication
+impl RelayActuationTrait for ActuateControllino {
+    /// Triggers actuation on Controllino hardware via serial port communication
     /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
     /// considering relay id and relay logic.
     /// # Arguments
     /// * `internal_command` - enum value used for identifying content which shall be sent
-    /// * `_tx_to_tcp_opt` - channel for communication with simulator wrapped in Option - not used in this implementation of the trait
-  
-    fn actuate(
-        &mut self,
-        internal_command: InternalCommand,
-    ) -> Result<(), ControllinoError> {
+    fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
             | InternalCommand::SwitchOff(ref _c)
@@ -426,7 +421,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                             target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                             "preparation of communication failed ({e:?})"
                         );
-                        return Err(ControllinoError::FailureCommandMessageCreation);
+                        return Err(RelayError::FailureCommandMessageCreation);
                     }
                 };
 
@@ -447,12 +442,13 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                             target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                             "sending command to Controllino failed ({e:?})"
                         );
-                        return Err(ControllinoError::WriteError);
+                        return Err(RelayError::WriteError);
                     }
                 }
 
                 // give Controllino some time to process the command
-                self.spin_sleeper.sleep(self.controllino_processing_duration);
+                self.spin_sleeper
+                    .sleep(self.controllino_processing_duration);
 
                 // for pulse command, also wait the pulse duration
                 match internal_command {
@@ -472,7 +468,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                                 target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                                 "Received response from device with incorrect checksums"
                             );
-                            Err(ControllinoError::IncorrectChecksum)
+                            Err(RelayError::IncorrectChecksum)
                         } else {
                             Ok(())
                         }
@@ -482,7 +478,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                             target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
                             "receiving response from device failed."
                         );
-                        Err(ControllinoError::ReadError)
+                        Err(RelayError::ReadError)
                     }
                 }
             }
@@ -492,7 +488,7 @@ impl RelayActuationTrait for ControllinoActuateHardware {
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
-                Err(ControllinoError::IrrelevantCommand(internal_command))
+                Err(RelayError::IrrelevantCommand(internal_command))
             }
         }
     }
@@ -561,8 +557,8 @@ fn controllino_open_serial_port(
     serial_port
 }
 
-impl ControllinoActuateHardware {
-    pub fn new(config: ControllinoRelayConfig) -> ControllinoActuateHardware {
+impl ActuateControllino {
+    pub fn new(config: ActuateControllinoConfig) -> ActuateControllino {
         let spin_sleeper = SpinSleeper::default();
 
         let serial_port = controllino_open_serial_port(
@@ -571,10 +567,14 @@ impl ControllinoActuateHardware {
             config.timeout_millis,
         );
         let controllino_processing_millis = config.controllino_processing_millis;
-        let controllino_processing_duration =
-            Duration::from_millis(controllino_processing_millis);
-        
-        ControllinoActuateHardware { config, spin_sleeper, controllino_processing_duration, serial_port }
+        let controllino_processing_duration = Duration::from_millis(controllino_processing_millis);
+
+        ActuateControllino {
+            config,
+            spin_sleeper,
+            controllino_processing_duration,
+            serial_port,
+        }
     }
 }
 
@@ -597,8 +597,8 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
-    use crate::relays::controllino::ControllinoError;
-    use crate::relays::controllino_actuate_hardware::{
+    use crate::relays::relay_manager::RelayError;
+    use crate::relays::actuate_controllino::{
         controllino_constants, create_command_message,
     };
     use crate::utilities::channel_content::InternalCommand;
@@ -623,7 +623,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
-        let controllino = Controllino::new(config.controllino);
+        let controllino = Controllino::new(config.relay_manager);
 
         let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
 
@@ -644,10 +644,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Skimmer),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -655,10 +651,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Ventilation),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -666,10 +658,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Heater),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -677,10 +665,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -688,10 +672,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -699,10 +679,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -710,10 +686,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -721,10 +693,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -732,10 +700,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -743,10 +707,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump3),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -754,10 +714,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(PeristalticPump4),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -765,10 +721,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -776,10 +728,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Skimmer),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -787,10 +735,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Ventilation),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -798,10 +742,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Heater),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -809,10 +749,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -820,10 +756,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -831,10 +763,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -842,10 +770,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -853,10 +777,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -864,10 +784,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -875,10 +791,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump3),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -886,10 +798,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(PeristalticPump4),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -897,10 +805,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -910,10 +814,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump1, 500),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -921,10 +821,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump2, 500),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -932,10 +828,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump3, 500),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -943,10 +835,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::Pulse(PeristalticPump4, 500),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -960,7 +848,7 @@ pub mod tests {
         );
         assert_eq!(
             create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay),
-            Err(ControllinoError::IrrelevantCommand(
+            Err(RelayError::IrrelevantCommand(
                 InternalCommand::ResetAllErrors
             )),
         );
@@ -1276,7 +1164,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(Skimmer))
+            Err(RelayError::PulseNotAllowedForDevice(Skimmer))
         );
 
         error_message = create_command_message(
@@ -1285,7 +1173,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(Ventilation))
+            Err(RelayError::PulseNotAllowedForDevice(Ventilation))
         );
 
         error_message = create_command_message(
@@ -1294,7 +1182,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(Heater))
+            Err(RelayError::PulseNotAllowedForDevice(Heater))
         );
 
         error_message = create_command_message(
@@ -1303,7 +1191,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(MainPump1))
+            Err(RelayError::PulseNotAllowedForDevice(MainPump1))
         );
 
         error_message = create_command_message(
@@ -1312,7 +1200,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(MainPump2))
+            Err(RelayError::PulseNotAllowedForDevice(MainPump2))
         );
 
         error_message = create_command_message(
@@ -1321,7 +1209,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(AuxPump1))
+            Err(RelayError::PulseNotAllowedForDevice(AuxPump1))
         );
 
         error_message = create_command_message(
@@ -1330,7 +1218,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(AuxPump2))
+            Err(RelayError::PulseNotAllowedForDevice(AuxPump2))
         );
 
         let mut message = create_command_message(
@@ -1396,7 +1284,7 @@ pub mod tests {
         );
         assert_eq!(
             error_message,
-            Err(ControllinoError::PulseNotAllowedForDevice(Feeder))
+            Err(RelayError::PulseNotAllowedForDevice(Feeder))
         );
     }
 
@@ -1411,7 +1299,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let config: ConfigData = read_config_file(get_platform_specific_configuration_file());
-        let controllino = Controllino::new(config.controllino);
+        let controllino = Controllino::new(config.relay_manager);
 
         let config2: ConfigData = read_config_file(get_platform_specific_configuration_file());
 
@@ -1432,10 +1320,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1443,10 +1327,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(MainPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1454,10 +1334,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(AuxPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1465,10 +1341,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1476,10 +1348,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1487,10 +1355,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1498,10 +1362,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOff(Feeder),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1509,10 +1369,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1520,10 +1376,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(MainPump2),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );
@@ -1531,10 +1383,6 @@ pub mod tests {
         assert_eq!(
             actuator.actuate(
                 InternalCommand::SwitchOn(AuxPump1),
-                &mut Some(serial_port.try_clone().expect(expect_info)),
-                &controllino.spin_sleeper_opt,
-                &controllino.controllino_processing_duration_opt,
-                &config2.controllino
             ),
             Ok(())
         );

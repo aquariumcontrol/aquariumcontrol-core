@@ -16,7 +16,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use crate::food::{feed::Feed, food_injection::FoodInjection};
 use crate::recorder::data_logger::DataLogger;
-use crate::relays::controllino::Controllino;
+use crate::relays::relay_manager::RelayManager;
 use crate::utilities::channel_content::InternalCommand;
 
 #[cfg(target_os = "linux")]
@@ -309,7 +309,7 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
     }
 }
 
-impl ProcessExternalRequestTrait for Controllino {
+impl ProcessExternalRequestTrait for RelayManager {
     /// Checks if there are new messages in the channel.
     /// Implementation for Controllino
     /// # Arguments

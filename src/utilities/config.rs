@@ -18,8 +18,8 @@ use std::env;
 
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
-use crate::relays::controllino::ControllinoConfig;
-use crate::relays::controllino_actuate_hardware::ControllinoRelayConfig;
+use crate::relays::relay_manager::RelayManagerConfig;
+use crate::relays::actuate_controllino::ActuateControllinoConfig;
 use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
 
@@ -97,11 +97,11 @@ pub struct ConfigData {
     /// configuration of the feed control
     pub feed: FeedConfig,
 
-    /// configuration of the Controllino
-    pub controllino: ControllinoConfig,
+    /// configuration of the relay manager
+    pub relay_manager: RelayManagerConfig,
 
     /// configuration of the Controllino relays
-    pub controllino_relay: ControllinoRelayConfig,
+    pub controllino_relay: ActuateControllinoConfig,
 
     /// configuration for schedule check
     pub schedule_check: ScheduleCheckConfig,

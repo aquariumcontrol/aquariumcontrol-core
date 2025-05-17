@@ -76,10 +76,10 @@ use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::DataLogger;
-use crate::relays::controllino::{Controllino, ControllinoChannels};
+use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
 //use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
-use crate::relays::controllino_actuate_simulator::ControllinoActuateSimulator;
-use crate::relays::relay_manager_actuate_gpio::RelayManagerActuateGpio;
+use crate::relays::actuate_simulator::ActuateSimulator;
+use crate::relays::actuate_gpio::ActuateGpio;
 use crate::sensors::ambient::Ambient;
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
@@ -107,7 +107,7 @@ use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInt
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
-use crate::relays::controllino_actuate_hardware::ControllinoActuateHardware;
+use crate::relays::actuate_controllino::ActuateControllino;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::dht::Dht;
 
@@ -445,7 +445,7 @@ fn main() {
 
     // check if any of the components requires use of the simulator
     let use_simulator = config.gpio_handler.use_simulator
-        | config.controllino.use_simulator
+        | config.relay_manager.use_simulator
         | config.ambient.use_simulator
         | config.atlas_scientific.use_simulator
         | config.tank_level_switch.use_simulator;
@@ -881,14 +881,14 @@ fn main() {
         false => None,
     };
 
-    let tx_controllino_to_tcp_opt: Option<Sender<InternalCommand>> =
-        match config.controllino.use_simulator {
+    let tx_relay_manager_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.relay_manager.use_simulator {
             true => Some(tx_controllino_to_tcp),
             false => None,
         };
 
-    let rx_tcp_communication_from_controllino_opt: Option<Receiver<InternalCommand>> =
-        match config.controllino.use_simulator {
+    let rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>> =
+        match config.relay_manager.use_simulator {
             true => Some(rx_tcp_communication_from_controllino),
             false => None,
         };
@@ -1036,12 +1036,12 @@ fn main() {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
-    
+
     #[cfg(not(feature = "target_hw"))]
-    let relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
+    let relay_manager_actuate_gpio_opt: Option<ActuateGpio> = None;
     #[cfg(feature = "target_hw")]
-    let mut relay_manager_actuate_gpio_opt: Option<RelayManagerActuateGpio> = None;
-    
+    let mut relay_manager_actuate_gpio_opt: Option<ActuateGpio> = None;
+
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
@@ -1053,7 +1053,7 @@ fn main() {
             let gpio_dht22_io = config.gpio_handler.dht22_io;
             let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
-            let gpio_skimmer = config.gpio_handler.skimmer;
+            let actuate_gpio_config = ActuateGpioConfig::new(config.gpio_handler);
             let use_simulator = config.gpio_handler.use_simulator;
             let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
 
@@ -1088,7 +1088,7 @@ fn main() {
                     dht_opt = Some(
                         Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
                     );
-                    relay_manager_actuate_gpio_opt = Some(RelayManagerActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, gpio_skimmer));
+                    relay_manager_actuate_gpio_opt = Some(RelayManagerActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
                 }
             }
         }
@@ -1111,7 +1111,7 @@ fn main() {
     let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
     let mut ambient = Ambient::new(config.ambient);
 
-    let mut controllino = Controllino::new(config.controllino.clone());
+    let mut controllino = RelayManager::new(config.relay_manager.clone());
     let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
 
     let mut data_injection = DataInjection;
@@ -1131,19 +1131,19 @@ fn main() {
         config.ds18b20.replacement_value_ambient_temperature;
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
-    let controllino_channels = ControllinoChannels {
-        tx_controllino_to_refill,
-        rx_controllino_from_refill,
-        tx_controllino_to_heating,
-        rx_controllino_from_heating,
-        tx_controllino_to_ventilation,
-        rx_controllino_from_ventilation,
-        tx_controllino_to_balling,
-        rx_controllino_from_balling,
-        tx_controllino_to_feed,
-        rx_controllino_from_feed,
-        tx_controllino_to_signal_handler,
-        rx_controllino_from_signal_handler,
+    let controllino_channels = RelayManagerChannels {
+        tx_relay_manager_to_refill: tx_controllino_to_refill,
+        rx_relay_manager_from_refill: rx_controllino_from_refill,
+        tx_relay_manager_to_heating: tx_controllino_to_heating,
+        rx_relay_manager_from_heating: rx_controllino_from_heating,
+        tx_relay_manager_to_ventilation: tx_controllino_to_ventilation,
+        rx_relay_manager_from_ventilation: rx_controllino_from_ventilation,
+        tx_relay_manager_to_balling: tx_controllino_to_balling,
+        rx_relay_manager_from_balling: rx_controllino_from_balling,
+        tx_relay_manager_to_feed: tx_controllino_to_feed,
+        rx_relay_manager_from_feed: rx_controllino_from_feed,
+        tx_relay_manager_to_signal_handler: tx_controllino_to_signal_handler,
+        rx_relay_manager_from_signal_handler: rx_controllino_from_signal_handler,
     };
 
     let atlas_scientific_channels = AtlasScientificChannels {
@@ -1210,7 +1210,7 @@ fn main() {
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
-        rx_tcp_communication_from_controllino_opt,
+        rx_tcp_communication_from_controllino_opt: rx_tcp_communication_from_relay_manager_opt,
         rx_tcp_communication_from_ambient_opt,
         tx_tcp_communication_to_ambient_opt,
         rx_tcp_communication_from_atlas_scientific_opt,
@@ -1335,23 +1335,26 @@ fn main() {
             debug!(target: LOG_TARGET_MAIN, "TcpCommunication terminated.");
         };
 
-        if config.controllino.use_simulator {
+        if config.relay_manager.use_simulator {
             scope.spawn(move || {
-                let mut controllino_actuate_simulator = ControllinoActuateSimulator::new(tx_controllino_to_tcp_opt, config.controllino_relay);
+                let mut controllino_actuate_simulator = ActuateSimulator::new(
+                    tx_relay_manager_to_tcp_opt,
+                    config.controllino_relay,
+                );
                 controllino.execute(controllino_channels, &mut controllino_actuate_simulator);
                 #[cfg(feature = "debug_main")]
                 debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
-                if config.controllino.use_gpio {
+                if config.relay_manager.use_gpio {
                     if !relay_manager_actuate_gpio_opt.is_some() {
                         panic!("{}: aquarium control not configured correctly. Missing instantiation of RelayManagerActuateGpio.", LOG_TARGET_MAIN);
                     }
                     controllino.execute(controllino_channels, &mut relay_manager_actuate_gpio_opt.unwrap());
                 }
                 else {
-                    let mut controllino_actuate_hardware = ControllinoActuateHardware::new(config.controllino_relay);
+                    let mut controllino_actuate_hardware = ActuateControllino::new(config.controllino_relay);
                     controllino.execute(controllino_channels, &mut controllino_actuate_hardware);
                 }
 

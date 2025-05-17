@@ -1,4 +1,4 @@
-use crate::relays::controllino_actuate_hardware::controllino_constants;
+use crate::relays::actuate_controllino::controllino_constants;
 use std::fmt;
 
 /// Container for message content sent to Controllino

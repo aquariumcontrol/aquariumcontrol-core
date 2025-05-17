@@ -7,24 +7,24 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::relays::controllino::ControllinoError;
+use crate::relays::relay_manager::RelayError;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 
-fn get_relay_command_normally_open(command: &InternalCommand) -> Result<bool, ControllinoError> {
+fn get_relay_command_normally_open(command: &InternalCommand) -> Result<bool, RelayError> {
     match command {
         InternalCommand::SwitchOn(_) => Ok(true),
         InternalCommand::SwitchOff(_) => Ok(false),
-        InternalCommand::Pulse(d, _) => Err(ControllinoError::PulseNotAllowedForDevice(d.clone())),
-        _ => Err(ControllinoError::IrrelevantCommand(command.clone())),
+        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+        _ => Err(RelayError::IrrelevantCommand(command.clone())),
     }
 }
 
-fn get_relay_command_normally_closed(command: &InternalCommand) -> Result<bool, ControllinoError> {
+fn get_relay_command_normally_closed(command: &InternalCommand) -> Result<bool, RelayError> {
     match command {
         InternalCommand::SwitchOn(_) => Ok(false),
         InternalCommand::SwitchOff(_) => Ok(true),
-        InternalCommand::Pulse(d, _) => Err(ControllinoError::PulseNotAllowedForDevice(d.clone())),
-        _ => Err(ControllinoError::IrrelevantCommand(command.clone())),
+        InternalCommand::Pulse(d, _) => Err(RelayError::PulseNotAllowedForDevice(d.clone())),
+        _ => Err(RelayError::IrrelevantCommand(command.clone())),
     }
 }
 
@@ -35,7 +35,7 @@ fn get_relay_command_normally_closed(command: &InternalCommand) -> Result<bool, 
 pub fn get_relay_command_gpio(
     internal_command: &InternalCommand,
     device: AquariumDevice,
-) -> Result<bool, ControllinoError> {
+) -> Result<bool, RelayError> {
     match device {
         AquariumDevice::Skimmer => get_relay_command_normally_closed(internal_command),
         AquariumDevice::MainPump1 => get_relay_command_normally_closed(internal_command),
