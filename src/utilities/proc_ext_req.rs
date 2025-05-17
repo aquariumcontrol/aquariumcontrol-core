@@ -16,7 +16,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use crate::food::{feed::Feed, food_injection::FoodInjection};
 use crate::recorder::data_logger::DataLogger;
-use crate::relays::controllino::Controllino;
+use crate::relays::relay_manager::RelayManager;
 use crate::utilities::channel_content::InternalCommand;
 
 #[cfg(target_os = "linux")]
@@ -309,7 +309,7 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
     }
 }
 
-impl ProcessExternalRequestTrait for Controllino {
+impl ProcessExternalRequestTrait for RelayManager {
     /// Checks if there are new messages in the channel.
     /// Implementation for Controllino
     /// # Arguments
@@ -366,10 +366,10 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
             InternalCommand::Quit => true,
             _ => {
                 warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
-                        "ignoring inapplicable command {} from signal handler.",
-                        c
-                    );
+                    target: LOG_TARGET_PROC_EXT_REQ,
+                    "ignoring inapplicable command {} from signal handler.",
+                    c
+                );
                 false
             }
         },
@@ -379,9 +379,9 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
                 TryRecvError::Disconnected => {
                     #[cfg(not(test))]
                     error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
-                            "receiving command from signal handler failed ({e:?})"
-                        );
+                        target: LOG_TARGET_PROC_EXT_REQ,
+                        "receiving command from signal handler failed ({e:?})"
+                    );
                 }
             }
             false

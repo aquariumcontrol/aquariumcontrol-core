@@ -507,9 +507,9 @@ pub mod tests {
                     tx_messaging_to_watchdog,
                 );
             })
-            .unwrap()        
+            .unwrap()
     }
-    
+
     #[cfg(target_os = "linux")]
     fn create_test_environment(
         msg_commands: Vec<Message>,
@@ -623,7 +623,7 @@ pub mod tests {
             tx_messaging_to_monitors,
             tx_messaging_to_watchdog,
         );
-        
+
         join_handle_mock_ventilation
             .join()
             .expect("Mock ventilation thread did not finish.");

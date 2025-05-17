@@ -98,10 +98,10 @@ pub struct SignalHandlerChannels {
     pub rx_signal_handler_from_heating: Receiver<bool>,
 
     /// sender part of the channel for communication to Controllino
-    pub tx_signal_handler_to_controllino: Sender<InternalCommand>,
+    pub tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
 
     /// receiver part of the channel for communication from Controllino
-    pub rx_signal_handler_from_controllino: Receiver<bool>,
+    pub rx_signal_handler_from_relay_manager: Receiver<bool>,
 
     /// sender part of the channel for communication to Atlas Scientific
     pub tx_signal_handler_to_atlas_scientific: Sender<InternalCommand>,
@@ -191,8 +191,8 @@ pub struct SignalHandlerChannels {
 ///     tank_level_switch --> signal_handler
 ///     signal_handler --> heating[Heating control]
 ///     heating --> signal_handler
-///     signal_handler --> controllino[Controllino]
-///     controllino --> signal_handler
+///     signal_handler --> relay_manager[Relay Manager]
+///     relay_manager --> signal_handler
 ///     signal_handler --> atlas_scientific[Atlas Scientific]
 ///     atlas_scientific --> signal_handler
 ///     signal_handler --> ambient[Ambient]
@@ -380,9 +380,9 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     send_command(
         InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_controllino),
-        Some(&signal_handler_channels.rx_signal_handler_from_controllino),
-        "controllino",
+        Some(&signal_handler_channels.tx_signal_handler_to_relay_manager),
+        Some(&signal_handler_channels.rx_signal_handler_from_relay_manager),
+        "relay_manager",
     );
     send_command(
         InternalCommand::Quit,
@@ -494,6 +494,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         Some(&signal_handler_channels.rx_signal_handler_from_watchdog),
         "watchdog",
     );
+
     send_command(
         InternalCommand::Terminate,
         signal_handler_channels
@@ -619,12 +620,12 @@ pub mod tests {
         ) = mpsc::channel();
         // *********************************
 
-        // *** signal handler <=> controllino ***
-        let (tx_signal_handler_to_controllino, rx_controllino_from_signal_handler): (
+        // *** signal handler <=> relay_manager ***
+        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
-        let (tx_controllino_to_signal_handler, rx_signal_handler_from_controllino): (
+        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager): (
             Sender<bool>,
             Receiver<bool>,
         ) = mpsc::channel();
@@ -723,7 +724,7 @@ pub mod tests {
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
-        let (_tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
+        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog): (
             Sender<bool>,
             Receiver<bool>,
         ) = mpsc::channel();
@@ -743,8 +744,8 @@ pub mod tests {
                     rx_signal_handler_from_tank_level_switch,
                     tx_signal_handler_to_heating,
                     rx_signal_handler_from_heating,
-                    tx_signal_handler_to_controllino,
-                    rx_signal_handler_from_controllino,
+                    tx_signal_handler_to_relay_manager,
+                    rx_signal_handler_from_relay_manager,
                     tx_signal_handler_to_atlas_scientific,
                     rx_signal_handler_from_atlas_scientific,
                     tx_signal_handler_to_ambient,
@@ -867,10 +868,10 @@ pub mod tests {
         // no response from dht
 
         assert_eq!(
-            rx_controllino_from_signal_handler.recv().unwrap(),
+            rx_relay_manager_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
-        _ = tx_controllino_to_signal_handler.send(true);
+        _ = tx_relay_manager_to_signal_handler.send(true);
 
         assert_eq!(
             rx_tcp_from_signal_handler.recv().unwrap(),
@@ -948,7 +949,7 @@ pub mod tests {
             rx_watchdog_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
-        // no response to termination request
+        _ = tx_watchdog_to_signal_handler.send(true);
 
         assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),

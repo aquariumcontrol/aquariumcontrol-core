@@ -61,16 +61,16 @@ pub struct VentilationConfig {
     switch_on_when_external_stop: bool,
 }
 
-/// Communicates to Controllino thread via the channel to switch on the ventilation
+/// Communicates to relay manager thread via the channel to switch on the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_ventilation_to_controllino` - Sender part of the channel for communication to Controllino
-/// * `rx_ventilation_from_controllino` - Receiver part of the channel for communication from Controllino
+/// * `tx_ventilation_to_relay_manager` - Sender part of the channel for communication to relay manager
+/// * `rx_ventilation_from_relay_manager` - Receiver part of the channel for communication from relay manager
 /// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_ventilation_to_controllino: &Sender<InternalCommand>,
-    rx_ventilation_from_controllino: &Receiver<bool>,
+    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
+    rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     // reduce probability of wrong warning
@@ -79,16 +79,17 @@ fn switch_on_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_controllino.send(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
+    match tx_ventilation_to_relay_manager
+        .send(InternalCommand::SwitchOn(AquariumDevice::Ventilation))
     {
         Ok(_) => {
             // now listen for the response
-            match rx_ventilation_from_controllino.recv() {
+            match rx_ventilation_from_relay_manager.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_VENTILATION,
-                        "receiving answer from Controllino when switching on ventilation failed ({e:?})"
+                        "receiving answer from relay manager when switching on ventilation failed ({e:?})"
                     );
                 }
             };
@@ -96,23 +97,23 @@ fn switch_on_ventilation(
         Err(e) => {
             error!(
                 target: LOG_TARGET_VENTILATION,
-                "channel communication to Controllino when switching on ventilation ({e:?})"
+                "channel communication to relay manager when switching on ventilation ({e:?})"
             );
         }
     }
     *mutex_data += 1;
 }
 
-/// Communicates to Controllino thread via the channel to switch off the ventilation
+/// Communicates to relay manager thread via the channel to switch off the ventilation
 /// # Arguments
 /// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_ventilation_to_controllino` - Sender part of the channel for communication to Controllino
-/// * `rx_ventilation_from_controllino` - Receiver part of the channel for communication from Controllino
+/// * `tx_ventilation_to_relay_manager` - Sender part of the channel for communication to relay manager
+/// * `rx_ventilation_from_relay_manager` - Receiver part of the channel for communication from relay manager
 /// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
-    tx_ventilation_to_controllino: &Sender<InternalCommand>,
-    rx_ventilation_from_controllino: &Receiver<bool>,
+    tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
+    rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
     // reduce probability of wrong warning
@@ -121,17 +122,17 @@ fn switch_off_ventilation(
 
     // avoid electrical overloads through parallel device actuation
     let mut mutex_data = mutex_device_scheduler_ventilation.lock().unwrap();
-    match tx_ventilation_to_controllino
+    match tx_ventilation_to_relay_manager
         .send(InternalCommand::SwitchOff(AquariumDevice::Ventilation))
     {
         Ok(_) => {
             // now listen for the response
-            match rx_ventilation_from_controllino.recv() {
+            match rx_ventilation_from_relay_manager.recv() {
                 Ok(_) => {}
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_VENTILATION,
-                        "receiving answer from Controllino when switching off ventilation failed ({e:?})"
+                        "receiving answer from relay manager when switching off ventilation failed ({e:?})"
                     );
                 }
             };
@@ -139,7 +140,7 @@ fn switch_off_ventilation(
         Err(e) => {
             error!(
                 target: LOG_TARGET_VENTILATION,
-                "channel communication to Controllino when switching off ventilation failed ({e:?})"
+                "channel communication to relay manager when switching off ventilation failed ({e:?})"
             );
         }
     }
@@ -148,11 +149,11 @@ fn switch_off_ventilation(
 
 /// Struct collects the channels for communication between Ventilation and other components.
 pub struct VentilationChannels {
-    /// Sender part of the channel for communication to Controllino
-    pub tx_ventilation_to_controllino: Sender<InternalCommand>,
+    /// Sender part of the channel for communication to relay manager
+    pub tx_ventilation_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from Controllino
-    pub rx_ventilation_from_controllino: Receiver<bool>,
+    /// Receiver part of the channel for communication from relay manager
+    pub rx_ventilation_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_ventilation_to_signal_handler: Sender<bool>,
@@ -181,15 +182,15 @@ pub struct VentilationChannels {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ventilation[Ventilation control] --> atlas_scientific[AtlasScientific]
+///     ventilation[Ventilation Control] --> atlas_scientific[Atlas Scientific]
 ///     atlas_scientific --> ventilation
-///     ventilation --> controllino[Controllino]
-///     controllino --> ventilation
-///     ventilation --> signal_handler[Signal handler]
+///     ventilation --> relay_manager[Relay Manager]
+///     relay_manager --> ventilation
+///     ventilation --> signal_handler[Signal Handler]
 ///     signal_handler --> ventilation
-///     ventilation --> data_logger[Data logger]
+///     ventilation --> data_logger[Data Logger]
 ///     data_logger --> ventilation
-///     ventilation --> schedule_check[Schedule check]
+///     ventilation --> schedule_check[Schedule Check]
 ///     schedule_check --> ventilation
 ///     messaging[Messaging] --> ventilation
 /// ```
@@ -451,8 +452,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
@@ -462,8 +463,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
@@ -476,8 +477,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
@@ -488,8 +489,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
@@ -504,8 +505,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
@@ -516,8 +517,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
@@ -532,8 +533,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::On {
                                 switch_on_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
@@ -544,8 +545,8 @@ impl Ventilation {
                             if ventilation_state != ActuatorState::Off {
                                 switch_off_ventilation(
                                     &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_controllino,
-                                    &ventilation_channels.rx_ventilation_from_controllino,
+                                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                                    &ventilation_channels.rx_ventilation_from_relay_manager,
                                     &mut mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
@@ -596,8 +597,8 @@ impl Ventilation {
             if ventilation_state != ActuatorState::On {
                 switch_on_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &ventilation_channels.tx_ventilation_to_controllino,
-                    &ventilation_channels.rx_ventilation_from_controllino,
+                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                    &ventilation_channels.rx_ventilation_from_relay_manager,
                     &mut mutex_was_blocked_during_actuation,
                 );
             }
@@ -606,8 +607,8 @@ impl Ventilation {
             if ventilation_state != ActuatorState::Off {
                 switch_off_ventilation(
                     &mutex_device_scheduler_ventilation,
-                    &ventilation_channels.tx_ventilation_to_controllino,
-                    &ventilation_channels.rx_ventilation_from_controllino,
+                    &ventilation_channels.tx_ventilation_to_relay_manager,
+                    &ventilation_channels.rx_ventilation_from_relay_manager,
                     &mut mutex_was_blocked_during_actuation,
                 );
             }
@@ -628,7 +629,7 @@ impl Ventilation {
             }
         };
 
-        // This thread has channel connections to underlying threads (Controllino, Atlas Scientific).
+        // This thread has channel connections to underlying threads (relay manager, Atlas Scientific).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
@@ -687,8 +688,8 @@ pub mod tests {
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
 
-    use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
 
     fn prepare_ventilation_tests() -> Ventilation {
@@ -710,8 +711,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
             mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
@@ -753,13 +754,13 @@ pub mod tests {
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_ventilation,
-                    &rx_controllino_from_ventilation,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 1);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -792,12 +793,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_controllino_for_test_case_finish =
-                    tx_ventilation_to_controllino.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
 
                 let ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
@@ -816,8 +817,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ =
-                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
                 println!("* [Ventilation] checking reaction to high temperature succeeded.");
             })
             .unwrap();
@@ -828,9 +829,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -852,8 +853,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
             mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
@@ -895,13 +896,13 @@ pub mod tests {
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_ventilation,
-                    &rx_controllino_from_ventilation,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -939,12 +940,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_controllino_for_test_case_finish =
-                    tx_ventilation_to_controllino.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
 
                 let ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
@@ -963,8 +964,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ =
-                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
                 println!("* [Ventilation] checking reaction to low temperature.");
             })
             .unwrap();
@@ -975,9 +976,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -999,8 +1000,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
             mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
@@ -1042,16 +1043,16 @@ pub mod tests {
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_ventilation,
-                    &rx_controllino_from_ventilation,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
                 );
                 println!(
-                    "Mock Controllino received {} commands:",
+                    "Mock relay manager received {} commands:",
                     actuation_events.len()
                 );
                 for actuation_event in actuation_events.clone() {
@@ -1213,12 +1214,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_controllino_for_test_case_finish =
-                    tx_ventilation_to_controllino.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
 
                 let ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
@@ -1237,8 +1238,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ =
-                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
                 println!("* [Heating] checking reaction to medium temperature succeeded.");
             })
             .unwrap();
@@ -1249,9 +1250,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1271,8 +1272,8 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
             mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
@@ -1314,13 +1315,13 @@ pub mod tests {
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_ventilation,
-                    &rx_controllino_from_ventilation,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let actuation_event = actuation_events.pop().unwrap();
@@ -1358,12 +1359,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_controllino_for_test_case_finish =
-                    tx_ventilation_to_controllino.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
 
                 let ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
@@ -1382,8 +1383,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ =
-                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
 
                 let actuation_count = *mutex_device_scheduler_ventilation.lock().unwrap();
 
@@ -1400,9 +1401,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1423,8 +1424,8 @@ pub mod tests {
 
         let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
         let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_controllino, rx_controllino_from_ventilation) = mpsc::channel();
-        let (tx_controllino_to_ventilation, rx_ventilation_from_controllino) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
             mpsc::channel();
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
@@ -1468,13 +1469,13 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_ventilation,
-                    &rx_controllino_from_ventilation,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
                 );
                 println!("actuation_events:");
                 for actuation_event in &actuation_events {
@@ -1594,12 +1595,12 @@ pub mod tests {
                 // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
                 let tx_ventilation_to_schedule_check_for_test_case_finish =
                     tx_ventilation_to_schedule_check.clone();
-                let tx_ventilation_to_controllino_for_test_case_finish =
-                    tx_ventilation_to_controllino.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
 
                 let ventilation_channels = VentilationChannels {
-                    tx_ventilation_to_controllino,
-                    rx_ventilation_from_controllino,
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
                     tx_ventilation_to_data_logger,
@@ -1618,8 +1619,8 @@ pub mod tests {
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);
-                let _ =
-                    tx_ventilation_to_controllino_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
 
                 println!("* [Ventilation] checking if messaging can block and restart actuation.");
             })
@@ -1631,9 +1632,9 @@ pub mod tests {
         join_handle_mock_data_logger
             .join()
             .expect("Mock Data Logger thread did not finish.");
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");

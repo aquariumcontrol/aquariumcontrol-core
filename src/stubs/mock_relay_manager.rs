@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_CONTROLLINO: &str = "mock_controllino";
+    const LOG_TARGET_MOCK_RELAY_MANAGER: &str = "mock_relay_manager";
 
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
@@ -18,9 +18,9 @@ pub mod tests {
     use crate::stubs::actuation_event::tests::ActuationEvent;
     use crate::utilities::channel_content::InternalCommand;
 
-    pub fn mock_controllino(
-        tx_controllino_to_test_object: &Sender<bool>,
-        rx_controllino_from_test_object: &Receiver<InternalCommand>,
+    pub fn mock_relay_manager(
+        tx_relay_manager_to_test_object: &Sender<bool>,
+        rx_relay_manager_from_test_object: &Receiver<InternalCommand>,
     ) -> Vec<ActuationEvent> {
         let mut result: Vec<ActuationEvent> = Vec::new();
 
@@ -28,14 +28,14 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         loop {
             // receive command from test object
-            match rx_controllino_from_test_object.recv() {
+            match rx_relay_manager_from_test_object.recv() {
                 Ok(command) => {
                     match command {
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            // println!("mock_controllino: Received command {}", command);
+                            // println!("mock_relay_manager: Received command {}", command);
                             // store tuple of SystemTime and command in vector
                             result.push(ActuationEvent::new(SystemTime::now(), command));
                         }
@@ -44,18 +44,18 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Error when receiving actuation command from test object: {e:?}",
-                        LOG_TARGET_MOCK_CONTROLLINO
+                        LOG_TARGET_MOCK_RELAY_MANAGER
                     );
                 }
             }
 
             // send confirmation back
-            match tx_controllino_to_test_object.send(true) {
+            match tx_relay_manager_to_test_object.send(true) {
                 Ok(_) => {}
                 Err(e) => {
                     panic!(
                         "{}: Error when sending back actuation command confirmation to test object: {e:?}",
-                        LOG_TARGET_MOCK_CONTROLLINO
+                        LOG_TARGET_MOCK_RELAY_MANAGER
                     );
                 }
             }
