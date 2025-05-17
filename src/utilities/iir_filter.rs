@@ -49,7 +49,7 @@ pub struct IIRFilter {
 }
 
 impl IIRFilter {
-    /// Returns a struct of type IIRFilter where the initial value is stated as parameter
+    /// Returns a struct of type IIRFilter where the initial value is stated as a parameter
     ///
     /// # Arguments:
     ///
@@ -79,7 +79,7 @@ impl IIRFilter {
     pub fn get_filtered_value(&mut self, new_value: f32) -> f32 {
         self.old_value =
             self.old_value * (1.0 - self.filter_coefficient) + new_value * self.filter_coefficient;
-        self.old_value // new value becomes old value for next iteration
+        self.old_value // new value becomes old value for the next iteration
     }
 }
 

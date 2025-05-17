@@ -29,8 +29,8 @@ const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 pub trait WaterInjectionTrait {
     /// Actuates the refill pump which injects water into the main tank.
     /// # Arguments
-    /// * `tx_water_injection_to_controllino` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_water_injection_from_controllino` - Reference to Receiver part of channel for communication from Controllino
+    /// * `tx_water_injection_to_relay_manager` - Reference to sender part of channel for communication to Controllino
+    /// * `rx_water_injection_from_relay_manager` - Reference to Receiver part of channel for communication from Controllino
     /// * `rx_water_injection_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
     /// * `tx_water_injection_to_data_logger` - Sender part of channel for communication to data logger
     /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection            
@@ -38,8 +38,8 @@ pub trait WaterInjectionTrait {
     /// * `mutex_tank_level_switch` - Reference to mutex for reading tank level switch signals
     fn inject_water(
         &mut self,
-        tx_water_injection_to_controllino: &Sender<InternalCommand>,
-        rx_water_injection_from_controllino: &Receiver<bool>,
+        tx_water_injection_to_relay_manager: &Sender<InternalCommand>,
+        rx_water_injection_from_relay_manager: &Receiver<bool>,
         rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
         tx_water_injection_to_data_logger: &Sender<bool>,
         rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
@@ -55,13 +55,13 @@ pub trait WaterInjectionTrait {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     water_injection[Mineral injection] --> controllino[Controllino]
-///     controllino --> water_injection
-///     water_injection --> data_logger[Data logger]
+///     water_injection[Water Injection] --> relay_manager[Relay Manager]
+///     relay_manager --> water_injection
+///     water_injection --> data_logger[Data Logger]
 ///     data_logger --> water_injection
-///     water_injection --> tank_level_switch[tank level switch calculation]
+///     water_injection --> tank_level_switch[Tank Level Switch]
 ///     tank_level_switch --> water_injection
-///     signal_handler[Signal handler] --> water_injection
+///     signal_handler[Signal Handler] --> water_injection
 /// ```
 pub struct WaterInjection {
     refill_increment: f64,         // value is calculated based on RefillConfig
@@ -101,8 +101,8 @@ impl WaterInjectionTrait for WaterInjection {
     /// this function executes the refill operation
     fn inject_water(
         &mut self,
-        tx_water_injection_to_controllino: &Sender<InternalCommand>,
-        rx_water_injection_from_controllino: &Receiver<bool>,
+        tx_water_injection_to_relay_manager: &Sender<InternalCommand>,
+        rx_water_injection_from_relay_manager: &Receiver<bool>,
         rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
         tx_water_injection_to_data_logger: &Sender<bool>,
         rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
@@ -113,12 +113,12 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match tx_water_injection_to_controllino
+        match tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match rx_water_injection_from_controllino.recv() {
+                match rx_water_injection_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -198,12 +198,12 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match tx_water_injection_to_controllino
+        match tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match rx_water_injection_from_controllino.recv() {
+                match rx_water_injection_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -264,8 +264,8 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
 
-    use crate::stubs::mock_controllino::tests::mock_controllino;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
 
     #[test]
     // This test case executes the inject_water-function and immediately sets the sensor signal to high value.
@@ -281,27 +281,27 @@ pub mod tests {
             mpsc::channel();
         let (_tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, _rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -335,7 +335,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_six_seconds);
                 let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -348,8 +348,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -362,7 +362,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment
@@ -389,16 +389,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
@@ -416,12 +416,12 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -453,7 +453,7 @@ pub mod tests {
                 let spin_sleeper = SpinSleeper::default();
                 let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -466,8 +466,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -480,7 +480,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment
@@ -511,16 +511,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, true)));
@@ -538,12 +538,12 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -576,7 +576,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_seconds);
                 let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -589,8 +589,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -603,7 +603,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment
@@ -632,16 +632,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -661,12 +661,12 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -719,7 +719,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_seconds);
 
                 // request termination to mock threads
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -732,8 +732,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -746,7 +746,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment
@@ -774,16 +774,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (_tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -801,12 +801,12 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -841,7 +841,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_fourtyfive_seconds);
 
                 // request termination to mock threads
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -854,8 +854,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -869,7 +869,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment
@@ -898,16 +898,16 @@ pub mod tests {
             mpsc::channel();
         let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
             mpsc::channel();
-        let (tx_water_injection_to_controllino, rx_controllino_from_water_injection) =
+        let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
-        let (tx_controllino_to_water_injection, rx_water_injection_from_controllino) =
+        let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
-        let tx_signal_handler_to_controllino = tx_water_injection_to_controllino.clone();
+        let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -925,12 +925,12 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_controllino = thread::Builder::new()
-            .name("mock_controllino".to_string())
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_controllino(
-                    &tx_controllino_to_water_injection,
-                    &rx_controllino_from_water_injection,
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
                 );
                 assert_eq!(actuation_events.len(), 2);
                 let last_actuation_event = actuation_events.pop().unwrap();
@@ -969,7 +969,7 @@ pub mod tests {
                 spin_sleeper.sleep(sleep_duration_two_seconds);
 
                 // request termination to mock threads
-                let _ = tx_signal_handler_to_controllino.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
@@ -982,8 +982,8 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_controllino,
-                    &rx_water_injection_from_controllino,
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
                     &rx_water_injection_from_signal_handler,
                     &tx_water_injection_to_data_logger,
                     &rx_water_injection_from_data_logger,
@@ -996,7 +996,7 @@ pub mod tests {
             })
             .unwrap();
 
-        join_handle_mock_controllino
+        join_handle_mock_relay_manager
             .join()
             .expect("Mock Controllino thread did not finish.");
         join_handle_test_environment

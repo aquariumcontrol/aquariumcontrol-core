@@ -77,7 +77,7 @@ impl fmt::Display for AquariumDevice {
 }
 
 /// Enum is used for internal thread messaging between various threads
-/// The values indicate which information the a thread shall return.
+/// The values indicate which information the thread shall return.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AquariumSignal {
     /// water temperature in °C
@@ -195,7 +195,7 @@ pub enum InternalCommand {
     /// Quit the application - first step to terminate the application
     Quit,
 
-    /// Terminate - second step to terminate the application
+    /// Terminate - second step to terminating the application
     Terminate,
 
     /// ScheduleCheck - request permission to run based on time of day
@@ -214,7 +214,7 @@ pub enum InternalCommand {
     Execute(i32),
 
     #[allow(dead_code)]
-    /// Default value used when unknown command is received via IPC message
+    /// Default value used when unknown command is received via IPC-message
     Unknown,
 }
 

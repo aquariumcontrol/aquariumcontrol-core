@@ -10,11 +10,11 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 use crate::watchmen::petting::PettingTrait;
+use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
-use log::error;
 
 const LOG_TARGET_WATCHDOG: &str = "watchdog";
 
@@ -110,7 +110,6 @@ impl Watchdog {
                 );
             }
             spin_sleeper.sleep(sleep_duration);
-            println!("Checking channel.");
             (
                 quit_command_received,
                 start_command_received,
@@ -120,7 +119,6 @@ impl Watchdog {
 
             if quit_command_received {
                 // Deactivate the watchdog functionality
-                println!("Received quit command, sending watchdog deactivation signal.");
                 petting.pet(
                     &self.config.watchdog_filename,
                     &self.config.watchdog_deactivation,
@@ -137,7 +135,7 @@ impl Watchdog {
                 inhibited = true;
             }
         }
-        
+
         // Application received the request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match tx_to_signal_handler.send(true) {
@@ -149,7 +147,6 @@ impl Watchdog {
                 );
             }
         };
-
     }
 }
 
@@ -264,7 +261,7 @@ pub mod tests {
                     None,
                     &mut mock_petting
                 );
-                
+
                 assert_eq!(
                     mock_petting.petting_recorder.len(),
                     5

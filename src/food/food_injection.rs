@@ -24,7 +24,6 @@ pub trait FoodInjectionTrait {
     /// * `tx_to_controllino` - Reference to sender part of the channel for communication to Controllino
     /// * `rx_from_controllino` - Reference to Receiver part of the channel for communication from Controllino
     /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler   
-    /// * `config` - Reference to configuration of feed control
     /// * `feed_pattern` - Reference to struct holding the description of the feed pattern    
     fn inject_food(
         &mut self,
@@ -477,7 +476,9 @@ pub mod tests {
     fn test_food_injection_receive_actuation_command_send_confirmation(
         tx_controllino_to_feed: &Sender<bool>,
         rx_controllino_from_feed: &Receiver<InternalCommand>,
-    ) -> InternalCommand {
+        counter_switch_on: &mut i32,
+        counter_switch_off: &mut i32,
+    ) {
         // receive command from the test object
         let (command, device) = match rx_controllino_from_feed.recv() {
             Ok(c) => match c {
@@ -507,7 +508,17 @@ pub mod tests {
             }
         }
 
-        command
+        match command {
+            InternalCommand::SwitchOn(_) => {
+                *counter_switch_on += 1;
+            }
+            InternalCommand::SwitchOff(_) => {
+                *counter_switch_off += 1;
+            }
+            _ => {
+                // Do nothing. This case is covered with panic beforehand.
+            }
+        }
     }
 
     #[test]
@@ -529,20 +540,12 @@ pub mod tests {
 
                 for i in 0..126 {
                     println!("test_food_injection: loop #{}", i);
-                    match test_food_injection_receive_actuation_command_send_confirmation(
+                    test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
-                    ) {
-                        InternalCommand::SwitchOn(_) => {
-                            counter_switch_on += 1;
-                        }
-                        InternalCommand::SwitchOff(_) => {
-                            counter_switch_off += 1;
-                        }
-                        _ => {
-                            // Do nothing. This case is covered with panic in a lower level.
-                        }
-                    }
+                        &mut counter_switch_on,
+                        &mut counter_switch_off,
+                    );
                 }
                 println!(
                     "counter_switch_on={} counter_switch_off={}",
@@ -620,39 +623,23 @@ pub mod tests {
 
                 for i in 0..5 {
                     println!("test_food_injection: loop #{}", i);
-                    match test_food_injection_receive_actuation_command_send_confirmation(
+                    test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
-                    ) {
-                        InternalCommand::SwitchOn(_) => {
-                            counter_switch_on += 1;
-                        }
-                        InternalCommand::SwitchOff(_) => {
-                            counter_switch_off += 1;
-                        }
-                        _ => {
-                            // Do nothing. This case is covered with panic in a lower level.
-                        }
-                    }
+                        &mut counter_switch_on,
+                        &mut counter_switch_off,
+                    );
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
                 _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
                 for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
-                    match test_food_injection_receive_actuation_command_send_confirmation(
+                    test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
-                    ) {
-                        InternalCommand::SwitchOn(_) => {
-                            counter_switch_on += 1;
-                        }
-                        InternalCommand::SwitchOff(_) => {
-                            counter_switch_off += 1;
-                        }
-                        _ => {
-                            // Do nothing. This case is covered with panic in a lower level.
-                        }
-                    }
+                        &mut counter_switch_on,
+                        &mut counter_switch_off,
+                    );
                 }
                 println!(
                     "counter_switch_on={} counter_switch_off={}",

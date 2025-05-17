@@ -55,11 +55,11 @@ impl MineralInjection {
 }
 
 impl MineralInjectionTrait for MineralInjection {
-    /// Switches on one of the peristaltic pumps for a defined period of time or until a Quit command is received from signal handler.
+    /// Switches on one of the peristaltic pumps for a defined period of time, or until a Quit command is received from the signal handler.
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of channel for communication with Controllino
-    /// * `rx_from_controllino` - Reference to receiver part of channel for communication with Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of channel for communication with signal handler
+    /// * `tx_to_controllino` - Reference to sender part of the channel for communication with Controllino
+    /// * `rx_from_controllino` - Reference to receiver part of the channel for communication with Controllino
+    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication with signal handler
     /// * `mineral_pump` - parameter defining which pump shall be switched on
     /// * `dosing_duration_millis` - dosing duration in milliseconds    
     fn inject_mineral(
@@ -79,7 +79,7 @@ impl MineralInjectionTrait for MineralInjection {
 
         match tx_to_controllino.send(InternalCommand::SwitchOn(mineral_pump.clone())) {
             Ok(_) => {
-                // now listen for response
+                // now listen for the response
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
@@ -117,7 +117,7 @@ impl MineralInjectionTrait for MineralInjection {
 
         match tx_to_controllino.send(InternalCommand::SwitchOff(mineral_pump)) {
             Ok(_) => {
-                // now listen for response
+                // now listen for the response
                 match rx_from_controllino.recv() {
                     Ok(_) => {}
                     Err(e) => {
@@ -157,18 +157,18 @@ pub mod tests {
     ) -> InternalCommand {
         let command: InternalCommand;
 
-        // receive command from test object
+        // receive command from the test object
         match rx_controllino_from_mineral_injection.recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(_) => command = c,
                 InternalCommand::SwitchOff(_) => command = c,
                 _ => {
-                    panic!("MineralInjection: Received invalid command from test object:");
+                    panic!("MineralInjection: Received invalid command from the test object:");
                 }
             },
             Err(e) => {
                 panic!(
-                    "MineralInjection: Error when receiving actuation command from test object: {e:?}"
+                    "MineralInjection: Error when receiving actuation command from the test object: {e:?}"
                 );
             }
         }
@@ -184,7 +184,7 @@ pub mod tests {
         command
     }
 
-    // this test cases executes the mineral injection without interruption from signal handler
+    // This test case executes the mineral injection without interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_happy_case() {
         let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
@@ -214,7 +214,7 @@ pub mod tests {
                 );
             });
 
-            // thread for test object
+            // thread for the test object
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(
@@ -230,7 +230,7 @@ pub mod tests {
         });
     }
 
-    // this test cases executes the mineral injection with interruption from signal handler
+    // This test case executes the mineral injection with interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_interrupted() {
         let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
@@ -269,7 +269,7 @@ pub mod tests {
                 );
             });
 
-            // thread for test object
+            // thread for the test object
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(

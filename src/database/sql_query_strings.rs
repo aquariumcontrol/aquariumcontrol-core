@@ -137,15 +137,20 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         (Timestamp, \
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
-        Conductivity, ConductivityFiltered, ConductivityCompensated,
-        RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, SurfaceVentilation,
+        Conductivity, ConductivityFiltered, ConductivityCompensated, \
+        RefillInProgress, \
+        TankLevelSwitchPosition, TankLevelSwitchInvalid, TankLevelSwitchPositionStabilized, \
+        SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20) \
         values (:timestamp, \
         #TemperatureUnfiltered, #TemperatureFiltered, \
         #pHUnfiltered, #pHFiltered, \
         #ConductivityUnfiltered, #ConductivityFiltered, #ConductivityCompensated, \
-        #RefillInProgress, #TankLevelSwitchPosition, #TankLevelSwitchInvalid, #SurfaceVentilation,
-        #AmbTemp, #AmbHum, #Heater, \
+        #RefillInProgress, \
+        #TankLevelSwitchPosition, #TankLevelSwitchInvalid, #TankLevelSwitchPositionStabilized, \
+        #SurfaceVentilation, \
+        #AmbTemp, #AmbHum, \
+        #Heater, \
         #TempWaterDs18B20, #TempAmbDs18B20) \
         ON DUPLICATE KEY UPDATE \
         Temperature=#TemperatureUnfiltered, TemperatureFiltered=#TemperatureFiltered, \
@@ -153,9 +158,12 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         Conductivity=#ConductivityUnfiltered, ConductivityFiltered=#ConductivityFiltered, \
         ConductivityCompensated=#ConductivityCompensated, \
         RefillInProgress=#RefillInProgress, \
-        TankLevelSwitchPosition=#TankLevelSwitchPosition, TankLevelSwitchInvalid=#TankLevelSwitchInvalid, \
+        TankLevelSwitchPosition=#TankLevelSwitchPosition, \
+        TankLevelSwitchInvalid=#TankLevelSwitchInvalid, \
+        TankLevelSwitchPositionStabilized=#TankLevelSwitchPositionStabilized, \
         SurfaceVentilation=#SurfaceVentilation, \
-        AmbTemp=#AmbTemp, AmbHum=#AmbHum, Heater=#Heater, \
+        AmbTemp=#AmbTemp, AmbHum=#AmbHum, \
+        Heater=#Heater, \
         TempWaterDs18B20=#TempWaterDs18B20, TempAmbDs18B20=#TempAmbDs18B20;";
 
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)

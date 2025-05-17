@@ -32,7 +32,7 @@ pub struct VersionInformation {
     /// Build numer (increases with every published build)
     pub build: i32,
 
-    /// Hash serves as fingerprint to match SW with database configuration
+    /// Hash serves as a fingerprint to match SW with database configuration
     pub hash: String,
 }
 
@@ -41,7 +41,7 @@ impl VersionInformation {
 
     /// Provides a struct of type VersionInformation.
     pub fn new() -> VersionInformation {
-        // get fully qualified path and file name
+        // get the fully qualified path and file name
         let pathfilename = match env::current_exe() {
             Ok(exe_path) => {
                 #[cfg(not(test))]

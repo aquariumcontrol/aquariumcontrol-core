@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Holds the configuration data of one feed pattern.
 pub struct Feedpattern {
     /// numeric ID of the feed profile
-    /// Data is not used in the implementation. Therefore is tagged as unused.
+    /// Data is not used in the implementation. Therefore, is tagged as unused.
     #[allow(unused)]
     pub profile_id: i32,
 
@@ -76,7 +76,7 @@ pub struct FeedPhase {
 }
 
 impl FeedPhase {
-    // Provides a struct of type FeedPhase - used only for testing
+    /// Provides a struct of type FeedPhase - used only for testing
     #[cfg(test)]
     pub fn new(
         pause_duration: i16,
@@ -93,18 +93,18 @@ impl FeedPhase {
         feed_aux_pump_2: bool,
     ) -> FeedPhase {
         FeedPhase {
-            pause_duration: pause_duration,
-            pause_skimmer: pause_skimmer,
-            pause_main_pump_1: pause_main_pump_1,
-            pause_main_pump_2: pause_main_pump_2,
-            pause_aux_pump_1: pause_aux_pump_1,
-            pause_aux_pump_2: pause_aux_pump_2,
-            feed_duration: feed_duration,
-            feed_skimmer: feed_skimmer,
-            feed_main_pump_1: feed_main_pump_1,
-            feed_main_pump_2: feed_main_pump_2,
-            feed_aux_pump_1: feed_aux_pump_1,
-            feed_aux_pump_2: feed_aux_pump_2,
+            pause_duration,
+            pause_skimmer,
+            pause_main_pump_1,
+            pause_main_pump_2,
+            pause_aux_pump_1,
+            pause_aux_pump_2,
+            feed_duration,
+            feed_skimmer,
+            feed_main_pump_1,
+            feed_main_pump_2,
+            feed_aux_pump_1,
+            feed_aux_pump_2,
         }
     }
 }

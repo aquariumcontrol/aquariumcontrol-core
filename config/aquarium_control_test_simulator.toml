@@ -1,5 +1,13 @@
-[controllino]
-active = true
+[relay_manager]
+active = true						                    # used for testing purposes
+use_simulator = true                                    # if true, then do not use real HW
+use_gpio = false                                        # if true, then use GPIO instead of Controllino
+
+[controllino_relay]
+baud_rate = 9600                                        # baud rate for communication via serial port
+port_name = "dummy"                                     # port name for communication via serial port
+timeout_millis = 10                                     # timeout in milliseconds for serial port communication
+controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
 skimmer_id = 3                                          # relay id for protein skimmer
 main_pump1_id = 4                                       # relay id for main pump #1
 main_pump2_id = 5                                       # relay id for main pump #2
@@ -13,11 +21,7 @@ peristaltic_pump1_id = 12                               # relay id for peristalt
 peristaltic_pump2_id = 13                               # relay id for peristaltic pump #2
 peristaltic_pump3_id = 14                               # relay id for peristaltic pump #3
 peristaltic_pump4_id = 15                               # relay id for peristaltic pump #4
-use_simulator = true                                    # if true, then do not use real HW
-baud_rate = 9600                                        # baud rate for communication via serial port
-port_name = "dummy"                                     # port name for communication via serial port (for testing on MacOs)
-timeout_millis = 10                                     # timeout in milliseconds for serial port communication
-controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
+
 
 [sql_interface]
 db_user = "aquarium"

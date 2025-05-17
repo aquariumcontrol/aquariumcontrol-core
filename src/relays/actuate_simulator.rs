@@ -8,40 +8,37 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::warn;
-use serialport::SerialPort;
-use spin_sleep::SpinSleeper;
-use std::{sync::mpsc::Sender, time::Duration};
+use std::sync::mpsc::Sender;
 
-use crate::relays::controllino::{ControllinoConfig, ControllinoError, RelayActuationTrait};
-use crate::relays::device_relay_logic::get_relay_command;
+use crate::relays::actuate_controllino::{get_relay_command, ActuateControllinoConfig};
+use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";
 
 /// Contains trait implementation for system testing purposes.
-pub struct ControllinoActuateSimulator;
+pub struct ActuateSimulator {
+    config: ActuateControllinoConfig,
+    tx_to_tcp_opt: Option<Sender<InternalCommand>>,
+}
 
-impl RelayActuationTrait for ControllinoActuateSimulator {
+impl RelayActuationTrait for ActuateSimulator {
     /// Triggers actuation on simulator via TCP communication
-    /// This function is used for development purposes only.
+    /// This function is used for development only.
     /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
     /// considering relay id and relay logic.
     /// # Arguments
-    /// * `tx_to_tcp` - Reference to Sender part of communication channel with TcpCommunication
+    /// * `tx_to_tcp` - Reference to Sender part of the communication channel with TcpCommunication
     /// * `internal_command` - enum value used for identifying content which shall be sent
-    fn actuate(
-        &mut self,
-        internal_command: InternalCommand,
-        tx_to_tcp_opt: Option<&Sender<InternalCommand>>,
-        _serial_port_opt: &mut Option<Box<dyn SerialPort>>,
-        _spin_sleeper_opt: &Option<SpinSleeper>,
-        _controllino_processing_duration_opt: &Option<Duration>,
-        config: &ControllinoConfig,
-    ) -> Result<(), ControllinoError> {
-        let tx_to_tcp = tx_to_tcp_opt.unwrap();
+    fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
+        let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
-                let relay_command = match get_relay_command(&internal_command, c.clone(), config) {
+                let relay_command = match get_relay_command(
+                    &internal_command,
+                    c.clone(),
+                    &self.config,
+                ) {
                     Ok(c) => c,
                     Err(e) => {
                         panic!("Controllino: Error in preparation of communication to simulator: {e:?}");
@@ -63,8 +60,20 @@ impl RelayActuationTrait for ControllinoActuateSimulator {
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
-                Err(ControllinoError::IrrelevantCommand(internal_command))
+                Err(RelayError::IrrelevantCommand(internal_command))
             }
+        }
+    }
+}
+
+impl ActuateSimulator {
+    pub fn new(
+        tx_to_tcp_opt: Option<Sender<InternalCommand>>,
+        config: ActuateControllinoConfig,
+    ) -> Self {
+        Self {
+            tx_to_tcp_opt,
+            config,
         }
     }
 }

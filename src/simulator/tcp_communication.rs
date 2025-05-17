@@ -45,10 +45,10 @@ pub enum TcpCommunicationError {
 
 /// Struct collects the channels for communication with other threads.
 pub struct TcpCommunicationChannels {
-    /// Receiver part of the channel for communication from Controllino wrapped in Option type
-    pub rx_tcp_communication_from_controllino_opt: Option<Receiver<InternalCommand>>,
+    /// Receiver part of the channel for communication from relay manager wrapped in Option type
+    pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
 
-    /// Receiver part of the channel for communication from Controllino wrapped in Option type
+    /// Receiver part of the channel for communication from relay manager wrapped in Option type
     pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to Ambient wrapped in Option type
@@ -78,10 +78,14 @@ pub struct TcpCommunicationChannels {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     controllino[Controllino] --> tcp_communication[TCP communication]
-///     gpio_handler[GPIO handler] --> tcp_communication
-///     tcp_communication --> gpio_handler
-///     tcp_communication --> signal_handler[Signal handler]
+///     relay_manager[Relay Manager] --> tcp_communication[TCP Communication]
+///     ambient[Ambient] --> tcp_communication
+///	tcp_communication --> ambient
+///     atlas_scientific[Atlas Scientific] --> tcp_communication
+///	tcp_communication --> atlas_scientific
+///	tank_level_switch[Tank Level Switch] --> tcp_communciation
+///	tcp_communication --> tank_level_switch
+///     tcp_communication --> signal_handler[Signal Handler]
 ///     signal_handler --> tcp_communication
 /// ```
 pub struct TcpCommunication {
@@ -399,10 +403,10 @@ impl TcpCommunication {
                 }
             }
 
-            // *** communication with Controllino - no response required ***
-            match tcp_communication_channels.rx_tcp_communication_from_controllino_opt {
-                Some(ref rx_tcp_communication_from_controllino) => {
-                    match rx_tcp_communication_from_controllino.try_recv() {
+            // *** communication with relay manager - no response required ***
+            match tcp_communication_channels.rx_tcp_communication_from_relay_manager_opt {
+                Some(ref rx_tcp_communication_from_relay_manager) => {
+                    match rx_tcp_communication_from_relay_manager.try_recv() {
                         Ok(c) => match c {
                             InternalCommand::SetRelay(c) => self.change_relay(c, true),
                             InternalCommand::UnsetRelay(c) => self.change_relay(c, false),
