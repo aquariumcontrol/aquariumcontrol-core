@@ -256,16 +256,49 @@ impl WaterInjectionTrait for WaterInjection {
 #[cfg(test)]
 pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
+    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
+    use crate::water::refill::Refill;
     use crate::water::water_injection::{WaterInjection, WaterInjectionTrait};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
 
-    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
+    fn create_assert_test_object(
+        tx_water_injection_to_relay_manager: Sender<InternalCommand>,
+        rx_water_injection_from_relay_manager: Receiver<bool>,
+        rx_water_injection_from_signal_handler: Receiver<InternalCommand>,
+        tx_water_injection_to_data_logger: Sender<bool>,
+        rx_water_injection_from_data_logger: Receiver<InternalCommand>,
+        mut refill: Refill,
+        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+        target_result: bool,
+        target_refill_has_errors: bool,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                let mut water_injection = WaterInjection::new(&refill.config);
+
+                let result = water_injection.inject_water(
+                    &tx_water_injection_to_relay_manager,
+                    &rx_water_injection_from_relay_manager,
+                    &rx_water_injection_from_signal_handler,
+                    &tx_water_injection_to_data_logger,
+                    &rx_water_injection_from_data_logger,
+                    &mut refill.refill_errors,
+                    &mut refill.sql_interface_refill,
+                    &mutex_tank_level_switch_signals,
+                );
+                assert_eq!(result, target_result);
+                assert_eq!(refill.refill_errors.has_error(), target_refill_has_errors);
+            })
+            .unwrap()
+    }
 
     #[test]
     // This test case executes the inject_water-function and immediately sets the sensor signal to high value.
@@ -274,8 +307,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(39));
-        let mut water_injection = WaterInjection::new(&refill.config);
+        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(39));
 
         let (tx_water_injection_to_data_logger, _rx_data_logger_from_water_injection) =
             mpsc::channel();
@@ -344,23 +376,17 @@ pub mod tests {
         spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
-                    &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
-                    &mutex_tank_level_switch_signals,
-                );
-                assert_eq!(result, false);
-                assert_eq!(refill.refill_errors.has_error(), false);
-            })
-            .unwrap();
+        let join_handle_test_object = create_assert_test_object(
+            tx_water_injection_to_relay_manager,
+            rx_water_injection_from_relay_manager,
+            rx_water_injection_from_signal_handler,
+            tx_water_injection_to_data_logger,
+            rx_water_injection_from_data_logger,
+            refill,
+            mutex_tank_level_switch_signals,
+            false,
+            false,
+        );
 
         join_handle_mock_relay_manager
             .join()
@@ -373,6 +399,40 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    fn create_mock_relay_manager(
+        tx_relay_manager_to_water_injection: Sender<bool>,
+        rx_relay_manager_from_water_injection: Receiver<InternalCommand>,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_water_injection,
+                    &rx_relay_manager_from_water_injection,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let last_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    last_actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
+                );
+                let first_actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    first_actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
+                );
+                let actuation_duration = last_actuation_event
+                    .time
+                    .duration_since(first_actuation_event.time)
+                    .unwrap()
+                    .as_millis();
+                println!("Actuation duration={}", actuation_duration);
+                assert_ge!(actuation_duration, 0);
+                assert_le!(actuation_duration, 200);
+            })
+            .unwrap()
+    }
+
     #[test]
     // This test case executes the inject_water function and immediately sets the sensor signal to high value.
     // Additionally, the Quit signal is sent.
@@ -382,8 +442,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(40));
-        let mut water_injection = WaterInjection::new(&refill.config);
+        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(40));
 
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
@@ -416,34 +475,10 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_relay_manager = thread::Builder::new()
-            .name("mock_relay_manager".to_string())
-            .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
-                    &tx_relay_manager_to_water_injection,
-                    &rx_relay_manager_from_water_injection,
-                );
-                assert_eq!(actuation_events.len(), 2);
-                let last_actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    last_actuation_event.command,
-                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
-                );
-                let first_actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    first_actuation_event.command,
-                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
-                );
-                let actuation_duration = last_actuation_event
-                    .time
-                    .duration_since(first_actuation_event.time)
-                    .unwrap()
-                    .as_millis();
-                println!("Actuation duration={}", actuation_duration);
-                assert_ge!(actuation_duration, 0);
-                assert_le!(actuation_duration, 200);
-            })
-            .unwrap();
+        let join_handle_mock_relay_manager = create_mock_relay_manager(
+            tx_relay_manager_to_water_injection,
+            rx_relay_manager_from_water_injection,
+        );
 
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
@@ -462,23 +497,17 @@ pub mod tests {
         spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
-                    &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
-                    &mutex_tank_level_switch_signals,
-                );
-                assert_eq!(result, true);
-                assert_eq!(refill.refill_errors.has_error(), false);
-            })
-            .unwrap();
+        let join_handle_test_object = create_assert_test_object(
+                    tx_water_injection_to_relay_manager,
+                    rx_water_injection_from_relay_manager,
+                    rx_water_injection_from_signal_handler,
+                    tx_water_injection_to_data_logger,
+                    rx_water_injection_from_data_logger,
+                    refill,
+                    mutex_tank_level_switch_signals,
+                    true,
+                    false
+        );
 
         join_handle_mock_relay_manager
             .join()
@@ -494,6 +523,31 @@ pub mod tests {
             .expect("Mock Data Logger thread did not finish.");
     }
 
+    fn create_test_environment(
+        tx_signal_handler_to_water_injection: Sender<InternalCommand>,
+        tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
+        tx_signal_handler_to_data_logger: Sender<InternalCommand>,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_two_seconds = Duration::from_secs(2);
+                let spin_sleeper = SpinSleeper::default();
+
+                // wait for the refill operation to inject some water
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
+
+                // wait for the test object to terminate
+                spin_sleeper.sleep(sleep_duration_two_seconds);
+
+                // request termination to mock threads
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
+            })
+            .unwrap()        
+    }
+    
     #[test]
     // This test case executes the inject_water function and immediately
     // - sets the sensor signal to high value
@@ -504,8 +558,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(41));
-        let mut water_injection = WaterInjection::new(&refill.config);
+        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(41));
 
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
@@ -538,70 +591,33 @@ pub mod tests {
             .unwrap();
 
         // thread for mock Controllino - includes assertions
-        let join_handle_mock_relay_manager = thread::Builder::new()
-            .name("mock_relay_manager".to_string())
-            .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
-                    &tx_relay_manager_to_water_injection,
-                    &rx_relay_manager_from_water_injection,
-                );
-                assert_eq!(actuation_events.len(), 2);
-                let last_actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    last_actuation_event.command,
-                    InternalCommand::SwitchOff(AquariumDevice::RefillPump)
-                );
-                let first_actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    first_actuation_event.command,
-                    InternalCommand::SwitchOn(AquariumDevice::RefillPump)
-                );
-                let actuation_duration = last_actuation_event
-                    .time
-                    .duration_since(first_actuation_event.time)
-                    .unwrap()
-                    .as_millis();
-                println!("Actuation duration={}", actuation_duration);
-                assert_ge!(actuation_duration, 0);
-                assert_le!(actuation_duration, 200);
-            })
-            .unwrap();
+        let join_handle_mock_relay_manager = create_mock_relay_manager(
+            tx_relay_manager_to_water_injection,
+            rx_relay_manager_from_water_injection,
+        );
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration_two_seconds = Duration::from_secs(2);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
-                spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            tx_signal_handler_to_water_injection,
+            tx_signal_handler_to_relay_manager,
+            tx_signal_handler_to_data_logger,
+        );
 
         // make sure all mock threads are running when instantiating the test object
         spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
-                    &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
-                    &mutex_tank_level_switch_signals,
-                );
-                assert_eq!(result, false);
-                assert_eq!(refill.refill_errors.has_error(), false);
-            })
-            .unwrap();
+        let join_handle_test_object = create_assert_test_object(
+            tx_water_injection_to_relay_manager,
+            rx_water_injection_from_relay_manager,
+            rx_water_injection_from_signal_handler,
+            tx_water_injection_to_data_logger,
+            rx_water_injection_from_data_logger,
+            refill,
+            mutex_tank_level_switch_signals,
+            false,
+            false,
+        );
 
         join_handle_mock_relay_manager
             .join()
@@ -625,8 +641,7 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(42));
-        let mut water_injection = WaterInjection::new(&refill.config);
+        let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(42));
 
         let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
             mpsc::channel();
@@ -728,23 +743,17 @@ pub mod tests {
         spin_sleeper.sleep(sleep_duration_100_millis);
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
-                    &mut refill.refill_errors,
-                    &mut refill.sql_interface_refill,
-                    &mutex_tank_level_switch_signals,
-                );
-                assert_eq!(result, false);
-                assert_eq!(refill.refill_errors.has_error(), false);
-            })
-            .unwrap();
+        let join_handle_test_object = create_assert_test_object(
+            tx_water_injection_to_relay_manager,
+            rx_water_injection_from_relay_manager,
+            rx_water_injection_from_signal_handler,
+            tx_water_injection_to_data_logger,
+            rx_water_injection_from_data_logger,
+            refill,
+            mutex_tank_level_switch_signals,
+            false,
+            false,
+        );
 
         join_handle_mock_relay_manager
             .join()
@@ -955,24 +964,11 @@ pub mod tests {
             .unwrap();
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration_two_seconds = Duration::from_secs(2);
-                let spin_sleeper = SpinSleeper::default();
-
-                // wait for the refill operation to inject some water
-                spin_sleeper.sleep(sleep_duration_two_seconds);
-                let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
-
-                // wait for the test object to terminate
-                spin_sleeper.sleep(sleep_duration_two_seconds);
-
-                // request termination to mock threads
-                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            tx_signal_handler_to_water_injection,
+            tx_signal_handler_to_relay_manager,
+            tx_signal_handler_to_data_logger,
+        );
 
         // make sure all mock threads are running when instantiating the test object
         spin_sleeper.sleep(sleep_duration_100_millis);

@@ -45,10 +45,10 @@ pub enum TcpCommunicationError {
 
 /// Struct collects the channels for communication with other threads.
 pub struct TcpCommunicationChannels {
-    /// Receiver part of the channel for communication from relay manager wrapped in Option type
+    /// Receiver part of the channel for communication from the relay manager wrapped in Option type
     pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
 
-    /// Receiver part of the channel for communication from relay manager wrapped in Option type
+    /// Receiver part of the channel for communication from the relay manager wrapped in Option type
     pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to Ambient wrapped in Option type
@@ -80,11 +80,11 @@ pub struct TcpCommunicationChannels {
 /// graph LR
 ///     relay_manager[Relay Manager] --> tcp_communication[TCP Communication]
 ///     ambient[Ambient] --> tcp_communication
-///	tcp_communication --> ambient
+///	    tcp_communication --> ambient
 ///     atlas_scientific[Atlas Scientific] --> tcp_communication
-///	tcp_communication --> atlas_scientific
-///	tank_level_switch[Tank Level Switch] --> tcp_communciation
-///	tcp_communication --> tank_level_switch
+///	    tcp_communication --> atlas_scientific
+///	    tank_level_switch[Tank Level Switch] --> tcp_communication
+///	    tcp_communication --> tank_level_switch
 ///     tcp_communication --> signal_handler[Signal Handler]
 ///     signal_handler --> tcp_communication
 /// ```
@@ -147,6 +147,34 @@ impl TcpCommunication {
         }
     }
 
+    /// Helper function to avoid duplicate code warning:
+    /// Writes to the stream and checks the number of bytes written.
+    /// If the number of actually written bytes differs, then the application issues a panic.
+    /// After a successful write operation, the application flushes the stream.
+    /// # Arguments
+    /// * `request` - String to be written to stream
+    fn write_stream_check_for_error(&mut self, request: String) {
+        match self.write_stream.write(request.as_bytes()) {
+            Ok(amount_of_bytes_written) => {
+                if amount_of_bytes_written != request.len() {
+                    warn!(
+                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
+                        Self::LOG_TARGET_TCP_COMMUNICATION,
+                        amount_of_bytes_written,
+                        request.len(),
+                    );
+                }
+            }
+            Err(e) => {
+                panic!(
+                    "{}: Writing to TCP stream failed ({e:?})",
+                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                );
+            }
+        };
+        let _ = self.write_stream.flush();
+    }
+
     /// Communicates with simulator to change relay state.
     /// # Arguments
     /// * `relay_id` - numeric id of relay for which the state shall be changed
@@ -178,25 +206,7 @@ impl TcpCommunication {
                 + &relay_id_string
                 + "\n"
         };
-        match self.write_stream.write(request.as_bytes()) {
-            Ok(amount_of_bytes_written) => {
-                if amount_of_bytes_written != request.len() {
-                    warn!(
-                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
-                        Self::LOG_TARGET_TCP_COMMUNICATION,
-                        amount_of_bytes_written,
-                        request.len(),
-                    );
-                }
-            }
-            Err(e) => {
-                panic!(
-                    "{}: Writing to TCP stream failed ({e:?})",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
-                );
-            }
-        };
-        let _ = self.write_stream.flush();
+        self.write_stream_check_for_error(request);
 
         let mut response = String::new();
         response.clear();
@@ -251,25 +261,7 @@ impl TcpCommunication {
         let request =
             category.to_string() + " " + command::READ + " " + tcp_signal_identifier + "\n";
 
-        match self.write_stream.write(request.as_bytes()) {
-            Ok(amount_of_bytes_written) => {
-                if amount_of_bytes_written != request.len() {
-                    warn!(
-                        "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
-                        Self::LOG_TARGET_TCP_COMMUNICATION,
-                        amount_of_bytes_written,
-                        request.len(),
-                    );
-                }
-            }
-            Err(e) => {
-                panic!(
-                    "{}: Writing to TCP stream failed ({e:?})",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
-                );
-            }
-        };
-        let _ = self.write_stream.flush();
+        self.write_stream_check_for_error(request);
 
         let mut response = String::new();
         response.clear();

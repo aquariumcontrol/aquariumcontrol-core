@@ -6,7 +6,6 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use std::collections::HashSet;
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
@@ -14,6 +13,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
+use std::collections::HashSet;
 use std::time::Duration;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
@@ -576,11 +576,17 @@ impl ActuateControllino {
 
         // check validity of configuration
         if Self::check_valid_relay_id_config(&config) {
-            panic!("{}: Relay ID configuration is invalid.", LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE);
+            panic!(
+                "{}: Relay ID configuration is invalid.",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
         }
 
         if config.port_name.is_empty() {
-            panic!("{}: Port name for communication with Controllino is empty.", LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE);
+            panic!(
+                "{}: Port name for communication with Controllino is empty.",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
         }
 
         let serial_port = controllino_open_serial_port(
@@ -619,7 +625,10 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
-    use crate::relays::actuate_controllino::{controllino_constants, create_command_message, ActuateControllino, CONTROLLINO_MIN_RELAY_ID, CONTROLLINO_MAX_RELAY_ID};
+    use crate::relays::actuate_controllino::{
+        controllino_constants, create_command_message, ActuateControllino,
+        CONTROLLINO_MAX_RELAY_ID, CONTROLLINO_MIN_RELAY_ID,
+    };
     use crate::relays::relay_manager::RelayError;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -832,9 +841,8 @@ pub mod tests {
     #[test]
     /// Test case tests if an invalid command is rejected when preparing the message for Controllino.
     pub fn test_create_message_invalid_command() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_simulator.toml".to_string(),
-        );
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
         assert_eq!(
             create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay),
             Err(RelayError::IrrelevantCommand(
@@ -848,9 +856,8 @@ pub mod tests {
     // During the creation of the message to Controllino, the application considers
     // if relay needs to bet set or unset to switch on/off a device.
     pub fn test_controllino_create_message_switch_on_with_set_relay_switch_off_with_unset_relay() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_simulator.toml".to_string(),
-        );
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
 
         // switching on all devices
         let mut message = create_command_message(
@@ -1143,9 +1150,8 @@ pub mod tests {
     // Tests the message creation for pulse command.
     // Pulse command is only permitted for a subset of the devices (e.g., peristaltic pumps).
     pub fn test_create_message_pulse() {
-        let config: ConfigData = read_config_file(
-            "/config/aquarium_control_test_simulator.toml".to_string(),
-        );
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
 
         let mut error_message = create_command_message(
             InternalCommand::Pulse(Skimmer, 1000),

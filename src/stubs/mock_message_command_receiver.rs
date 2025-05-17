@@ -35,7 +35,7 @@ pub mod tests {
                 },
                 Err(e) => {
                     panic!(
-                        "{}: error occured when receiving message from message thread via channel ({e:?}).",
+                        "{}: error occurred when receiving message from message thread via channel ({e:?}).",
                         LOG_TARGET_MOCK_MESSAGE_RECEIVER
                     );
                 }

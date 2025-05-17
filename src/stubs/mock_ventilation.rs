@@ -11,13 +11,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK_VENTILATION: &str = "mock_ventilation";
 
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
-
+    use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::time::Duration;
 
     pub fn mock_ventilation(
         tx_ventilation_to_data_logger: &Sender<bool>,
@@ -77,29 +77,12 @@ pub mod tests {
                 }
             };
 
-            match rx_ventilation_from_signal_handler.try_recv() {
-                Ok(c) => {
-                    match c {
-                        InternalCommand::Quit => {
-                            break;
-                        }
-                        _ => {
-                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK_VENTILATION);
-                        }
-                    };
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from signal handler: {e:?}",
-                                LOG_TARGET_MOCK_VENTILATION
-                            );
-                        }
-                    }
-                }
-            };
+            if mock_common_receive_from_signal_handler(
+                rx_ventilation_from_signal_handler,
+                LOG_TARGET_MOCK_VENTILATION,
+            ) {
+                break;
+            }
 
             match rx_ventilation_from_test_environment_opt {
                 Some(rx_ventilation_from_test_environment) => {

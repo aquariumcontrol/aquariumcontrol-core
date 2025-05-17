@@ -11,13 +11,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK_REFILL: &str = "mock_refill";
 
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
-
+    use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::time::Duration;
 
     pub fn mock_refill(
         tx_refill_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
@@ -81,29 +81,12 @@ pub mod tests {
                 None => { /* do nothing */ }
             };
 
-            match rx_refill_from_signal_handler.try_recv() {
-                Ok(c) => {
-                    match c {
-                        InternalCommand::Quit => {
-                            break;
-                        }
-                        _ => {
-                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK_REFILL);
-                        }
-                    };
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from signal handler: {e:?}",
-                                LOG_TARGET_MOCK_REFILL
-                            );
-                        }
-                    }
-                }
-            };
+            if mock_common_receive_from_signal_handler(
+                rx_refill_from_signal_handler,
+                LOG_TARGET_MOCK_REFILL,
+            ) {
+                break;
+            }
 
             // communicate with data logger
             match rx_refill_from_data_logger_opt {

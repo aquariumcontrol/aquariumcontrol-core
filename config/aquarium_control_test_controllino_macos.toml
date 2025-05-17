@@ -5,12 +5,12 @@ use_gpio = false                                        # if true, then use GPIO
 
 [controllino_relay]
 baud_rate = 9600                                        # baud rate for communication via serial port
-port_name = "/dev/cu.usbmodem112401"                    # port name for communication via serial port (for testing on MacOs)
+port_name = "/dev/cu.usbmodem112401"                    # port name for communication via serial port (for testing on macOS)
 timeout_millis = 10                                     # timeout in milliseconds for serial port communication
-controllino_processing_millis = 10                      # time in milliseconds for Controllino to process command
+controllino_processing_millis = 10                      # time in milliseconds for Controllino to process the command
 skimmer_id = 3                                          # relay id for protein skimmer
-main_pump1_id = 4                                       # relay id for main pump #1
-main_pump2_id = 5                                       # relay id for main pump #2
+main_pump1_id = 4                                       # relay id for the main pump #1
+main_pump2_id = 5                                       # relay id for the main pump #2
 aux_pump1_id = 6                                        # relay id for auxiliary pump #1
 aux_pump2_id = 7                                        # relay id for auxiliary pump #2
 feeder_id = 8                                           # relay id for feeder
@@ -68,8 +68,8 @@ max_refill_count_24h = 20                               # max. allowed refill op
 max_refill_volume_24h = 6.0                             # max. allowed refill volume per 24h
 max_refill_count_hour = 5                               # max. allowed refill operations per hour
 max_refill_volume_hour = 2.0                            # max. allowed refill volume per hour
-min_interval_last_refill = 600                          # min. required time interval in seconds between two refill operations
-max_duration_since_last_refill = 36000                  # number of seconds before error condition "switch stuck high" is triggered
+min_interval_last_refill = 600                          # min. required time in seconds between two refill operations
+max_duration_since_last_refill = 36000                  # number of seconds before the error condition "switch stuck high" is triggered
 refill_pump_flow = 0.05                                 # flow rate of refill pump in L/sec
 max_refill_volume = 2.0                                 # maximum allowed refill volume in one refill operation
 additional_refill_volume = 0.2                          # additional refill volume as hysteresis to avoid triggering refill too often
@@ -83,9 +83,9 @@ active = true
 use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
-stop_on_refill_error = true                             # if true, then heating shall be switched off after configurable time period
+stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time
 stop_on_refill_error_delay = 6000                       # time in seconds after which the heating shall be switched off in case of refill error
-heater_power = 200                                      # electrical power consumption of heater in Watt
+heater_power = 200                                      # The electrical power consumption of the heater in Watt
 # configuration of saw tooth profile for low-frequency PWM-based control. Calibration of these values is usually not necessary.
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
@@ -93,7 +93,7 @@ switch_on_when_external_stop = false                    # strategy when external
 
 [feed]
 active = true
-schedule_check_interval = 60                            # check every x seconds if there is a matching entry in SQL database ready to be executed
+schedule_check_interval = 60                            # check every x seconds if there is a matching entry in the database ready to be executed
 device_switch_delay_millis = 150                        # waiting time in milliseconds before switching on or off a device during feed
 strategy_multiple_schedule_entries_in_past = 0          # strategy to apply when finding more than one feed schedule entry in the past
 
@@ -160,7 +160,7 @@ sensor_pause_duration_millis = 500                      # duration to wait betwe
 sensor_init_pin_down_duration_micros = 2000             # duration to keep pin down during start signal in microseconds
 sensor_init_pin_up_duration_micros = 30			        # duration to keep pin up during start signal in microseconds 
 sensor_init_input_duration_micros = 0			        # duration for sensor to respond after sending start signal in microseconds
-timeout_duration_micros = 10000				            # maximum permissible duration for sensor to respond in microseconds
+timeout_duration_micros = 10000				            # maximum permissible duration for the sensor to respond in microseconds
 
 [i2c_interface]
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
@@ -168,9 +168,9 @@ address_atlas_scientific_conductivity = 100             # I2C address for Atlas 
 address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
 timeout_transaction = 100                               # timeout for transactions in milliseconds
 max_read_attempts = 10                                  # maximum number of read attempts
-sleep_time_atlas_scientific_ph = 900                    # sleep time in milliseconds before after writing before reading from pH sensor unit
-sleep_time_atlas_scientific_conductivity = 900          # sleep time in milliseconds before after writing before reading from conductivity sensor unit
-sleep_time_atlas_scientific_temperature = 600           # sleep time in milliseconds before after writing before reading from temperature sensor unit
+sleep_time_atlas_scientific_ph = 900                    # sleep time in milliseconds before after writing before reading from the pH sensor unit
+sleep_time_atlas_scientific_conductivity = 900          # sleep time in milliseconds before after writing before reading from the conductivity sensor unit
+sleep_time_atlas_scientific_temperature = 600           # sleep time in milliseconds before after writing before reading from the temperature sensor unit
 max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
 min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
 max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
@@ -180,7 +180,7 @@ min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value 
 
 [schedule_check]
 schedule_check_interval = 300                           # interval in seconds for polling SQL database
-strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in database
+strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in the database
 
 [messaging]
 mq_filename = "/var/local/aquarium-ctrl.mq"             # filename for generating token for message queue identification
@@ -194,7 +194,7 @@ active = true
 watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
 heartbeat_duration_millis = 1000                         # duration between two hearbeats in milliseconds
-watchdog_deactivation = "V"                             # deactivation code for system's watchdog functionality
+watchdog_deactivation = "V"                             # deactivation code for the system's watchdog functionality
 
 [ds18b20]
 active = true

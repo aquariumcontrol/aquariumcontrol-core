@@ -14,11 +14,11 @@ use crate::utilities::channel_content::InternalCommand;
 
 const LOG_TARGET_GET_RESP_SIM: &str = "get_resp_sim";
 
-/// The trait implements communication with simulator instead of real HW.
+/// The trait implements communication with the simulator instead of real HW.
 pub trait GetResponseFromSimulatorTrait {
     /// Requests a response from the simulator via TCP communication by sending
-    /// an internal message via channel to the TCP thread.
-    /// This function is used for development purposes only.
+    /// an internal message via the channel to the TCP thread.
+    /// This function is used for development only.
     fn get_response_from_simulator(
         tx_to_tcp: &Sender<InternalCommand>,
         rx_from_tcp: &Receiver<f32>,

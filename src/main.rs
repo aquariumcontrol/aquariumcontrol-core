@@ -1134,18 +1134,18 @@ fn main() {
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     let relay_manager_channels = RelayManagerChannels {
-        tx_relay_manager_to_refill: tx_relay_manager_to_refill,
-        rx_relay_manager_from_refill: rx_relay_manager_from_refill,
-        tx_relay_manager_to_heating: tx_relay_manager_to_heating,
-        rx_relay_manager_from_heating: rx_relay_manager_from_heating,
-        tx_relay_manager_to_ventilation: tx_relay_manager_to_ventilation,
-        rx_relay_manager_from_ventilation: rx_relay_manager_from_ventilation,
-        tx_relay_manager_to_balling: tx_relay_manager_to_balling,
-        rx_relay_manager_from_balling: rx_relay_manager_from_balling,
-        tx_relay_manager_to_feed: tx_relay_manager_to_feed,
-        rx_relay_manager_from_feed: rx_relay_manager_from_feed,
-        tx_relay_manager_to_signal_handler: tx_relay_manager_to_signal_handler,
-        rx_relay_manager_from_signal_handler: rx_relay_manager_from_signal_handler,
+        tx_relay_manager_to_refill,
+        rx_relay_manager_from_refill,
+        tx_relay_manager_to_heating,
+        rx_relay_manager_from_heating,
+        tx_relay_manager_to_ventilation,
+        rx_relay_manager_from_ventilation,
+        tx_relay_manager_to_balling,
+        rx_relay_manager_from_balling,
+        tx_relay_manager_to_feed,
+        rx_relay_manager_from_feed,
+        tx_relay_manager_to_signal_handler,
+        rx_relay_manager_from_signal_handler,
     };
 
     let atlas_scientific_channels = AtlasScientificChannels {
@@ -1212,7 +1212,7 @@ fn main() {
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
-        rx_tcp_communication_from_relay_manager_opt: rx_tcp_communication_from_relay_manager_opt,
+        rx_tcp_communication_from_relay_manager_opt,
         rx_tcp_communication_from_ambient_opt,
         tx_tcp_communication_to_ambient_opt,
         rx_tcp_communication_from_atlas_scientific_opt,

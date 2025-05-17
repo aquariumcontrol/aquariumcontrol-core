@@ -37,13 +37,6 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_single_feedpattern_from_database(
-            &mut self,
-            _profile_id: i32,
-        ) -> Result<Feedpattern, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
-        }
-
         fn insert_feed_event(
             &mut self,
             _timestamp: NaiveDateTime,
@@ -51,6 +44,13 @@ pub mod tests {
             _profile_name: String,
             _profile_id: i32,
         ) -> Result<(), SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
+        fn get_single_feedpattern_from_database(
+            &mut self,
+            _profile_id: i32,
+        ) -> Result<Feedpattern, SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
 

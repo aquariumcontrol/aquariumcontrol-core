@@ -55,7 +55,7 @@ pub mod tests {
         /// refill pump status
         RefillPumpStatus(bool),
 
-        /// schedule alllows operation
+        /// schedule allows operation
         #[allow(unused)]
         ScheduleAllows(bool),
     }

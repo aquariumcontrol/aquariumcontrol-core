@@ -69,7 +69,7 @@ pub struct BallingChannels {
     /// sender part of the channel for communication to relay manager
     pub tx_balling_to_relay_manager: Sender<InternalCommand>,
 
-    /// receiver part of the channel for communication from relay manager
+    /// receiver part of the channel for communication from the relay manager
     pub rx_balling_from_relay_manager: Receiver<bool>,
 
     /// sender part of the channel for communication to the signal handler
@@ -103,7 +103,7 @@ pub struct BallingChannels {
 ///     schedule_check --> balling
 ///     messaging[Messaging] --> balling
 /// ```
-/// Communication channel to and from relay manager is forwarded to implementation of MineralInjectionTrait.
+/// Communication channel to and from the relay manager is forwarded to implementation of MineralInjectionTrait.
 /// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
 pub struct Balling {
     /// configuration data for Balling dosing control
@@ -643,8 +643,8 @@ impl Balling {
             }
         };
 
-        // This thread has channel connection to underlying threads (relay manager).
-        // These threads have to stop receiving commands from this thread.
+        // This thread has channel connections to underlying threads (relay manager).
+        // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
@@ -1163,13 +1163,13 @@ pub mod tests {
         test_balling_dosing(
             3,                        // index for determining test the database
             true,                     // schedule allows
-            1,                // execution count
-            10000,                     // maximum time in milliseconds for test execution
-            1,     // number of dosing events for pump #1
-            0,     // number of dosing events for pump #2
-            0,     // number of dosing events for pump #3
-            0,     // number of dosing events for pump #4
-            60,                 // schedule check interval
+            1,                        // execution count
+            10000,                    // maximum time in milliseconds for test execution
+            1,                        // number of dosing events for pump #1
+            0,                        // number of dosing events for pump #2
+            0,                        // number of dosing events for pump #3
+            0,                        // number of dosing events for pump #4
+            60,                       // schedule check interval
             Some((50, 200, 100, 50)), // dosing intervals
         );
     }
@@ -1202,16 +1202,16 @@ pub mod tests {
     // Test case uses test database #05.
     pub fn test_balling_dosing_schedule_allows_multiple_dosings() {
         test_balling_dosing(
-            5,                                     // index for determining test database
-            true,                                  // schedule allows
-            14,                            // execution count
-            34000,                                  // maximum time in milliseconds for test execution
+            5,                  // index for determining test database
+            true,               // schedule allows
+            14,                 // execution count
+            34000,              // maximum time in milliseconds for test execution
             5,                  // number of dosing events for pump #1
             4,                  // number of dosing events for pump #2
             3,                  // number of dosing events for pump #3
             2,                  // number of dosing events for pump #4
-            1,                              // schedule check interval
-            Some((3, 5, 7, 9)),                                 // dosing intervals
+            1,                  // schedule check interval
+            Some((3, 5, 7, 9)), // dosing intervals
         );
     }
 

@@ -27,7 +27,7 @@ pub mod tests {
         let sleep_duration_one_millisecond = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         loop {
-            // receive command from test object
+            // receive command from the test object
             match rx_relay_manager_from_test_object.recv() {
                 Ok(command) => {
                     match command {

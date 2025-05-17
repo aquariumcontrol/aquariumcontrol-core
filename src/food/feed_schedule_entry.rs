@@ -17,7 +17,7 @@ use crate::database::{
 
 const LOG_TARGET_FEED_SCHEDULE_ENTRY: &str = "feed_schedule_entry";
 
-/// Holds the data of a feed schedule entry derived from data read from SQL database.
+/// Holds the data of a feed schedule entry derived from data read from the database.
 #[derive(Debug, PartialEq, Clone)]
 pub struct FeedScheduleEntry {
     pub timestamp: NaiveDateTime,

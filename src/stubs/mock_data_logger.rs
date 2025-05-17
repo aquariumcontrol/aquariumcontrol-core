@@ -33,7 +33,7 @@ pub mod tests {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            // for this mock thread, this case occurrs - test case execution has concluded
+                            // for this mock thread, this case occurs - test case execution has concluded
                             break;
                         }
                     }
@@ -55,7 +55,7 @@ pub mod tests {
                     match e {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
-                            // for this mock thread, this case occurrs - test case execution has concluded
+                            // for this mock thread, this case occurs - test case execution has concluded
                             break;
                         }
                     }

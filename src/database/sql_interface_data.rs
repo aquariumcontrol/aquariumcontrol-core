@@ -401,7 +401,9 @@ pub mod tests {
             refill_in_progress: Some(data_frame_2.refill_in_progress),
             tank_level_switch_position: Some(data_frame_2.tank_level_switch_position),
             tank_level_switch_invalid: Some(data_frame_2.tank_level_switch_invalid),
-            tank_level_switch_position_stabilized: Some(data_frame_2.tank_level_switch_position_stabilized),
+            tank_level_switch_position_stabilized: Some(
+                data_frame_2.tank_level_switch_position_stabilized,
+            ),
             surface_ventilation_status: Some(data_frame_2.surface_ventilation_status),
             ambient_temperature: Some(data_frame_2.ambient_temperature),
             ambient_humidity: Some(data_frame_2.ambient_humidity),

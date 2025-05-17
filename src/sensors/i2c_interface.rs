@@ -52,15 +52,15 @@ pub struct I2cInterfaceConfig {
     #[allow(unused)]
     timeout_transaction: u32,
 
-    /// sleep time in milliseconds before after writing before reading from pH sensor unit
+    /// sleep time in milliseconds before after writing before reading from the pH sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_ph: u64,
 
-    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
+    /// sleep time in milliseconds before after writing before reading from the conductivity sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_conductivity: u64,
 
-    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
+    /// sleep time in milliseconds before after writing before reading from the temperature sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_temperature: u64,
 
@@ -80,11 +80,11 @@ pub struct I2cInterfaceConfig {
     #[allow(unused)]
     min_val_atlas_scientific_temperature: f32,
 
-    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    /// maximum allowed value for conductivity used to assess if the conductivity sensor reading is valid
     #[allow(unused)]
     max_val_atlas_scientific_conductivity: f32,
 
-    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    /// minimum allowed value for conductivity used to assess if the conductivity sensor reading is valid
     #[allow(unused)]
     min_val_atlas_scientific_conductivity: f32,
 }
@@ -93,30 +93,30 @@ pub struct I2cInterfaceConfig {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum AtlasScientificError {
-    /// first character in message sent from sensor unit does not match required magic number
+    /// The first character in the message sent from the sensor does not match the required magic number.
     FirstCharacterNotMagic,
 
-    /// last character in message sent from sensor unit does not match required magic number    
+    /// The last character in the message sent from the sensor does not match the required magic number.
     LastCharacterNotMagic,
 
-    /// message sent from sensor unit contains non-numeric characters in data section
+    /// The message sent from the sensor unit contains non-numeric characters in the data section
     ContainsInvalidCharacter,
 
-    /// error is masked by other checks. However signature of function to convert from u8 array slice to String throws an error.
+    /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
     InvalidUtf8Sequence,
 
-    /// conversion from String to f32 failed
+    /// Conversion from String to f32 failed.
     ConversionFailure,
 }
 
 /// communication error codes
 #[derive(Debug, PartialEq)]
 pub enum I2cError {
-    /// message could not be sent
+    /// the message could not be sent
     #[allow(unused)]
     WriteFailure,
 
-    /// command could not be sent completely to sensor unit
+    /// command could not be sent completely to the sensor unit
     #[allow(unused)]
     InsufficientWrite,
 
@@ -132,7 +132,7 @@ pub enum I2cError {
     #[allow(unused)]
     SetAddressError(u16),
 
-    /// Signal requested cannot be provided by this crate
+    /// This crate cannot provide the requested signal.
     #[allow(unused)]
     InvalidSignalRequest(AquariumSignal),
 }
@@ -143,22 +143,22 @@ mod atlas_scientific_constants {
     /// command sent to sensor unit for initiating response
     pub const COMMAND_READ: u8 = b'R';
 
-    /// length of message received from sensor unit (number of byte)
+    /// length of the message received from the sensor (number of bytes)
     pub const MESSAGE_SIZE: usize = 8;
 
-    /// location of first character to be checked inside message from sensor unit
+    /// location of the first character to be checked inside the message from the sensor
     pub const INDEX_FIRST_CHARACTER: usize = 0;
 
-    /// start of data inside message from sensor unit
+    /// start of data inside the message from the sensor
     pub const INDEX_CONTENT_START: usize = 1;
 
-    /// finish of data inside message from sensor unit
+    /// finish of data inside the message from the sensor
     pub const INDEX_PENULTIMATE_CHARACTER: usize = 6;
 
-    /// location of last character to be checked inside message from sensor unit
+    /// location of the last character to be checked inside the message from the sensor
     pub const INDEX_LAST_CHARACTER: usize = 7;
 
-    /// ASCII value for representation of zero figure
+    /// ASCII value for representation of figure zero
     pub const ASCII_VAL_ZERO: u8 = 48;
 
     /// ASCII value for representation of figure nine
@@ -167,13 +167,13 @@ mod atlas_scientific_constants {
     /// decimal point
     pub const DECIMAL_POINT: u8 = b'.';
 
-    /// negative sign (note: positive sign does not occurr in message from sensor)
+    /// negative sign (note: positive sign does not occur in the message from the sensor)
     pub const NEGATIVE_SIGN: u8 = b'-';
 
-    /// magic number at front position inside message which identifies valid response from sensor unit
+    /// magic number at front position inside the message which identifies valid response from sensor unit
     pub const MESSAGE_START_MAGIC: u8 = 1;
 
-    /// magic number at finish position inside message which identifies valid response from sensor unit
+    /// magic number at finish position inside the message which identifies valid response from sensor unit
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
@@ -246,9 +246,9 @@ impl I2cInterface {
         }
     }
 
-    /// Checks if character is part of a numeric description:
-    /// - returns true if character is either a figureor a decimal point
-    /// - returns true/fale depending on parameter is character is a negative sign
+    /// Checks if the character is part of a numeric description:
+    /// - returns true if the character is either a figure or a decimal point
+    /// - returns true/false depending on if parameter is a character or if it is a negative sign
     /// - returns false elsewise
     /// # Arguments    
     /// * `character` - character to be checked
@@ -264,12 +264,12 @@ impl I2cInterface {
         }
     }
 
-    /// Evaluates response from Atlas Scientific sensor unit and provides wrapped in Result type either
+    /// Evaluates response from Atlas Scientific sensor unit and provides wrapped in Result type either:
     /// - result
     /// - error code
     /// # Arguments
     /// * `buf` - array of u8
-    /// * `is_ph` - flag indicating if sensor unit is pH unit
+    /// * `is_ph` - flag indicating if the sensor is pH unit
     #[allow(dead_code)]
     fn check_response(
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
@@ -288,11 +288,11 @@ impl I2cInterface {
             return Err(AtlasScientificError::LastCharacterNotMagic);
         }
 
-        // get slice of array
+        // get a slice of the array
         let numeric_content = &buffer[atlas_scientific_constants::INDEX_CONTENT_START
             ..atlas_scientific_constants::INDEX_PENULTIMATE_CHARACTER];
 
-        // third check: all characters inbetween belong to a number
+        // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
                 return Err(AtlasScientificError::ContainsInvalidCharacter);
@@ -313,7 +313,7 @@ impl I2cInterface {
     }
 
     /// Reads and checks response from Atlas Scientific sensor.
-    /// Provide wrapped into Result type either
+    /// Provide wrapped into a Result type either:
     /// - result
     /// - error code
     /// # Arguments
@@ -419,8 +419,8 @@ impl I2cInterface {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    // measures all three signals sequentially
-    // In case one measurement yields an error, the function return this error.
+    // Measures all three signals sequentially:
+    // In case one measurement yields an error function returns this error.
     // In case all measurements yield success, the function returns a tuple of
     // all three signals wrapped in Ok.
     fn get_all_data(&mut self) -> Result<(f32, f32, f32), I2cError> {
@@ -557,7 +557,7 @@ pub mod tests {
                 assert_float_absolute_eq!(c, 8.0, 0.001);
             }
             Err(e) => {
-                panic!("i2c_interfcae_check_response_valid_pH returned error: {e:?}");
+                panic!("i2c_interface_check_response_valid_pH returned error: {e:?}");
             }
         }
     }
@@ -583,7 +583,7 @@ pub mod tests {
         );
     }
 
-    // happy case for evaluating response from conductivity sensor unit
+    // happy case for evaluating response from conductivity sensor
     #[test]
     pub fn test_i2c_interface_check_response_valid_conductivity() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -607,7 +607,7 @@ pub mod tests {
         }
     }
 
-    // happy case for evaluating response from temperature sensor unit
+    // happy case for evaluating the response from the temperature sensor unit
     #[test]
     pub fn test_i2c_interface_check_response_valid_temperature() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -631,7 +631,7 @@ pub mod tests {
         }
     }
 
-    // checking if incorrect magic number in the front of the message is identified correctly
+    // checking if an incorrect magic number in the front of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_front() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -650,7 +650,7 @@ pub mod tests {
         );
     }
 
-    // checking if incorrect magic number in the rear part of the message is identified correctly
+    // checking if an incorrect magic number in the rear part of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_rear() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -669,7 +669,7 @@ pub mod tests {
         );
     }
 
-    // checking if incorrect sequence of numeric characters is identified correctly
+    // checking if an incorrect sequence of numeric characters is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_conversion() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -739,8 +739,8 @@ pub mod tests {
         }
     }
 
-    // test the error response of get_response_from_i2c when requesting an invalid signal.
-    // This test case only runs on the target hardware, because it requires initialization of the I2C subsystem.
+    // Test the error response of get_response_from_i2c when requesting an invalid signal.
+    // This test case only runs on the target hardware because it requires initialization of the I2C subsystem.
     #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn test_i2c_error_response_to_invalid_signal_request() {

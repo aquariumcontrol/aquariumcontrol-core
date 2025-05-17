@@ -34,8 +34,7 @@ pub mod tests {
             refill_errors: RefillErrors,
         ) -> MockWaterInjection {
             MockWaterInjection {
-                tx_water_injection_to_test_environment_opt:
-                    tx_water_injection_to_test_environment_opt,
+                tx_water_injection_to_test_environment_opt,
                 injection_recorder: Vec::new(),
                 stimuli_refill_errors: refill_errors,
             }
@@ -60,7 +59,7 @@ pub mod tests {
                     .clone()
                     .unwrap();
 
-                // copy refill errors from stimuli to mutable reference given as parameter
+                // copy refill errors from stimuli to mutable reference given as a parameter
                 refill_errors.error_switch_stuck_high =
                     self.stimuli_refill_errors.error_switch_stuck_high;
                 refill_errors.error_switch_stuck_low =

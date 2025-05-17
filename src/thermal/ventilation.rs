@@ -152,7 +152,7 @@ pub struct VentilationChannels {
     /// Sender part of the channel for communication to relay manager
     pub tx_ventilation_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from relay manager
+    /// Receiver part of the channel for communication from the relay manager
     pub rx_ventilation_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
@@ -333,6 +333,41 @@ impl Ventilation {
         };
     }
 
+    /// Helper function to avoid duplicate code warning
+    fn conditional_ventilation_switch(
+        condition: bool,
+        ventilation_state: &mut ActuatorState,
+        mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
+        ventilation_channels: &VentilationChannels,
+        mutex_was_blocked_during_actuation: &mut bool,
+    ) {
+        match condition {
+            true => {
+                // switch on the ventilation if not already on
+                if *ventilation_state != ActuatorState::On {
+                    switch_on_ventilation(
+                        &mutex_device_scheduler_ventilation,
+                        &ventilation_channels.tx_ventilation_to_relay_manager,
+                        &ventilation_channels.rx_ventilation_from_relay_manager,
+                        mutex_was_blocked_during_actuation,
+                    );
+                    *ventilation_state = ActuatorState::On;
+                }
+            }
+            false => {
+                // switch off the ventilation if not already off
+                if *ventilation_state != ActuatorState::Off {
+                    switch_off_ventilation(
+                        &mutex_device_scheduler_ventilation,
+                        &ventilation_channels.tx_ventilation_to_relay_manager,
+                        &ventilation_channels.rx_ventilation_from_relay_manager,
+                        mutex_was_blocked_during_actuation,
+                    );
+                    *ventilation_state = ActuatorState::Off;
+                }
+            }
+        }
+    }
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
@@ -499,60 +534,22 @@ impl Ventilation {
                     }
                 } else if ventilation_inhibited {
                     // An external request for stopping ventilation control has been received
-                    match self.config.switch_on_when_external_stop {
-                        true => {
-                            // switch on the heater if not already on
-                            if ventilation_state != ActuatorState::On {
-                                switch_on_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
-                                );
-                                ventilation_state = ActuatorState::On;
-                            }
-                        }
-                        false => {
-                            // switch off the heater if not already off
-                            if ventilation_state != ActuatorState::Off {
-                                switch_off_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
-                                );
-                                ventilation_state = ActuatorState::Off;
-                            }
-                        }
-                    }
+                    Self::conditional_ventilation_switch(
+                        self.config.switch_on_when_external_stop,
+                        &mut ventilation_state,
+                        &mutex_device_scheduler_ventilation,
+                        &ventilation_channels,
+                        &mut mutex_was_blocked_during_actuation,
+                    );
                 } else {
                     // schedule check requires stop of ventilation control
-                    match self.config.switch_on_when_out_of_schedule {
-                        true => {
-                            // switch on the heater if not already on
-                            if ventilation_state != ActuatorState::On {
-                                switch_on_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
-                                );
-                                ventilation_state = ActuatorState::On;
-                            }
-                        }
-                        false => {
-                            // switch off the heater if not already off
-                            if ventilation_state != ActuatorState::Off {
-                                switch_off_ventilation(
-                                    &mutex_device_scheduler_ventilation,
-                                    &ventilation_channels.tx_ventilation_to_relay_manager,
-                                    &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
-                                );
-                                ventilation_state = ActuatorState::Off;
-                            }
-                        }
-                    }
+                    Self::conditional_ventilation_switch(
+                        self.config.switch_on_when_out_of_schedule,
+                        &mut ventilation_state,
+                        &mutex_device_scheduler_ventilation,
+                        &ventilation_channels,
+                        &mut mutex_was_blocked_during_actuation,
+                    );
                 }
             }
 
@@ -679,6 +676,7 @@ pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
@@ -699,6 +697,23 @@ pub mod tests {
         Ventilation::new(config.ventilation)
     }
 
+    fn create_test_environment(
+        duration_seconds: u64,
+        tx_signal_handler_to_ventilation: Sender<InternalCommand>,
+        rx_signal_handler_from_ventilation: Receiver<bool>,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_ten_seconds = Duration::from_secs(duration_seconds);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_ten_seconds);
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
+                rx_signal_handler_from_ventilation.recv().unwrap();
+                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
+            })
+            .unwrap()
+    }
     // Check if the ventilation is switched on when the temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
@@ -772,17 +787,11 @@ pub mod tests {
             .unwrap();
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration_ten_seconds = Duration::from_secs(10);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            10,
+            tx_signal_handler_to_ventilation,
+            rx_signal_handler_from_ventilation,
+        );
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 
@@ -838,6 +847,32 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
+    }
+
+    fn create_mock_relay_manager(
+        tx_relay_manager_to_ventilation: Sender<bool>,
+        rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
+    ) -> thread::JoinHandle<()> {
+        thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
+                );
+                assert_eq!(actuation_events.len(), 2);
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                let actuation_event = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+            })
+            .unwrap()
     }
 
     // Check if the ventilation is switched off with low temperature and switched back on when exiting the application.
@@ -897,39 +932,17 @@ pub mod tests {
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // thread for mock relay manager - includes assertions
-        let join_handle_mock_relay_manager = thread::Builder::new()
-            .name("mock_relay_manager".to_string())
-            .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
-                );
-                assert_eq!(actuation_events.len(), 2);
-                let actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    actuation_event.command,
-                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
-                );
-                let actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    actuation_event.command,
-                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
-                );
-            })
-            .unwrap();
+        let join_handle_mock_relay_manager = create_mock_relay_manager(
+            tx_relay_manager_to_ventilation,
+            rx_relay_manager_from_ventilation,
+        );
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration_ten_seconds = Duration::from_secs(10);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            58,
+            tx_signal_handler_to_ventilation,
+            rx_signal_handler_from_ventilation,
+        );
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 
@@ -1193,17 +1206,11 @@ pub mod tests {
             .unwrap();
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration = Duration::from_secs(58);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            58,
+            tx_signal_handler_to_ventilation,
+            rx_signal_handler_from_ventilation,
+        );
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 
@@ -1316,39 +1323,17 @@ pub mod tests {
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // thread for mock relay manager - includes assertions
-        let join_handle_mock_relay_manager = thread::Builder::new()
-            .name("mock_relay_manager".to_string())
-            .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
-                    &tx_relay_manager_to_ventilation,
-                    &rx_relay_manager_from_ventilation,
-                );
-                assert_eq!(actuation_events.len(), 2);
-                let actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    actuation_event.command,
-                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
-                );
-                let actuation_event = actuation_events.pop().unwrap();
-                assert_eq!(
-                    actuation_event.command,
-                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
-                );
-            })
-            .unwrap();
+        let join_handle_mock_relay_manager = create_mock_relay_manager(
+            tx_relay_manager_to_ventilation,
+            rx_relay_manager_from_ventilation,
+        );
 
         // thread for controlling duration of test run
-        let join_handle_test_environment = thread::Builder::new()
-            .name("test_environment".to_string())
-            .spawn(move || {
-                let sleep_duration_ten_seconds = Duration::from_secs(10);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_ten_seconds);
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                rx_signal_handler_from_ventilation.recv().unwrap();
-                let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Terminate);
-            })
-            .unwrap();
+        let join_handle_test_environment = create_test_environment(
+            10,
+            tx_signal_handler_to_ventilation,
+            rx_signal_handler_from_ventilation,
+        );
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 

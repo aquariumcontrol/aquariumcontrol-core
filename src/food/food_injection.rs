@@ -477,7 +477,7 @@ pub mod tests {
         tx_controllino_to_feed: &Sender<bool>,
         rx_controllino_from_feed: &Receiver<InternalCommand>,
         counter_switch_on: &mut i32,
-        counter_switch_off: &mut i32
+        counter_switch_off: &mut i32,
     ) {
         // receive command from the test object
         let (command, device) = match rx_controllino_from_feed.recv() {
@@ -520,7 +520,7 @@ pub mod tests {
             }
         }
     }
-    
+
     #[test]
     // this test case executes the food injection without interruption from the signal handler
     pub fn test_food_injection_uninterrupted() {
@@ -544,7 +544,7 @@ pub mod tests {
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
                         &mut counter_switch_on,
-                        &mut counter_switch_off
+                        &mut counter_switch_off,
                     );
                 }
                 println!(
@@ -627,7 +627,7 @@ pub mod tests {
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
                         &mut counter_switch_on,
-                        &mut counter_switch_off
+                        &mut counter_switch_off,
                     );
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
@@ -638,7 +638,7 @@ pub mod tests {
                         &tx_controllino_to_feed,
                         &rx_controllino_from_feed,
                         &mut counter_switch_on,
-                        &mut counter_switch_off
+                        &mut counter_switch_off,
                     );
                 }
                 println!(

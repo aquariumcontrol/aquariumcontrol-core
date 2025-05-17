@@ -13,5 +13,5 @@ pub mod refill;
 /// Contains trait implementation for the execution of the fresh water refill
 pub mod water_injection;
 
-/// Contains data definition between main thread and trait implementation
+/// Contains data definition between the main thread and trait implementation
 pub mod refill_errors;

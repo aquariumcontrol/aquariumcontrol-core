@@ -9,8 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 /// Holds the configuration data of one feed pattern.
 pub struct Feedpattern {
-    /// numeric ID of the feed profile
-    /// Data is not used in the implementation. Therefore, is tagged as unused.
+    /// Numeric ID of the feed profile
+    /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
     pub profile_id: i32,
 
@@ -23,7 +23,7 @@ pub struct Feedpattern {
 
 impl Feedpattern {
     /// Calculate the total run time of the feeder for the feed pattern.
-    /// Data is inserted into feed log.
+    /// Data is inserted into the feed log.
     pub fn calc_feeder_runtime(&self) -> f64 {
         let mut feeder_run_time = 0.0;
 

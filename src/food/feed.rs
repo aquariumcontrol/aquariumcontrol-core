@@ -62,7 +62,7 @@ pub struct FeedChannels {
     /// Sender part of the channel for communication to relay manager
     pub tx_feed_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from relay manager
+    /// Receiver part of the channel for communication from the relay manager
     pub rx_feed_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
@@ -88,30 +88,30 @@ pub struct FeedChannels {
 ///     messaging[Messaging] --> feed
 /// ```
 /// Communication channel to Controllino is forwarded to implementation of FoodInjectionTrait.
-/// Signal handler is communicating both directly with feed as well with implementation of FoodInjectionTrait.
+/// Signal handler is communicating with both directly: feed as well with implementation of FoodInjectionTrait.
 pub struct Feed {
-    /// configuration data for Feed control
+    /// Configuration data for Feed control
     config: FeedConfig,
 
-    /// interface to SQL database (trait object)
+    /// Interface to SQL database (trait object)
     sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
 
-    /// communication from trait implementation: request to execute a certain feed profile has been received
+    /// Communication from trait implementation: request to execute a certain feed profile has been received
     pub execute_command_received: bool,
 
-    /// communication from trait implementation: id of feed profile to be executed requested externally
+    /// Communication from trait implementation: id of feed profile to be executed requested externally
     pub profile_id_requested: i32,
 
-    /// flag inhibiting further execution of feed profiles. It is set whenever errors occur during feeding and can be reset by external command.
+    /// Inhibition flag for further execution of feed profiles. It is set whenever errors occur during feeding and can be reset by external command.
     pub execution_blocked: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from database
+    /// Inhibition flag to avoid flooding the log file with repeated messages about failure to read feed schedule entry from the database
     lock_error_get_feedschedule_entry: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
+    /// Inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command
     lock_warn_inapplicable_command: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via channel
+    /// Inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination_signal: bool,
 }
 
@@ -139,7 +139,7 @@ impl Feed {
     #[cfg(all(feature = "debug_feed", not(test)))]
     /// Helper function to visualize a vector of feed schedule entries.
     /// # Arguments:
-    /// * `feedschedule_entries` - reference to vector of feed schedule entries    
+    /// * `feedschedule_entries` - reference to a vector of feed schedule entries    
     fn feedschedule_entries_to_string(feedschedule_entries: Vec<FeedScheduleEntry>) -> String {
         let mut output: String = "Vec<FeedscheduleEntry>=".to_string();
         for (i, s) in feedschedule_entries.iter().enumerate() {
@@ -165,7 +165,7 @@ impl Feed {
         rx_feed_from_signal_handler: &Receiver<InternalCommand>,
     ) -> (Result<(), ()>, bool) {
         let mut quit_command_received: bool = false;
-        // load feed pattern from database
+        // load the feed pattern from the database
         #[allow(unused_variables)]
         let result = match self
             .sql_interface_feed
@@ -246,7 +246,7 @@ impl Feed {
                 // vector has not enough elements - choose the last element
                 feedschedule_entries.last().cloned()
             } else {
-                // vector has sufficient number of elements - choose as per parameter
+                // vector has enough elements - choose as per parameter
                 feedschedule_entries
                     .get(self.config.strategy_multiple_schedule_entries_in_past as usize)
                     .cloned()
@@ -320,7 +320,7 @@ impl Feed {
         quit_command_received_during_feed
     }
 
-    /// Executes the main control in a loop until signal handler commands quitting and termination.
+    /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
     /// * `mutex_device_scheduler_feed` - clone of the mutex for avoiding parallel device actuation.
     /// * `feed_channels` - channels for communication with other threads
@@ -334,10 +334,10 @@ impl Feed {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;
-        let mut feed_inhibited: bool = false; // state of feed control determined by if start/stop command has been received
-        let mut quit_command_received: bool = false; // request to end the application has been received
-        let mut start_command_received: bool; // request to (re-)start feed has been received
-        let mut stop_command_received: bool; // request to (temporarily) stop feed has been received
+        let mut feed_inhibited: bool = false; // state of feed control determined by if the start/stop command has been received
+        let mut quit_command_received: bool = false; // the request to end the application has been received
+        let mut start_command_received: bool; // the request to (re-)start feed has been received
+        let mut stop_command_received: bool; // the request to (temporarily) stop the feed has been received
 
         loop {
             if self.config.active
@@ -379,7 +379,7 @@ impl Feed {
 
                                     if !self.execution_blocked {
                                         {
-                                            // scope to limit lifetime of unlocked mutex
+                                            // scope to limit the lifetime of unlocked mutex
                                             let mut mutex_data =
                                                 mutex_device_scheduler_feed.lock().unwrap();
 
@@ -419,16 +419,16 @@ impl Feed {
                 };
             }
 
-            // exit loop right after feed execution if quit command has been received meanwhile
+            // exit loop right after feed execution if the quit command has been received meanwhile
             if quit_command_received {
                 break;
             }
 
             // check and process external requests
             (
-                quit_command_received,  // request to end the application has been received
-                start_command_received, // request to (re-)start feed has been received
-                stop_command_received,  // request to (temporarily) stop feed has been received
+                quit_command_received,  // the request to end the application has been received
+                start_command_received, // the request to (re-)start feed has been received
+                stop_command_received, // the request to (temporarily) stop the feed has been received
             ) = self.process_external_request(
                 &feed_channels.rx_feed_from_signal_handler,
                 feed_channels.rx_feed_from_messaging_opt.as_ref(),
@@ -477,7 +477,7 @@ impl Feed {
                 );
 
                 {
-                    // scope to limit lifetime of unlocked mutex
+                    // scope to limit the lifetime of unlocked mutex
                     let mut mutex_data = mutex_device_scheduler_feed.lock().unwrap();
 
                     let (result, quit_command_received_during_requested_feed) = self.execute_feed(
@@ -513,7 +513,7 @@ impl Feed {
         }
 
         // application received request to terminate, that is why the loop was left.
-        // answer to thread which sent the request for termination, so that shutdown can proceed further.
+        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
         #[cfg(all(feature = "debug_signal_handler", not(test)))]
         debug!(
             target: LOG_TARGET_FEED,
@@ -530,9 +530,9 @@ impl Feed {
             }
         };
 
-        // this thread has channel connection to underlying threads (Controllino).
-        // These threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by signal_handler module.
+        // This thread has channel connections to underlying threads (Controllino).
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
             termination_command_received = match feed_channels.rx_feed_from_signal_handler.recv() {
@@ -725,7 +725,7 @@ pub mod tests {
                 }
             };
 
-        // manipulation of database: inserting feed schedule entries with future timestamp
+        // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,
@@ -771,7 +771,7 @@ pub mod tests {
                 rx_feed_from_messaging_opt: None,
             };
 
-            // thread for test object
+            // thread for the test object
             scope.spawn(move || {
                 feed.execute(
                     mutex_device_scheduler_feed.clone(),
@@ -788,11 +788,11 @@ pub mod tests {
     }
 
     #[test]
-    // Test case runs feed control and triggers inhibition by sending stop message via channel.
+    // Test case runs feed control and triggers inhibition by sending the stop message via the channel.
     // After verification that feed is stopped,
-    // test case sends start message via channel and verifies if feed control
-    // resumes operation. Afterward, test case triggers execution of a specific feed profile
-    // by sending "execute" message via channel.
+    // The test case sends the start message via the channel and verifies if feed control
+    // resumes operation. Afterward, the test case triggers execution of a specific feed profile
+    // by sending the "execute" message via the channel.
     // Test case uses test database #08.
     pub fn test_messaging_stops_starts_execute_feed() {
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -839,7 +839,7 @@ pub mod tests {
                 }
             };
 
-        // manipulation of database: inserting feed schedule entries with future timestamp
+        // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry,
@@ -850,7 +850,7 @@ pub mod tests {
             )
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        // create test object
+        // create the test object
         let mut feed = Feed::new(config.feed, sql_interface_feed);
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
@@ -869,10 +869,10 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                // wait to make sure test object can receive message
+                // wait to make sure the test object can receive the message
                 spin_sleeper.sleep(sleep_duration_100_millis);
 
-                // sending message requesting stop of feed control
+                // sending the message requesting stop of feed control
                 match tx_messaging_to_feed.send(InternalCommand::Stop) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -883,17 +883,17 @@ pub mod tests {
                     }
                 }
 
-                // wait for 10 seconds. If test object does not follow stop request,
+                // Wait for 10 seconds. If the test object does not follow the stop request,
                 // then food injection will happen in this period.
                 spin_sleeper.sleep(sleep_duration_10_secs);
 
                 let actuation_count_1 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check number of actuation (after stop request)
+                // check the amount of actuation (after stop request)
                 assert_eq!(actuation_count_1, 0);
 
-                // sending message requesting restart of feed control
+                // sending the message requesting restart of feed control
                 match tx_messaging_to_feed.send(InternalCommand::Start) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -904,7 +904,7 @@ pub mod tests {
                     }
                 }
 
-                // wait for 10 seconds. If test object follows start request,
+                // Wait for 10 seconds. If the test object follows the start request,
                 // then food injections will happen in this period.
                 spin_sleeper.sleep(sleep_duration_10_secs);
 
@@ -912,10 +912,10 @@ pub mod tests {
                 let actuation_count_2 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check number of actuation (after start request)
+                // check the amount of actuation (after start request)
                 assert_eq!(actuation_count_2, 1);
 
-                // sending message requesting execution of feed profile
+                // sending the message requesting execution of the feed profile
                 match tx_messaging_to_feed.send(InternalCommand::Execute(1)) {
                     Ok(()) => { /* do nothing */ }
                     Err(e) => {
@@ -926,7 +926,7 @@ pub mod tests {
                     }
                 }
 
-                // wait for 2 seconds. If test object follows execute request,
+                // Wait for 2 seconds. If the test object follows the "execute" request,
                 // then food injection will happen in this period.
                 spin_sleeper.sleep(sleep_duration_2_secs);
 
@@ -934,7 +934,7 @@ pub mod tests {
                 let actuation_count_3 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check number of actuation (after execute request)
+                // check the amount of actuation (after the "execute" request)
                 assert_eq!(actuation_count_3, 2);
 
                 // requesting feed control to quit
@@ -946,7 +946,7 @@ pub mod tests {
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -981,8 +981,8 @@ pub mod tests {
     }
 
     #[test]
-    // Test case runs feed control and triggers inhibition by using mock SQL interface which returns only errors.
-    // This test case does not require any communication with SQL database.
+    // Test case runs feed control and triggers inhibition by using a mock SQL interface which returns only errors.
+    // This test case does not require any communication with the database.
     pub fn test_messaging_sql_error_inhibition_feed() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let sleep_duration_10_secs = Duration::from_secs(10);
@@ -993,11 +993,11 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        // mock interface will be used in operation of test object
+        // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(MockSqlInterfaceFeed::new());
 
-        // create test object
+        // create the test object
         let mut feed = Feed::new(config.feed, mock_sql_interface_feed);
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
@@ -1015,14 +1015,14 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                // wait for 10 seconds to be able to afterward check
-                // if test object still managed to execute a feed operation
+                // Wait for 10 seconds to be able to afterward check
+                // if the test object still managed to execute a feed operation
                 spin_sleeper.sleep(sleep_duration_10_secs);
 
                 let actuation_count_1 =
                     *mutex_device_scheduler_feed_test_environment.lock().unwrap();
 
-                // check number of actuation (after stop request)
+                // check the amount of actuation (after stop request)
                 assert_eq!(actuation_count_1, 0);
 
                 // requesting feed control to quit
@@ -1034,7 +1034,7 @@ pub mod tests {
 
         spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object
+        // thread for the test object
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
@@ -1096,21 +1096,21 @@ pub mod tests {
     #[test]
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select none of them.
-    // This test case does not require any communication with SQL database.
+    // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_none() {
         setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
 
-        // mock interface will be used in operation of test object
+        // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(MockSqlInterfaceFeed::new());
 
-        // create test object
+        // create the test object
         let feed = Feed::new(config.feed, mock_sql_interface_feed);
 
-        // input for function to be tested
+        // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
 
         assert_eq!(
@@ -1122,21 +1122,21 @@ pub mod tests {
     #[test]
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select the first one.
-    // This test case does not require any communication with SQL database.
+    // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_first() {
         setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
 
-        // mock interface will be used in operation of test object
+        // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(MockSqlInterfaceFeed::new());
 
-        // create test object
+        // create the test object
         let feed = Feed::new(config.feed, mock_sql_interface_feed);
 
-        // input for function to be tested
+        // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
 
         assert_eq!(
@@ -1150,21 +1150,21 @@ pub mod tests {
     #[test]
     // Test case test selection of feed schedule entry in case there are multiple entries in the past
     // This test case tests the strategy to select a middle one.
-    // This test case does not require any communication with SQL database.
+    // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
         setup_logger();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
 
-        // mock interface will be used in operation of test object
+        // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(MockSqlInterfaceFeed::new());
 
-        // create test object
+        // create the test object
         let feed = Feed::new(config.feed, mock_sql_interface_feed);
 
-        // input for function to be tested
+        // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
 
         assert_eq!(
@@ -1178,20 +1178,20 @@ pub mod tests {
     #[test]
     // Test case tests selection of feed schedule entry in case there are multiple entries in the past.
     // This test case tests the strategy to select the last one.
-    // This test case does not require any communication with SQL database.
+    // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_last() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         config.feed.strategy_multiple_schedule_entries_in_past = 99;
 
-        // mock interface will be used in operation of test object
+        // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
             Box::new(MockSqlInterfaceFeed::new());
 
-        // create test object
+        // create the test object
         let feed = Feed::new(config.feed, mock_sql_interface_feed);
 
-        // input for function to be tested
+        // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
 
         assert_eq!(
@@ -1268,7 +1268,7 @@ pub mod tests {
                 }
             };
 
-        // manipulation of database: inserting feed schedule entries with future timestamp
+        // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,
@@ -1397,7 +1397,7 @@ pub mod tests {
                 }
             };
 
-        // manipulation of database: inserting feed schedule entries with future timestamp
+        // manipulation of the database: inserting feed schedule entries with future timestamp
         sql_interface_feed
             .insert_feed_schedule_entry(
                 time_stamp_feed_schedule_entry_one_time,

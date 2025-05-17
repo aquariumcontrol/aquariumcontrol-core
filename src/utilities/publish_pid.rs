@@ -32,9 +32,9 @@ pub struct PublishPid {
 impl PublishPid {
     const LOG_TARGET_PUBLISH_PID: &'static str = "publish_pid";
 
-    /// Checks if PID file already contains published PID.
-    /// If yes, then application will panic.
-    /// If no, then function publishes PID provides a struct of type PublishPid
+    /// Checks if the PID file already contains published PID.
+    /// If yes, then the application will panic.
+    /// If no, then the function publishes PID provides a struct of type PublishPid
     /// If publishing does not work, then the application will panic.
     /// # Arguments
     /// * `config` - configuration data for PublishPid
@@ -84,7 +84,7 @@ impl PublishPid {
         PublishPid { config }
     }
 
-    /// Erases PID from previously generated file
+    /// Erases PID from the file previously generated
     pub fn erase_pid(&self) {
         fs::write(self.config.pid_filename.clone(), "0").expect("PublishPid: Could not erase PID.");
     }
@@ -106,7 +106,7 @@ pub mod tests {
         fs::write(pid_filename.clone(), "0".to_string())
             .expect("test_publish_PID: Could not erase PID.");
 
-        // create test object and run code to be tested
+        // create the test object and run code to be tested
         _ = PublishPid::new(config.publish_pid);
 
         let process_id_numeric: u32 = process::id();

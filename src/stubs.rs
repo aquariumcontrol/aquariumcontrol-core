@@ -10,13 +10,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod actuation_event;
 pub mod mock_ambient;
 pub mod mock_atlas_scientific;
-pub mod mock_relay_manager;
+mod mock_common;
 pub mod mock_data_injection;
 pub mod mock_data_logger;
 pub mod mock_heating;
 pub mod mock_message_command_receiver;
 pub mod mock_petting;
 pub mod mock_refill;
+pub mod mock_relay_manager;
 pub mod mock_schedule_check;
 pub mod mock_signal;
 pub mod mock_sql_interface_feed;
