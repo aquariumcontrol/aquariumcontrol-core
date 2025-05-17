@@ -346,7 +346,7 @@ impl Ventilation {
                 // switch on the ventilation if not already on
                 if *ventilation_state != ActuatorState::On {
                     switch_on_ventilation(
-                        &mutex_device_scheduler_ventilation,
+                        mutex_device_scheduler_ventilation,
                         &ventilation_channels.tx_ventilation_to_relay_manager,
                         &ventilation_channels.rx_ventilation_from_relay_manager,
                         mutex_was_blocked_during_actuation,
@@ -358,7 +358,7 @@ impl Ventilation {
                 // switch off the ventilation if not already off
                 if *ventilation_state != ActuatorState::Off {
                     switch_off_ventilation(
-                        &mutex_device_scheduler_ventilation,
+                        mutex_device_scheduler_ventilation,
                         &ventilation_channels.tx_ventilation_to_relay_manager,
                         &ventilation_channels.rx_ventilation_from_relay_manager,
                         mutex_was_blocked_during_actuation,

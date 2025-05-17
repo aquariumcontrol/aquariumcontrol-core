@@ -80,11 +80,11 @@ pub struct TcpCommunicationChannels {
 /// graph LR
 ///     relay_manager[Relay Manager] --> tcp_communication[TCP Communication]
 ///     ambient[Ambient] --> tcp_communication
-///	    tcp_communication --> ambient
+///     tcp_communication --> ambient
 ///     atlas_scientific[Atlas Scientific] --> tcp_communication
-///	    tcp_communication --> atlas_scientific
-///	    tank_level_switch[Tank Level Switch] --> tcp_communication
-///	    tcp_communication --> tank_level_switch
+///     tcp_communication --> atlas_scientific
+///     tank_level_switch[Tank Level Switch] --> tcp_communication
+///     tcp_communication --> tank_level_switch
 ///     tcp_communication --> signal_handler[Signal Handler]
 ///     signal_handler --> tcp_communication
 /// ```

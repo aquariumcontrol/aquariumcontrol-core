@@ -543,7 +543,7 @@ impl ActuateControllino {
         ];
 
         for &value in &relay_id_values {
-            if value < CONTROLLINO_MIN_RELAY_ID || value > CONTROLLINO_MAX_RELAY_ID {
+            if !(CONTROLLINO_MIN_RELAY_ID..=CONTROLLINO_MAX_RELAY_ID).contains(&value) {
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
