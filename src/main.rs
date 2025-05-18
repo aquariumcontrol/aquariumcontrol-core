@@ -75,14 +75,14 @@ use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::DataLogger;
+use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
-use crate::sensors::ambient::Ambient;
+use crate::sensors::ambient::{Ambient, AmbientChannels};
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1271,7 +1271,7 @@ fn main() {
         rx_signal_handler_from_watchdog,
         tx_signal_handler_to_ds18b20,
     };
-
+    
     scope(|scope| {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
@@ -1418,13 +1418,18 @@ fn main() {
         }
 
         scope.spawn(move || {
-            ambient.execute(
-                &tx_ambient_to_tcp_opt,
-                &rx_ambient_from_tcp_opt,
+
+            let ambient_channels = AmbientChannels {
+                tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
+                rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
                 tx_ambient_to_dht_opt,
                 rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
+            };
+
+            ambient.execute(
+                ambient_channels,
                 mutex_ambient_temperature,
                 mutex_ambient_humidity,
             );
@@ -1445,25 +1450,34 @@ fn main() {
         println!("starting control...");
 
         scope.spawn(move || {
+            
+            let data_logger_channels = DataLoggerChannels {
+                tx_to_refill: &tx_data_logger_to_refill,
+                rx_from_refill: &rx_data_logger_from_refill,
+                tx_to_heating: &tx_data_logger_to_heating,
+                rx_from_heating: &rx_data_logger_from_heating,
+                tx_to_ventilation: &tx_data_logger_to_ventilation,
+                rx_from_ventilation: &rx_data_logger_from_ventilation,
+                tx_to_signal_handler: &tx_data_logger_to_signal_handler,
+                rx_from_signal_handler: &rx_data_logger_from_signal_handler,
+            };
+            
+            let data_logger_mutexes = DataLoggerMutexes {
+                mutex_water_temperature_ds18b20: mutex_ds18b20_water_temperature_clone_for_data_logger,
+                mutex_ambient_temperature_dsb18b20: mutex_ds18b20_ambient_temperature_clone_for_data_logger,
+                mutex_atlas_scientific_temperature: mutex_atlas_scientific_temperature_clone_for_data_logger,
+                mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_data_logger,
+                mutex_atlas_scientific_conductivity: mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
+                mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
+                mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_data_logger,
+            };
+            
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                tx_data_logger_to_refill,
-                rx_data_logger_from_refill,
-                tx_data_logger_to_heating,
-                rx_data_logger_from_heating,
-                tx_data_logger_to_ventilation,
-                rx_data_logger_from_ventilation,
-                tx_data_logger_to_signal_handler,
-                rx_data_logger_from_signal_handler,
-                mutex_ds18b20_water_temperature_clone_for_data_logger,
-                mutex_ds18b20_ambient_temperature_clone_for_data_logger,
-                mutex_atlas_scientific_temperature_clone_for_data_logger,
-                mutex_atlas_scientific_ph_clone_for_data_logger,
-                mutex_atlas_scientific_conductivity_clone_for_data_logger,
-                mutex_ambient_temperature_clone_for_data_logger,
-                mutex_ambient_humidity_clone_for_data_logger,
-                mutex_tank_level_switch_signals_clone_for_data_logger,
+                data_logger_channels,
+                data_logger_mutexes
             );
 
             #[cfg(feature = "debug_main")]

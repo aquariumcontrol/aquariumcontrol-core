@@ -24,25 +24,34 @@ use crate::water::refill_errors::RefillErrors;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
+pub struct WaterInjectionChannels<'a> {
+    /// Reference to sender part of the channel for communication to the relay manager
+    pub tx_water_injection_to_relay_manager: &'a Sender<InternalCommand>,
+
+    /// Reference to Receiver part of the channel for communication from the relay manger
+    pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,
+
+    /// Reference to receiver part of the channel for communication from the signal handler
+    pub rx_water_injection_from_signal_handler: &'a Receiver<InternalCommand>,
+
+    /// Sender part of the channel for communication to data logger
+    pub tx_water_injection_to_data_logger: &'a Sender<bool>,
+
+    /// Receiver part of the channel for communication to data logger
+    pub rx_water_injection_from_data_logger: &'a Receiver<InternalCommand>,
+}
+
 /// Trait for the execution of the refill once control has detected that the water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait WaterInjectionTrait {
     /// Actuates the refill pump which injects water into the main tank.
     /// # Arguments
-    /// * `tx_water_injection_to_relay_manager` - Reference to sender part of channel for communication to Controllino
-    /// * `rx_water_injection_from_relay_manager` - Reference to Receiver part of channel for communication from Controllino
-    /// * `rx_water_injection_from_signal_handler` - Reference to receiver part of channel for communication from signal handler
-    /// * `tx_water_injection_to_data_logger` - Sender part of channel for communication to data logger
-    /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection            
+    /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection
     /// * `sql_interface_refill` - Reference to SQL database interface for refill control
     /// * `mutex_tank_level_switch` - Reference to mutex for reading tank level switch signals
     fn inject_water(
         &mut self,
-        tx_water_injection_to_relay_manager: &Sender<InternalCommand>,
-        rx_water_injection_from_relay_manager: &Receiver<bool>,
-        rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
-        tx_water_injection_to_data_logger: &Sender<bool>,
-        rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
+        water_injection_channels: WaterInjectionChannels,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -101,11 +110,7 @@ impl WaterInjectionTrait for WaterInjection {
     /// this function executes the refill operation
     fn inject_water(
         &mut self,
-        tx_water_injection_to_relay_manager: &Sender<InternalCommand>,
-        rx_water_injection_from_relay_manager: &Receiver<bool>,
-        rx_water_injection_from_signal_handler: &Receiver<InternalCommand>,
-        tx_water_injection_to_data_logger: &Sender<bool>,
-        rx_water_injection_from_data_logger: &Receiver<InternalCommand>,
+        water_injection_channels: WaterInjectionChannels,
         refill_errors: &mut RefillErrors,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -113,12 +118,12 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match tx_water_injection_to_relay_manager
+        match water_injection_channels.tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match rx_water_injection_from_relay_manager.recv() {
+                match water_injection_channels.rx_water_injection_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -146,8 +151,8 @@ impl WaterInjectionTrait for WaterInjection {
 
         loop {
             self.communicate_with_data_logger(
-                tx_water_injection_to_data_logger,
-                rx_water_injection_from_data_logger,
+                water_injection_channels.tx_water_injection_to_data_logger,
+                water_injection_channels.rx_water_injection_from_data_logger,
                 true,
             );
 
@@ -186,7 +191,7 @@ impl WaterInjectionTrait for WaterInjection {
                 additional_refill_volume_executed += self.refill_increment;
             }
             (quit_command_received, _, _) =
-                self.process_external_request(rx_water_injection_from_signal_handler, None);
+                self.process_external_request(water_injection_channels.rx_water_injection_from_signal_handler, None);
             if quit_command_received {
                 break;
             }
@@ -198,12 +203,12 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match tx_water_injection_to_relay_manager
+        match water_injection_channels.tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match rx_water_injection_from_relay_manager.recv() {
+                match water_injection_channels.rx_water_injection_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -222,7 +227,7 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // inform data logger that refill is finished
-        match tx_water_injection_to_data_logger.send(false) {
+        match water_injection_channels.tx_water_injection_to_data_logger.send(false) {
             Ok(_) => { /* no listening to response */ }
             Err(e) => {
                 error!(
@@ -261,7 +266,7 @@ pub mod tests {
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
     use crate::water::refill::Refill;
-    use crate::water::water_injection::{WaterInjection, WaterInjectionTrait};
+    use crate::water::water_injection::{WaterInjection, WaterInjectionChannels, WaterInjectionTrait};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
@@ -284,12 +289,15 @@ pub mod tests {
             .spawn(move || {
                 let mut water_injection = WaterInjection::new(&refill.config);
 
+                let water_injection_channels = WaterInjectionChannels {
+                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
+                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
+                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
+                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
+                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                };
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
+                    water_injection_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,
@@ -545,9 +553,9 @@ pub mod tests {
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
-            .unwrap()        
+            .unwrap()
     }
-    
+
     #[test]
     // This test case executes the inject_water function and immediately
     // - sets the sensor signal to high value
@@ -862,12 +870,15 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let water_injection_channels = WaterInjectionChannels {
+                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
+                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
+                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
+                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
+                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                };
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
+                    water_injection_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,
@@ -977,12 +988,16 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let water_injection_channels = WaterInjectionChannels {
+                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
+                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
+                    tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
+                    rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
+                    rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
+                };
+
                 let result = water_injection.inject_water(
-                    &tx_water_injection_to_relay_manager,
-                    &rx_water_injection_from_relay_manager,
-                    &rx_water_injection_from_signal_handler,
-                    &tx_water_injection_to_data_logger,
-                    &rx_water_injection_from_data_logger,
+                    water_injection_channels,
                     &mut refill.refill_errors,
                     &mut refill.sql_interface_refill,
                     &mutex_tank_level_switch_signals,

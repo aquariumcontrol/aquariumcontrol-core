@@ -27,7 +27,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill_errors::RefillErrors;
-use crate::water::water_injection::WaterInjectionTrait;
+use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -857,12 +857,16 @@ impl Refill {
                                 mutex_data
                             );
 
+                            let water_injection_channels = WaterInjectionChannels {
+                                tx_water_injection_to_relay_manager: &refill_channels.tx_refill_to_relay_manager,
+                                rx_water_injection_from_relay_manager: &refill_channels.rx_refill_from_relay_manager,
+                                tx_water_injection_to_data_logger: &refill_channels.tx_refill_to_data_logger,
+                                rx_water_injection_from_data_logger: &refill_channels.rx_refill_from_data_logger,
+                                rx_water_injection_from_signal_handler: &refill_channels.rx_refill_from_signal_handler,
+                            };
+                            
                             quit_command_received = water_injection.inject_water(
-                                &refill_channels.tx_refill_to_relay_manager,
-                                &refill_channels.rx_refill_from_relay_manager,
-                                &refill_channels.rx_refill_from_signal_handler,
-                                &refill_channels.tx_refill_to_data_logger,
-                                &refill_channels.rx_refill_from_data_logger,
+                                water_injection_channels,
                                 &mut self.refill_errors,
                                 &mut self.sql_interface_refill,
                                 &mutex_tank_level_switch_signals_clone_for_refill,

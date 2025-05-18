@@ -51,6 +51,26 @@ pub struct AmbientConfig {
     pub replacement_value_ambient_humidity: f32,
 }
 
+pub struct AmbientChannels<'a> {
+    /// Sender part of the channel for communication via TCP wrapped as optional
+    pub tx_ambient_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
+    
+    /// Receiver part of the channel for communication via TCP wrapped as optional
+    pub rx_ambient_from_tcp_opt: &'a Option<Receiver<f32>>,
+    
+    /// Sender part of the channel for communication to Dht
+    pub tx_ambient_to_dht_opt: Option<Sender<InternalCommand>>,
+    
+    /// Receiver part of the channel for communication from Dht
+    pub rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
+    
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_ambient_to_signal_handler: Sender<bool>,
+    
+    /// Receiver part of the channel for communication from the signal handler                
+    pub rx_ambient_from_signal_handler: Receiver<InternalCommand>,
+}
+
 /// Contains the communication with DHT ambient temperature and humidity sensor.
 /// Alternatively, TCP communication is used when configured to run with the simulator.
 /// Sensor data is read periodically and stored.
@@ -247,22 +267,12 @@ impl Ambient {
 
     /// Executes the main control in a loop until the signal handler commands quitting and termination.
     /// # Arguments
-    /// * `tx_ambient_to_tcp_opt` - Sender part of channel for communication via TCP wrapped as optional
-    /// * `rx_ambient_from_tcp_opt` - Receiver part of channel for communication via TCP wrapped as optional
-    /// * `tx_ambient_to_dht_opt` - Sender part of channel for communication to Dht
-    /// * `rx_ambient_from_dht_opt` - Receiver part of channel for communication from Dht
-    /// * `tx_ambient_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_ambient_from_signal_handler` - Receiver part of channel for communication from signal handler                
+    /// * ambient_channels - struct with channels for thread communication
     /// * `mutex_ambient_temperature` - Mutex for ambient temperature
     /// * `mutex_ambient_humidity` - Mutex for ambient humidity
     pub fn execute(
         &mut self,
-        tx_ambient_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_ambient_from_tcp_opt: &Option<Receiver<f32>>,
-        tx_ambient_to_dht_opt: Option<Sender<InternalCommand>>,
-        rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
-        tx_ambient_to_signal_handler: Sender<bool>,
-        rx_ambient_from_signal_handler: Receiver<InternalCommand>,
+        ambient_channels: AmbientChannels,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
         mutex_ambient_humidity: Arc<Mutex<f32>>,
     ) {
@@ -285,7 +295,7 @@ impl Ambient {
         let mut measurement_countdown: i32 = 0;
 
         if (self.config.use_simulator)
-            && (tx_ambient_to_tcp_opt.is_none() | rx_ambient_from_tcp_opt.is_none())
+            && (ambient_channels.tx_ambient_to_tcp_opt.is_none() | ambient_channels.rx_ambient_from_tcp_opt.is_none())
         {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
@@ -294,7 +304,7 @@ impl Ambient {
         }
 
         if (self.config.use_simulator)
-            && ((tx_ambient_to_dht_opt.is_some()) | (rx_ambient_from_dht_opt.is_some()))
+            && ((ambient_channels.tx_ambient_to_dht_opt.is_some()) | (ambient_channels.rx_ambient_from_dht_opt.is_some()))
         {
             panic!(
                 "{}: configured to run with simulator, but channels to Dht thread provided",
@@ -303,7 +313,7 @@ impl Ambient {
         }
 
         #[cfg(not(target_os = "linux"))]
-        if tx_ambient_to_dht_opt.is_some() || rx_ambient_from_dht_opt.is_some() {
+        if ambient_channels.tx_ambient_to_dht_opt.is_some() || ambient_channels.rx_ambient_from_dht_opt.is_some() {
             warn!(target: LOG_TARGET_AMBIENT,
                 "Sender/Receiver to Dht are not 'None'");
         }
@@ -313,7 +323,7 @@ impl Ambient {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&rx_ambient_from_signal_handler, None);
+            ) = self.process_external_request(&ambient_channels.rx_ambient_from_signal_handler, None);
 
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -380,7 +390,7 @@ impl Ambient {
                         }
                     }
                 } else {
-                    self.communicate_with_simulator(tx_ambient_to_tcp_opt, rx_ambient_from_tcp_opt);
+                    self.communicate_with_simulator(ambient_channels.tx_ambient_to_tcp_opt, ambient_channels.rx_ambient_from_tcp_opt);
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
 
@@ -415,7 +425,7 @@ impl Ambient {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
-        match tx_ambient_to_signal_handler.send(true) {
+        match ambient_channels.tx_ambient_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -430,7 +440,7 @@ impl Ambient {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_ambient_from_signal_handler.recv() {
+            termination_command_received = match ambient_channels.rx_ambient_from_signal_handler.recv() {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command_signal_handler = false;
@@ -472,7 +482,7 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::sensors::ambient::Ambient;
+    use crate::sensors::ambient::{Ambient, AmbientChannels};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -556,14 +566,18 @@ pub mod tests {
             });
 
             scope.spawn(move || {
+                let ambient_channels = AmbientChannels {
+                    tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
+                    rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
+                    tx_ambient_to_dht_opt: None,
+                    rx_ambient_from_dht_opt: None,
+                    tx_ambient_to_signal_handler,
+                    rx_ambient_from_signal_handler
+                };
+                
                 // test object
                 ambient.execute(
-                    &tx_ambient_to_tcp_opt,
-                    &rx_ambient_from_tcp_opt,
-                    None,
-                    None,
-                    tx_ambient_to_signal_handler,
-                    rx_ambient_from_signal_handler,
+                    ambient_channels,
                     mutex_ambient_temperature,
                     mutex_ambient_humidity,
                 );
