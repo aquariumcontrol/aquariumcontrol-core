@@ -86,7 +86,7 @@ pub struct RefillChannels {
     /// Sender part of the channel for communication to relay manager
     pub tx_refill_to_relay_manager: Sender<InternalCommand>,
 
-    /// Receiver part of the channel for communication from relay manager
+    /// Receiver part of the channel for communication from the relay manager
     pub rx_refill_from_relay_manager: Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
@@ -132,7 +132,7 @@ pub struct RefillChannels {
 /// data_logger --> refill
 /// messaging[Messaging] --> refill
 /// ```
-/// Communication channel to and from relay manager is forwarded to implementation of WaterInjectionTrait.
+/// Communication channel to and from the relay manager is forwarded to implementation of WaterInjectionTrait.
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
 /// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
@@ -363,146 +363,111 @@ impl Refill {
         match self.sql_interface_refill.check_empty() {
             Ok(0) => {
                 self.lock_error_check_empty = false;
-                refill_sql_data.duration_since_last_refill = self.config.min_interval_last_refill;
                 refill_sql_data.duration_since_last_refill =
-                    refill_sql_data.duration_since_last_refill.saturating_add(1);
+                    self.config.min_interval_last_refill.saturating_add(1);
             }
             Ok(_) => {
                 self.lock_error_check_empty = false;
                 match self.sql_interface_refill.get_duration_since_last_refill() {
-                    Ok(c) => {
+                    Ok(duration) => {
                         self.lock_error_read_duration_since_last_refill = false;
-                        refill_sql_data.duration_since_last_refill = c;
+                        refill_sql_data.duration_since_last_refill = duration;
                     }
-                    #[cfg(not(test))]
-                    Err(e) => {
-                        if !self.lock_error_read_duration_since_last_refill {
-                            #[cfg(not(test))]
-                            error!(
-                                target: LOG_TARGET_REFILL,
-                                "could not get duration since last refill event ({e:?})"
-                            );
-                            self.lock_error_read_duration_since_last_refill = true;
-                        }
-                        self.refill_errors.error_sql_get_historic_data_failed = true;
-                    }
-                    #[cfg(test)]
-                    Err(_) => {
+                    Err(_e) => {
                         self.lock_error_read_duration_since_last_refill = true;
                         self.refill_errors.error_sql_get_historic_data_failed = true;
+                        #[cfg(not(test))]
+                        if !self.lock_error_read_duration_since_last_refill {
+                            error!(
+                                target: LOG_TARGET_REFILL,
+                                "could not get duration since last refill event ({_e:?})"
+                            );
+                        }
                     }
                 }
             }
-            #[cfg(not(test))]
-            Err(e) => {
-                if !self.lock_error_check_empty {
-                    #[cfg(not(test))]
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "could not check if refill table is empty or not ({e:?})"
-                    );
-                    self.lock_error_check_empty = true;
-                }
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
+            Err(_e) => {
                 self.lock_error_check_empty = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
+                #[cfg(not(test))]
+                if !self.lock_error_check_empty {
+                    error!(
+                        target: LOG_TARGET_REFILL,
+                        "could not check if refill table is empty or not ({_e:?})"
+                    );
+                }
             }
         };
 
         match self.sql_interface_refill.get_refill_volume_of_last_24h() {
-            Ok(c) => {
+            Ok(volume) => {
                 self.lock_error_read_refill_volume_last_24h = false;
-                refill_sql_data.refill_volume_last_24h = c;
+                refill_sql_data.refill_volume_last_24h = volume;
             }
-            #[cfg(not(test))]
-            Err(e) => {
-                if !self.lock_error_read_refill_volume_last_24h {
-                    #[cfg(not(test))]
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "could not get refill volume of last 24 hours ({e:?})");
-                    self.lock_error_read_refill_volume_last_24h = true;
-                }
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
+            Err(_e) => {
                 self.lock_error_read_refill_volume_last_24h = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
+                #[cfg(not(test))]
+                if !self.lock_error_read_refill_volume_last_24h {
+                    error!(
+                target: LOG_TARGET_REFILL,
+                "could not get refill volume of last 24 hours ({_e:?})"
+            );
+                }
             }
         };
 
         match self.sql_interface_refill.get_refill_count_of_last_24h() {
-            Ok(c) => {
+            Ok(count) => {
                 self.lock_error_read_refill_count_last_24h = false;
-                refill_sql_data.refill_count_last_24h = c;
+                refill_sql_data.refill_count_last_24h = count;
             }
-            #[cfg(not(test))]
-            Err(e) => {
-                if !self.lock_error_read_refill_count_last_24h {
-                    #[cfg(not(test))]
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "could not get refill count of last 24 hours: {e:?}"
-                    );
-                    self.lock_error_read_refill_count_last_24h = true;
-                }
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
+            Err(_e) => {
                 self.lock_error_read_refill_count_last_24h = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
+                #[cfg(not(test))]
+                if !self.lock_error_read_refill_count_last_24h {
+                    error!(
+                target: LOG_TARGET_REFILL,
+                "could not get refill count of last 24 hours: {_e:?}"
+            );
+                }
             }
         };
 
         match self.sql_interface_refill.get_refill_volume_of_last_hour() {
-            Ok(c) => {
+            Ok(volume) => {
                 self.lock_error_read_refill_volume_last_hour = false;
-                refill_sql_data.refill_volume_last_hour = c;
+                refill_sql_data.refill_volume_last_hour = volume;
             }
-            #[cfg(not(test))]
-            Err(e) => {
-                if !self.lock_error_read_refill_volume_last_hour {
-                    #[cfg(not(test))]
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "Could not get refill volume of last hour: {e:?}"
-                    );
-                    self.lock_error_read_refill_volume_last_hour = true;
-                }
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
+            Err(_e) => {
                 self.lock_error_read_refill_volume_last_hour = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
+                #[cfg(not(test))]
+                if !self.lock_error_read_refill_volume_last_hour {
+                    error!(
+                target: LOG_TARGET_REFILL,
+                "Could not get refill volume of last hour: {_e:?}"
+            );
+                }
             }
         };
 
         match self.sql_interface_refill.get_refill_count_of_last_hour() {
-            Ok(c) => {
+            Ok(count) => {
                 self.lock_error_read_refill_count_last_hour = false;
-                refill_sql_data.refill_count_last_hour = c;
+                refill_sql_data.refill_count_last_hour = count;
             }
-            #[cfg(not(test))]
-            Err(e) => {
-                if !self.lock_error_read_refill_count_last_hour {
-                    error!(
-                        target: LOG_TARGET_REFILL,
-                        "Could not get refill count of last hour: {e:?}"
-                    );
-                    self.lock_error_read_refill_count_last_hour = true;
-                }
-                self.refill_errors.error_sql_get_historic_data_failed = true;
-            }
-            #[cfg(test)]
-            Err(_) => {
+            Err(_e) => {
                 self.lock_error_read_refill_count_last_hour = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
+                #[cfg(not(test))]
+                if !self.lock_error_read_refill_count_last_hour {
+                    error!(
+                target: LOG_TARGET_REFILL,
+                "Could not get refill count of last hour: {_e:?}"
+            );
+                }
             }
         };
     }

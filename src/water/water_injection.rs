@@ -31,7 +31,7 @@ pub struct WaterInjectionChannels<'a> {
     /// Reference to Receiver part of the channel for communication from the relay manger
     pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,
 
-    /// Reference to receiver part of the channel for communication from the signal handler
+    /// Reference to the receiver part of the channel for communication from the signal handler
     pub rx_water_injection_from_signal_handler: &'a Receiver<InternalCommand>,
 
     /// Sender part of the channel for communication to data logger
