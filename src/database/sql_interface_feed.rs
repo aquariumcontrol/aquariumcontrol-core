@@ -122,12 +122,14 @@ pub struct SqlInterfaceFeed {
 }
 
 impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
-    /// Provides the current timestamp using its own connection
+    /// Provides the current timestamp using the connection of the SqlInterfaceFeed struct.
+    /// The function either returns wrapped in Result type either the current timestamp as
+    /// type NaiveDateTime or a value of enum SqlInterfaceError.
     fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_current_timestamp(&mut self.conn)
     }
 
-    /// Retrieve from the database the feed schedule entries which lies in the past.
+    /// Retrieve from the database the feed schedule entries which lie in the past.
     /// Function provides wrapped into a Result type either
     /// - Feed schedule entries as vector of type FeedScheduleEntry or None value wrapped in type Option
     /// - a value of enum SqlInterfaceError
@@ -140,7 +142,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     }
 
     /// Inserts one dataset of feed event into the database.
-    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    /// The function either returns an empty Ok value or a value of enum SqlInterfaceError.
     /// # Arguments
     /// * `timestamp` - timestamp of feed event
     /// * `feeder_run_time` - run time of feeder in seconds
@@ -231,7 +233,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     /// Triggers the SQL queries to either update the existing feed schedule entry with
     /// tomorrow's date or delete the entry.
     /// # Arguments
-    /// * `feedschedule_entry` - reference to a struct of type FeedScheduleEntry for which the timestamp shall be updated.
+    /// * `feedschedule_entry` - reference to a vector of struct FeedScheduleEntry for which the timestamp shall be updated.
     fn update_feedschedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
@@ -318,9 +320,10 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
     // The function either returns an empty Ok value or a value of type SqlInterfaceError.
     // # Arguments
     // * `timestamp` - timestamp of feed event
-    // * `feeder_run_time` - run time of feeder in seconds
-    // * `profile_name` - name of the feed profile executed
     // * `profile_id` - ID of the feed profile executed
+    // * `profile_name` - name of the feed profile executed
+    // * `is_weekly` - flag indicating if the feed schedule entry shall be repeated weekly
+    // * `is_daily` - flag indicating if the feed schedule entry shall be repeated daily
     #[cfg(test)]
     fn insert_feed_schedule_entry(
         &mut self,
@@ -356,7 +359,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
 }
 
 impl SqlInterfaceFeed {
-    /// Provides a tuple of struct of type SqlInterfaceFeed and connection to the database
+    /// Provides a struct of type SqlInterfaceFeed
     /// # Arguments
     /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
@@ -417,10 +420,10 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    /// Retrieve from the database the feed schedule entry which lies furthest in the future.
-    /// Function provides wrapped into Result type either
-    /// - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
-    /// - a value of enum SqlInterfaceError
+    // Retrieve from the database the feed schedule entry which lies furthest in the future.
+    // Function provides wrapped into Result type either
+    // - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
+    // - a value of enum SqlInterfaceError
     fn get_future_feedschedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
@@ -437,10 +440,10 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    /// Retrieve from the database the feed schedule entries scheduled in the future
-    /// Function provides wrapped into Result type either
-    /// - Vector of feedschedule entries or None value wrapped in type Option
-    /// - a value of enum SqlInterfaceError
+    // Retrieve from the database the feed schedule entries scheduled in the future
+    // Function provides wrapped into Result type either
+    // - Vector of feedschedule entries or None value wrapped in type Option
+    // - a value of enum SqlInterfaceError
     fn get_future_feedschedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
@@ -503,7 +506,8 @@ impl SqlInterfaceFeed {
         Ok(feedpattern_header.clone())
     }
 
-    /// Retrieves the feed pattern data of a specific phase from the database.
+    /// Retrieves the feed pattern data of a specific phase from the database wrapped in Result type
+    /// or a value of enum SqlInterfaceError.
     /// # Arguments
     /// * `profile_id` - ID of the feed profile    
     /// * `phase_nr` - phase number of the feed profile   
@@ -605,7 +609,11 @@ pub mod tests {
         feed_profile_id: i32,
     }
 
+    #[cfg(test)]
     // helper function to prepare test cases for feed
+    // # Arguments
+    // * `sql_interface` - general interface to SQL database    
+    // * `sql_interface_feed` - specific interface for feed operations to SQL database  
     pub fn insert_feed_patterns(
         sql_interface: &mut SqlInterface,
         sql_interface_feed: &mut SqlInterfaceFeed,
