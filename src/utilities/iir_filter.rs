@@ -16,10 +16,21 @@ trait FilterDefault {
 }
 
 impl FilterDefault for () {
+    /// Provides a default (empty) value for filter initialization when no specific initial value is needed.
+    ///
+    /// This implementation for the unit type `()` signifies that for certain filter configurations,
+    /// an explicit `initial_value` might not be strictly required or can be implicit `()`.
     fn filter_default() -> Self {}
 }
 
 impl FilterDefault for f32 {
+    /// Provides a default value for filter initialization, specifically for `f32` types.
+    ///
+    /// **Panics:**
+    /// This implementation is designed to **panic** if called. This indicates that an
+    /// `initial_value` for the filter was expected in the configuration but was not
+    /// explicitly provided, and for `f32` filters, a meaningful default cannot be
+    /// automatically assumed without a specific initial state.
     fn filter_default() -> Self {
         panic!(
             "{}: initial value was required for filter",
@@ -49,13 +60,28 @@ pub struct IIRFilter {
 }
 
 impl IIRFilter {
-    /// Returns a struct of type IIRFilter where the initial value is stated as a parameter
+    /// Creates a new `IIRFilter` instance, requiring an explicit initial value and a time step.
     ///
-    /// # Arguments:
+    /// This constructor is used when the filter's initial state needs to be precisely
+    /// defined and when the filter coefficient needs to be adjusted based on a simulation
+    /// or sampling `time_step`. The `time_step` helps to normalize the `filter_coefficient`
+    /// if the simulation speed differs from real-time.
     ///
-    /// * `filter_config` - reference to configuration of filter
-    /// * `initial_value` - value with which the filter is initialized
-    /// * `time_step` - delta time used in simulation: if faster than real time, then this value is used to correct the filter factor
+    /// # Arguments
+    /// * `filter_config` - A reference to the filter's static configuration, which provides
+    ///   the base `filter_coefficient`.
+    /// * `initial_value` - The `f32` value used to set the filter's initial output state.
+    /// * `time_step` - The delta time (in seconds) used in the simulation or sampling.
+    ///   This value corrects the filter coefficient: a smaller `time_step` makes the
+    ///   filter react faster, while a larger one slows it down.
+    ///
+    /// # Returns
+    /// A new `IIRFilter` struct, initialized with the provided values and a
+    /// time-step-corrected filter coefficient.
+    ///
+    /// # Panics
+    /// This function will panic if `time_step` is `0.0`, as this would lead to a
+    /// division-by-zero error in the filter coefficient calculation.
     pub fn new_requires_initial(
         filter_config: &IIRFilterConfig<()>,
         initial_value: f32,
@@ -73,9 +99,17 @@ impl IIRFilter {
         }
     }
 
-    /// Returns the filtered value.
-    /// # Arguments:
-    /// * `new_value` - unfiltered input value
+    /// Applies the Infinite Impulse Response (IIR) filter to a new input value and returns the filtered result.
+    ///
+    /// This method updates the filter's internal state (`old_value`) using the IIR formula:
+    /// `filtered_value = (1 - filter_coefficient) * old_filtered_value + filter_coefficient * new_unfiltered_value`.
+    /// The calculated filtered value then becomes the `old_value` for the next filtering iteration.
+    ///
+    /// # Arguments
+    /// * `new_value` - The latest unfiltered input value (`f32`) to be processed by the filter.
+    ///
+    /// # Returns
+    /// The newly calculated, filtered `f32` value.
     pub fn get_filtered_value(&mut self, new_value: f32) -> f32 {
         self.old_value =
             self.old_value * (1.0 - self.filter_coefficient) + new_value * self.filter_coefficient;
