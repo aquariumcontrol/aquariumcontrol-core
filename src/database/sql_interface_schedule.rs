@@ -106,11 +106,25 @@ pub struct ScheduleEntry {
 }
 
 impl ScheduleEntry {
-    /// Provides wrapped in result type either
-    /// - a struct of type ScheduleEntry with data converted from input
-    /// - or a value of type SqlInterfaceError in case of failure
+    /// Creates a new `ScheduleEntry` struct by converting raw data from `SqlScheduleEntry`.
+    ///
+    /// This constructor takes a `SqlScheduleEntry` (typically read directly from the database)
+    /// and performs necessary type conversions, such as transforming string representations
+    /// of schedule type, start time and stop time into their respective Rust enum and
+    /// `NaiveTime` types. It also converts a numeric `is_active` flag to a boolean.
+    ///
     /// # Arguments
-    /// * `sql_schedule_entry` - struct with data read from SQL server
+    /// * `sql_schedule_entry` - A `SqlScheduleEntry` struct containing the raw schedule data from the SQL database.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(ScheduleEntry)`: A new `ScheduleEntry` struct with all data successfully converted.
+    /// - `Err(SqlInterfaceError::ScheduleTypeConversionFailure)`: If the `schedule_type` string
+    ///   cannot be parsed into a valid `ScheduleType` enum variant.
+    /// - `Err(SqlInterfaceError::ScheduleStartTimeConversionFailure)`: If the `start_time` string
+    ///   cannot be parsed into a valid `NaiveTime`.
+    /// - `Err(SqlInterfaceError::ScheduleStopTimeConversionFailure)`: If the `stop_time` string
+    ///   cannot be parsed into a valid `NaiveTime`.
     pub fn new(sql_schedule_entry: SqlScheduleEntry) -> Result<ScheduleEntry, SqlInterfaceError> {
         let schedule_type = match ScheduleType::from_str(&sql_schedule_entry.schedule_type) {
             Ok(c) => c,
@@ -155,7 +169,14 @@ impl ScheduleEntry {
         })
     }
 
-    /// Checks if the current local time is in between start and stop time for the schedule entry.
+    /// Determines if the current local time falls within the allowed time window of this schedule entry.
+    ///
+    /// This function compares the system's current local time (`Local::now().time()`)
+    /// against the `start_time` and `stop_time` defined in this `ScheduleEntry`.
+    ///
+    /// # Returns
+    /// `true` if the current local time is greater than or equal to `start_time`
+    /// AND less than or equal to `stop_time`; otherwise, returns `false`.
     pub fn check_if_allowed(&self) -> bool {
         let current_time = Local::now().time();
         (current_time >= self.start_time) & (current_time <= self.stop_time)
@@ -174,9 +195,16 @@ pub struct SqlInterfaceSchedule {
 impl SqlInterfaceSchedule {
     const LOG_TARGET_SQL_INTERFACE_SCHEDULE: &'static str = "sql_interface_schedule";
 
-    /// Provides a struct of type SqlInterfaceSchedule.
+    /// Provides a new `SqlInterfaceSchedule` instance.
+    ///
+    /// This constructor initializes the interface with a database connection
+    /// and an empty internal list of schedules.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
+    /// * `conn` - The established database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceSchedule` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceSchedule {
         Self {
             conn,
@@ -184,9 +212,19 @@ impl SqlInterfaceSchedule {
         }
     }
 
-    /// Reads the schedule entries from the SQL database and updates the struct with postprocessed data.
-    /// In case of success, the function returns an empty Ok value.
-    /// In case of failure, the function returns a value of type SqlInterfaceError.
+    /// Reads all schedule entries from the SQL database, processes them and updates the internal state.
+    ///
+    /// This function queries the database for all available schedule configurations.
+    /// Each raw database entry is then converted into a `ScheduleEntry` struct,
+    /// performing necessary type conversions and validations. The internal `schedules`
+    /// vector of this struct is cleared and then populated with the newly processed entries.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if all schedule entries were successfully read and processed.
+    /// - `Err(SqlInterfaceError::ScheduleRequestFailure)` if the initial database query fails.
+    /// - `Err(SqlInterfaceError)`: If any error occurs during the conversion of individual
+    ///   raw schedule entries into `ScheduleEntry` structs (e.g., due to invalid data formats).
     pub fn read_schedule(&mut self) -> Result<(), SqlInterfaceError> {
         // Get all schedule entries from the database
         let schedule_string_array = match self.conn.query_map(
