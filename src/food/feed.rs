@@ -87,7 +87,7 @@ pub struct FeedChannels {
 ///     signal_handler --> food_injection
 ///     messaging[Messaging] --> feed
 /// ```
-/// Communication channel to Controllino is forwarded to implementation of FoodInjectionTrait.
+/// Communication channel to relay manager is forwarded to implementation of FoodInjectionTrait.
 /// Signal handler is communicating with both directly: feed as well with implementation of FoodInjectionTrait.
 pub struct Feed {
     /// Configuration data for Feed control
@@ -616,7 +616,7 @@ impl Feed {
             }
         };
 
-        // This thread has channel connections to underlying threads (Controllino).
+        // This thread has channel connections to underlying threads (relay manager).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
