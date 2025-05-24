@@ -46,19 +46,34 @@ pub struct BallingSetVal {
 impl SqlInterfaceBalling {
     const LOG_TARGET_SQL_INTERFACE_BALLING: &'static str = "sql_interface_balling";
 
-    /// Provides a struct of type SqlInterfaceBalling
+    /// Creates a new `SqlInterfaceBalling` instance.
+    ///
+    /// This constructor initializes the Balling SQL interface with an established
+    /// database connection.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
+    /// * `conn` - An active database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceBalling` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceBalling {
         SqlInterfaceBalling { conn }
     }
 
-    /// Retrieves the timestamp of the last Balling dosing event from the database and returns wrapped
-    /// into a Result type either:
-    /// - result as type NaiveDateTime or
-    /// - value of enum SqlInterfaceError
+    /// Retrieves the timestamp of the last Balling dosing event for a specific pump.
+    ///
+    /// This function queries the database for the most recent dosing timestamp associated
+    /// with the given `pump_id`. Since a pump might not have any previous dosing events,
+    /// the result is wrapped in an `Option`.
+    ///
     /// # Arguments
-    /// * `pump_id` - id of the pump for which the function shall retrieve the data
+    /// * `pump_id` - The unique identifier of the pump for which to retrieve the last dosing timestamp.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Some(NaiveDateTime))` if a last dosing timestamp is found for the pump.
+    /// - `Ok(None)` if no previous dosing events are found for the specified pump.
+    /// - `Err(SqlInterfaceError)` if there's any issue during the database query or timestamp parsing.
     fn get_last_balling_dosing_timestamp(
         &mut self,
         pump_id: i64,
@@ -71,10 +86,22 @@ impl SqlInterfaceBalling {
         SqlInterface::get_optional_timestamp(&mut self.conn, &sql_query)
     }
 
-    /// Requests the current timestamp and timestamp of the last balling dosing event and calculates
-    /// the difference between them in seconds.
+    /// Calculates the duration in seconds since the last Balling dosing event for a given pump.
+    ///
+    /// This function retrieves both the current database timestamp and the last dosing
+    /// timestamp for the specified `pump_id`. It then computes the time difference
+    /// between these two points in seconds.
+    ///
     /// # Arguments
-    /// * `pump_id` - id of the pump for which the function shall retrieve the data
+    /// * `pump_id` - The unique identifier of the pump.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Some(i64))` containing the number of seconds that have passed since the
+    ///   last Balling dosing event. A positive value indicates time elapsed.
+    /// - `Ok(None)` if there has been no previous Balling dosing event recorded for this pump.
+    /// - `Err(SqlInterfaceError)` if there's an issue retrieving either the current
+    ///   timestamp or the last dosing timestamp from the database.
     pub fn get_duration_since_last_balling_dosing(
         &mut self,
         pump_id: i64,
@@ -105,11 +132,21 @@ impl SqlInterfaceBalling {
         Ok(result_opt)
     }
 
-    /// Inserts one dataset of Balling dosing event into the SQL database.
+    /// Inserts a new Balling dosing event record into the SQL database.
+    ///
+    /// This function logs details of a Balling dosing operation, including the
+    /// exact time, the pump used, and the volume of fluid dispensed.
+    ///
     /// # Arguments
-    /// * `timestamp` - timestamp to be inserted as NaiveDateTime
-    /// * `pump_id` - id of the pump for which the Balling dosing event shall be logged
-    /// * `dosing_volume` - volume in ml which has been dosed into the aquarium
+    /// * `timestamp` - The `NaiveDateTime` when the dosing event occurred.
+    /// * `pump_id` - The identifier of the pump that performed the dosing.
+    /// * `dosing_volume` - The volume (in milliliters) of fluid dispensed during this event.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the Balling event record was successfully inserted.
+    /// - `Err(SqlInterfaceError::InsertBallingEventFailure)` if an error occurs
+    ///   during the database insertion.
     pub fn insert_balling_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -138,9 +175,21 @@ impl SqlInterfaceBalling {
         }
     }
 
-    /// Retrieves Balling set values from the database for a given pump id
-    /// and evaluates if the response is a single data set.
-    /// * `pump_id` - id of the pump for which the Balling dosing event shall be retrieved
+    /// Retrieves a single set of Balling dosing parameters for a specified pump from the database.
+    ///
+    /// This function queries the database for the Balling set values (e.g., dosing speed, volume, label)
+    /// associated with a given `pump_id`. It strictly expects to find exactly one matching dataset.
+    ///
+    /// # Arguments
+    /// * `pump_id` - The unique identifier of the pump for which to retrieve the set values.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(BallingSetVal)` containing the retrieved dosing parameters if exactly one
+    ///   matching record is found.
+    /// - `Err(SqlInterfaceError::SingleBallingSetValRequestFailure)` if the database query
+    ///   fails, or if it returns no records, or if it returns more than one record
+    ///   (indicating a data consistency issue).
     pub fn get_single_balling_setval_from_database(
         &mut self,
         pump_id: i64,
@@ -188,13 +237,24 @@ impl SqlInterfaceBalling {
         Ok(single_balling_setval_array.remove(0))
     }
 
-    // For testing purpose, this function inserts a pump dataset into the database.
-    // # Arguments
-    // * `pump_id` - id of the pump
-    // * `dosing_speed` - dosing speed in ml/s
-    // * `dosing_volume` - volume in ml which shall be dosed in one dosing event
-    // * `label` - label of the fluid injected by the pump
     #[cfg(test)]
+    // Inserts a pump configuration dataset into the database.
+    //
+    // This helper function is used exclusively in test environments to
+    // pre-populate the database with specific pump configuration data,
+    // allowing for consistent and isolated testing of related functionalities.
+    //
+    // # Arguments
+    // * `pump_id` - The unique identifier for the pump.
+    // * `dosing_speed` - The flow rate of the pump in milliliters per second.
+    // * `dosing_volume` - The volume (in milliliters) intended to be dosed in a single event.
+    // * `label` - A descriptive label for the fluid being dispensed by the pump.
+    //
+    // # Returns
+    // A `Result` which is:
+    // - `Ok(())` if the pump configuration was successfully inserted.
+    // - `Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure)` if an error occurs
+    //   during the database insertion.
     pub fn insert_pump_configuration(
         &mut self,
         pump_id: i64,
