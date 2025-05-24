@@ -48,7 +48,7 @@ impl SqlInterfaceBalling {
 
     /// Provides a struct of type SqlInterfaceBalling
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
+    /// * `conn` - connection to SQL database
     pub fn new(conn: PooledConn) -> SqlInterfaceBalling {
         SqlInterfaceBalling { conn }
     }
@@ -57,6 +57,8 @@ impl SqlInterfaceBalling {
     /// into a Result type either:
     /// - result as type NaiveDateTime or
     /// - value of enum SqlInterfaceError
+    /// # Arguments
+    /// * `pump_id` - id of the pump for which the function shall retrieve the data
     fn get_last_balling_dosing_timestamp(
         &mut self,
         pump_id: i64,
@@ -69,7 +71,10 @@ impl SqlInterfaceBalling {
         SqlInterface::get_optional_timestamp(&mut self.conn, &sql_query)
     }
 
-    /// Requests the current timestamp and timestamp of the last balling dosing event and calculates the difference between them in seconds.
+    /// Requests the current timestamp and timestamp of the last balling dosing event and calculates
+    /// the difference between them in seconds.
+    /// # Arguments
+    /// * `pump_id` - id of the pump for which the function shall retrieve the data
     pub fn get_duration_since_last_balling_dosing(
         &mut self,
         pump_id: i64,
@@ -183,6 +188,12 @@ impl SqlInterfaceBalling {
         Ok(single_balling_setval_array.remove(0))
     }
 
+    // For testing purpose, this function inserts a pump dataset into the database.
+    // # Arguments
+    // * `pump_id` - id of the pump
+    // * `dosing_speed` - dosing speed in ml/s
+    // * `dosing_volume` - volume in ml which shall be dosed in one dosing event
+    // * `label` - label of the fluid injected by the pump
     #[cfg(test)]
     pub fn insert_pump_configuration(
         &mut self,
@@ -242,7 +253,8 @@ pub mod tests {
         "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) values(:pump_id, :dosing_speed, :dosing_volume, :label);";
 
     #[test]
-    /// Test case includes all checks for this table combined in one function to limit the number of additional databases.
+    // Test case verifies the behavior of all functions accessing the Balling event log table.
+    // They are all combined in one function to limit the number of additional databases.
     // Test case uses test database #30.
     pub fn test_sql_interface_balling_events() {
         let pump_id = 1;
@@ -331,7 +343,8 @@ pub mod tests {
     }
 
     #[test]
-    /// Test case includes all checks for this table combined in one function to limit the number of additional databases.
+    // Test case verifies the behavior of all functions accessing the Balling set value table.
+    // They are all combined in one function to limit the number of additional databases.
     // Test case uses test database #31.
     pub fn test_sql_interface_balling_setvals() {
         let config: ConfigData = read_config_file_with_test_database(
