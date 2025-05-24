@@ -27,9 +27,22 @@ pub struct FeedScheduleEntry {
 }
 
 impl FeedScheduleEntry {
-    /// Provides a struct of type FeedPhase - used only for testing
+    /// Creates a new `FeedScheduleEntry` struct by converting raw data from `SqlFeedScheduleEntry`.
+    ///
+    /// This constructor takes a raw database entry (`SqlFeedScheduleEntry`) and
+    /// transforms its string-based timestamp into a `NaiveDateTime` and its
+    /// numeric `repeat_daily` flag into a boolean.
+    ///
     /// # Arguments
-    /// * `sql_feed_schedule_entry` - reference to a feed schedule entry of type SqlFeedScheduleEntry
+    /// * `sql_feed_schedule_entry` - A reference to a `SqlFeedScheduleEntry` struct,
+    ///   containing data typically read directly from the SQL database.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(FeedScheduleEntry)`: A new `FeedScheduleEntry` struct with all data successfully converted.
+    /// - `Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)`: If the
+    ///   `timestamp` string within `sql_feed_schedule_entry` cannot be parsed into a
+    ///   valid `NaiveDateTime`.
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
@@ -77,9 +90,17 @@ impl FeedScheduleEntry {
 }
 
 impl fmt::Display for FeedScheduleEntry {
-    /// Function provides output of the struct for development purposes
+    /// Formats the `FeedScheduleEntry` struct into a concise, human-readable string.
+    ///
+    /// This implementation is designed for development and debugging purposes,
+    /// providing a compact representation of the schedule entry's key details
+    /// (timestamp, profile ID, profile name, and daily repetition status) on a single line.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
