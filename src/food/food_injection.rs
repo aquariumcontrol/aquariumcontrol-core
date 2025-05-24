@@ -19,16 +19,25 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of the feed pattern.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait FoodInjectionTrait {
-    /// Actuates the refill pump for water injection into the main tank.
+    /// Actuates the feeder according to the specified feed pattern to inject food.
+    ///
+    /// This trait method defines the interface for physically dispensing food based
+    /// on a detailed feed pattern. Implementations will control relevant pumps and
+    /// the feeder motor through communication with a hardware manager (e.g., relay manager).
+    ///
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of the channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to Receiver part of the channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler   
-    /// * `feed_pattern` - Reference to struct holding the description of the feed pattern    
+    /// * `tx_to_relay_manager` - Reference to sender part of the channel for communication to the relay manager.
+    /// * `rx_from_relay_manager` - Reference to Receiver part of the channel for communication from the relay manager.
+    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler.
+    /// * `feed_pattern` - Reference to struct holding the description of the feed pattern.
+    ///
+    /// # Returns
+    /// `true` if a `Quit` command was received from the signal handler during the injection process,
+    /// indicating an early termination request; otherwise `false`.
     fn inject_food(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        tx_to_relay_manager: &Sender<InternalCommand>,
+        rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
     ) -> bool;
@@ -61,8 +70,8 @@ pub struct FoodInjectionTargetActuatorStates {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     food_injection[Food injection] --> controllino[Controllino]
-///     controllino --> food_injection
+///     food_injection[Food injection] --> relay_manager[Relay Manager]
+///     relay_manager --> food_injection
 ///     signal_handler[Signal handler] --> food_injection
 /// ```
 pub struct FoodInjection {
@@ -79,7 +88,19 @@ pub struct FoodInjection {
 impl FoodInjection {
     const LOG_TARGET_FOOD_INJECTION: &'static str = "food_injection";
 
-    /// Provide a struct of type FoodInjection
+    /// Creates a new `FoodInjection` instance.
+    ///
+    /// This constructor initializes the food injection control module. It sets
+    /// the initial state of all associated actuators (skimmer, pumps, feeder)
+    /// to `Undefined` and configures internal timing mechanisms, such as the
+    /// delay between device switches, based on the provided `FeedConfig`.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the `FeedConfig` struct, which contains
+    ///   parameters like `device_switch_delay_millis`.
+    ///
+    /// # Returns
+    /// A new `FoodInjection` struct to execute food dispensing operations.
     pub fn new(config: &FeedConfig) -> FoodInjection {
         FoodInjection {
             skimmer_state: ActuatorState::Undefined,
@@ -95,11 +116,24 @@ impl FoodInjection {
         }
     }
 
+    /// Commands the specified aquarium actuators (skimmer, main pumps, auxiliary pumps, feeder)
+    /// to switch to their target states.
+    ///
+    /// This private helper function iterates through a set of target states for various devices.
+    /// For each device whose current state differs from its target state, it sends an
+    /// appropriate `SwitchOn` or `SwitchOff` command to the relay manager
+    /// and waits for an acknowledgment. It includes a small delay between each switch command.
+    ///
+    /// # Arguments
+    /// * `target_actuator_states` - A `FoodInjectionTargetActuatorStates` struct containing the
+    ///   desired `ActuatorState` for each relevant device.
+    /// * `tx_to_relay_manager` - The sender channel for communication with the relay manager.
+    /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
     fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        tx_to_relay_manager: &Sender<InternalCommand>,
+        rx_from_relay_manager: &Receiver<bool>,
     ) {
         if self.skimmer_state != target_actuator_states.target_skimmer_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
@@ -114,16 +148,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.skimmer_state = target_actuator_states.target_skimmer_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on skimmer failed ({e:?})"
+                                "receiving answer from relay manager when switching on skimmer failed ({e:?})"
                             );
                         }
                     };
@@ -131,7 +165,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on skimmer failed ({e:?})"
+                        "channel communication to relay manager when switching on skimmer failed ({e:?})"
                     );
                 }
             }
@@ -149,16 +183,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.main_pump1_state = target_actuator_states.target_main_pump1_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on main pump 1 failed ({e:?})"
+                                "receiving answer from relay manager when switching on main pump 1 failed ({e:?})"
                             );
                         }
                     };
@@ -166,7 +200,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on main pump 1 failed ({e:?})"
+                        "channel communication to relay manager when switching on main pump 1 failed ({e:?})"
                     );
                 }
             }
@@ -184,16 +218,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.main_pump2_state = target_actuator_states.target_main_pump2_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on main pump 2 failed ({e:?})"
+                                "receiving answer from relay manager when switching on main pump 2 failed ({e:?})"
                             );
                         }
                     };
@@ -201,7 +235,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on main pump 2 failed ({e:?})"
+                        "channel communication to relay manager when switching on main pump 2 failed ({e:?})"
                     );
                 }
             }
@@ -219,16 +253,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.aux_pump1_state = target_actuator_states.target_aux_pump1_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on aux pump 1 failed ({e:?})"
+                                "receiving answer from relay manager when switching on aux pump 1 failed ({e:?})"
                             );
                         }
                     };
@@ -236,7 +270,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on aux pump 1 failed ({e:?})"
+                        "channel communication to relay manager when switching on aux pump 1 failed ({e:?})"
                     );
                 }
             }
@@ -254,16 +288,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.aux_pump2_state = target_actuator_states.target_aux_pump2_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on aux pump 2 failed ({e:?})"
+                                "receiving answer from relay manager when switching on aux pump 2 failed ({e:?})"
                             );
                         }
                     };
@@ -271,7 +305,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on aux pump 2 failed ({e:?})"
+                        "channel communication to relay manager when switching on aux pump 2 failed ({e:?})"
                     );
                 }
             }
@@ -289,16 +323,16 @@ impl FoodInjection {
                     return;
                 }
             };
-            match tx_to_controllino.send(command) {
+            match tx_to_relay_manager.send(command) {
                 Ok(_) => {
-                    match rx_from_controllino.recv() {
+                    match rx_from_relay_manager.recv() {
                         Ok(_) => {
                             self.feeder_state = target_actuator_states.target_feeder_state;
                         }
                         Err(e) => {
                             error!(
                                 target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from Controllino when switching on feeder failed ({e:?})"
+                                "receiving answer from relay manager when switching on feeder failed ({e:?})"
                             );
                         }
                     };
@@ -306,7 +340,7 @@ impl FoodInjection {
                 Err(e) => {
                     error!(
                         target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to Controllino when switching on feeder failed ({e:?})"
+                        "channel communication to relay manager when switching on feeder failed ({e:?})"
                     );
                 }
             }
@@ -317,8 +351,8 @@ impl FoodInjection {
 impl FoodInjectionTrait for FoodInjection {
     fn inject_food(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        tx_to_relay_manager: &Sender<InternalCommand>,
+        rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
     ) -> bool {
@@ -372,8 +406,8 @@ impl FoodInjectionTrait for FoodInjection {
                         target_aux_pump2_state,
                         target_feeder_state: ActuatorState::Off,
                     },
-                    tx_to_controllino,
-                    rx_from_controllino,
+                    tx_to_relay_manager,
+                    rx_from_relay_manager,
                 );
             }
 
@@ -423,8 +457,8 @@ impl FoodInjectionTrait for FoodInjection {
                         target_aux_pump2_state,
                         target_feeder_state: ActuatorState::On,
                     },
-                    tx_to_controllino,
-                    rx_from_controllino,
+                    tx_to_relay_manager,
+                    rx_from_relay_manager,
                 );
             }
 
@@ -453,8 +487,8 @@ impl FoodInjectionTrait for FoodInjection {
                 target_aux_pump2_state: ActuatorState::On,
                 target_feeder_state: ActuatorState::Off,
             },
-            tx_to_controllino,
-            rx_from_controllino,
+            tx_to_relay_manager,
+            rx_from_relay_manager,
         );
 
         quit_command_received
@@ -473,14 +507,32 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 
+    // Simulates the relay manager's behavior in response to actuation commands.
+    //
+    // This helper function is used within test scopes to act as a mock for the relay manager.
+    // It waits to receive a `SwitchOn` or `SwitchOff` command from the
+    // `FoodInjection` test object, prints it, sends a confirmation back, and increments
+    // counters for the number of on/off commands received.
+    //
+    // Arguments:
+    // * `tx_relay_manager_to_feed`: The sender channel for this mock to send acknowledgments back to the `FoodInjection` test object.
+    // * `rx_relay_manager_from_feed`: The receiver channel for this mock to get actuation commands from the `FoodInjection` test object.
+    // * `counter_switch_on`: A mutable counter to track the number of `SwitchOn` commands received.
+    // * `counter_switch_off`: A mutable counter to track the number of `SwitchOff` commands received.
+    //
+    // Panics:
+    // This function will panic if:
+    // - It fails to receive a command from the `FoodInjection` test object.
+    // - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
+    // - It fails to send the acknowledgment back to the `FoodInjection` test object.
     fn test_food_injection_receive_actuation_command_send_confirmation(
-        tx_controllino_to_feed: &Sender<bool>,
-        rx_controllino_from_feed: &Receiver<InternalCommand>,
+        tx_relay_manager_to_feed: &Sender<bool>,
+        rx_relay_manager_from_feed: &Receiver<InternalCommand>,
         counter_switch_on: &mut i32,
         counter_switch_off: &mut i32,
     ) {
         // receive command from the test object
-        let (command, device) = match rx_controllino_from_feed.recv() {
+        let (command, device) = match rx_relay_manager_from_feed.recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(ref d) => (c.clone(), d.clone()),
                 InternalCommand::SwitchOff(ref d) => (c.clone(), d.clone()),
@@ -501,7 +553,7 @@ pub mod tests {
         );
 
         // send confirmation back
-        match tx_controllino_to_feed.send(true) {
+        match tx_relay_manager_to_feed.send(true) {
             Ok(_) => {}
             Err(e) => {
                 panic!("FoodInjection: Error when sending back actuation command confirmation to test object: {e:?}");
@@ -528,8 +580,8 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut food_injection = FoodInjection::new(&config.feed);
 
-        let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
-        let (tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
+        let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (_tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
@@ -541,8 +593,8 @@ pub mod tests {
                 for i in 0..126 {
                     println!("test_food_injection: loop #{}", i);
                     test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_controllino_to_feed,
-                        &rx_controllino_from_feed,
+                        &tx_relay_manager_to_feed,
+                        &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -584,8 +636,8 @@ pub mod tests {
 
                 let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 food_injection.inject_food(
-                    &tx_feed_to_controllino,
-                    &rx_feed_from_controllino,
+                    &tx_feed_to_relay_manager,
+                    &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
@@ -611,8 +663,8 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut food_injection = FoodInjection::new(&config.feed);
 
-        let (tx_feed_to_controllino, rx_controllino_from_feed) = mpsc::channel();
-        let (tx_controllino_to_feed, rx_feed_from_controllino) = mpsc::channel();
+        let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
+        let (tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
 
         scope(|scope| {
@@ -624,8 +676,8 @@ pub mod tests {
                 for i in 0..5 {
                     println!("test_food_injection: loop #{}", i);
                     test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_controllino_to_feed,
-                        &rx_controllino_from_feed,
+                        &tx_relay_manager_to_feed,
+                        &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -635,8 +687,8 @@ pub mod tests {
                 for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
                     test_food_injection_receive_actuation_command_send_confirmation(
-                        &tx_controllino_to_feed,
-                        &rx_controllino_from_feed,
+                        &tx_relay_manager_to_feed,
+                        &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
                     );
@@ -678,8 +730,8 @@ pub mod tests {
 
                 let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 food_injection.inject_food(
-                    &tx_feed_to_controllino,
-                    &rx_feed_from_controllino,
+                    &tx_feed_to_relay_manager,
+                    &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
