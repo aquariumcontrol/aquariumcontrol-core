@@ -20,11 +20,7 @@ use crate::database::{
 /// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
-    /// Executes an SQL query which provides an integer value and returns the result as u64
-    /// if it is positive.
-    /// It provides wrapped into Result type either
-    /// - the integer value as u64
-    /// - or a value from enum SqlInterfaceError
+    
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
@@ -111,6 +107,8 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     /// It provides wrapped into Result type either
     /// - the integer value as u64
     /// - or a value from enum SqlInterfaceError
+    /// # Arguments
+    /// * `sql_query_string` - string containing SQL query to be executed
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
