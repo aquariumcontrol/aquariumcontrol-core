@@ -122,17 +122,32 @@ pub struct SqlInterfaceFeed {
 }
 
 impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
-    /// Provides the current timestamp using the connection of the SqlInterfaceFeed struct.
-    /// The function either returns wrapped in Result type either the current timestamp as
-    /// type NaiveDateTime or a value of enum SqlInterfaceError.
+    /// Retrieves the current timestamp from the database using the internal connection.
+    ///
+    /// This function acts as a proxy, calling the general `SqlInterface::get_current_timestamp`
+    /// method with the `SqlInterfaceFeed`'s established database connection.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(NaiveDateTime)`: The current timestamp as reported by the database.
+    /// - `Err(SqlInterfaceError)`: If any error occurs during the retrieval or parsing
+    ///   of the timestamp from the database.
     fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_current_timestamp(&mut self.conn)
     }
 
-    /// Retrieve from the database the feed schedule entries which lie in the past.
-    /// Function provides wrapped into a Result type either
-    /// - Feed schedule entries as vector of type FeedScheduleEntry or None value wrapped in type Option
-    /// - a value of enum SqlInterfaceError
+    /// Retrieves feed schedule entries from the database that are scheduled in the past.
+    ///
+    /// This function queries the database for all feed schedule entries whose timestamps
+    /// are before the current time. The raw database entries are then post-processed
+    /// into `FeedScheduleEntry` structs.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Some(Vec<FeedScheduleEntry>))` if one or more past feed schedule entries are found.
+    /// - `Ok(None)` if no past feed schedule entries are found in the database.
+    /// - `Err(SqlInterfaceError)` if any error occurs during the database query
+    ///   or during the conversion of raw database data into `FeedScheduleEntry` structs.
     fn get_past_feedschedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
@@ -141,13 +156,22 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         )
     }
 
-    /// Inserts one dataset of feed event into the database.
-    /// The function either returns an empty Ok value or a value of enum SqlInterfaceError.
+    /// Inserts a new feed event record into the database.
+    ///
+    /// This function logs details about a completed feed operation, including the
+    /// timestamp, how long the feeder ran, and which feed profile was used.
+    ///
     /// # Arguments
-    /// * `timestamp` - timestamp of feed event
-    /// * `feeder_run_time` - run time of feeder in seconds
-    /// * `profile_name` - name of the feed profile executed
-    /// * `profile_id` - ID of the feed profile executed
+    /// * `timestamp` - The `NaiveDateTime` when the feed event occurred.
+    /// * `feeder_run_time` - The duration (in seconds) the feeder motor was active.
+    /// * `profile_name` - The name of the feed profile that was executed for this event.
+    /// * `profile_id` - The unique identifier of the feed profile that was executed.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the feed event record was successfully inserted.
+    /// - `Err(SqlInterfaceError::InsertFeedEventFailure)` if an error occurs
+    ///   during the database insertion.
     fn insert_feed_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -178,12 +202,22 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         }
     }
 
-    /// The function retrieves the header and all phases of a feed pattern from the SQL database.
-    /// It provides wrapped into Result type either
-    /// - the result of type Feedpattern
-    /// - or a value of enum SqlInterfaceError
+    /// Retrieves a complete `Feedpattern` from the SQL database, including its header and all associated phases.
+    ///
+    /// This function first fetches the basic header information for the specified feed profile ID.
+    /// It then proceeds to retrieve data for each of the 10 expected feed phases (from 1 to 10),
+    /// converting the raw numeric flags from the database into boolean values for the `FeedPhase` structs.
+    ///
     /// # Arguments
-    /// * `profile_id` - ID of the feed profile    
+    /// * `profile_id` - The unique identifier of the feed profile to retrieve.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Feedpattern)`: A fully constructed `Feedpattern` object containing the
+    ///   header and all its phases if successful.
+    /// - `Err(SqlInterfaceError)`: If an error occurs during the retrieval of the
+    ///   feed pattern header or any of its phases from the database. This includes
+    ///   cases where the profile is not found or database query issues.
     fn get_single_feedpattern_from_database(
         &mut self,
         profile_id: i32,
@@ -230,10 +264,26 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         })
     }
 
-    /// Triggers the SQL queries to either update the existing feed schedule entry with
-    /// tomorrow's date or delete the entry.
+    /// Updates or deletes multiple feed schedule entries in the database based on their repetition setting.
+    ///
+    /// This function iterates through a provided list of `FeedScheduleEntry` structs.
+    /// For each entry:
+    /// - If `repeat_daily` is `true`, it updates the entry's timestamp in the database to tomorrow's date
+    ///   while preserving the original time of day.
+    /// - If `repeat_daily` is `false`, it deletes the entry from the database.
+    ///
+    /// The function continues processing all entries even if an individual update or deletion fails,
+    /// but it will return the last encountered error.
+    ///
     /// # Arguments
-    /// * `feedschedule_entry` - reference to a vector of struct FeedScheduleEntry for which the timestamp shall be updated.
+    /// * `feedschedule_entries` - A mutable reference to a vector of `FeedScheduleEntry` structs
+    ///   to be processed. The timestamps of repeated entries will be updated.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if all operations (updates and deletions) were successful.
+    /// - `Err(SqlInterfaceError::FeedScheduleUpdateFailure)` if any update or deletion
+    ///   operation fails for an entry. The function will return the last error encountered.
     fn update_feedschedule_entries_in_database(
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
@@ -316,14 +366,24 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         result
     }
 
-    // Inserts one dataset of feed schedule entry into the database - for testing purposes only.
-    // The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    #[cfg(test)]
+    // Inserts a single feed schedule entry into the database.
+    //
+    // This helper function is exclusively used in test environments to
+    // programmatically set up specific feed schedule configurations.
+    //
     // # Arguments
-    // * `timestamp` - timestamp of feed event
-    // * `profile_id` - ID of the feed profile executed
-    // * `profile_name` - name of the feed profile executed
-    // * `is_weekly` - flag indicating if the feed schedule entry shall be repeated weekly
-    // * `is_daily` - flag indicating if the feed schedule entry shall be repeated daily
+    // * `timestamp` - The `NaiveDateTime` when the feed event is scheduled to occur.
+    // * `profile_id` - The unique identifier of the feed profile associated with this schedule.
+    // * `profile_name` - The name of the feed profile associated with this schedule.
+    // * `is_weekly` - A boolean flag indicating if this schedule entry should repeat weekly.
+    // * `is_daily` - A boolean flag indicating if this schedule entry should repeat daily.
+    //
+    // # Returns
+    // A `Result` which is:
+    // - `Ok(())` if the feed schedule entry was successfully inserted.
+    // - `Err(SqlInterfaceError::InsertFeedEventFailure)` if an error occurs during
+    //   the database insertion.
     #[cfg(test)]
     fn insert_feed_schedule_entry(
         &mut self,
@@ -359,19 +419,38 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
 }
 
 impl SqlInterfaceFeed {
-    /// Provides a struct of type SqlInterfaceFeed
+    /// Creates a new `SqlInterfaceFeed` instance.
+    ///
+    /// This constructor initializes the feed management SQL interface
+    /// with an established database connection.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
+    /// * `conn` - An active database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceFeed` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
         SqlInterfaceFeed { conn }
     }
 
-    /// Retrieve from the database feed schedule entries.
-    /// Function provides wrapped into Result type either
-    /// - Vector of feedschedule entries of type FeedScheduleEntry or None value wrapped in type Option
-    /// - a value of enum SqlInterfaceError
+    /// Retrieves and post-processes feed schedule entries from the database based on a given SQL query.
+    ///
+    /// This private helper function executes the provided `sql_query` to fetch raw schedule data.
+    /// It then attempts to convert these raw `SqlScheduleEntry` records into fully typed
+    /// `FeedScheduleEntry` structs. It handles cases where no records are found or where
+    /// conversion of timestamps fails.
+    ///
     /// # Arguments
-    /// * `sql_query` - query string
+    /// * `sql_query` - The SQL query string used to retrieve feed schedule entries.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(Some(Vec<FeedScheduleEntry>))` if one or more schedule entries are successfully retrieved and converted.
+    /// - `Ok(None)` if the query returns an empty result set.
+    /// - `Err(SqlInterfaceError::FeedScheduleEntryRequestFailure)` if the database query fails.
+    /// - `Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)` if the query
+    ///   returns results, but none of the timestamp strings could be successfully parsed
+    ///   into `NaiveDateTime`.
     fn get_feedschedule_entries_from_database(
         &mut self,
         sql_query: &str,
@@ -420,10 +499,18 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    // Retrieve from the database the feed schedule entry which lies furthest in the future.
-    // Function provides wrapped into Result type either
-    // - Feedschedule entry of type FeedScheduleEntry or None value wrapped in type Option
-    // - a value of enum SqlInterfaceError
+    // Retrieves the single feed schedule entry that is furthest in the future.
+    //
+    // This private helper function is intended for test scenarios. It queries the database
+    // for future-scheduled feed entries and, assuming they are ordered by timestamp,
+    // returns the earliest (furthest in the future) one.
+    //
+    // # Returns
+    // A `Result` which is:
+    // - `Ok(Some(FeedScheduleEntry))` if a future feed schedule entry is found.
+    // - `Ok(None)` if no future feed schedule entries are found in the database.
+    // - `Err(SqlInterfaceError)` if an error occurs during the database query
+    //   or post-processing of the data.
     fn get_future_feedschedule_entry_from_database(
         &mut self,
     ) -> Result<Option<FeedScheduleEntry>, SqlInterfaceError> {
@@ -440,10 +527,18 @@ impl SqlInterfaceFeed {
     }
 
     #[cfg(test)]
-    // Retrieve from the database the feed schedule entries scheduled in the future
-    // Function provides wrapped into Result type either
-    // - Vector of feedschedule entries or None value wrapped in type Option
-    // - a value of enum SqlInterfaceError
+    // Retrieves all feed schedule entries that are scheduled in the future.
+    //
+    // This private helper function is intended for test scenarios. It queries the database
+    // for all feed entries whose timestamps are in the future, then processes them
+    // into a vector of `FeedScheduleEntry` structs.
+    //
+    // # Returns
+    // A `Result` which is:
+    // - `Ok(Some(Vec<FeedScheduleEntry>))` if one or more future feed schedule entries are found.
+    // - `Ok(None)` if no future feed schedule entries are found in the database.
+    // - `Err(SqlInterfaceError)` if an error occurs during the database query
+    //   or post-processing of the data.   
     fn get_future_feedschedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
@@ -452,12 +547,21 @@ impl SqlInterfaceFeed {
         )
     }
 
-    /// Retrieves the header of a feed pattern from the database.
-    /// It provides wrapped into Result type either
-    /// - the result of type SqlFeedpatternHeader
-    /// - or a value of enum SqlInterfaceError
+    /// Retrieves the header (basic information) of a specific feed pattern from the database.
+    ///
+    /// This function queries the database using the provided `profile_id` to fetch
+    /// the feed pattern's unique ID and its associated name. It strictly expects
+    /// exactly one matching header entry.
+    ///
     /// # Arguments
-    /// * `profile_id` - ID of the feed profile    
+    /// * `profile_id` - The unique identifier of the feed profile whose header is to be retrieved.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(SqlFeedpatternHeader)` if exactly one matching header entry is found.
+    /// - `Err(SqlInterfaceError::SingleFeedpatternRequestFailure)` if the database query fails.
+    /// - `Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse)` if the query
+    ///   returns no entry or more than one entry for the given `profile_id`. 
     pub fn get_feedpattern_header_from_database(
         &mut self,
         profile_id: i32,
@@ -506,11 +610,22 @@ impl SqlInterfaceFeed {
         Ok(feedpattern_header.clone())
     }
 
-    /// Retrieves the feed pattern data of a specific phase from the database wrapped in Result type
-    /// or a value of enum SqlInterfaceError.
+    /// Retrieves the specific data for a single phase of a feed pattern from the database.
+    ///
+    /// This function constructs a query using both the `profile_id` and the `phase_nr`
+    /// to fetch the detailed configuration for that particular feed phase. It strictly
+    /// expects to find exactly one matching phase entry.
+    ///
     /// # Arguments
-    /// * `profile_id` - ID of the feed profile    
-    /// * `phase_nr` - phase number of the feed profile   
+    /// * `profile_id` - The unique identifier of the feed profile.
+    /// * `phase_nr` - The specific phase number (e.g., 1, 2, ..., 10) within the feed profile.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(SqlFeedPhase)` if exactly one matching phase entry is found for the given profile and phase number.
+    /// - `Err(SqlInterfaceError::SingleFeedpatternRequestFailure)` if the database query fails.
+    /// - `Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse)` if the query
+    ///   returns no entry or more than one entry for the specified profile and phase.
     pub fn get_feed_phase_from_database(
         &mut self,
         profile_id: i32,
@@ -610,10 +725,13 @@ pub mod tests {
     }
 
     #[cfg(test)]
-    // helper function to prepare test cases for feed
-    // # Arguments
-    // * `sql_interface` - general interface to SQL database    
-    // * `sql_interface_feed` - specific interface for feed operations to SQL database  
+    // This helper function prepares the database for feed-related test cases.
+    // It truncates the 'feedpatterns' table to ensure a clean state and then
+    // inserts two predefined test feed profiles.
+    //
+    // Arguments:
+    // * `sql_interface`: A mutable reference to the general SQL interface, used for table truncation.
+    // * `sql_interface_feed`: A mutable reference to the feed-specific SQL interface, used for inserting patterns.
     pub fn insert_feed_patterns(
         sql_interface: &mut SqlInterface,
         sql_interface_feed: &mut SqlInterfaceFeed,
