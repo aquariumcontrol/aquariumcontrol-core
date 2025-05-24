@@ -248,10 +248,10 @@ pub mod tests {
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
-    /// This struct contains the first part of one row from table 'data'
-    /// Due to limitations of the library, this struct can only contain up to 12 elements.
-    /// The library has no means for handling NULL values.
-    /// So the data types of this struct are no optionals.
+    // This struct contains the first part of one row from table 'data'
+    // Due to limitations of the library, this struct can only contain up to 12 elements.
+    // The library has no means for handling NULL values.
+    // So the data types of this struct are no optionals.
     pub struct SqlDataFrame1 {
         pub timestamp: String,
         pub water_temperature: f32,
@@ -263,10 +263,10 @@ pub mod tests {
         pub conductivity_compensated: f32,
     }
 
-    /// This struct contains the second part of one row from table 'data'
-    /// Due to limitations of the library, this struct can only contain up to 12 elements.
-    /// The library has no means for handling NULL values.
-    /// So the data types of this struct are no optionals.
+    // This struct contains the second part of one row from table 'data'
+    // Due to limitations of the library, this struct can only contain up to 12 elements.
+    // The library has no means for handling NULL values.
+    // So the data types of this struct are no optionals.
     pub struct SqlDataFrame2 {
         pub refill_in_progress: bool,
         pub tank_level_switch_position: bool,
@@ -280,18 +280,21 @@ pub mod tests {
         pub ambient_temperature_ds18b20: f32,
     }
 
+    // Query for reading the first part from data for test cases operating on a valid database entry
     pub const SQL_QUERY_READ_DATA_FRAME_1: &str = "SELECT Timestamp, \
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
         Conductivity, ConductivityFiltered, ConductivityCompensated \
         FROM data WHERE Timestamp='#timestamp';";
 
+    // Query for reading the second part from data for test cases operating on a valid database entry
     pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
         RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
         TankLevelSwitchPositionStabilized, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
+    // Query for reading complete data for test cases with a operating on an invalid database entry
     pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \
@@ -301,9 +304,12 @@ pub mod tests {
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
-    /// The function executes two SQL statements to retrieve one row from table 'data'
-    /// In Ok case, the function returns one struct of type DataFrame wrapped in Result.
-    /// Note: This function cannot handle entries with NULL data due to limitations of the SQL library.
+    // The function executes two SQL statements to retrieve one row from table 'data'
+    // In Ok case, the function returns one struct of type DataFrame wrapped in Result.
+    // Note: This function cannot handle entries with NULL data due to limitations of the SQL library.
+    // # Arguments
+    // * `conn` - connection to SQL database
+    // * `timestamp` - timestamp data to be inserted into the query
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
@@ -413,9 +419,12 @@ pub mod tests {
         })
     }
 
-    /// The function executes two SQL statements to retrieve one row from table 'data'
-    /// In Ok case, the function returns one struct of type DataFrame wrapped in Result.
-    /// Note: This function exclusively handles entries with NULL data.
+    // The function executes two SQL statements to retrieve one row from table 'data'
+    // In Ok case, the function returns one struct of type DataFrame wrapped in Result.
+    // Note: This function exclusively handles entries with NULL data.
+    // # Arguments
+    // * `conn` - connection to SQL database
+    // * `timestamp` - timestamp data to be inserted into the query
     pub fn check_database_row_if_all_null(conn: &mut PooledConn, timestamp: NaiveDateTime) {
         let timestamp_string = timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
         // Get a series of NULL values from the database
