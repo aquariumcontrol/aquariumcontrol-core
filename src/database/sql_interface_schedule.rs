@@ -29,6 +29,19 @@ pub enum ScheduleType {
 impl FromStr for ScheduleType {
     type Err = ();
 
+    /// Converts a string slice into a `ScheduleType` enum variant.
+    ///
+    /// This function attempts to match the input string to one of the predefined
+    /// `ScheduleType` variants (e.g., "Balling", "Refill", "Ventilation", "Heating").
+    /// The comparison is case-sensitive.
+    ///
+    /// # Arguments
+    /// * `input` - The string slice to be converted.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(ScheduleType)` if the input string matches a valid `ScheduleType` variant.
+    /// - `Err(())` if the input string does not match any known `ScheduleType` variant.
     fn from_str(input: &str) -> Result<ScheduleType, Self::Err> {
         match input {
             "Balling" => Ok(ScheduleType::Balling),
@@ -41,6 +54,16 @@ impl FromStr for ScheduleType {
 }
 
 impl fmt::Display for ScheduleType {
+    /// Formats the `ScheduleType` enum into a human-readable string representation.
+    ///
+    /// This implementation allows `ScheduleType` variants to be displayed directly
+    /// using `println!` or `format!`, returning the string name of the variant.
+    ///
+    /// # Arguments
+    /// * `f` - A mutable reference to the formatter.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ScheduleType::Balling => write!(f, "Balling"),
@@ -83,7 +106,7 @@ pub struct ScheduleEntry {
 }
 
 impl ScheduleEntry {
-    /// provides wrapped in result type either
+    /// Provides wrapped in result type either
     /// - a struct of type ScheduleEntry with data converted from input
     /// - or a value of type SqlInterfaceError in case of failure
     /// # Arguments
@@ -203,6 +226,14 @@ impl SqlInterfaceSchedule {
         Ok(())
     }
 
+    /// Retrieves the schedule for a given schedule type.
+    /// # Arguments
+    /// * `schedule_type` - information which type of schedule is requested
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(&ScheduleEntry)` in case the schedule could be retrieved successfully.
+    /// - `Err(SqlInterfaceError)` if the schedule could not be retrieved.
     pub fn find_schedule(
         &self,
         schedule_type: ScheduleType,
