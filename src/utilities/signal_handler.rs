@@ -20,11 +20,21 @@ use std::{sync::Arc, time::Duration};
 
 const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
 
-/// Sends the QUIT command to the thread and waits for confirmation.
+/// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
+///
+/// The signal handler uses this helper function to communicate termination
+/// or other control commands to various application threads. It attempts to send
+/// the command and, if a receiver channel is provided, waits for a boolean acknowledgment
+/// to confirm the command was processed.
+///
 /// # Arguments
-/// * `tx_to_thread` - reference to sender part of the channel for communication to thread
-/// * `tx_to_refill` - reference to receiver part of the channel for communication from thread
-/// * `thread_name` - name of thread (for debugging purposes)
+/// * `command` - The `InternalCommand` to be sent to the target thread.
+/// * `tx_to_thread_opt` - An `Option` containing the sender part of the channel
+///   for communication to the target thread. If `None`, no command is sent.
+/// * `rx_from_thread_opt` - An `Option` containing the receiver part of the channel
+///   for communication *from* the target thread, used to receive an acknowledgment.
+///   If `None`, no acknowledgment is expected or waited for.
+/// * `thread_name` - The name of the target thread (for logging and debugging purposes).
 fn send_command(
     command: InternalCommand,
     tx_to_thread_opt: Option<&Sender<InternalCommand>>,
@@ -173,15 +183,27 @@ pub struct SignalHandlerChannels {
     pub tx_signal_handler_to_ds18b20: Sender<InternalCommand>,
 }
 
-/// Handles the termination signal from the operating system (SIGTERM).
-/// Upon receiving the termination signal, it will send the internal command for quitting
-/// to all threads in a dedicated order which allows safe shutdown.
+/// Handles operating system termination signals (e.g., SIGTERM).
+///
+/// Upon receiving a termination signal, this function orchestrates a **safe, multiphase shutdown**
+/// of all application threads. It sends specific `InternalCommand` messages (`Quit` then `Terminate`)
+/// to each module in a predetermined order, ensuring dependencies are gracefully
+/// shut down before their consumers.
+///
 /// # Arguments
-/// * `term` - indicates whether the application should terminate
-/// * `signalHandlerChannels` - struct of type SignalHandlerChannels containing all channels  
-
+/// * `term` - An atomic boolean flag that becomes `true` when a termination signal is received
+///   from the operating system. The function continuously monitors this flag.
+/// * `signal_handler_channels` - A struct containing all necessary `mpsc` sender and receiver
+///   channel pairs for communicating with different application threads and modules.
+///
+/// # Panics
+/// * If `signal_handler_channels` contains an inconsistent setup for TCP communication
+///   (e.g., a sender but no receiver, or vice versa).
+/// * If the function fails to register a hook for the OS termination signals.
+///
+/// # Thread Communication Flow
+/// The controlled shutdown sequence is visualized below:
 #[cfg_attr(doc, aquamarine::aquamarine)]
-///   Thread communication is as follows:
 /// ```mermaid
 /// graph LR
 ///     signal_handler[Signal handler] --> messaging[Messaging]
