@@ -37,6 +37,20 @@ pub struct SawToothProfileConfig {
 
 impl SawToothProfileConfig {
     #[cfg(test)]
+    // Creates a new `SawToothProfileConfig` with specified phase lengths.
+    //
+    // This constructor is exclusively for use in test environments to quickly
+    // define and set up a sawtooth profile configuration without needing to
+    // load from a file or use default deserialization.
+    //
+    // # Arguments
+    // * `phase1_length` - The length of the first phase (ramp up from 0 to 1).
+    // * `phase2_length` - The length of the second phase (constant value of 1).
+    // * `phase3_length` - The length of the third phase (ramp down from 1 to 0).
+    // * `phase4_length` - The length of the fourth phase (constant value of 0).
+    //
+    // # Returns
+    // A new `SawToothProfileConfig` instance initialized with the given phase lengths.
     pub fn new(
         phase1_length: u32,
         phase2_length: u32,
@@ -74,9 +88,17 @@ pub struct SawToothProfile {
 }
 
 impl fmt::Display for SawToothProfile {
-    /// Provides output of the struct for debugging purposes.
+    /// Formats the `SawToothProfile` struct into a multi-line, human-readable string.
+    ///
+    /// This implementation is primarily for debugging and logging purposes, providing
+    /// a detailed view of the filter's current state, including its internal counter,
+    /// normalized output level, and the limits for each phase.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -98,9 +120,20 @@ impl fmt::Display for SawToothProfile {
 }
 
 impl SawToothProfile {
-    /// Provides a struct of type SawToothProfile.
+    /// Creates a new `SawToothProfile` instance based on the provided configuration.
+    ///
+    /// This constructor initializes the sawtooth wave generator, setting up its
+    /// internal counter and pre-calculating the limits for each phase based on
+    /// the lengths defined in the `SawToothProfileConfig`. The `level_normalized`
+    /// output is initially set to `0.0`.
+    ///
     /// # Arguments
-    /// * `config` - struct of type SawToothProfileConfig with phase lengths in seconds
+    /// * `config` - A reference to a `SawToothProfileConfig` struct, which specifies
+    ///   the desired lengths of the four phases (ramp up, constant high, ramp down, constant low)
+    ///   in terms of iterations or time units.
+    ///
+    /// # Returns
+    /// A new `SawToothProfile` struct, ready to generate values.
     pub fn new(config: &SawToothProfileConfig) -> SawToothProfile {
         SawToothProfile {
             counter: 0.0,
@@ -117,9 +150,17 @@ impl SawToothProfile {
         }
     }
 
-    /// Calculates the current value of the saw tooth profile.
-    /// Function receives increment as a parameter
-    /// It updates the counter and the normalized level of the saw tooth profile.
+    /// Advances the internal state of the sawtooth profile and calculates its current normalized output level.
+    ///
+    /// This method increments an internal counter. When the counter reaches the end of a full cycle
+    /// (defined by the sum of all phase lengths), it resets to the beginning.
+    /// Based on the current value of the counter, the function then determines which phase of the
+    /// sawtooth profile is active and updates `level_normalized` accordingly. The output
+    /// `level_normalized` ranges from `0.0` to `1.0`.
+    ///
+    /// # Arguments
+    /// * `increment` - The step value by which the internal counter should be advanced in this execution.
+    ///   This value determines the "speed" at which the profile progresses.
     pub fn execute_with(&mut self, increment: f32) {
         // If the counter exceeds the final limit, reset it. Otherwise, increment.
         if self.counter >= (self.phase4_counter_limit - 3.0 * increment) {
