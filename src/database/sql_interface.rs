@@ -110,6 +110,8 @@ impl SqlInterface {
         Ok(SqlInterface { config, pool, conn })
     }
 
+    /// Establish a connection with the database and return the connection handle if successful.
+    /// In the error case, the function triggers a panic.
     pub fn get_connection(&self) -> PooledConn {
         match self.pool.get_conn() {
             Ok(c) => c,
@@ -119,8 +121,11 @@ impl SqlInterface {
         }
     }
 
-    /// Execute the SQL statement given as a parameter and evaluates if the result is ok.
+    /// Executes an SQL query expected to return multiple string values.
     /// In the error case, an error of type SqlInterfaceError is returned.
+    /// # Arguments
+    /// * `conn` - connection to SQL database
+    /// * `sql_query_string` - SQL query as String
     fn get_string_array_from_database(
         conn: &mut PooledConn,
         sql_query_string: &str,
@@ -171,7 +176,7 @@ impl SqlInterface {
     /// Executes an SQL statement given as a parameter and evaluates if the response is a single string value.
     /// Empty response is allowed.
     /// Depending on the result of the query, the function provides wrapped in a result type either
-    /// - the response of the query as String as Optional
+    /// - the response of the query as String wrapped in Option
     /// - Optional None
     /// - or an error code from the enum SqlInterfaceError
     /// # Arguments
@@ -501,14 +506,14 @@ impl SqlInterface {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
 
-    /// Retrieves the current timestamp plus an offset in seconds from the database
-    /// and provides wrapped in Result type either
-    /// - the current timestamp as type NaiveDateTime
-    /// - or an error code from the enum SqlInterfaceError
-    /// This function is used for testing purposes only.
-    /// # Arguments
-    /// * `conn` - connection to SQL database
-    /// * `offset_seconds` - offset into the future in seconds for the timestamp to be calculated
+    // Retrieves the current timestamp plus an offset in seconds from the database
+    // and provides wrapped in Result type either
+    // - the current timestamp as type NaiveDateTime
+    // - or an error code from the enum SqlInterfaceError
+    // This function is used for testing purposes only.
+    // # Arguments
+    // * `conn` - connection to SQL database
+    // * `offset_seconds` - offset into the future in seconds for the timestamp to be calculated
     #[cfg(test)]
     pub fn get_current_timestamp_offset_seconds(
         conn: &mut PooledConn,
@@ -565,6 +570,8 @@ impl SqlInterface {
     /// Retrieves the current date from the database and provides wrapped in Result type either
     /// - the current timestamp as type NaiveDate
     /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
     pub fn get_current_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_DATE)
     }
@@ -572,6 +579,8 @@ impl SqlInterface {
     /// Retrieves the date of tomorrow from the database and provides wrapped in Result type either
     /// - tomorrow's timestamp as type NaiveDate
     /// - or an error code from the enum SqlInterfaceError
+    /// # Arguments
+    /// * `conn` - connection to SQL database
     pub fn get_tomorrow_date(conn: &mut PooledConn) -> Result<NaiveDate, SqlInterfaceError> {
         Self::get_date(conn, sql_query_strings::SQL_QUERY_READ_TOMORROW_DATE)
     }
@@ -636,6 +645,9 @@ impl SqlInterface {
 
     // Empties the table provided as parameter.
     // This function is used for testing purposes only across multiple crates.
+    // # Arguments
+    // * `sql_interface` - Mutable reference to struct of type SqlInterface
+    // * `sql_table_name` - String containing the name of the table which shall be erased 
     #[cfg(test)]
     pub fn truncate_table(
         sql_interface: &mut SqlInterface,
@@ -657,8 +669,11 @@ impl SqlInterface {
         }
     }
 
-    /// Calculates a timestamp of type NaiveDateTime which lies in a defined period into the past.
-    /// This function is used for testing purposes only across multiple crates.
+    // Calculates a timestamp of type NaiveDateTime which lies in a defined period into the past.
+    // This function is used for testing purposes only across multiple crates.
+    // # Arguments
+    // * `hours_in_past` - number of hours which the resulting timestamp shall lie in the past
+    // * `seconds_in_past` - number of seconds which the resulting timestamp shall lie in the past
     #[cfg(test)]
     pub fn get_naive_timestamp_from_past(
         hours_in_past: i64,
@@ -669,8 +684,10 @@ impl SqlInterface {
         timestamp_from_past.naive_local()
     }
 
-    /// Calculates the time difference between a given timestamp of type NaiveDateTime
-    /// to the current local time in seconds.
+    // Calculates the time difference between a given timestamp of type NaiveDateTime
+    // to the current local time in seconds.
+    // # Arguments
+    // * `timestamp_naive` - past timestamp from which the function shall calculate the duration since
     #[cfg(test)]
     pub fn get_duration_from_naive_timestamp_to_local_now(
         timestamp_naive: NaiveDateTime,
