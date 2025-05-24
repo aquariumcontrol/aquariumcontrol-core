@@ -132,7 +132,7 @@ impl WaterInjectionTrait for WaterInjection {
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_WATER_INJECTION,
-                            "receiving answer from Controllino when switching on refill pump failed ({e:?})"
+                            "receiving answer from relay manager when switching on refill pump failed ({e:?})"
                         );
                     }
                 };
@@ -140,7 +140,7 @@ impl WaterInjectionTrait for WaterInjection {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_WATER_INJECTION,
-                    "channel communication to Controllino when switching on refill pump failed ({e:?})"
+                    "channel communication to relay manager when switching on refill pump failed ({e:?})"
                 );
             }
         }
@@ -223,7 +223,7 @@ impl WaterInjectionTrait for WaterInjection {
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_WATER_INJECTION,
-                            "receiving answer from Controllino when switching off refill pump failed ({e:?})"
+                            "receiving answer from relay manager when switching off refill pump failed ({e:?})"
                         );
                     }
                 };
@@ -231,7 +231,7 @@ impl WaterInjectionTrait for WaterInjection {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_WATER_INJECTION,
-                    "channel communication to Controllino when switching off refill pump failed ({e:?})"
+                    "channel communication to relay manager when switching off refill pump failed ({e:?})"
                 );
             }
         }
@@ -350,7 +350,7 @@ pub mod tests {
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
-        // thread for mock Controllino - includes assertions
+        // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
@@ -413,7 +413,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -497,7 +497,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
+        // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
             tx_relay_manager_to_water_injection,
             rx_relay_manager_from_water_injection,
@@ -534,7 +534,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -613,7 +613,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
+        // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
             tx_relay_manager_to_water_injection,
             rx_relay_manager_from_water_injection,
@@ -644,7 +644,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -698,7 +698,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
+        // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
@@ -780,7 +780,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -832,7 +832,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
+        // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
@@ -906,7 +906,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -959,7 +959,7 @@ pub mod tests {
             })
             .unwrap();
 
-        // thread for mock Controllino - includes assertions
+        // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
@@ -1024,7 +1024,7 @@ pub mod tests {
 
         join_handle_mock_relay_manager
             .join()
-            .expect("Mock Controllino thread did not finish.");
+            .expect("Mock relay manager thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
