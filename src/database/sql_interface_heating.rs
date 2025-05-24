@@ -362,7 +362,7 @@ impl SqlInterfaceHeating {
         };
         Ok(single_heating_stats_entry)
     }
-    
+
     /// Retrieves a single heating statistics entry from the database for the day that just passed
     /// or for the current day in case the control application is terminated.
     ///

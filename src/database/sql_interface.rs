@@ -628,7 +628,7 @@ impl SqlInterface {
     ///
     /// This function executes a database query to get the database server's current timestamp
     /// and returns it as a `NaiveDateTime`.    
-    /// 
+    ///
     /// # Arguments
     /// * `conn` - A mutable reference to an active database connection.
     ///
@@ -642,7 +642,7 @@ impl SqlInterface {
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
         Self::get_timestamp(conn, sql_query_strings::SQL_QUERY_READ_CURRENT_TIMESTAMP)
     }
-    
+
     #[cfg(test)]
     // Retrieves a timestamp from the database with a specified future offset.
     //

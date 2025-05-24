@@ -118,12 +118,16 @@ impl WaterInjectionTrait for WaterInjection {
         let mut quit_command_received = false;
 
         // command start of refill pump
-        match water_injection_channels.tx_water_injection_to_relay_manager
+        match water_injection_channels
+            .tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOn(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match water_injection_channels.rx_water_injection_from_relay_manager.recv() {
+                match water_injection_channels
+                    .rx_water_injection_from_relay_manager
+                    .recv()
+                {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -190,8 +194,10 @@ impl WaterInjectionTrait for WaterInjection {
             if tank_level_switch_position {
                 additional_refill_volume_executed += self.refill_increment;
             }
-            (quit_command_received, _, _) =
-                self.process_external_request(water_injection_channels.rx_water_injection_from_signal_handler, None);
+            (quit_command_received, _, _) = self.process_external_request(
+                water_injection_channels.rx_water_injection_from_signal_handler,
+                None,
+            );
             if quit_command_received {
                 break;
             }
@@ -203,12 +209,16 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // command stop of refill pump
-        match water_injection_channels.tx_water_injection_to_relay_manager
+        match water_injection_channels
+            .tx_water_injection_to_relay_manager
             .send(InternalCommand::SwitchOff(AquariumDevice::RefillPump))
         {
             Ok(_) => {
                 // now listen for the response
-                match water_injection_channels.rx_water_injection_from_relay_manager.recv() {
+                match water_injection_channels
+                    .rx_water_injection_from_relay_manager
+                    .recv()
+                {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
@@ -227,7 +237,10 @@ impl WaterInjectionTrait for WaterInjection {
         }
 
         // inform data logger that refill is finished
-        match water_injection_channels.tx_water_injection_to_data_logger.send(false) {
+        match water_injection_channels
+            .tx_water_injection_to_data_logger
+            .send(false)
+        {
             Ok(_) => { /* no listening to response */ }
             Err(e) => {
                 error!(
@@ -266,7 +279,9 @@ pub mod tests {
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
     use crate::water::refill::Refill;
-    use crate::water::water_injection::{WaterInjection, WaterInjectionChannels, WaterInjectionTrait};
+    use crate::water::water_injection::{
+        WaterInjection, WaterInjectionChannels, WaterInjectionTrait,
+    };
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
@@ -506,15 +521,15 @@ pub mod tests {
 
         // thread for the test object
         let join_handle_test_object = create_assert_test_object(
-                    tx_water_injection_to_relay_manager,
-                    rx_water_injection_from_relay_manager,
-                    rx_water_injection_from_signal_handler,
-                    tx_water_injection_to_data_logger,
-                    rx_water_injection_from_data_logger,
-                    refill,
-                    mutex_tank_level_switch_signals,
-                    true,
-                    false
+            tx_water_injection_to_relay_manager,
+            rx_water_injection_from_relay_manager,
+            rx_water_injection_from_signal_handler,
+            tx_water_injection_to_data_logger,
+            rx_water_injection_from_data_logger,
+            refill,
+            mutex_tank_level_switch_signals,
+            true,
+            false,
         );
 
         join_handle_mock_relay_manager

@@ -86,9 +86,16 @@ pub enum MessagingDomain {
 }
 
 impl fmt::Display for MessagingDomain {
-    /// Provides output of the enum values for debugging purposes.
+    /// Formats the `MessagingDomain` enum into its human-readable string representation.
+    ///
+    /// This implementation allows `MessagingDomain` variants to be displayed directly
+    /// using macros like `println!` or `format!`, returning the name of the domain.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MessagingDomain::Refill => write!(f, "Refill"),
@@ -129,7 +136,14 @@ pub struct Message {
 }
 
 impl Message {
-    /// Provides an empty message initialized with zeros
+    /// Creates a new `Message` instance with all its fields initialized to zero.
+    ///
+    /// This constructor provides a default, empty message state, which is
+    /// populated with specific domain, command, and parameter values.
+    ///
+    /// # Returns
+    /// A new `Message` struct with `domain`, `command`, `command_param1`,
+    /// and `command_param2` all set to `0`.    
     pub fn new() -> Message {
         Message {
             domain: 0,
@@ -208,9 +222,26 @@ pub struct Messaging {
 }
 
 impl Messaging {
-    /// Opens the message queue
+    /// Opens and initializes the POSIX message queue for inter-process communication.
+    ///
+    /// This constructor attempts to open the message queue specified in the configuration.
+    /// It then retrieves the maximum message length supported by this queue.
+    /// This function is specifically enabled for Linux operating systems because
+    /// the messaging subsystem is only supported by this operating system and not by
+    /// other operating systems (e.g., macOS).
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Messaging
+    /// * `config` - Configuration data for the messaging module, primarily containing
+    ///   the `mq_filename` (the name of the POSIX message queue).
+    ///
+    /// # Returns
+    /// A new `Messaging` struct, initialized with the configuration, the opened
+    /// message queue handle, and its maximum message length.
+    ///
+    /// # Panics
+    /// This function will panic in the following scenarios:
+    /// - If it fails to open the message queue with the specified `mq_filename`.
+    /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
     pub fn new(config: MessagingConfig) -> Messaging {
         #[cfg(target_os = "linux")]
         let mq = match PosixMq::open(&config.mq_filename) {
@@ -244,6 +275,31 @@ impl Messaging {
     }
 
     #[cfg(target_os = "linux")]
+    /// Continuously monitors the POSIX message queue for incoming commands and forwards them to the relevant modules.
+    ///
+    /// This function serves as the central message dispatching unit for the application on Linux systems.
+    /// It operates in a loop, attempting to receive messages from a configured POSIX message queue (`mq_filename`).
+    /// Upon receiving a message, it parses the message's content (domain, command, parameters) and
+    /// dispatches it as an `InternalCommand` to the appropriate module's channel.
+    ///
+    /// It also periodically checks for a `Quit` command from the signal handler to initiate a graceful shutdown
+    /// and then waits for a `Terminate` command before exiting.
+    ///
+    /// # Arguments
+    /// * `tx_to_signal_handler` - The sender part of the channel used to acknowledge commands received by the signal handler.
+    /// * `rx_from_signal_handler` - The receiver part of the channel used to receive commands (like `Quit` or `Terminate`) from the signal handler.
+    /// * `tx_to_refill` - Sender channel for commands to the refill control module.
+    /// * `tx_to_ventilation` - Sender channel for commands to the ventilation control module.
+    /// * `tx_to_heating` - Sender channel for commands to the heating control module.
+    /// * `tx_to_feed` - Sender channel for commands to the feed control module.
+    /// * `tx_to_balling` - Sender channel for commands to the Balling dosing control module.
+    /// * `tx_to_monitors` - Sender channel for commands to the monitors module.
+    /// * `tx_to_watchdog` - Sender channel for commands to the watchdog module.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
+    /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
     pub fn execute(
         &mut self,
         tx_to_signal_handler: Sender<bool>,
@@ -467,6 +523,21 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
 
     #[cfg(target_os = "linux")]
+    // Opens a POSIX message queue for test purposes.
+    //
+    // This helper function is exclusively used in test environments on Linux.
+    // It attempts to open a POSIX message queue specified by its `filename`.
+    // If the message queue cannot be opened, the function will panic,
+    // indicating a critical issue for the test setup.
+    //
+    // # Arguments
+    // * `filename` - The name of the POSIX message queue to open for testing.
+    //
+    // # Returns
+    // An opened `PosixMq` instance.
+    //
+    // # Panics
+    // This function will panic if it fails to open the specified POSIX message queue.
     fn open_posixmq_test_file(filename: &str) -> PosixMq {
         match PosixMq::open(filename) {
             Ok(c) => c,
@@ -480,6 +551,29 @@ pub mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    // Creates a new thread to run the `Messaging` module's `execute` loop.
+    //
+    // This helper function is used in test environments on Linux to simulate the `Messaging`
+    // module running in its own dedicated thread. It sets up the necessary channel
+    // connections for communication with various components (like `Refill`, `Heating`, `Watchdog`, etc.).
+    //
+    // # Arguments
+    // * `messaging` - The `Messaging` instance to be executed in the new thread. It is moved into the thread.
+    // * `tx_messaging_to_signal_handler` - The sender channel for `Messaging` to send acknowledgments to the signal handler.
+    // * `rx_messaging_from_signal_handler` - The receiver channel for `Messaging` to receive commands from the signal handler.
+    // * `tx_messaging_to_refill` - The sender channel for `Messaging` to send commands to the refill control.
+    // * `tx_messaging_to_ventilation` - The sender channel for `Messaging` to send commands to the ventilation control.
+    // * `tx_messaging_to_heating` - The sender channel for `Messaging` to send commands to the heating control.
+    // * `tx_messaging_to_feed` - The sender channel for `Messaging` to send commands to the feed control.
+    // * `tx_messaging_to_balling` - The sender channel for `Messaging` to send commands to the Balling dosing control.
+    // * `tx_messaging_to_monitors` - The sender channel for `Messaging` to send commands to the monitors module.
+    // * `tx_messaging_to_watchdog` - The sender channel for `Messaging` to send commands to the watchdog.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
+    //
+    // # Panics
+    // This function will panic if the new thread cannot be spawned.
     fn create_test_object(
         mut messaging: Messaging,
         tx_messaging_to_signal_handler: Sender<bool>,
@@ -511,6 +605,27 @@ pub mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    // Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
+    //
+    // This helper function is used in test environments on Linux. It simulates an
+    // external process sending commands to the `Messaging` module via a POSIX message queue
+    // and also sends shutdown commands to the `Messaging` module and a mock control object
+    // through internal channels.
+    //
+    // # Arguments
+    // * `msg_commands` - A vector of `Message` structs to be sent as stimuli to the `Messaging` module.
+    // * `tx_environment_to_object` - The sender channel for this test environment to send commands to a mock control object.
+    // * `tx_signal_handler_to_messaging` - The sender channel for this test environment to send commands to the `Messaging` module, simulating the signal handler.
+    // * `rx_signal_handler_from_messaging` - The receiver channel for this test environment to receive acknowledgments from the `Messaging` module.
+    // * `mq_filename` - The name of the POSIX message queue used for sending stimuli.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used to wait for the spawned thread to complete.
+    //
+    // # Panics
+    // This function will panic if:
+    // - The new thread cannot be spawned.
+    // - It fails to open the specified POSIX message queue for sending stimuli.
     fn create_test_environment(
         msg_commands: Vec<Message>,
         tx_environment_to_object: Sender<InternalCommand>,
@@ -550,6 +665,22 @@ pub mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    // Asserts that a specific sequence of "Stop" then "Start" commands was received.
+    //
+    // This helper function is used in test environments on Linux to validate the order
+    // and content of commands received by a test mock. It specifically checks that:
+    // 1. Exactly two commands were received.
+    // 2. The first command received was `InternalCommand::Stop`.
+    // 3. The second command received was `InternalCommand::Start`.
+    //
+    // # Arguments
+    // * `commands_received` - A `Vec<InternalCommand>` containing the commands that were
+    //   captured by a mock object in the order they were received. This vector is consumed.
+    //
+    // # Panics
+    // This function will panic if:
+    // - The `commands_received` vector does not contain exactly two elements.
+    // - The commands are not `InternalCommand::Stop` followed by `InternalCommand::Start` in that order.
     fn assert_stop_start_sequence(mut commands_received: Vec<InternalCommand>) {
         // assert the number of commands sent/received are identical
         assert_eq!(2, commands_received.len());

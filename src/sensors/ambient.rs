@@ -54,19 +54,19 @@ pub struct AmbientConfig {
 pub struct AmbientChannels<'a> {
     /// Sender part of the channel for communication via TCP wrapped as optional
     pub tx_ambient_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
-    
+
     /// Receiver part of the channel for communication via TCP wrapped as optional
     pub rx_ambient_from_tcp_opt: &'a Option<Receiver<f32>>,
-    
+
     /// Sender part of the channel for communication to Dht
     pub tx_ambient_to_dht_opt: Option<Sender<InternalCommand>>,
-    
+
     /// Receiver part of the channel for communication from Dht
     pub rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
-    
+
     /// Sender part of the channel for communication to the signal handler
     pub tx_ambient_to_signal_handler: Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_ambient_from_signal_handler: Receiver<InternalCommand>,
 }
@@ -295,7 +295,8 @@ impl Ambient {
         let mut measurement_countdown: i32 = 0;
 
         if (self.config.use_simulator)
-            && (ambient_channels.tx_ambient_to_tcp_opt.is_none() | ambient_channels.rx_ambient_from_tcp_opt.is_none())
+            && (ambient_channels.tx_ambient_to_tcp_opt.is_none()
+                | ambient_channels.rx_ambient_from_tcp_opt.is_none())
         {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
@@ -304,7 +305,8 @@ impl Ambient {
         }
 
         if (self.config.use_simulator)
-            && ((ambient_channels.tx_ambient_to_dht_opt.is_some()) | (ambient_channels.rx_ambient_from_dht_opt.is_some()))
+            && ((ambient_channels.tx_ambient_to_dht_opt.is_some())
+                | (ambient_channels.rx_ambient_from_dht_opt.is_some()))
         {
             panic!(
                 "{}: configured to run with simulator, but channels to Dht thread provided",
@@ -313,7 +315,9 @@ impl Ambient {
         }
 
         #[cfg(not(target_os = "linux"))]
-        if ambient_channels.tx_ambient_to_dht_opt.is_some() || ambient_channels.rx_ambient_from_dht_opt.is_some() {
+        if ambient_channels.tx_ambient_to_dht_opt.is_some()
+            || ambient_channels.rx_ambient_from_dht_opt.is_some()
+        {
             warn!(target: LOG_TARGET_AMBIENT,
                 "Sender/Receiver to Dht are not 'None'");
         }
@@ -323,7 +327,8 @@ impl Ambient {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self.process_external_request(&ambient_channels.rx_ambient_from_signal_handler, None);
+            ) = self
+                .process_external_request(&ambient_channels.rx_ambient_from_signal_handler, None);
 
             cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -390,7 +395,10 @@ impl Ambient {
                         }
                     }
                 } else {
-                    self.communicate_with_simulator(ambient_channels.tx_ambient_to_tcp_opt, ambient_channels.rx_ambient_from_tcp_opt);
+                    self.communicate_with_simulator(
+                        ambient_channels.tx_ambient_to_tcp_opt,
+                        ambient_channels.rx_ambient_from_tcp_opt,
+                    );
                     measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
 
@@ -440,35 +448,36 @@ impl Ambient {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match ambient_channels.rx_ambient_from_signal_handler.recv() {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command_signal_handler = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_signal_handler {
-                            warn!(
+            termination_command_received =
+                match ambient_channels.rx_ambient_from_signal_handler.recv() {
+                    Ok(c) => match c {
+                        InternalCommand::Terminate => {
+                            self.lock_warn_inapplicable_command_signal_handler = false;
+                            true
+                        }
+                        _ => {
+                            if !self.lock_warn_inapplicable_command_signal_handler {
+                                warn!(
+                                    target: LOG_TARGET_AMBIENT,
+                                    "ignoring inapplicable command from signal handler ({})",
+                                    c
+                                );
+                                self.lock_warn_inapplicable_command_signal_handler = true;
+                            }
+                            false
+                        }
+                    },
+                    Err(e) => {
+                        if !self.lock_error_channel_receive_termination {
+                            error!(
                                 target: LOG_TARGET_AMBIENT,
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
+                                "receiving termination signal from signal handler failed ({e:?})"
                             );
-                            self.lock_warn_inapplicable_command_signal_handler = true;
+                            self.lock_error_channel_receive_termination = true;
                         }
                         false
                     }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: LOG_TARGET_AMBIENT,
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
+                };
             spin_sleeper.sleep(sleep_duration_one_millis);
         }
     }
@@ -572,9 +581,9 @@ pub mod tests {
                     tx_ambient_to_dht_opt: None,
                     rx_ambient_from_dht_opt: None,
                     tx_ambient_to_signal_handler,
-                    rx_ambient_from_signal_handler
+                    rx_ambient_from_signal_handler,
                 };
-                
+
                 // test object
                 ambient.execute(
                     ambient_channels,

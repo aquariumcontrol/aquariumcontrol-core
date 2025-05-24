@@ -71,7 +71,7 @@ impl SqlInterfaceData {
     ///
     /// The data is inserted into the database. If a record with the same timestamp
     /// already exists, the existing record will be updated (this behavior depends
-    /// on the underlying SQL query `SQL_QUERY_WRITE_DATA` using an 
+    /// on the underlying SQL query `SQL_QUERY_WRITE_DATA` using an
     /// `ON DUPLICATE KEY UPDATE` clause).
     ///
     /// # Arguments
@@ -335,7 +335,7 @@ pub mod tests {
         TankLevelSwitchPositionStabilized, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
-    
+
     // Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
     //
     // This function executes two separate SQL queries to fetch all components of a
@@ -356,7 +356,7 @@ pub mod tests {
     //   exactly one row with non-NULL data.
     // - `Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse)`: If either
     //   query returns zero rows or more than one row.
-    // - `Err(SqlInterfaceError)`: If any other database error occurs during fetching, 
+    // - `Err(SqlInterfaceError)`: If any other database error occurs during fetching,
     //   or if the timestamp string from the database cannot be parsed.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,

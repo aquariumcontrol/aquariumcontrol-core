@@ -410,9 +410,9 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_24h {
                     error!(
-                target: LOG_TARGET_REFILL,
-                "could not get refill volume of last 24 hours ({_e:?})"
-            );
+                        target: LOG_TARGET_REFILL,
+                        "could not get refill volume of last 24 hours ({_e:?})"
+                    );
                 }
             }
         };
@@ -428,9 +428,9 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_24h {
                     error!(
-                target: LOG_TARGET_REFILL,
-                "could not get refill count of last 24 hours: {_e:?}"
-            );
+                        target: LOG_TARGET_REFILL,
+                        "could not get refill count of last 24 hours: {_e:?}"
+                    );
                 }
             }
         };
@@ -446,9 +446,9 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_hour {
                     error!(
-                target: LOG_TARGET_REFILL,
-                "Could not get refill volume of last hour: {_e:?}"
-            );
+                        target: LOG_TARGET_REFILL,
+                        "Could not get refill volume of last hour: {_e:?}"
+                    );
                 }
             }
         };
@@ -464,9 +464,9 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_hour {
                     error!(
-                target: LOG_TARGET_REFILL,
-                "Could not get refill count of last hour: {_e:?}"
-            );
+                        target: LOG_TARGET_REFILL,
+                        "Could not get refill count of last hour: {_e:?}"
+                    );
                 }
             }
         };
@@ -823,13 +823,18 @@ impl Refill {
                             );
 
                             let water_injection_channels = WaterInjectionChannels {
-                                tx_water_injection_to_relay_manager: &refill_channels.tx_refill_to_relay_manager,
-                                rx_water_injection_from_relay_manager: &refill_channels.rx_refill_from_relay_manager,
-                                tx_water_injection_to_data_logger: &refill_channels.tx_refill_to_data_logger,
-                                rx_water_injection_from_data_logger: &refill_channels.rx_refill_from_data_logger,
-                                rx_water_injection_from_signal_handler: &refill_channels.rx_refill_from_signal_handler,
+                                tx_water_injection_to_relay_manager: &refill_channels
+                                    .tx_refill_to_relay_manager,
+                                rx_water_injection_from_relay_manager: &refill_channels
+                                    .rx_refill_from_relay_manager,
+                                tx_water_injection_to_data_logger: &refill_channels
+                                    .tx_refill_to_data_logger,
+                                rx_water_injection_from_data_logger: &refill_channels
+                                    .rx_refill_from_data_logger,
+                                rx_water_injection_from_signal_handler: &refill_channels
+                                    .rx_refill_from_signal_handler,
                             };
-                            
+
                             quit_command_received = water_injection.inject_water(
                                 water_injection_channels,
                                 &mut self.refill_errors,

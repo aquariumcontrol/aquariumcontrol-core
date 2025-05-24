@@ -538,7 +538,7 @@ impl SqlInterfaceFeed {
     // - `Ok(Some(Vec<FeedScheduleEntry>))` if one or more future feed schedule entries are found.
     // - `Ok(None)` if no future feed schedule entries are found in the database.
     // - `Err(SqlInterfaceError)` if an error occurs during the database query
-    //   or post-processing of the data.   
+    //   or post-processing of the data.
     fn get_future_feedschedule_entries_from_database(
         &mut self,
     ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
@@ -561,7 +561,7 @@ impl SqlInterfaceFeed {
     /// - `Ok(SqlFeedpatternHeader)` if exactly one matching header entry is found.
     /// - `Err(SqlInterfaceError::SingleFeedpatternRequestFailure)` if the database query fails.
     /// - `Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse)` if the query
-    ///   returns no entry or more than one entry for the given `profile_id`. 
+    ///   returns no entry or more than one entry for the given `profile_id`.
     pub fn get_feedpattern_header_from_database(
         &mut self,
         profile_id: i32,

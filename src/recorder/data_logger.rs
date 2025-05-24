@@ -112,7 +112,7 @@ pub struct DataLoggerConfig {
 pub struct DataLoggerChannels<'a> {
     /// Sender part of the channel for communication to Refill
     pub tx_to_refill: &'a Sender<InternalCommand>,
-    
+
     /// Receiver part of the channel for communication from Refill
     pub rx_from_refill: &'a Receiver<bool>,
 
@@ -124,13 +124,13 @@ pub struct DataLoggerChannels<'a> {
 
     /// Sender part of the channel for communication to Ventilation
     pub tx_to_ventilation: &'a Sender<InternalCommand>,
-    
+
     /// Receiver part of the channel for communication from Ventilation
     pub rx_from_ventilation: &'a Receiver<bool>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_to_signal_handler: &'a Sender<bool>,
-    
+
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_from_signal_handler: &'a Receiver<InternalCommand>,
 }
@@ -138,22 +138,22 @@ pub struct DataLoggerChannels<'a> {
 pub struct DataLoggerMutexes {
     /// Mutex for water temperature from DS18B20 sensor
     pub mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
-    
+
     /// Mutex for ambient temperature from DS18B20 sensor
     pub mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
-    
+
     /// Mutex for temperature from Atlas Scientific
     pub mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
-    
+
     /// Mutex for pH from Atlas Scientific
     pub mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
-    
+
     /// Mutex for conductivity DS18B20 sensor
     pub mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
-    
+
     /// Mutex for ambient temperature
     pub mutex_ambient_temperature: Arc<Mutex<f32>>,
-    
+
     /// Mutex for ambient humidity
     pub mutex_ambient_humidity: Arc<Mutex<f32>>,
 
@@ -644,7 +644,8 @@ impl DataLogger {
 
         //*** communication with refill thread ***
         self.lock_error_output_state_refill_in_progress = self.update_on_off_signal(
-            &mut refill_in_progress, &mut refill_channel_disconnected,
+            &mut refill_in_progress,
+            &mut refill_channel_disconnected,
             AquariumSignal::RefillPumpStatus,
             data_logger_channels.tx_to_refill,
             data_logger_channels.rx_from_refill,
@@ -931,13 +932,13 @@ impl DataLogger {
     /// * `data_injection` - Trait method for transferring data to database or mock data structure
     /// * `sql_interface_data` - Interface to SQL database for manipulation of data table
     /// * `data_logger_channels` - Struct containing the channels for communication with other threads
-    /// 
+    ///
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
         data_logger_channels: DataLoggerChannels,
-        data_logger_mutexes: DataLoggerMutexes
+        data_logger_mutexes: DataLoggerMutexes,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -983,16 +984,22 @@ impl DataLogger {
             // update signals by accessing mutex for DS18B20 sensor signals
             self.update_ds18b20_signals(
                 data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
-                data_logger_mutexes.mutex_ambient_temperature_dsb18b20.clone(),
+                data_logger_mutexes
+                    .mutex_ambient_temperature_dsb18b20
+                    .clone(),
                 &mut water_temperature_ds18b20,
                 &mut ambient_temperature_ds18b20,
             );
 
             // update signals by accessing mutex for Atlas Scientific signals
             self.update_atlas_scientific_signals(
-                data_logger_mutexes.mutex_atlas_scientific_temperature.clone(),
+                data_logger_mutexes
+                    .mutex_atlas_scientific_temperature
+                    .clone(),
                 data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
-                data_logger_mutexes.mutex_atlas_scientific_conductivity.clone(),
+                data_logger_mutexes
+                    .mutex_atlas_scientific_conductivity
+                    .clone(),
                 &mut water_temperature,
                 &mut ph,
                 &mut conductivity,
@@ -1080,8 +1087,8 @@ impl DataLogger {
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
-                (quit_command_received, _, _) =
-                    self.process_external_request(data_logger_channels.rx_from_signal_handler, None);
+                (quit_command_received, _, _) = self
+                    .process_external_request(data_logger_channels.rx_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(
@@ -1096,7 +1103,8 @@ impl DataLogger {
                     // update signals via channel communication
                     let mut refill_status = (refill_in_progress, refill_channel_disconnected);
                     let mut heater_status = (heater_is_on, heating_channel_disconnected);
-                    let mut ventilation_status = (ventilation_is_on, ventilation_channel_disconnected);
+                    let mut ventilation_status =
+                        (ventilation_is_on, ventilation_channel_disconnected);
                     self.update_signals(
                         &data_logger_channels,
                         &mut refill_status,
@@ -1107,20 +1115,25 @@ impl DataLogger {
                     (heater_is_on, heating_channel_disconnected) = heater_status;
                     (ventilation_is_on, ventilation_channel_disconnected) = ventilation_status;
 
-
                     // update signals by accessing mutex for DS18B20 sensor signals
                     self.update_ds18b20_signals(
                         data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
-                        data_logger_mutexes.mutex_ambient_temperature_dsb18b20.clone(),
+                        data_logger_mutexes
+                            .mutex_ambient_temperature_dsb18b20
+                            .clone(),
                         &mut water_temperature_ds18b20,
                         &mut ambient_temperature_ds18b20,
                     );
 
                     // update signals by accessing mutex for Atlas Scientific signals
                     self.update_atlas_scientific_signals(
-                        data_logger_mutexes.mutex_atlas_scientific_temperature.clone(),
+                        data_logger_mutexes
+                            .mutex_atlas_scientific_temperature
+                            .clone(),
                         data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
-                        data_logger_mutexes.mutex_atlas_scientific_conductivity.clone(),
+                        data_logger_mutexes
+                            .mutex_atlas_scientific_conductivity
+                            .clone(),
                         &mut water_temperature,
                         &mut ph,
                         &mut conductivity,
@@ -1174,7 +1187,8 @@ impl DataLogger {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match data_logger_channels.rx_from_signal_handler.recv() {
+            termination_command_received = match data_logger_channels.rx_from_signal_handler.recv()
+            {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command = false;
@@ -1211,7 +1225,9 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
-    use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes};
+    use crate::recorder::data_logger::{
+        DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes,
+    };
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
@@ -1609,16 +1625,20 @@ pub mod tests {
                 };
 
                 let data_logger_mutexes = DataLoggerMutexes {
-                    mutex_water_temperature_ds18b20: mutex_ds18b20_water_temperature_clone_for_data_logger,
-                    mutex_ambient_temperature_dsb18b20: mutex_ds18b20_ambient_temperature_clone_for_data_logger,
-                    mutex_atlas_scientific_temperature: mutex_atlas_scientific_temperature_clone_for_data_logger,
+                    mutex_water_temperature_ds18b20:
+                        mutex_ds18b20_water_temperature_clone_for_data_logger,
+                    mutex_ambient_temperature_dsb18b20:
+                        mutex_ds18b20_ambient_temperature_clone_for_data_logger,
+                    mutex_atlas_scientific_temperature:
+                        mutex_atlas_scientific_temperature_clone_for_data_logger,
                     mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_data_logger,
-                    mutex_atlas_scientific_conductivity: mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                    mutex_atlas_scientific_conductivity:
+                        mutex_atlas_scientific_conductivity_clone_for_data_logger,
                     mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
                     mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
                     mutex_tank_level_switch_signals,
                 };
-                
+
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,

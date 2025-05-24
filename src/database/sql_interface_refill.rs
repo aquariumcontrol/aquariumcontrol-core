@@ -20,7 +20,7 @@ use crate::database::{
 /// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
-    
+
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
