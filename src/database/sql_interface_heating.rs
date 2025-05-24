@@ -43,7 +43,14 @@ pub struct HeatingStatsEntry {
 }
 
 impl HeatingStatsEntry {
-    /// Provides a struct of type HeatingStatsEntry - used in case the database has no entry for the current date
+    /// Creates a new `HeatingStatsEntry` initialized for the current local date.
+    ///
+    /// This constructor is used when there's no existing heating statistics
+    /// record for the current day in the database. It sets the `date` field to today's
+    /// date and initializes all statistical counters and values to zero.
+    ///
+    /// # Returns
+    /// A new `HeatingStatsEntry` struct with default values for the current date.
     pub fn new() -> HeatingStatsEntry {
         let now = Local::now();
         let year = now.year();
@@ -63,11 +70,17 @@ impl HeatingStatsEntry {
         }
     }
 
-    /// Adds another sample for calculating the average values
+    /// Updates the heating statistics entry with new sensor readings and energy consumption data.
+    ///
+    /// This method incorporates new samples to incrementally calculate average water and ambient
+    /// temperatures, sum up energy consumption, and track the heating control's active runtime.
+    ///
     /// # Arguments
-    /// * `water_temperature_opt` - water temperature wrapped in Option
-    /// * `ambient_temperature_opt` - ambient temperature wrapped in Option
-    /// * `energy_increment` - energy consumption of heater since last update
+    /// * `water_temperature_opt` - An `Option<f64>` representing the latest water temperature reading.
+    ///   If `Some`, it contributes to the average; if `None`, the water temperature average remains unchanged.
+    /// * `ambient_temperature_opt` - An `Option<f64>` representing the latest ambient air temperature reading.
+    ///   If `Some`, it contributes to the average; if `None`, the ambient temperature average remains unchanged.
+    /// * `energy_increment` - The amount of energy (in kWh) consumed by the heater since the last update.
     pub fn update(
         &mut self,
         water_temperature_opt: Option<f64>,
@@ -120,9 +133,17 @@ impl HeatingStatsEntry {
 }
 
 impl fmt::Display for HeatingStatsEntry {
-    /// Provides output of the struct values for debugging purposes.
+    /// Formats the `HeatingStatsEntry` struct into a multi-line, human-readable string.
+    ///
+    /// This implementation is primarily intended for debugging and logging, providing
+    /// a clear overview of the heating statistics for a given date, including
+    /// average temperatures, energy consumption, and control runtime.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -181,10 +202,16 @@ pub struct SqlInterfaceHeatingMidnightCalculator {
 }
 
 impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMidnightCalculator {
-    /// Requests the duration until midnight in seconds.
-    /// It provides wrapped into Result type either
-    /// - the number of seconds until midnight
-    /// - or a value from enum SqlInterfaceError
+    /// Queries the database to determine the number of seconds remaining until the next midnight.
+    ///
+    /// This function executes an SQL query to retrieve a precise count of seconds
+    /// from the current database time until 00:00:00 of the upcoming day.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(i64)`: The number of seconds remaining until midnight. This value is expected to be non-negative.
+    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving the integer from the database,
+    ///   such as a query failure, or if the database returns an unexpected number of results.
     fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         match SqlInterface::get_single_integer_from_database(
             &mut self.conn,
@@ -197,9 +224,16 @@ impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMidnightC
 }
 
 impl SqlInterfaceHeatingMidnightCalculator {
-    /// Provides a struct of type SqlInterfaceHeatingMidnightCalculator
+    /// Creates a new `SqlInterfaceHeatingMidnightCalculator` instance.
+    ///
+    /// This constructor initializes the calculator with an established database connection,
+    /// which it uses to perform time-related queries, such as determining time until midnight.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
+    /// * `conn` - An active database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceHeatingMidnightCalculator` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceHeatingMidnightCalculator {
         SqlInterfaceHeatingMidnightCalculator { conn }
     }
@@ -216,10 +250,20 @@ pub struct SqlInterfaceHeating {
 }
 
 impl SqlInterfaceHeating {
-    /// Provides a struct of type SqlInterfaceHeating.
+    /// Creates a new `SqlInterfaceHeating` instance.
+    ///
+    /// This constructor initializes the heating SQL interface with a primary
+    /// database connection and a dedicated calculator for time-until-midnight
+    /// functionality, which allows for dependency injection for testing.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
-    /// * `sql_interface_heating_midnight_calculator` - trait object for calculation of time until midnight
+    /// * `conn` - An active database connection pool object for general heating-related operations.
+    /// * `sql_interface_heating_midnight_calculator` - A boxed trait object that provides
+    ///   the implementation for calculating the duration until midnight. This allows
+    ///   for dynamic dispatch and mock implementations in tests.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceHeating` struct.
     pub fn new(
         conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
@@ -318,13 +362,22 @@ impl SqlInterfaceHeating {
         };
         Ok(single_heating_stats_entry)
     }
-
-    /// Inserts one dataset of heating statistics into the SQL database.
-    /// It provides wrapped into Result type either
-    /// - an empty Ok value
-    /// - or a value from enum SqlInterfaceError
-    /// # Arguments
-    /// * `heating_stats_entry` - reference to struct HeatingStatsEntry providing the data which shall be inserted into the database.
+    
+    /// Retrieves a single heating statistics entry from the database for the day that just passed
+    /// or for the current day in case the control application is terminated.
+    ///
+    /// This function queries the database for heating statistics data, expecting to find
+    /// exactly one record. It then post-processes the raw string-based date into a `NaiveDate`
+    /// and constructs a `HeatingStatsEntry` struct.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(HeatingStatsEntry)`: The successfully retrieved and parsed heating statistics entry.
+    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestFailure)`: If the database query fails.
+    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse)`: If the query
+    ///   returns zero records or more than one record (indicating a data inconsistency).
+    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the date string
+    ///   retrieved from the database cannot be parsed into a valid `NaiveDate`.
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
@@ -389,9 +442,18 @@ impl SqlInterfaceHeating {
         }
     }
 
-    /// Requests the duration until midnight in seconds from implementation of trait.
-    /// The function provides wrapped in Result type either the time until midnight in seconds
-    /// or a value of enum SqlInterfaceError.
+    /// Delegates the request for the duration until midnight to the configured calculator.
+    ///
+    /// This function calls the `get_duration_until_midnight` method on the
+    /// `sql_interface_heating_midnight_calculator` trait object, providing an
+    /// abstraction layer for retrieving this specific time calculation.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(i64)`: The number of seconds remaining until the next midnight,
+    ///   as determined by the injected calculator implementation.
+    /// - `Err(SqlInterfaceError)`: If the underlying calculator encounters an error
+    ///   during its operation.
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
