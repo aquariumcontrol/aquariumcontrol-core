@@ -39,7 +39,23 @@ pub struct VersionInformation {
 impl VersionInformation {
     const LOG_TARGET_VERSION_INFORMATION: &'static str = "version_information";
 
-    /// Provides a struct of type VersionInformation.
+    /// Creates a new `VersionInformation` instance, populating it with
+    /// the application's compiled-in version numbers and an SHA-256 hash
+    /// of its executable file.
+    ///
+    /// This constructor is responsible for identifying the currently running
+    /// executable and computing a unique fingerprint (hash) of its binary content.
+    /// This hash is used to verify the integrity or version compatibility
+    /// of the running application against a database schema.
+    ///
+    /// # Returns
+    /// A new `VersionInformation` struct containing the major, minor, build,
+    /// and the calculated executable hash.
+    ///
+    /// # Panics
+    /// This function will panic if it fails to:
+    /// - Determine the path of the current executable.
+    /// - Read the contents of the executable file (e.g., due to permissions or file system errors).
     pub fn new() -> VersionInformation {
         // get the fully qualified path and file name
         let pathfilename = match env::current_exe() {
