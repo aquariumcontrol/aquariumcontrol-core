@@ -43,7 +43,7 @@ pub struct HeatingStatsEntry {
 }
 
 impl HeatingStatsEntry {
-    /// provides a struct of type HeatingStatsEntry - used in case the database has no entry for the current date
+    /// Provides a struct of type HeatingStatsEntry - used in case the database has no entry for the current date
     pub fn new() -> HeatingStatsEntry {
         let now = Local::now();
         let year = now.year();
@@ -63,7 +63,11 @@ impl HeatingStatsEntry {
         }
     }
 
-    /// add another sample for calculating the average values
+    /// Adds another sample for calculating the average values
+    /// # Arguments
+    /// * `water_temperature_opt` - water temperature wrapped in Option
+    /// * `ambient_temperature_opt` - ambient temperature wrapped in Option
+    /// * `energy_increment` - energy consumption of heater since last update
     pub fn update(
         &mut self,
         water_temperature_opt: Option<f64>,
@@ -169,6 +173,8 @@ pub trait SqlInterfaceHeatingMidnightCalculatorTrait {
     fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError>;
 }
 
+/// Struct holds connection data to the SQL database and provides implementation for calculating
+/// the time in seconds until midnight.
 pub struct SqlInterfaceHeatingMidnightCalculator {
     /// Connection to the database
     pub conn: PooledConn,
@@ -213,6 +219,7 @@ impl SqlInterfaceHeating {
     /// Provides a struct of type SqlInterfaceHeating.
     /// # Arguments
     /// * `conn` - connection to SQL database
+    /// * `sql_interface_heating_midnight_calculator` - trait object for calculation of time until midnight
     pub fn new(
         conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
@@ -382,7 +389,9 @@ impl SqlInterfaceHeating {
         }
     }
 
-    /// Requests the duration until midnight in seconds from implementation of trait
+    /// Requests the duration until midnight in seconds from implementation of trait.
+    /// The function provides wrapped in Result type either the time until midnight in seconds
+    /// or a value of enum SqlInterfaceError.
     pub fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
