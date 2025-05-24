@@ -22,17 +22,33 @@ pub struct SqlInterfaceData {
 impl SqlInterfaceData {
     const LOG_TARGET_SQL_INTERFACE_DATA: &'static str = "sql_interface_data";
 
-    /// Provides a struct of type SqlInterfaceData
+    /// Creates a new `SqlInterfaceData` instance.
+    ///
+    /// This constructor initializes the time-based data SQL interface
+    /// with an established database connection.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
+    /// * `conn` - An active database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceData` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceData {
         SqlInterfaceData { conn }
     }
 
-    /// Helper function to convert from f32 to String representation considering
-    /// unwrapping optional, NaN and Inf.
+    /// Converts an optional `f32` value into its `String` representation,
+    /// specifically handling `None`, `NaN`, and infinite values by returning "NULL".
+    ///
+    /// This helper function ensures that floating-point numbers are correctly formatted
+    /// for database insertion, where `NULL` is used for missing or invalid numerical data.
+    ///
     /// # Arguments
-    /// * `value` - value to be converted wrapped in Option
+    /// * `value` - An `Option<f32>` containing the floating-point value to convert.
+    ///   If `None`, `NaN`, or `Infinity`, it will be represented as "NULL".
+    ///
+    /// # Returns
+    /// A `String` representing the float value, or "NULL" if the input is `None`,
+    /// Not-a-Number (`NaN`), positive infinity (`f32::INFINITY`), or negative infinity (`f32::NEG_INFINITY`).
     pub fn get_string_from_value(value: Option<f32>) -> String {
         let null_string = "NULL".to_string();
 
@@ -45,11 +61,27 @@ impl SqlInterfaceData {
         }
     }
 
-    /// Writes all data inside the data frame to the SQL database.
-    /// None values or float variables with NaN or infinite (both positive and negative) are inserted as NULL into the database.
-    /// The function either returns an empty Ok value or a value of type SqlInterfaceError.
+    /// Writes a complete `RecorderDataFrame` to the SQL database.
+    ///
+    /// This function processes all data points within the provided `RecorderDataFrame`.
+    /// It intelligently handles optional (`Option<f32>`) and floating-point values
+    /// (`f32`) by converting `None`, `NaN` (Not-a-Number), or infinite values
+    /// (positive and negative infinity) into `NULL` for database insertion. Boolean
+    /// options are similarly converted to `NULL` if `None`.
+    ///
+    /// The data is inserted into the database. If a record with the same timestamp
+    /// already exists, the existing record will be updated (this behavior depends
+    /// on the underlying SQL query `SQL_QUERY_WRITE_DATA` using an 
+    /// `ON DUPLICATE KEY UPDATE` clause).
+    ///
     /// # Arguments
-    /// * `data` - data to be written to the database as type RecorderDataFrame
+    /// * `data` - A reference to the `RecorderDataFrame` containing the data to be written.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the data frame was successfully inserted or updated in the database.
+    /// - `Err(SqlInterfaceError::InsertDataFrameFailure)` if any error occurs during
+    ///   the database operation.    
     pub fn write_data_frame_to_database(
         &mut self,
         data: &RecorderDataFrame,
@@ -303,13 +335,29 @@ pub mod tests {
         TankLevelSwitchPositionStabilized, SurfaceVentilation, \
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
-
-    // The function executes two SQL statements to retrieve one row from table 'data'
-    // In Ok case, the function returns one struct of type DataFrame wrapped in Result.
-    // Note: This function cannot handle entries with NULL data due to limitations of the SQL library.
-    // # Arguments
-    // * `conn` - connection to SQL database
-    // * `timestamp` - timestamp data to be inserted into the query
+    
+    // Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
+    //
+    // This function executes two separate SQL queries to fetch all components of a
+    // `RecorderDataFrame` for a specific timestamp. It strictly expects exactly one
+    // matching row for each part.
+    //
+    // Note: Due to limitations of the underlying SQL library, this function **cannot**
+    // properly handle database entries where values are `NULL`. It expects all fields
+    // to contain concrete data.
+    //
+    // Arguments:
+    // * `conn`: A mutable reference to an active database connection.
+    // * `timestamp`: The `NaiveDateTime` to identify the specific data frame to retrieve.
+    //
+    // Returns:
+    // A `Result` which is:
+    // - `Ok(RecorderDataFrame)`: The reconstructed data frame if both queries return
+    //   exactly one row with non-NULL data.
+    // - `Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse)`: If either
+    //   query returns zero rows or more than one row.
+    // - `Err(SqlInterfaceError)`: If any other database error occurs during fetching, 
+    //   or if the timestamp string from the database cannot be parsed.
     pub fn get_single_dataframe_from_database(
         conn: &mut PooledConn,
         timestamp: NaiveDateTime,
