@@ -18,13 +18,24 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of the Balling mineral dosing.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait MineralInjectionTrait {
-    /// Actuates the peristaltic pumps for injecting a mineral solution into the main tank.
+    /// Actuates a specific peristaltic pump to inject a mineral solution into the main tank for a defined duration.
+    ///
+    /// This method controls the selected `mineral_pump` by sending `SwitchOn` and `SwitchOff` commands
+    /// to the relay manager. It runs the pump for the `dosing_duration_millis` or until a
+    /// `Quit` command is received from the signal handler, allowing for early termination.
+    ///
     /// # Arguments
-    /// * `tx_to_relay_manager` - Reference to sender part of the channel for communication to relay manager
-    /// * `rx_from_relay_manager` - Reference to Receiver part of the channel for communication from relay manager
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler
-    /// * `mineral_pump` - pump to be actuated of type AquariumDevice
-    /// * `dosing_duration_millis` - dosing duration in milliseconds
+    /// * `tx_to_relay_manager` - The sender channel for communicating commands to the relay manager (e.g., Controllino).
+    /// * `rx_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager after a command.
+    /// * `rx_from_signal_handler` - The receiver channel for listening to `InternalCommand` signals from the main signal handler.
+    /// * `mineral_pump` - The `AquariumDevice` enum variant identifying which peristaltic pump to actuate.
+    /// * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump should run.
+    ///
+    /// # Returns
+    /// A tuple `(bool, u32)`:
+    /// - The `bool` is `true` if a `Quit` command was received from the signal handler during injection,
+    ///   indicating that the operation was interrupted. It's `false` otherwise.
+    /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
     fn inject_mineral(
         &mut self,
         tx_to_relay_manager: &Sender<InternalCommand>,
@@ -55,13 +66,26 @@ impl MineralInjection {
 }
 
 impl MineralInjectionTrait for MineralInjection {
-    /// Switches on one of the peristaltic pumps for a defined period of time, or until a Quit command is received from the signal handler.
+    /// Switches on one of the peristaltic pumps for a defined period, or until a `Quit` command is received.
+    ///
+    /// This implementation for `inject_mineral` controls the specified `mineral_pump`.
+    /// It sends a `SwitchOn` command to the relay manager, then enters a loop
+    /// to keep the pump active for `dosing_duration_millis`. During this period,
+    /// it continuously checks for a `Quit` command from the signal handler,
+    /// allowing for immediate termination. Once the duration is met or a `Quit`
+    /// command is received, it sends a `SwitchOff` command to the pump.
+    ///
     /// # Arguments
-    /// * `tx_to_relay_manager` - Reference to sender part of the channel for communication with relay manager
-    /// * `rx_from_relay_manager` - Reference to receiver part of the channel for communication with relay manager
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication with signal handler
-    /// * `mineral_pump` - parameter defining which pump shall be switched on
-    /// * `dosing_duration_millis` - dosing duration in milliseconds    
+    /// * `tx_to_relay_manager` - The sender channel for communicating commands to the relay manager.
+    /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
+    /// * `rx_from_signal_handler` - The receiver channel for listening to `InternalCommand` signals from the signal handler.
+    /// * `mineral_pump` - The `AquariumDevice` variant identifying which pump to actuate.
+    /// * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump should run.
+    ///
+    /// # Returns
+    /// A tuple `(bool, u32)`:
+    /// - The `bool` is `true` if a `Quit` command was received during injection; otherwise `false`.
+    /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
     fn inject_mineral(
         &mut self,
         tx_to_relay_manager: &Sender<InternalCommand>,
@@ -151,6 +175,28 @@ pub mod tests {
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 
+    // Simulates the Relay Manager's behavior for Mineral Injection tests.
+    //
+    // This helper function acts as a mock for the Relay Manager. It waits to receive
+    // either a `SwitchOn` or `SwitchOff` command from the `MineralInjection` test object.
+    // Upon receiving a command, it sends a `true` acknowledgment back to the sender
+    // and returns the received command. This is used to verify that the
+    // `MineralInjection` module sends the correct commands.
+    //
+    // Arguments:
+    // * `tx_relay_manager_to_mineral_injection`: The sender channel for this mock to send
+    //   acknowledgments back to the `MineralInjection` test object.
+    // * `rx_relay_manager_from_mineral_injection`: The receiver channel for this mock to get
+    //   actuation commands from the `MineralInjection` test object.
+    //
+    // Returns:
+    // The `InternalCommand` that was received from the `MineralInjection` test object.
+    //
+    // Panics:
+    // This function will panic if:
+    // - It fails to receive a command from the `MineralInjection` test object.
+    // - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
+    // - It fails to send the acknowledgment back.
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
         tx_relay_manager_to_mineral_injection: &Sender<bool>,
         rx_relay_manager_from_mineral_injection: &Receiver<InternalCommand>,
