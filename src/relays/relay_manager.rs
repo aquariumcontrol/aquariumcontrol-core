@@ -38,9 +38,18 @@ pub enum RelayError {
 }
 
 impl fmt::Debug for RelayError {
-    /// Provides output of the enum values for debugging purposes.
+    /// Formats the `RelayError` enum into a human-readable string representation for debugging.
+    ///
+    /// This implementation allows `RelayError` variants to be displayed directly using
+    /// `println!` or `format!`, providing concise and informative error messages.
+    /// For variants that contain associated data (like `IrrelevantCommand` or `PulseNotAllowedForDevice`),
+    /// that data is included in the output for better diagnostic context.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RelayError::IrrelevantCommand(c) => write!(f, "Irrelevant command {}", c),
@@ -180,9 +189,19 @@ pub struct RelayManager {
 }
 
 impl RelayManager {
-    /// Provides a struct of type RelayManager
+    /// Creates a new `RelayManager` instance.
+    ///
+    /// This constructor initializes the relay management module with its configuration.
+    /// It sets up various internal lock flags to `false`, which are used to prevent
+    /// repetitive error and warning messages from flooding the log file during operation,
+    /// especially concerning channel communication and actuation errors.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for relay manager
+    /// * `config` - Configuration data for the relay manager, loaded from a TOML file.
+    ///
+    /// # Returns
+    /// A new `RelayManager` struct, ready to handle relay actuation commands
+    /// and communicate with other modules.    
     pub fn new(config: RelayManagerConfig) -> RelayManager {
         RelayManager {
             config,
@@ -204,12 +223,23 @@ impl RelayManager {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting.
-    /// This function receives request from other threads and either actuates on real HW
-    /// or communicates with simulator
+    /// Executes the main control loop for the Relay Manager.
+    ///
+    /// This function runs continuously, acting as the central dispatcher for actuation commands
+    /// received from various control modules. It forwards these commands either to real hardware
+    /// (e.g., Controllino via serial port) or to a simulator, depending on the `RelayActuationTrait`
+    /// implementation it receives.
+    ///
+    /// The loop continually checks for new commands from different sources (Refill, Heating,
+    /// Ventilation, Balling, Feed) and from the global signal handler. It remains active
+    /// until a `Quit` command is received from the signal handler, at which point it initiates
+    /// a graceful shutdown.
+    ///
     /// # Arguments
-    /// * `relay_manager_channels` - struct containing channels for communication with other threads   
-    /// * `actuator` - struct implementing RelayActuationTrait    
+    /// * `relay_manager_channels` - A struct containing all `mpsc` channels necessary for
+    ///   communication with other control threads and the main signal handler.
+    /// * `actuator` - A mutable reference to an object implementing the `RelayActuationTrait`,
+    ///   which handles the actual hardware interaction or simulation.
     pub fn execute(
         &mut self,
         relay_manager_channels: RelayManagerChannels,
