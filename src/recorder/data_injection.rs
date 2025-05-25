@@ -24,13 +24,24 @@ pub trait DataInjectionTrait {
     );
 }
 
+/// Implements the `DataInjectionTrait` for concrete data logging to an SQL database.
+///
+/// This struct serves as the practical component for transferring `RecorderDataFrame`
+/// instances to the configured SQL database.
 pub struct DataInjection;
 
 impl DataInjectionTrait for DataInjection {
-    /// Transfers the data provided as parameter to SQL database
+    /// Transfers a `RecorderDataFrame` to the SQL database for logging.
+    ///
+    /// This method serves as the concrete implementation for injecting collected
+    /// data frames into the database. It attempts to write the provided `data_frame`
+    /// using the `sql_interface_data` and logs any errors that occur during the process.
+    ///
     /// # Arguments
-    /// * `data_frame` - Data to be transferred to SQL database
-    /// * `sql_interface_data` - Interface to SQL database
+    /// * `data_frame` - The `RecorderDataFrame` containing the data to be persisted in the SQL database.
+    ///   This is passed by value, meaning ownership is transferred to this function.
+    /// * `sql_interface_data` - A mutable reference to the `SqlInterfaceData` instance,
+    ///   which handles the actual database write operation.
     fn inject_data(
         &mut self,
         data_frame: RecorderDataFrame,

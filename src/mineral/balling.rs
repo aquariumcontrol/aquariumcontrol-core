@@ -419,7 +419,7 @@ impl Balling {
     /// This function acts as a mapping from a numerical pump ID
     /// to a tuple containing the pump's `u32` ID and its `AquariumDevice` enum variant.
     /// Numerical pump IDs are used in external commands and in the database.
-    /// 
+    ///
     /// # Arguments
     /// * `pump_id` - The numerical ID of the pump (e.g., 1, 2, 3, 4) to be selected.
     ///
