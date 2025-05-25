@@ -23,13 +23,29 @@ pub struct ActuateSimulator {
 }
 
 impl RelayActuationTrait for ActuateSimulator {
-    /// Triggers actuation on simulator via TCP communication
-    /// This function is used for development only.
-    /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
-    /// considering relay id and relay logic.
+    /// Triggers simulated relay actuation via TCP communication for development and testing.
+    ///
+    /// This function translates `SwitchOn` and `SwitchOff` commands for specific aquarium devices
+    /// into their corresponding `SetRelay` or `UnsetRelay` commands (considering the configured
+    /// relay logic). These translated commands are then sent over a TCP communication channel
+    /// to a listener (typically a simulator or a test harness).
+    ///
+    /// This implementation is intended **solely for development and system testing**
+    /// and does not interact with physical hardware directly.
+    ///
     /// # Arguments
-    /// * `tx_to_tcp` - Reference to Sender part of the communication channel with TcpCommunication
-    /// * `internal_command` - enum value used for identifying content which shall be sent
+    /// * `internal_command` - The `InternalCommand` specifying the `AquariumDevice` and the desired state (`SwitchOn` or `SwitchOff`).
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the translated command was successfully sent via the TCP channel.
+    /// - `Err(RelayError::IrrelevantCommand)` if the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The internal `tx_to_tcp_opt` channel sender is `None` (meaning the TCP communication channel was not set up).
+    /// - There's an error translating the `internal_command` into a relay-specific command (e.g., `Pulse` command for a non-pulsable device).
+    /// - There's a failure sending the command through the TCP channel.
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
         let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
         match internal_command {
@@ -67,6 +83,21 @@ impl RelayActuationTrait for ActuateSimulator {
 }
 
 impl ActuateSimulator {
+    /// Creates a new `ActuateSimulator` instance.
+    ///
+    /// This constructor initializes the simulator with an optional sender channel
+    /// for TCP communication and the Controllino-specific configuration.
+    /// It's used to set up the mock actuation logic for testing purposes.
+    ///
+    /// # Arguments
+    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel (`Sender<InternalCommand>`)
+    ///   used to send simulated relay commands via TCP. If `None`, attempts to `actuate`
+    ///   will panic.
+    /// * `config` - The `ActuateControllinoConfig` struct, providing device-to-relay mappings
+    ///   and other configuration relevant for simulating Controllino behavior.
+    ///
+    /// # Returns
+    /// A new `ActuateSimulator` struct.
     pub fn new(
         tx_to_tcp_opt: Option<Sender<InternalCommand>>,
         config: ActuateControllinoConfig,
