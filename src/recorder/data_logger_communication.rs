@@ -17,8 +17,12 @@ const LOG_TARGET_DATA_LOGGER_COMMUNICATION: &str = "data_logger_communication";
 
 /// Trait for the communication to data logger used by Refill and WaterInjection
 pub trait DataLoggerCommunicationTrait {
-    /// wrapper function implemented individually for Refill and WaterInjection
+    /// Wrapper function implemented individually for Refill and WaterInjection
     /// to allow access to the struct variables.
+    /// # Arguments
+    /// * `tx_to_data_logger` - The sender channel for sending the boolean status back to the data logger.
+    /// * `rx_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
+    /// * `refill_pump_status` - The current status of the refill pump (`true` for ON, `false` for OFF).
     fn communicate_with_data_logger(
         &mut self,
         tx_to_data_logger: &Sender<bool>,
@@ -26,15 +30,25 @@ pub trait DataLoggerCommunicationTrait {
         refill_pump_status: bool,
     );
 
-    /// Checks request from data logger and responds via channel
+    /// Checks for a `RequestSignal` command from the data logger and responds with the refill pump's status.
+    ///
+    /// This private helper function is a generic communication handler designed for modules
+    /// (like Refill, Heating, Ventilation) that provide ON/OFF signal information to the data logger.
+    /// It attempts to receive a command without blocking. If it's a `RequestSignal` for `RefillPumpStatus`,
+    /// it sends the current `refill_pump_status` back to the data logger. Other commands or
+    /// invalid signal requests are logged as warnings or errors.
+    ///
+    /// It uses "lock" variables (`lock_error_channel_receive_data_logger`, etc.) to prevent
+    /// log flooding from repeated communication failures.
+    ///
     /// # Arguments
-    /// * `tx_to_data_logger` - Reference to sender part of channel for communication to data logger
-    /// * `rx_from_data_logger` - Reference to Receiver part of channel for communication from Controllino
-    /// * `refill_pump_status` - information if refill pump status is active (true) or inactive (false)
-    /// * `lock_error_channel_receive_data_logger` - reference to lock variable to avoid log flooding
-    /// * `lock_warn_inapplicable_command_data_logger` - reference to lock variable to avoid log flooding
-    /// * `lock_error_invalid_signal_request_data_logger` - reference to lock variable to avoid log flooding
-    /// * `lock_error_send_to_data_logger` - reference to lock variable to avoid log flooding
+    /// * `tx_to_data_logger` - The sender channel for sending the boolean status back to the data logger.
+    /// * `rx_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
+    /// * `refill_pump_status` - The current status of the refill pump (`true` for ON, `false` for OFF).
+    /// * `lock_error_channel_receive_data_logger` - A mutable flag to inhibit repeated error logging for receiving failures.
+    /// * `lock_warn_inapplicable_command_data_logger` - A mutable flag to inhibit repeated warning logging for inapplicable commands.
+    /// * `lock_error_invalid_signal_request_data_logger` - A mutable flag to inhibit repeated error logging for invalid signal requests.
+    /// * `lock_error_send_to_data_logger` - A mutable flag to inhibit repeated error logging for sending failures.
     fn communicate_with_data_logger_generic(
         tx_to_data_logger: &Sender<bool>,
         rx_from_data_logger: &Receiver<InternalCommand>,
@@ -113,6 +127,17 @@ pub trait DataLoggerCommunicationTrait {
 }
 
 impl DataLoggerCommunicationTrait for Refill {
+    /// Communicates the refill pump's status to the data logger upon request.
+    ///
+    /// This implementation of `communicate_with_data_logger` for the `Refill` module
+    /// delegates the actual communication handling to a generic helper function.
+    /// It provides the `refill_pump_status` and the necessary lock variables
+    /// to manage error logging for channel communication.
+    ///
+    /// # Arguments
+    /// * `tx_to_data_logger` - The sender channel for sending the boolean status to the data logger.
+    /// * `rx_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
+    /// * `refill_pump_status` - The current status of the refill pump (`true` for ON, `false` for OFF).
     fn communicate_with_data_logger(
         &mut self,
         tx_to_data_logger: &Sender<bool>,
@@ -132,6 +157,17 @@ impl DataLoggerCommunicationTrait for Refill {
 }
 
 impl DataLoggerCommunicationTrait for WaterInjection {
+    /// Communicates the water injection pump's status to the data logger upon request.
+    ///
+    /// This implementation of `communicate_with_data_logger` for the `WaterInjection` module
+    /// delegates the actual communication handling to a generic helper function.
+    /// It provides the `refill_pump_status` (which acts as the water injection pump's status in this context)
+    /// and the necessary lock variables to manage error logging for channel communication.
+    ///
+    /// # Arguments
+    /// * `tx_to_data_logger` - The sender channel for sending the boolean status to the data logger.
+    /// * `rx_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
+    /// * `refill_pump_status` - The current status of the refill pump (`true` for ON, `false` for OFF).
     fn communicate_with_data_logger(
         &mut self,
         tx_to_data_logger: &Sender<bool>,
