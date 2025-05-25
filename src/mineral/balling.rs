@@ -144,10 +144,25 @@ pub struct Balling {
 }
 
 impl Balling {
-    /// Provides a struct of type Balling.
+    /// Creates a new `Balling` control instance.
+    ///
+    /// This constructor initializes the Balling dosing control module. It performs
+    /// initial setup, including validating the `schedule_check_interval` from the
+    /// configuration and calculating the initial countdowns for each dosing pump
+    /// based on their last recorded dosing times in the database.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
-    /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
+    /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
+    /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
+    ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    ///
+    /// # Returns
+    /// A new `Balling` struct, ready for managing dosing schedules.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The `schedule_check_interval` in the `config` is `0`, as this is an invalid value.
+    /// - Any error occurs during the initial calculation of pump countdowns (e.g., database connection issues).
     pub fn new(config: BallingConfig, mut sql_interface_balling: SqlInterfaceBalling) -> Balling {
         if config.schedule_check_interval == 0 {
             panic!(
@@ -181,12 +196,29 @@ impl Balling {
         }
     }
 
-    /// Retrieves duration since last dosing event from the database and calculates
+    /// Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
+    ///
+    /// This private helper function determines how many seconds are left until a pump's
+    /// next dosing event. It first retrieves the target dosing interval from the configuration
+    /// for the given `pump_id`. Then, it fetches the duration since the last dosing event
+    /// from the database. The countdown is calculated by subtracting this elapsed duration
+    /// from the target interval, saturating at zero to ensure no negative results.
+    ///
     /// # Arguments
-    /// the remaining time in seconds until next dosing for a specific pump
-    /// * `config` - reference to configuration data for Balling dosing control       
-    /// * `sql_interface_balling` - reference to specific SQL interface for Balling dosing control           
-    /// * `pump_id` - id of pump for which the count-down shall be calculated
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
+    ///   used to retrieve historical dosing data from the database.
+    /// * `pump_id` - The unique identifier of the pump (1, 2, 3, or 4) for which the countdown is being calculated.
+    ///
+    /// # Returns
+    /// A `u32` representing the number of seconds remaining until the next dosing event.
+    /// This value is `0` if the dosing is overdue or scheduled for the current moment.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - An invalid `pump_id` (not 1, 2, 3, or 4) is provided.
+    /// - The `target_dosing_interval` for the given `pump_id` in the configuration is `0`.
+    /// - A fatal error occurs while retrieving the duration since the last dosing event from the database.
     fn calc_countdown_next_dosing(
         config: &BallingConfig,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -253,9 +285,19 @@ impl Balling {
         countdown
     }
 
-    /// Calculates target dosing duration based on set values read from the database.
+    /// Calculates the target dosing duration in milliseconds based on the pump's flow rate and desired volume.
+    ///
+    /// This private helper function determines how long a dosing pump needs to run
+    /// to dispense a specific volume of fluid, given its flow rate.
+    ///
     /// # Arguments
-    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
+    /// * `balling_setval` - A reference to a `BallingSetVal` struct, which contains
+    ///   the `dosing_speed` (flow rate in ml/sec) and `dosing_volume` (target volume in ml).
+    ///
+    /// # Returns
+    /// A `u32` representing the calculated dosing duration in milliseconds.
+    /// Returns `0` if either `dosing_speed` or `dosing_volume` is zero or negative,
+    /// indicating that no dosing should occur due to invalid parameters.
     fn calc_target_dosing_duration_millis(balling_setval: &BallingSetVal) -> u32 {
         if balling_setval.dosing_speed > 0.0 && balling_setval.dosing_volume > 0.0 {
             let dosing_duration_seconds =
@@ -266,10 +308,20 @@ impl Balling {
         }
     }
 
-    /// Calculates actual dosing volume based on actual dosing duration and pump flow.
+    /// Calculates the actual volume of fluid dosed based on the pump's flow rate and the actual run duration.
+    ///
+    /// This private helper function determines the precise volume dispensed, taking into account
+    /// the pump's calibrated flow rate and the actual time it was active.
+    ///
     /// # Arguments
-    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
-    /// * `actual_dosing_duration_millis` - actual dosing duration in milliseconds
+    /// * `balling_setval` - A reference to a `BallingSetVal` struct, containing the pump's
+    ///   `dosing_speed` (flow rate in ml/sec).
+    /// * `actual_dosing_duration_millis` - The actual duration (in milliseconds) that the pump was active.
+    ///
+    /// # Returns
+    /// An `f32` representing the actual volume of fluid dosed (in milliliters).
+    /// Returns `0.0` if `dosing_speed` is zero or negative, or if `actual_dosing_duration_millis` is zero,
+    /// indicating that no fluid was dispensed.
     fn calc_actual_dosing_volume(
         balling_setval: &BallingSetVal,
         actual_dosing_duration_millis: u32,
@@ -281,16 +333,30 @@ impl Balling {
         }
     }
 
-    /// Executes the dosing for a specific pump including
-    /// - reading set values from the database
-    /// - invoking mineral injection
-    /// - writing the result back to the database
+    /// Orchestrates the dosing process for a specific peristaltic pump.
+    ///
+    /// This function performs the complete cycle of a dosing event:
+    /// 1. Retrieves the pump's set values (e.g., flow rate, target volume) from the database.
+    /// 2. Calculates the required dosing duration.
+    /// 3. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
+    /// 4. Calculates the actual volume dosed based on the actual run time.
+    /// 5. Logs the completed Balling dosing event, including the actual volume, back to the database.
+    ///
+    /// The function also monitors for a `Quit` command from the signal handler during the injection process.
+    ///
     /// # Arguments
-    /// * `pump_id` - id of the pump to be actuated.
-    /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
-    /// * `mineral_injection` - refence to struct implementing MineralInjectionTrait
-    /// * `tx_balling_to_relay_manager` - sender part of channel communication to send command to relay manager
-    /// * `rx_balling_from_relay_manager` - receiver part of channel communication to receive confirmation back from relay manager
+    /// * `pump_id` - The unique numerical ID of the peristaltic pump to be actuated (e.g., 1, 2, 3, 4).
+    /// * `pump_device` - The `AquariumDevice` enum variant corresponding to the `pump_id`,
+    ///   representing the physical device.
+    /// * `mineral_injection` - A mutable reference to an object implementing `MineralInjectionTrait`,
+    ///   responsible for the physical control of the pump.
+    /// * `rx_balling_from_signal_handler` - The receiver channel for listening to signals (like `Quit`) from the signal handler.
+    /// * `tx_balling_to_relay_manager` - The sender channel for sending commands to the relay manager (Controllino).
+    /// * `rx_balling_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager.
+    ///
+    /// # Returns
+    /// A `bool` which is `true` if a `Quit` command was received from the signal handler
+    /// during the dosing process, indicating that the application should shut down; otherwise `false`.
     fn execute_dosing(
         &mut self,
         pump_id: u32,
@@ -348,9 +414,20 @@ impl Balling {
         quit_command_received
     }
 
-    /// Select the pump from the ID received externally
+    /// Selects the appropriate peristaltic pump and its corresponding device representation based on a given ID.
+    ///
+    /// This function acts as a mapping from a numerical pump ID
+    /// to a tuple containing the pump's `u32` ID and its `AquariumDevice` enum variant.
+    /// Numerical pump IDs are used in external commands and in the database.
+    /// 
     /// # Arguments
-    /// * `pump_id` - ID of pump to be actuated as i32
+    /// * `pump_id` - The numerical ID of the pump (e.g., 1, 2, 3, 4) to be selected.
+    ///
+    /// # Returns
+    /// An `Option<(u32, AquariumDevice)>`:
+    /// - `Some((u32, AquariumDevice))`: If the `pump_id` matches one of the known peristaltic pumps,
+    ///   returning its `u32` ID and the corresponding `AquariumDevice` variant.
+    /// - `None`: If the provided `pump_id` does not correspond to a known peristaltic pump.
     pub fn get_pump_from_id(pump_id: i32) -> Option<(u32, AquariumDevice)> {
         match pump_id {
             1 => Some((1, AquariumDevice::PeristalticPump1)),
@@ -361,11 +438,26 @@ impl Balling {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the Balling dosing module.
+    ///
+    /// This function runs continuously, managing the automatic dosing schedule for
+    /// multiple peristaltic pumps, processing external commands, and ensuring a
+    /// graceful shutdown. It periodically checks the dosing countdowns for each pump
+    /// and, if due, initiates the dosing process, respecting schedule limitations.
+    ///
+    /// The loop continues until a `Quit` command is received from the signal handler.
+    /// After exiting the main loop, it sends a confirmation back to the signal handler
+    /// and then waits for a `Terminate` command to complete its shutdown sequence.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
-    /// * `balling_channels` - struct containing channels for communication with other components
-    /// * `mineral_injection`- reference to struct implementing MineralInjectionTrait
+    /// * `mutex_device_scheduler_balling` - An `Arc<Mutex<i32>>` used for coordinating
+    ///   access to device scheduling, preventing parallel actuation across different
+    ///   control modules. It holds a counter of the completed actuation.
+    /// * `balling_channels` - A `BallingChannels` struct containing all necessary `mpsc`
+    ///   sender and receiver channels for inter-thread communication (e.g., with
+    ///   the signal handler, relay manager, and schedule checker).
+    /// * `mineral_injection` - A mutable reference to an object implementing the
+    ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
@@ -710,6 +802,15 @@ pub mod tests {
     }
 
     impl MockMineralInjection {
+        // Creates a new `MockMineralInjection` instance.
+        //
+        // This constructor initializes the mock mineral injector for testing purposes.
+        // It sets up empty vectors to record the engagement durations for each of
+        // the four peristaltic pumps, allowing tests to verify if and how long
+        // each pump was "actuated."
+        //
+        // # Returns
+        // A new `MockMineralInjection` struct, ready to record simulated dosing events.
         pub fn new() -> MockMineralInjection {
             MockMineralInjection {
                 pump1_engagement_durations: Vec::new(),
@@ -721,6 +822,33 @@ pub mod tests {
     }
 
     impl MineralInjectionTrait for MockMineralInjection {
+        // Simulates the injection of minerals by recording pump engagement durations.
+        //
+        // This mock implementation of `inject_mineral` does not perform any physical dosing.
+        // Instead, it serves as a testing utility by:
+        // 1. Storing the `dosing_duration_millis` into the appropriate pump's
+        //    engagement duration vector (e.g., `pump1_engagement_durations`).
+        // 2. Printing a console message for debug visibility during test runs.
+        // 3. Always returning `false` for the `quit_command_received` status.
+        // 4. Returning the `dosing_duration_millis` as the `actual_dosing_duration_millis` (simulating perfect execution).
+        //
+        // The channel arguments are ignored in this mock implementation.
+        //
+        // # Arguments
+        // * `_tx_balling_to_relay_manager` - (Ignored) Sender channel for sending commands to the relay manager.
+        // * `_rx_balling_from_relay_manager` - (Ignored) Receiver channel for acknowledgments from the relay manager.
+        // * `_rx_balling_from_signal_handler` - (Ignored) Receiver channel for listening to signals from the signal handler.
+        // * `mineral_pump` - The `AquariumDevice` enum variant representing the peristaltic pump to be "actuated."
+        // * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump would run.
+        //
+        // # Returns
+        // A tuple `(bool, u32)`:
+        // - The `bool` is always `false`, indicating no `Quit` command was received.
+        // - The `u32` is the `dosing_duration_millis` passed in, simulating the actual duration.
+        //
+        // # Panics
+        // This function will panic if invoked with an `AquariumDevice` that is not
+        // one of the peristaltic pumps (e.g., `AquariumDevice::Skimmer`).
         fn inject_mineral(
             &mut self,
             _tx_balling_to_relay_manager: &Sender<InternalCommand>,
@@ -766,6 +894,20 @@ pub mod tests {
         )
     }
 
+    // Generates a string representation of pump engagement durations.
+    //
+    // This helper function is used exclusively in test environments to create
+    // a human-readable summary of how long a specific pump was "engaged"
+    // during simulated dosing events.
+    //
+    // Arguments:
+    // * `id`: The numerical ID of the pump.
+    // * `v`: A reference to a vector of `u32` representing the recorded
+    //   engagement durations (in milliseconds) for that pump.
+    //
+    // Returns:
+    // A `String` detailing the pump's ID and its recorded engagement durations,
+    // or a message indicating that the pump was not engaged.
     fn output_vector(id: u32, v: &Vec<u32>) -> String {
         let mut output: String = "Pump #".into();
         if v.is_empty() {
@@ -783,9 +925,17 @@ pub mod tests {
     }
 
     impl fmt::Display for MockMineralInjection {
-        /// Provides output of the struct for debugging purposes.
-        /// # Arguments
-        /// * `f` - configuration for formatting
+        // Formats the `MockMineralInjection` struct to display the recorded dosing durations for each pump.
+        //
+        // This implementation is primarily for debugging and testing purposes. It provides
+        // a human-readable, multi-line string summarizing the "engagement" (simulated dosing)
+        // for each of the four peristaltic pumps.
+        //
+        // # Arguments
+        // * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+        //
+        // # Returns
+        // A `fmt::Result` indicating whether the formatting operation was successful.
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(
                 f,
