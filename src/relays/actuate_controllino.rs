@@ -400,8 +400,7 @@ impl RelayActuationTrait for ActuateControllino {
     /// and validates the response, including checksum verification.
     ///
     /// # Arguments
-    /// * `internal_command` - The `InternalCommand` specifying the device and desired action
-    /// (e.g., `SwitchOn(Heater)`, `Pulse(PeristalticPump1, 500)`).
+    /// * `internal_command` - The `InternalCommand` specifying the device and desired action (e.g., `SwitchOn(Heater)`, `Pulse(PeristalticPump1, 500)`).
     ///
     /// # Returns
     /// A `Result` which is:

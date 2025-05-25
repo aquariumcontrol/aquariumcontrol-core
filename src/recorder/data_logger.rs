@@ -1051,39 +1051,24 @@ impl DataLogger {
     /// This function runs continuously, acting as the central data collection and logging hub for
     /// the application.
     /// It performs the following key tasks in a recurring cycle:
-    /// 1. **Signal Retrieval**: Gathers current status (ON/OFF) from control modules
-    /// (Refill, Heating, Ventilation) via channels.
-    /// 2. **Sensor Data Acquisition**: Reads raw sensor values
-    /// (temperatures, pH, conductivity, ambient conditions, tank level switch states)
-    /// from shared mutexes, which are updated by other sensor-reading threads.
-    /// 3. **Signal Filtering**: Applies IIR (Infinite Impulse Response) filters to sensor signals
-    /// (e.g., water temperature, pH, conductivity) to produce smoothed values.
-    /// 4. **Timestamping**: Determines the current timestamp, either from the SQL database or
-    /// generated locally, based on configuration.
-    /// 5. **DataFrame Construction**: Assembles all collected and processed data into a
-    /// comprehensive `RecorderDataFrame`.
-    /// 6. **Data Injection & Disk Output**: Transfers the `RecorderDataFrame` to the SQL database
-    /// (via the `data_injection` trait) and writes various individual signal/state values to
-    /// designated files on a RAM disk (if configured).
-    /// 7. **Cycle Management**: Calculates the execution time of the current cycle and idles for
-    /// the remaining duration to meet the configured `logging_interval`, ensuring precise data
-    /// logging frequency. It warns if the cycle time is exceeded.
-    /// 8. **Responsiveness**: Remains responsive to `Quit` commands from the signal handler during
-    /// idle periods to enable graceful shutdown.
+    /// 1. **Signal Retrieval**: Gathers current status (ON/OFF) from control modules (Refill, Heating, Ventilation) via channels.
+    /// 2. **Sensor Data Acquisition**: Reads raw sensor values (temperatures, pH, conductivity, ambient conditions, tank level switch states) from shared mutexes, which are updated by other sensor-reading threads.
+    /// 3. **Signal Filtering**: Applies IIR (Infinite Impulse Response) filters to sensor signals (e.g., water temperature, pH, conductivity) to produce smoothed values.
+    /// 4. **Timestamping**: Determines the current timestamp, either from the SQL database or generated locally, based on configuration.
+    /// 5. **DataFrame Construction**: Assembles all collected and processed data into a comprehensive `RecorderDataFrame`.
+    /// 6. **Data Injection & Disk Output**: Transfers the `RecorderDataFrame` to the SQL database (via the `data_injection` trait) and writes various individual signal/state values to designated files on a RAM disk (if configured).
+    /// 7. **Cycle Management**: Calculates the execution time of the current cycle and idles for the remaining duration to meet the configured `logging_interval`, ensuring precise data logging frequency. It warns if the cycle time is exceeded.
+    /// 8. **Responsiveness**: Remains responsive to `Quit` commands from the signal handler during idle periods to enable graceful shutdown.
     ///
     /// The loop continues indefinitely until a `Quit` command is received from the signal handler.
     /// Upon receiving `Quit`, it performs a graceful exit sequence: sending confirmation back
     /// to the signal handler and then waiting for a `Terminate` command before finally exiting the thread.
     ///
     /// # Arguments
-    /// * `data_injection` - An object implementing the `DataInjectionTrait`, used for transferring the
-    ///   collected `RecorderDataFrame` to the SQL database or a mock data structure during testing.
-    /// * `sql_interface_data` - A `SqlInterfaceData` instance, providing the direct interface
-    ///   for writing `RecorderDataFrame`s to the SQL database.
-    /// * `data_logger_channels` - A `DataLoggerChannels` struct, containing all the `mpsc`
-    ///   sender and receiver channels necessary for inter-thread communication with other modules and the signal handler.
-    /// * `data_logger_mutexes` - A `DataLoggerMutexes` struct, providing access to shared `Arc<Mutex>`
-    ///   protected sensor data and device states.
+    /// * `data_injection` - An object implementing the `DataInjectionTrait`, used for transferring the collected `RecorderDataFrame` to the SQL database or a mock data structure during testing.
+    /// * `sql_interface_data` - A `SqlInterfaceData` instance, providing the direct interface for writing `RecorderDataFrame`s to the SQL database.
+    /// * `data_logger_channels` - A `DataLoggerChannels` struct, containing all the `mpsc` sender and receiver channels necessary for inter-thread communication with other modules and the signal handler.
+    /// * `data_logger_mutexes` - A `DataLoggerMutexes` struct, providing access to shared `Arc<Mutex>` protected sensor data and device states.
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
