@@ -218,6 +218,11 @@ impl TankLevelSwitch {
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
             ) > 0.0;
+            self.tank_level_switch_invalid = Self::get_response_from_simulator(
+                tx_to_tcp,
+                rx_from_tcp,
+                InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
+            ) > 0.0;
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             {
@@ -427,7 +432,7 @@ pub mod tests {
 
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::mock_tcp::tests::mock_tcp;
+    use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -456,18 +461,18 @@ pub mod tests {
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         let mutex_tank_level_switch_signals =
-            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, true)));
 
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
-                    true,
                     false,
+                    true,
                 );
             })
             .unwrap();
@@ -497,6 +502,7 @@ pub mod tests {
                 let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
                 let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
 
+                let mutex_tank_level_switch_signals_for_assert = mutex_tank_level_switch_signals.clone();
                 tank_level_switch.execute(
                     &tx_tank_level_switch_to_tcp_opt,
                     &rx_tank_level_switch_from_tcp_opt,
@@ -504,6 +510,13 @@ pub mod tests {
                     &rx_tank_level_switch_from_signal_handler,
                     mutex_tank_level_switch_signals,
                 );
+
+                // Get the final state after execution.
+                let signals_after_test_run = mutex_tank_level_switch_signals_for_assert.lock().unwrap();
+                // Assert that the stabilized position is forced to true (safe state) due to invalidity.
+                assert!(signals_after_test_run.tank_level_switch_position_stabilized);
+                // Confirm invalid-flag remained true
+                assert!(signals_after_test_run.tank_level_switch_invalid); 
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -556,7 +569,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
@@ -652,7 +665,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
@@ -748,7 +761,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),

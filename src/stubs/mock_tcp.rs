@@ -19,7 +19,7 @@ pub mod tests {
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
-    pub fn mock_tcp(
+    pub fn mock_tcp_for_tank_level_switch(
         tx_tcp_to_test_object: &Sender<f32>,
         rx_tcp_from_test_object: &Receiver<InternalCommand>,
         rx_tcp_from_test_environment_opt: Option<&Receiver<TestCommand>>,
@@ -30,18 +30,26 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let mut mock_value_position = initial_mock_value_position;
         let mut mock_value_invalid = initial_mock_value_invalid;
+        
+        let mut command_received: Option<InternalCommand>;
+        let mut signal_received: Option<AquariumSignal>;
+        
         loop {
             match rx_tcp_from_test_object.try_recv() {
-                Ok(c) => {
-                    let response_value: f32 = match c {
-                        InternalCommand::RequestSignal(d) => match d {
-                            AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
-                            AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
-                            _ => {
-                                panic!(
-                                    "{}: unknown signal request to mock TCP",
-                                    LOG_TARGET_MOCK_TCP
-                                );
+                Ok(command) => {
+                    command_received = Some(command.clone());
+                    let response_value: f32 = match command {
+                        InternalCommand::RequestSignal(signal) => {
+                            signal_received = Some(signal.clone());
+                            match signal {
+                                AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
+                                AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
+                                _ => {
+                                    panic!(
+                                        "{}: unknown signal request to mock TCP",
+                                        LOG_TARGET_MOCK_TCP
+                                    );
+                                }
                             }
                         },
                         InternalCommand::Quit => {
@@ -55,7 +63,21 @@ pub mod tests {
                         }
                     };
                     match tx_tcp_to_test_object.send(response_value) {
-                        Ok(()) => {}
+                        Ok(()) => {
+                            if command_received.is_some() && signal_received.is_some() {
+                                println!(
+                                    "mock_tcp_for_tank_level_switch: test object sent command {}, \
+                                    requesting signal {}, \
+                                    sent mock data {} to test object, \
+                                    mock position = {}, mock invalid = {}",
+                                    command_received.unwrap(),
+                                    signal_received.unwrap(),
+                                    response_value,
+                                    mock_value_position,
+                                    mock_value_invalid
+                                );
+                            }
+                        }
                         Err(e) => {
                             panic!(
                                 "{}: sending mock data from TCP to test object failed ({e:?})",
