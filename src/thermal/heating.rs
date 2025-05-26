@@ -46,9 +46,25 @@ pub trait HeatingStatsDataTransferTrait {
     );
 }
 
+/// Implements the `HeatingStatsDataTransferTrait` for transferring heating statistics to the SQL database.
+///
+/// This struct serves as the concrete component for persisting daily heating statistics
+/// into the configured SQL database.
 pub struct HeatingStatsDataTransfer;
 
 impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
+    /// Transfers the provided daily heating statistics entry to the SQL database.
+    ///
+    /// This implementation updates the `date` of the `heating_stats_entry` to the
+    /// **current database date** (ensuring consistency) and then attempts to insert
+    /// or update this record in the database. Errors during database operations are logged,
+    /// but the function proceeds without panicking to avoid disrupting the main application flow.
+    ///
+    /// # Arguments
+    /// * `heating_stats_entry` - The **`HeatingStatsEntry`** containing the statistics for the day.
+    ///   This is passed by value, meaning ownership is transferred to this function.
+    /// * `sql_interface_heating` - A mutable reference to the **`SqlInterfaceHeating`** instance,
+    ///   used for database interaction.
     fn transfer_heating_stats(
         &mut self,
         mut heating_stats_entry: HeatingStatsEntry,
@@ -125,12 +141,21 @@ pub struct HeatingConfig {
     switch_on_when_external_stop: bool,
 }
 
-/// Communicates to relay manager thread via the channel to switch on the heater.
+/// Commands the relay manager to switch on the heater.
+///
+/// This private helper function sends a `SwitchOn` command for `AquariumDevice::Heater`
+/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
+/// incrementing a shared mutex counter (`mutex_device_scheduler_heating`) to track actuation.
+/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
+/// device scheduler mutex was blocked.
+///
 /// # Arguments
-/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
-/// * `tx_heating_to_relay_manager` - sender part of the channel for communication to relay manager
-/// * `rx_heating_from_relay_manager` - receiver part of the channel for communication from relay manager
-/// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
+/// * `mutex_device_scheduler_heating` - A reference to an `Arc<Mutex<i32>>` used for
+///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
+/// * `tx_heating_to_relay_manager` - The **sender channel** for communicating the `SwitchOn` command to the relay manager.
+/// * `rx_heating_from_relay_manager` - The **receiver channel** for getting a boolean acknowledgment back from the relay manager.
+/// * `mutex_blocked_during_actuation` - A **mutable boolean flag** that's set to `true` if the
+///   `mutex_device_scheduler_heating` was found to be blocked during the `check_if_mutex_is_blocked` call.
 fn switch_on_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_heating_to_relay_manager: &Sender<InternalCommand>,
@@ -169,12 +194,21 @@ fn switch_on_heater(
     }
 }
 
-/// Communicates to relay manager thread via the channel to switch off the heater.
+/// Commands the relay manager to switch off the heater.
+///
+/// This private helper function sends a `SwitchOff` command for `AquariumDevice::Heater`
+/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
+/// incrementing a shared mutex counter (`mutex_device_scheduler_heating`) to track actuation.
+/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
+/// device scheduler mutex was blocked.
+///
 /// # Arguments
-/// * `mutex_device_scheduler_heating` - mutex to avoid parallel actuation of the device
-/// * `tx_heating_to_relay_manager` - sender part of the channel for communication to relay manager
-/// * `rx_heating_from_relay_manager` - receiver part of the channel for communication from relay manager
-/// * `tx_heating_to_data_logger` - sender part of the channel for communication to data logger
+/// * `mutex_device_scheduler_heating` - A reference to an `Arc<Mutex<i32>>` used for
+///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
+/// * `tx_heating_to_relay_manager` - The **sender channel** for communicating the `SwitchOff` command to the relay manager.
+/// * `rx_heating_from_relay_manager` - The **receiver channel** for getting a boolean acknowledgment back from the relay manager.
+/// * `mutex_blocked_during_actuation` - A **mutable boolean flag** that's set to `true` if the
+///   `mutex_device_scheduler_heating` was found to be blocked during the `check_if_mutex_is_blocked` call.
 fn switch_off_heater(
     mutex_device_scheduler_heating: &Arc<Mutex<i32>>,
     tx_heating_to_relay_manager: &Sender<InternalCommand>,
@@ -212,7 +246,7 @@ fn switch_off_heater(
     }
 }
 
-/// Struct collects the channels for communication to relay manager, signal handler, data logger, schedule check and messaging.
+/// Struct collects the channels for communication to relay manager, signal handler, data logger, schedule check, and messaging.
 pub struct HeatingChannels {
     /// Sender part of the channel for communication to the relay manager
     pub tx_heating_to_relay_manager: Sender<InternalCommand>,
@@ -296,10 +330,23 @@ pub struct Heating {
 impl ProcessExternalRequestTrait for Heating {}
 
 impl Heating {
-    /// Provides a struct of type Heating.
+    /// Creates a new `Heating` control instance.
+    ///
+    /// This constructor initializes the heating control module with its specific
+    /// configuration and a dedicated SQL interface. It also sets up all internal
+    /// "lock" flags to `false` by default; these flags are crucial during operation
+    /// to prevent log files from being flooded with repeated error or warning messages
+    /// stemming from channel communication or invalid requests.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for heating control
-    /// * `sql_interface_heating` - specific SQL interface for heating control           
+    /// * `config` - **Configuration data** for the heating control, loaded from a TOML file.
+    ///   This includes parameters such as target temperatures, safety features, and
+    ///   behavioral strategies.
+    /// * `sql_interface_heating` - The **specific SQL interface** for heating-related database operations.
+    ///   This instance is moved into the `Heating` struct.
+    ///
+    /// # Returns
+    /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
     pub fn new(config: HeatingConfig, sql_interface_heating: SqlInterfaceHeating) -> Heating {
         Self {
             config,
@@ -315,9 +362,22 @@ impl Heating {
         }
     }
 
-    /// Calculates a normalized controller deviation between measured value and target value in the range from zero to one.
+    /// Calculates a **normalized control deviation** based on the measured temperature and configured heating thresholds.
+    ///
+    /// This private helper function determines how far the `measured_value` deviates
+    /// from the `switch_on_temperature` relative to the total temperature control range
+    /// (`switch_on_temperature` to `switch_off_temperature`). The result is a float
+    /// between `0.0` and `1.0`. A value of `0.0` means the temperature is at or below
+    /// `switch_on_temperature` (full heating needed), and `1.0` means it's at or above
+    /// `switch_off_temperature` (no heating needed).
+    ///
     /// # Arguments
-    /// * `measured_value` - measured temperature value    
+    /// * `measured_value` - The current measured temperature (`f32`).
+    ///
+    /// # Returns
+    /// An `f32` representing the normalized control deviation, ranging from `0.0` to `1.0`.
+    /// Returns `0.0` if `switch_off_temperature` is not greater than `switch_on_temperature`
+    /// (i.e., `target_value_delta` is not positive), indicating an invalid configuration.
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta: f32 =
             self.config.switch_off_temperature - self.config.switch_on_temperature;
@@ -329,7 +389,17 @@ impl Heating {
         }
     }
 
-    /// wraps the function from sql_interface_heating and provides alternate value in case of error
+    /// Retrieves the duration in seconds until the next midnight from the database or provides a default fallback on error.
+    ///
+    /// This private helper function acts as a robust wrapper around the `sql_interface_heating`'s
+    /// `get_duration_until_midnight` method. If the database call is successful, it returns
+    /// the precise duration. If an error occurs during the database interaction, it logs the error
+    /// and returns a default value of 24 hours (86400 seconds), ensuring the control logic
+    /// always has a valid time-until-midnight value.
+    ///
+    /// # Returns
+    /// An `i64` representing the number of seconds remaining until the next midnight.
+    /// Returns `24 * 3600` (86400) seconds as a fallback if the database retrieval fails.
     fn get_duration_until_midnight(&mut self) -> i64 {
         self.sql_interface_heating
             .get_duration_until_midnight()
@@ -342,7 +412,17 @@ impl Heating {
             })
     }
 
-    /// check if data logger sent the command and respond
+    /// Checks if the data logger sent a `RequestSignal` command and responds with the current heater status.
+    ///
+    /// This private helper function handles incoming requests from the `DataLogger` module.
+    /// If a `RequestSignal` for `AquariumSignal::HeatingControlStatus` is received,
+    /// it sends the current boolean state of the heater (`true` if ON, `false` if OFF)
+    /// back to the data logger. Inapplicable commands are logged as warnings.
+    ///
+    /// # Arguments
+    /// * `heater_state` - A reference to the current `ActuatorState` of the heater.
+    /// * `tx_heating_to_data_logger` - The sender channel for sending the boolean status to the data logger.
+    /// * `rx_heating_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
     fn communicate_with_data_logger(
         &mut self,
         heater_state: &ActuatorState,
@@ -419,14 +499,34 @@ impl Heating {
         };
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the **main control loop for the heating module**.
+    ///
+    /// This function runs continuously, managing the aquarium's heating system until a termination
+    /// signal is received. It adjusts heater operation based on **water temperature** and 
+    /// **tank level switch signals** adhering to the limitations imposed by a **schedule**.
+    /// The **ambient temperature** signal is considered for logging daily statistical data.
+    /// It also processes external `Start`/`Stop` commands, applies a
+    /// **sawtooth profile for proportional control**, and **logs daily heating statistics**.
+    ///
+    /// **Key Operations:**
+    /// - **Sensor Data Acquisition**: Reads current water temperature, ambient temperature, and tank level switch states from shared mutexes.
+    /// - **Safety Interlocks**: Implements a critical safety feature to turn off the heater if the water level is too low for a configured duration, preventing damage.
+    /// - **Schedule & External Control**: Checks with the `ScheduleCheck` module and responds to `Start`/`Stop` commands to inhibit or enable heating.
+    /// - **Proportional Control**: When within the active temperature range, uses a `SawToothProfile` to achieve a "PWM-like" heating effect.
+    /// - **Energy Logging**: Periodically updates and transfers daily heating statistics (energy consumption, average temperatures) to the SQL database.
+    /// - **Cycle Management**: Maintains a fixed cycle time, sleeping as necessary, and warning if execution duration exceeds the cycle limit.
+    /// - **Graceful Shutdown**: Responds to `Quit` and `Terminate` commands from the signal handler, ensuring a safe shutdown of the heater and final data logging.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_heating` - clone of the mutex for avoiding parallel device actuation.
-    /// * `heating_channels` - struct containing channels for communication to relay manager, signal handler, data logger, schedule check and messaging.
-    /// * `heating_stats_transfer` - generic struct for transfer of statistical data to the database
-    /// * `mutex_water_temperature` - Mutex for water temperature
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
-    /// * `mutex_tank_level_switch_signals` - Mutex for tank level switch signals
+    /// * `mutex_device_scheduler_heating` - A clone of the `Arc<Mutex<i32>>` used to coordinate device
+    ///   actuation across the application, preventing conflicts and tracking activity counts.
+    /// * `heating_channels` - A struct containing all sender and receiver channels for communication
+    ///   with modules like `RelayManager`, `SignalHandler`, `DataLogger`, `ScheduleCheck`, and `Messaging`.
+    /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingStatsDataTransferTrait`,
+    ///   responsible for persisting daily heating statistics to the database.
+    /// * `mutex_water_temperature` - The `Arc<Mutex<f32>>` holding the latest measured water temperature.
+    /// * `mutex_ambient_temperature` - The `Arc<Mutex<f32>>` holding the latest measured ambient temperature.
+    /// * `mutex_tank_level_switch_signals` - The `Arc<Mutex<TankLevelSwitchSignals>>` containing the latest
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
@@ -927,6 +1027,14 @@ pub mod tests {
     }
 
     impl HeatingStatsMockDataTransfer {
+        // Creates a new `HeatingStatsMockDataTransfer` instance.
+        //
+        // This constructor initializes the mock data transfer object for testing heating statistics.
+        // It sets up two `HeatingStatsEntry` instances, both initialized with default (zero) values
+        // for the current date, to simulate the previous and current day's statistics.
+        //
+        // # Returns
+        // A new `HeatingStatsMockDataTransfer` struct.
         pub fn new() -> HeatingStatsMockDataTransfer {
             Self {
                 heating_stats_entry_previous: HeatingStatsEntry::new(),
@@ -936,6 +1044,17 @@ pub mod tests {
     }
 
     impl HeatingStatsDataTransferTrait for HeatingStatsMockDataTransfer {
+        // Transfers the provided daily heating statistics entry to the SQL database.
+        //
+        // This implementation updates the `date` of the `heating_stats_entry` to the
+        // current database date (ensuring consistency) and then attempts to insert
+        // or update this record in the database. Errors during database operations are logged.
+        //
+        // # Arguments
+        // * `heating_stats_entry` - The `HeatingStatsEntry` containing the statistics for the day.
+        //   This is passed by value, meaning ownership is transferred to this function.
+        // * `sql_interface_heating` - A mutable reference to the `SqlInterfaceHeating` instance,
+        //   used for database interaction.
         fn transfer_heating_stats(
             &mut self,
             heating_stats_entry: HeatingStatsEntry,
@@ -955,6 +1074,18 @@ pub mod tests {
     }
 
     impl SqlInterfaceHeatingMockMidnightCalculator {
+        // Creates a new `SqlInterfaceHeatingMockMidnightCalculator` instance.
+        //
+        // This constructor initializes the mock calculator, setting the specific
+        // number of seconds until midnight that it will consistently return during tests.
+        // This allows for predictable simulation of time progression in testing scenarios.
+        //
+        // # Arguments
+        // * `seconds_to_midnight` - The fixed `i64` value representing the number of
+        //   seconds until midnight that this mock will provide.
+        //
+        // # Returns
+        // A new `SqlInterfaceHeatingMockMidnightCalculator` struct.
         pub fn new(seconds_to_midnight: i64) -> SqlInterfaceHeatingMockMidnightCalculator {
             Self {
                 seconds_to_midnight,
@@ -963,12 +1094,51 @@ pub mod tests {
     }
 
     impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMockMidnightCalculator {
+        // Provides a predefined duration until midnight for testing heating statistics transfer.
+        //
+        // This mock implementation of `get_duration_until_midnight` always returns a
+        // fixed `i64` value, `self.seconds_to_midnight`. This allows tests to simulate
+        // various durations until midnight without actually waiting for real-world time to pass,
+        // enabling deterministic and fast testing of the heating statistics transfer logic.
+        //
+        // # Returns
+        // An `Ok(i64)` containing the predefined number of seconds until midnight.
+        // This function will always succeed (`Ok`) as it does not interact with a real database.
         fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
             Ok(self.seconds_to_midnight) // seconds to midnight after which heating stats are inserted into the database
                                          // for testing, we do not want to wait until midnight
         }
     }
 
+    // Prepares a `Heating` control instance with a mock midnight calculator and a clean test database.
+    //
+    // This helper function is designed exclusively for testing the `Heating` module. It sets up
+    // a controlled environment by:
+    // 1.  Loading a generic test configuration and overriding specific settings (e.g., `stop_on_refill_error_delay`).
+    // 2.  Optionally applying a custom `SawToothProfileConfig` for precise control over heating patterns.
+    // 3.  Connecting to and **truncating a dedicated test database** to ensure a clean state for heating statistics.
+    // 4.  Injecting a **`SqlInterfaceHeatingMockMidnightCalculator`** to return a predefined `seconds_to_midnight`,
+    //     allowing deterministic testing of daily statistic transfers without real-time dependency.
+    //
+    // # Arguments
+    // * `seconds_to_midnight` - The fixed number of seconds (as `i64`) the mock midnight calculator will return.
+    //   This directly controls when the `Heating` module attempts to transfer daily statistics.
+    // * `test_db_number` - A unique `u32` identifier (e.g., `7`, `8`, `9`) used to select a specific
+    //   test database (`aquarium_test_XX`) from the configuration.
+    // * `saw_tooth_profile_config_opt` - An `Option<SawToothProfileConfig>`. If `Some`, this custom
+    //   sawtooth profile configuration will override the one loaded from the TOML file for the `Heating` module.
+    //
+    // # Returns
+    // A tuple `(ConfigData, Heating)`:
+    // - The `ConfigData` struct, containing the loaded and modified configuration.
+    // - The fully initialized `Heating` struct, ready for test execution.
+    //
+    // # Panics
+    // This function will panic if:
+    // - `read_config_file_with_test_database` fails (e.g., file not found, invalid DB number).
+    // - It fails to connect to the SQL database.
+    // - It fails to truncate the `heatingstats` table in the database.
+    // - It encounters any issue during the initialization of the `SqlInterfaceHeating` or `Heating` structs.
     pub fn prepare_heating_tests_mock_midnight_calculator(
         seconds_to_midnight: i64,
         test_db_number: u32,
@@ -1757,7 +1927,8 @@ pub mod tests {
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-heating_channels,                    &mut heating_stats_transfer,
+                    heating_channels,
+                    &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
@@ -1921,7 +2092,7 @@ heating_channels,                    &mut heating_stats_transfer,
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-heating_channels,
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
@@ -2186,7 +2357,7 @@ heating_channels,
 
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
-heating_channels,
+                    heating_channels,
                     &mut heating_stats_transfer,
                     mutex_water_temperature,
                     mutex_ambient_temperature,
