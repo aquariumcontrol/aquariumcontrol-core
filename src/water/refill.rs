@@ -16,7 +16,6 @@ use log::info;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::fmt;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -27,6 +26,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill_errors::RefillErrors;
+use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 
 /// Holds the configuration data for the refill control.
@@ -226,64 +226,6 @@ pub struct Refill {
     pub lock_error_send_to_data_logger: bool,
 }
 
-/// Contains the data retrieved from the SQL database.
-/// It is also used to communicate data to be updated in the SQL database.
-struct RefillSqlData {
-    duration_since_last_refill: u64,
-    refill_volume_last_24h: f64,
-    refill_count_last_24h: u64,
-    refill_volume_last_hour: f64,
-    refill_count_last_hour: u64,
-}
-
-impl RefillSqlData {
-    /// Creates a new `RefillSqlData` instance, with all its fields initialized to zero.
-    ///
-    /// This constructor provides a default, empty state for storing historical refill data,
-    /// suitable for initialization before actual values are retrieved from the database.
-    ///
-    /// # Returns
-    /// A new `RefillSqlData` struct with all numeric fields set to `0` or `0.0`.
-    pub fn new() -> RefillSqlData {
-        RefillSqlData {
-            duration_since_last_refill: 0,
-            refill_volume_last_24h: 0.0,
-            refill_count_last_24h: 0,
-            refill_volume_last_hour: 0.0,
-            refill_count_last_hour: 0,
-        }
-    }
-}
-
-impl fmt::Display for RefillSqlData {
-    /// Provides a multi-line, human-readable output of the struct's values for debugging purposes.
-    ///
-    /// This implementation formats all fields of the `RefillSqlData` struct into a detailed
-    /// string representation, summarizing historical refill statistics such as duration since
-    /// the last refill, and total volume and count for both the last 24 hours and the last hour.
-    /// This is particularly useful for inspecting refill data during development and logging.
-    ///
-    /// # Arguments
-    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
-    ///
-    /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            " {}: Duration since last refill is {} seconds.\n \
-            Refill: volume of last 24h is {} L.\n Refill: Count of last 24h is {}.\n \
-            Refill: volume of last hour is {} L.\n Refill: Count of last hour is {}.",
-            LOG_TARGET_REFILL,
-            self.duration_since_last_refill,
-            self.refill_volume_last_24h,
-            self.refill_count_last_24h,
-            self.refill_volume_last_hour,
-            self.refill_count_last_hour
-        )
-    }
-}
-
 impl Refill {
     /// Creates a new `Refill` control instance.
     ///
@@ -398,19 +340,19 @@ impl Refill {
     /// - Total volume and count of refills in the last 24 hours.
     /// - Total volume and count of refills in the last hour.
     ///
-    /// It populates the `refill_sql_data` struct with these values. Errors encountered during
+    /// It populates the `refill_stats_data` struct with these values. Errors encountered during
     /// database communication are logged and cause the `error_sql_get_historic_data_failed` flag
     /// in `refill_errors` to be set, potentially inhibiting further refills. Internal lock flags
     /// prevent log flooding.
     ///
     /// # Arguments
-    /// * `refill_sql_data` - A mutable reference to a `RefillSqlData` struct, which will be
+    /// * `refill_stats_data` - A mutable reference to a `RefillStatsData` struct, which will be
     ///   populated with the retrieved historical data.
-    fn get_sql_refill_data(&mut self, refill_sql_data: &mut RefillSqlData) {
+    fn get_refill_stats_data(&mut self, refill_stats_data: &mut RefillStatsData) {
         match self.sql_interface_refill.check_empty() {
             Ok(0) => {
                 self.lock_error_check_empty = false;
-                refill_sql_data.duration_since_last_refill =
+                refill_stats_data.duration_since_last_refill =
                     self.config.min_interval_last_refill.saturating_add(1);
             }
             Ok(_) => {
@@ -418,7 +360,7 @@ impl Refill {
                 match self.sql_interface_refill.get_duration_since_last_refill() {
                     Ok(duration) => {
                         self.lock_error_read_duration_since_last_refill = false;
-                        refill_sql_data.duration_since_last_refill = duration;
+                        refill_stats_data.duration_since_last_refill = duration;
                     }
                     Err(_e) => {
                         self.lock_error_read_duration_since_last_refill = true;
@@ -449,7 +391,7 @@ impl Refill {
         match self.sql_interface_refill.get_refill_volume_of_last_24h() {
             Ok(volume) => {
                 self.lock_error_read_refill_volume_last_24h = false;
-                refill_sql_data.refill_volume_last_24h = volume;
+                refill_stats_data.refill_volume_last_24h = volume;
             }
             Err(_e) => {
                 self.lock_error_read_refill_volume_last_24h = true;
@@ -467,7 +409,7 @@ impl Refill {
         match self.sql_interface_refill.get_refill_count_of_last_24h() {
             Ok(count) => {
                 self.lock_error_read_refill_count_last_24h = false;
-                refill_sql_data.refill_count_last_24h = count;
+                refill_stats_data.refill_count_last_24h = count;
             }
             Err(_e) => {
                 self.lock_error_read_refill_count_last_24h = true;
@@ -485,7 +427,7 @@ impl Refill {
         match self.sql_interface_refill.get_refill_volume_of_last_hour() {
             Ok(volume) => {
                 self.lock_error_read_refill_volume_last_hour = false;
-                refill_sql_data.refill_volume_last_hour = volume;
+                refill_stats_data.refill_volume_last_hour = volume;
             }
             Err(_e) => {
                 self.lock_error_read_refill_volume_last_hour = true;
@@ -503,7 +445,7 @@ impl Refill {
         match self.sql_interface_refill.get_refill_count_of_last_hour() {
             Ok(count) => {
                 self.lock_error_read_refill_count_last_hour = false;
-                refill_sql_data.refill_count_last_hour = count;
+                refill_stats_data.refill_count_last_hour = count;
             }
             Err(_e) => {
                 self.lock_error_read_refill_count_last_hour = true;
@@ -603,12 +545,12 @@ impl Refill {
     /// thanks to internal lock flags), indicating a potential issue that might inhibit further refills.
     ///
     /// # Arguments
-    /// * `sql_refill_data` - A reference to a `RefillSqlData` struct containing the historic
+    /// * `sql_refill_data` - A reference to a `RefillStatsData` struct containing the historic
     ///   refill data retrieved from the SQL database.
     ///
     /// # Returns
     /// `true` if **any** of the configured volume, count, or time limits are exceeded; `false` otherwise.
-    fn check_volume_count_time_limits(&mut self, sql_refill_data: &RefillSqlData) -> bool {
+    fn check_volume_count_time_limits(&mut self, sql_refill_data: &RefillStatsData) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
             target: LOG_TARGET_REFILL,
@@ -816,8 +758,8 @@ impl Refill {
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
         // retrieving data from SQL data base
-        let mut sql_refill_data = RefillSqlData::new();
-        self.get_sql_refill_data(&mut sql_refill_data);
+        let mut refill_stats_data = RefillStatsData::new();
+        self.get_refill_stats_data(&mut refill_stats_data);
 
         let mut refill_inhibited = false; // a flag indicating the external request to inhibit refill from injecting water
         let mut quit_command_received = false; // the request to end the application has been received
@@ -862,7 +804,7 @@ impl Refill {
         }
 
         // frequent update required for calculation of the error condition switch stuck high
-        sql_refill_data.duration_since_last_refill = sql_refill_data
+        refill_stats_data.duration_since_last_refill = refill_stats_data
             .duration_since_last_refill
             .saturating_add(self.config.initial_wait_interval);
 
@@ -879,7 +821,7 @@ impl Refill {
                 // check when the last refill operation has taken place
                 // if too much time has passed, issue an error condition - not impeding rest of operation
                 self.check_error_condition_switch_stuck_high(
-                    sql_refill_data.duration_since_last_refill,
+                    refill_stats_data.duration_since_last_refill,
                 );
 
                 if !quit_command_received && !refill_inhibited {
@@ -897,10 +839,10 @@ impl Refill {
                         }
                     }
 
-                    self.get_sql_refill_data(&mut sql_refill_data);
+                    self.get_refill_stats_data(&mut refill_stats_data);
 
                     // execute checks before initiating refill
-                    if !self.check_volume_count_time_limits(&sql_refill_data)
+                    if !self.check_volume_count_time_limits(&refill_stats_data)
                         && !self.refill_errors.error_switch_stuck_low
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
@@ -1055,7 +997,7 @@ impl Refill {
 
             start_time = SystemTime::now();
 
-            sql_refill_data.duration_since_last_refill = sql_refill_data
+            refill_stats_data.duration_since_last_refill = refill_stats_data
                 .duration_since_last_refill
                 .saturating_add(self.config.check_interval);
         }

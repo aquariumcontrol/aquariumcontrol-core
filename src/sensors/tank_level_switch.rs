@@ -300,13 +300,13 @@ impl TankLevelSwitch {
     /// raw `tank_level_switch_position` and `tank_level_switch_invalid` flags. It implements the following logic:
     ///
     /// * **Invalid Signal**: If `tank_level_switch_invalid` is `true`, the stabilized position is immediately
-    ///     forced to `true` (indicating a safe, high water level state), overriding any raw input.
+    ///   forced to `true` (indicating a safe, high water level state), overriding any raw input.
     /// * **High Water Level (True)**: If the raw `tank_level_switch_position` is `true` (high water),
-    ///     the stabilized signal is set to `true` **immediately**, and the low-level stabilization counter is reset.
+    ///   the stabilized signal is set to `true` **immediately**, and the low-level stabilization counter is reset.
     /// * **Low Water Level (False) - with Delay**: If the raw `tank_level_switch_position` is `false` (low water),
-    ///     a stabilization counter increments. The stabilized signal will only change to `false` (low water)
-    ///     **after** this counter exceeds the configured `tank_level_switch_position_low_stabilization_count`.
-    ///     This introduces a debouncing to prevent flickering from momentary low readings.
+    ///   a stabilization counter increments. The stabilized signal will only change to `false`
+    ///   (low water) **after** this counter exceeds the configured `tank_level_switch_position_low_stabilization_count`.
+    ///   This introduces a debouncing to prevent flickering from momentary low readings.
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
             // go to safe position if the input signal is invalid
@@ -573,7 +573,8 @@ pub mod tests {
                 let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
                 let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
 
-                let mutex_tank_level_switch_signals_for_assert = mutex_tank_level_switch_signals.clone();
+                let mutex_tank_level_switch_signals_for_assert =
+                    mutex_tank_level_switch_signals.clone();
                 tank_level_switch.execute(
                     &tx_tank_level_switch_to_tcp_opt,
                     &rx_tank_level_switch_from_tcp_opt,
@@ -583,11 +584,12 @@ pub mod tests {
                 );
 
                 // Get the final state after execution.
-                let signals_after_test_run = mutex_tank_level_switch_signals_for_assert.lock().unwrap();
+                let signals_after_test_run =
+                    mutex_tank_level_switch_signals_for_assert.lock().unwrap();
                 // Assert that the stabilized position is forced to true (safe state) due to invalidity.
                 assert!(signals_after_test_run.tank_level_switch_position_stabilized);
                 // Confirm invalid-flag remained true
-                assert!(signals_after_test_run.tank_level_switch_invalid); 
+                assert!(signals_after_test_run.tank_level_switch_invalid);
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =

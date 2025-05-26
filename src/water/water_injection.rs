@@ -40,7 +40,6 @@ pub struct WaterInjectionChannels<'a> {
     /// * `rx_water_injection_from_signal_handler`: Reference to the receiver part of the channel for receiving commands (e.g., `Quit`) from the signal handler.
     /// * `tx_water_injection_to_data_logger`: Reference to the sender part of the channel for sending status updates (e.g., pump ON/OFF) to the data logger.
     /// * `rx_water_injection_from_data_logger`: Reference to the receiver part of the channel for receiving requests (e.g., `RequestSignal`) from the data logger.
-
     pub tx_water_injection_to_relay_manager: &'a Sender<InternalCommand>,
 
     pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,

@@ -30,10 +30,10 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let mut mock_value_position = initial_mock_value_position;
         let mut mock_value_invalid = initial_mock_value_invalid;
-        
+
         let mut command_received: Option<InternalCommand>;
         let mut signal_received: Option<AquariumSignal>;
-        
+
         loop {
             match rx_tcp_from_test_object.try_recv() {
                 Ok(command) => {
@@ -42,7 +42,9 @@ pub mod tests {
                         InternalCommand::RequestSignal(signal) => {
                             signal_received = Some(signal.clone());
                             match signal {
-                                AquariumSignal::TankLevelSwitchPosition => mock_value_position.into(),
+                                AquariumSignal::TankLevelSwitchPosition => {
+                                    mock_value_position.into()
+                                }
                                 AquariumSignal::TankLevelSwitchInvalid => mock_value_invalid.into(),
                                 _ => {
                                     panic!(
@@ -51,7 +53,7 @@ pub mod tests {
                                     );
                                 }
                             }
-                        },
+                        }
                         InternalCommand::Quit => {
                             break;
                         }

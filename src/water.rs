@@ -15,3 +15,4 @@ pub mod water_injection;
 
 /// Contains data definition between the main thread and trait implementation
 pub mod refill_errors;
+mod refill_stats_data;

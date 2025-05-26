@@ -166,7 +166,7 @@ impl ActuateGpio {
     /// Creates a new `ActuateGpio` instance by configuring and acquiring all necessary GPIO output pins.
     ///
     /// This constructor is responsible for initializing the direct GPIO hardware control.
-    /// It iterates through the `ActuateGpioConfig` to get each device's assigned GPIO pin, 
+    /// It iterates through the `ActuateGpioConfig` to get each device's assigned GPIO pin,
     /// then acquires and sets up each pin as an `OutputPin` using the `rppal` library.
     ///
     /// # Arguments

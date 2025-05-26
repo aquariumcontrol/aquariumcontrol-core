@@ -93,7 +93,7 @@ impl GpioHandler {
     /// 1.  **Range Check**: Ensures all pin IDs fall within a permissible operating range (currently 4 to 27, inclusive).
     /// 2.  **Uniqueness Check**: Verifies that all assigned pin IDs are distinct, preventing multiple devices from being configured to the same physical pin.
     ///
-    /// Errors (out-of-range or duplicate IDs) are logged to the console/main log unless in testing mode 
+    /// Errors (out-of-range or duplicate IDs) are logged to the console/main log unless in testing mode
     /// and printed to stdout in test builds for immediate visibility.
     ///
     /// # Arguments

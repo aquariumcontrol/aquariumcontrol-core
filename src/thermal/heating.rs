@@ -502,7 +502,7 @@ impl Heating {
     /// Executes the **main control loop for the heating module**.
     ///
     /// This function runs continuously, managing the aquarium's heating system until a termination
-    /// signal is received. It adjusts heater operation based on **water temperature** and 
+    /// signal is received. It adjusts heater operation based on **water temperature** and
     /// **tank level switch signals** adhering to the limitations imposed by a **schedule**.
     /// The **ambient temperature** signal is considered for logging daily statistical data.
     /// It also processes external `Start`/`Stop` commands, applies a

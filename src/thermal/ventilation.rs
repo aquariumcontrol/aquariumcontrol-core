@@ -821,7 +821,7 @@ pub mod tests {
             })
             .unwrap()
     }
-    
+
     // Check if the ventilation is switched on when the temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
