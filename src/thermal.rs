@@ -12,3 +12,4 @@ pub mod heating;
 
 /// Contains functionality to control the ventilation
 pub mod ventilation;
+mod heating_stats_data_transfer;
