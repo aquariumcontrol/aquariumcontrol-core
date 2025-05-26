@@ -18,7 +18,24 @@ const LOG_TARGET_GET_RESP_SIM: &str = "get_resp_sim";
 pub trait GetResponseFromSimulatorTrait {
     /// Requests a response from the simulator via TCP communication by sending
     /// an internal message via the channel to the TCP thread.
-    /// This function is used for development only.
+    ///
+    /// This function is used **solely for development and testing purposes**.
+    /// It sends a `RequestSignal` command to the TCP communication thread (which
+    /// acts as a simulator) and then synchronously waits for an `f32` response.
+    /// Inapplicable commands are logged as warnings and return a default value.
+    ///
+    /// # Arguments
+    /// * `tx_to_tcp` - A reference to the sender channel for sending commands to the TCP communication thread.
+    /// * `rx_from_tcp` - A reference to the receiver channel for receiving `f32` data from the TCP communication thread.
+    /// * `internal_command` - The `InternalCommand` to send, expected to be a `RequestSignal` for sensor data.
+    ///
+    /// # Returns
+    /// An `f32` value representing the simulated sensor response. Returns `0.0` for inapplicable commands.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The `internal_command` is a `RequestSignal`, but sending the request fails (e.g., the channel disconnected).
+    /// - The `internal_command` is a `RequestSignal`, but receiving the response fails (e.g., the channel disconnected).
     fn get_response_from_simulator(
         tx_to_tcp: &Sender<InternalCommand>,
         rx_from_tcp: &Receiver<f32>,
