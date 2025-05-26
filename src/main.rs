@@ -143,9 +143,16 @@ enum ConfigFileDefinitionError {
 }
 
 impl fmt::Display for ConfigFileDefinitionError {
-    /// Function provides output of the error messages wrapped by enum values
+    /// Formats `ConfigFileDefinitionError` enum variants into human-readable error messages.
+    ///
+    /// This implementation allows these errors to be displayed directly, providing
+    /// informative messages about issues with the user-provided configuration file path.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting    
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConfigFileDefinitionError::PathDoesNotExist(c) => write!(f, "{}", c),
@@ -156,9 +163,21 @@ impl fmt::Display for ConfigFileDefinitionError {
     }
 }
 
-/// Check if the string provided contains a valid file name to be used as the configuration file
-/// # Arguments    
-/// * `user_selected_config_file_name` - reference to string provided by command line parameter
+/// Checks if the provided string is a valid path to a `.toml` configuration file.
+///
+/// This function validates a user-selected configuration file path by ensuring that:
+/// - The path exists on the file system.
+/// - It points to a regular file (not a directory).
+/// - The file has an extension.
+/// - The file's extension is `.toml`.
+///
+/// # Arguments
+/// * `user_selected_config_file_name` - A string slice representing the potential path to the configuration file.
+///
+/// # Returns
+/// A `Result<String, ConfigFileDefinitionError>`:
+/// - `Ok(String)`: The validated and owned file path if all checks pass.
+/// - `Err(ConfigFileDefinitionError)`: If any validation check fails, with a descriptive error message.
 fn check_argument_for_valid_config_file_name(
     user_selected_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
@@ -198,7 +217,22 @@ fn check_argument_for_valid_config_file_name(
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Creates the channels and sets up threads.
+/// The main entry point of the Aquarium Control application.
+///
+/// This function initializes and orchestrates all modules of the control system.
+/// It performs the following high-level steps:
+/// 1.  Sets up global logging and handles command-line arguments for configuration file selection.
+/// 2.  Loads the application configuration from the specified `.toml` file.
+/// 3.  Publishes the application's Process ID (PID) to a file and sets up a custom panic hook for cleanup.
+/// 4.  Performs version checks against the database to ensure compatibility.
+/// 5.  Initializes all SQL database interfaces and validates database readiness.
+/// 6.  Sets up all inter-thread communication channels (`mpsc`).
+/// 7.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
+/// 8.  Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
+/// 9.  Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
+///
+/// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
+///
 /// Global thread communication is as follows:
 /// ```mermaid
 /// graph LR
