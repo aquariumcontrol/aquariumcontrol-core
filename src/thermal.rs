@@ -12,4 +12,6 @@ pub mod heating;
 
 /// Contains functionality to control the ventilation
 pub mod ventilation;
-mod heating_stats_data_transfer;
+
+/// Contains data structure for transfer of heating statistics to the database
+pub mod heating_stats_data_transfer;
