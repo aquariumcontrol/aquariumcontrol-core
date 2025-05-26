@@ -25,30 +25,36 @@ use crate::water::refill_errors::RefillErrors;
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
 pub struct WaterInjectionChannels<'a> {
-    /// Reference to sender part of the channel for communication to the relay manager
+    /// Collects the communication channels required by the `WaterInjection` module.
+    ///
+    /// This struct bundles all necessary `mpsc` channel endpoints that `WaterInjection`
+    /// uses to interact with `RelayManager`, `DataLogger`, and the `SignalHandler`.
+    ///
+    /// # Lifetime Parameters
+    /// * `'a` - Indicates that this struct holds borrowed references (`&'a Sender`, `&'a Receiver`)
+    ///   whose lifetime is tied to the caller that owns the channels.
+    ///
+    /// # Fields
+    /// * `tx_water_injection_to_relay_manager`: Reference to the sender part of the channel for sending commands to the relay manager.
+    /// * `rx_water_injection_from_relay_manager`: Reference to the receiver part of the channel for receiving acknowledgments from the relay manager.
+    /// * `rx_water_injection_from_signal_handler`: Reference to the receiver part of the channel for receiving commands (e.g., `Quit`) from the signal handler.
+    /// * `tx_water_injection_to_data_logger`: Reference to the sender part of the channel for sending status updates (e.g., pump ON/OFF) to the data logger.
+    /// * `rx_water_injection_from_data_logger`: Reference to the receiver part of the channel for receiving requests (e.g., `RequestSignal`) from the data logger.
+
     pub tx_water_injection_to_relay_manager: &'a Sender<InternalCommand>,
 
-    /// Reference to Receiver part of the channel for communication from the relay manger
     pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,
 
-    /// Reference to the receiver part of the channel for communication from the signal handler
     pub rx_water_injection_from_signal_handler: &'a Receiver<InternalCommand>,
 
-    /// Sender part of the channel for communication to data logger
     pub tx_water_injection_to_data_logger: &'a Sender<bool>,
 
-    /// Receiver part of the channel for communication to data logger
     pub rx_water_injection_from_data_logger: &'a Receiver<InternalCommand>,
 }
 
 /// Trait for the execution of the refill once control has detected that the water level is low.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait WaterInjectionTrait {
-    /// Actuates the refill pump which injects water into the main tank.
-    /// # Arguments
-    /// * `refill_errors` - Reference to struct of type RefillErrors which records the errors occurred during water injection
-    /// * `sql_interface_refill` - Reference to SQL database interface for refill control
-    /// * `mutex_tank_level_switch` - Reference to mutex for reading tank level switch signals
     fn inject_water(
         &mut self,
         water_injection_channels: WaterInjectionChannels,
@@ -86,7 +92,21 @@ pub struct WaterInjection {
 }
 
 impl WaterInjection {
-    /// Provide a struct of type WaterInjection
+    /// Creates a new `WaterInjection` instance.
+    ///
+    /// This constructor initializes the water injection module, setting up parameters
+    /// crucial for controlling the refill pump during a water injection operation.
+    /// It calculates the `refill_increment` based on pump flow, copies refill limits
+    /// from the configuration, and sets up internal timing mechanisms.
+    /// All internal "lock" flags (used to prevent log flooding) are initialized to `false`.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the **`RefillConfig`** struct, which contains
+    ///   essential parameters such as `refill_pump_flow`, `additional_refill_volume`,
+    ///   and `max_refill_volume`.
+    ///
+    /// # Returns
+    /// A new **`WaterInjection` struct**, ready to perform water injection operations.
     pub fn new(config: &RefillConfig) -> WaterInjection {
         let sleep_interval_millis = 100;
         let sleep_interval_seconds: f64 = (sleep_interval_millis as f64) / (1000f64);
@@ -107,7 +127,32 @@ impl WaterInjection {
 }
 
 impl WaterInjectionTrait for WaterInjection {
-    /// this function executes the refill operation
+    /// Executes the freshwater refill operation, controlling the refill pump and monitoring tank level.
+    ///
+    /// This function orchestrates the physical water injection. It first switches on the refill pump,
+    /// then enters a loop to continuously monitor the tank level switch and check for various
+    /// termination conditions:
+    /// - Water level reaching `high` (plus `additional_refill_volume`).
+    /// - Tank level switch signal becoming `invalid`.
+    /// - Total refilled `volume` exceeding `max_refill_volume` (safety timeout).
+    /// - A `Quit` command being received from the signal handler.
+    ///
+    /// During the refill, it periodically communicates the pump status to the `DataLogger`
+    /// and logs the final refill event details (timestamp, duration, volume, error code) to the database.
+    ///
+    /// # Arguments
+    /// * `water_injection_channels` - Struct containing all necessary communication channels with
+    ///   `RelayManager`, `DataLogger`, and `SignalHandler`.
+    /// * `refill_errors` - A mutable reference to a `RefillErrors` struct, where specific error
+    ///   flags (e.g., `error_switch_stuck_low`, `error_sql_update_failed`) will be set if issues occur during injection.
+    /// * `sql_interface_refill` - A mutable reference to the SQL database interface for refill control,
+    ///   used to log the refill event.
+    /// * `mutex_tank_level_switch_signals` - A mutable reference to the `Arc<Mutex<TankLevelSwitchSignals>>`
+    ///   for reading the current tank level switch position and validity.
+    ///
+    /// # Returns
+    /// `true` if the refill operation was **aborted due to a `Quit` command** received from the signal handler;
+    /// `false` otherwise (meaning it completed normally or aborted due to other conditions like level reached or errors).
     fn inject_water(
         &mut self,
         water_injection_channels: WaterInjectionChannels,
@@ -288,6 +333,32 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
 
+    // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
+    //
+    // This private helper function simplifies complex test scenarios for `WaterInjection`.
+    // It spawns a new thread that:
+    // 1. Initializes a `WaterInjection` instance using the provided `Refill`'s configuration.
+    // 2. Sets up the `WaterInjectionChannels` by borrowing the necessary `mpsc` channels from the test environment.
+    // 3. Calls `water_injection.inject_water()` with all its required parameters.
+    // 4. Asserts that the `inject_water` function's return value (`result`) matches `target_result`.
+    // 5. Asserts that the `refill_errors.has_error()` status matches `target_refill_has_errors` after the operation.
+    //
+    // # Arguments
+    // * `tx_water_injection_to_relay_manager` - Sender channel for `WaterInjection` to communicate with the mock `RelayManager`.
+    // * `rx_water_injection_from_relay_manager` - Receiver channel for `WaterInjection` to receive acknowledgments from the mock `RelayManager`.
+    // * `rx_water_injection_from_signal_handler` - Receiver channel for `WaterInjection` to receive commands from the mock `SignalHandler`.
+    // * `tx_water_injection_to_data_logger` - Sender channel for `WaterInjection` to communicate with the mock `DataLogger`.
+    // * `rx_water_injection_from_data_logger` - Receiver channel for `WaterInjection` to receive commands from the mock `DataLogger`.
+    // * `refill` - The `Refill` struct (moved into this thread) whose `refill_errors` and `sql_interface_refill` will be used and modified by `inject_water`.
+    // * `mutex_tank_level_switch_signals` - The `Arc<Mutex<TankLevelSwitchSignals>>` providing shared access to mock tank level switch signals.
+    // * `target_result` - The expected boolean return value of the `inject_water` call (`true` if `Quit` was received, `false` otherwise).
+    // * `target_refill_has_errors` - The expected boolean result of `refill.refill_errors.has_error()` after `inject_water` completes.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this spawned thread's completion.
+    //
+    // # Panics
+    // This function will panic if the new thread cannot be spawned, or if any of the `assert_eq!` calls inside the spawned thread fail.
     fn create_assert_test_object(
         tx_water_injection_to_relay_manager: Sender<InternalCommand>,
         rx_water_injection_from_relay_manager: Receiver<bool>,
@@ -546,6 +617,29 @@ pub mod tests {
             .expect("Mock Data Logger thread did not finish.");
     }
 
+    // Creates a thread that simulates a test environment for `WaterInjection` scenarios.
+    //
+    // This private helper function is used in integration tests to control the test's timeline
+    // and send specific shutdown signals. It simulates a period of normal operation, then
+    // triggers a `Quit` command to the `WaterInjection` module, and finally sends `Quit`
+    // commands to other mock threads to ensure a clean test environment shutdown.
+    //
+    // # Arguments
+    // * `tx_signal_handler_to_water_injection` - The sender channel for this mock environment to send
+    //   commands to the `WaterInjection` test object, simulating the signal handler.
+    // * `tx_signal_handler_to_relay_manager` - The sender channel for this mock environment to send
+    //   commands to the mock `RelayManager` thread.
+    // * `tx_signal_handler_to_data_logger` - The sender channel for this mock environment to send
+    //   commands to the mock `DataLogger` thread.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this
+    // mock environment thread's completion.
+    //
+    // # Panics
+    // This function will panic if:
+    // - The new thread cannot be spawned.
+    // - It fails to send any of the `InternalCommand::Quit` messages through the channels.
     fn create_test_environment(
         tx_signal_handler_to_water_injection: Sender<InternalCommand>,
         tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
