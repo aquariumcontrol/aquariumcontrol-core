@@ -45,9 +45,29 @@ pub struct Watchdog {
 }
 
 impl Watchdog {
-    /// Provides a struct of type Watchdog.
+    /// Creates a new `Watchdog` instance.
+    ///
+    /// This constructor initializes the watchdog communication module with its specified
+    /// configuration. It performs critical **validation checks** on the configuration
+    /// parameters to ensure the watchdog can operate correctly and safely.
+    ///
+    /// **Validation Checks Performed:**
+    /// - `heartbeat_duration_millis` must be greater than zero.
+    /// - `watchdog_filename` cannot be an empty string.
+    /// - `watchdog_heartbeat` message cannot be an empty string.
+    /// - `watchdog_deactivation` message cannot be an empty string.
+    /// - `watchdog_heartbeat` and `watchdog_deactivation` messages must be different.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Watchdog communication
+    /// * `config` - **Configuration data** for the watchdog communication, loaded from a TOML file.
+    ///   This includes filename, heartbeat messages, and timing parameters.
+    ///
+    /// # Returns
+    /// A new **`Watchdog` struct**, ready for sending heartbeats or respond to termination requests.
+    ///
+    /// # Panics
+    /// This function will **panic** if any of the configuration validation checks fail,
+    /// as an incorrectly configured watchdog can lead to system instability or unintended resets.
     pub fn new(config: WatchdogConfig) -> Watchdog {
         if config.heartbeat_duration_millis == 0 {
             panic!(
@@ -83,10 +103,33 @@ impl Watchdog {
         Watchdog { config }
     }
 
-    /// Executes the watchdog communication in a loop until the signal handler commands termination.
+    /// Executes the main control loop for the watchdog communication module.
+    ///
+    /// This function runs continuously, managing the periodic sending of heartbeats
+    /// to a system watchdog. It ensures the application's liveness is maintained
+    /// and handles various external commands for controlling its operation.
+    ///
+    /// **Key Operations:**
+    /// - **Heartbeat Sending**: If `active` and not `inhibited`, it calls the `petting.pet()`
+    ///   method to send a heartbeat message to the configured `watchdog_filename`.
+    /// - **Cycle Management**: It sleeps for the configured `heartbeat_duration_millis`
+    ///   between each heartbeat.
+    /// - **External Control**: It processes `Start` and `Stop` commands received from
+    ///   messaging or the signal handler to `inhibit` or re-enable watchdog activity.
+    /// - **Graceful Deactivation**: Upon receiving a `Quit` command, it sends a final
+    ///   `watchdog_deactivation` message before exiting the loop.
+    /// - **Shutdown Confirmation**: After exiting the loop, it sends a confirmation back
+    ///   to the signal handler.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - receiver part of the channel for communication from signal handler                
-    /// * `rx_from_messaging_opt` - receiver part of the channel communication wrapped in Option from Messaging
+    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
+    ///   back to the main signal handler during shutdown.
+    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
+    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing the receiver channel for commands
+    ///   (e.g., `Start`, `Stop`) from the messaging system.
+    /// * `petting` - A mutable reference to an object implementing the `PettingTrait`,
+    ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
     pub fn execute(
         &mut self,
         tx_to_signal_handler: Sender<bool>,
