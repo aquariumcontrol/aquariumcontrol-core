@@ -1,7 +1,7 @@
-use log::error;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
+use log::error;
 
 const LOG_TARGET_HEATING_STATS_DATA_TRANSFER: &str = "HeatingStatsDataTransfer";
 

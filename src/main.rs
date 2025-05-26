@@ -88,8 +88,8 @@ use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels}
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
-use crate::thermal::heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::thermal::heating::{Heating, HeatingChannels};
+use crate::thermal::heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;

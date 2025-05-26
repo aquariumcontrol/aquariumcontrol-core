@@ -171,6 +171,8 @@ impl Balling {
             );
         }
 
+        Self::check_database_vs_config(&mut sql_interface_balling, &config);
+
         let countdown_dosing_pump1 =
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1);
         let countdown_dosing_pump2 =
@@ -193,6 +195,70 @@ impl Balling {
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
             pump_id_requested: 0,
+        }
+    }
+
+    /// Compares the database configuration against the configuration file.
+    ///
+    /// The function checks if there is a database entry available for each pump that is
+    /// active in the given configuration. If there is no database entry available, the
+    /// function will panic. The content of the database entry is not checked.
+    ///
+    /// # Arguments
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
+    ///   used to retrieve historical dosing data from the database.
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
+    ///
+    /// # Panics
+    /// This function will panic if there is no database entry available for any of the pumps
+    /// configured as active in the configuration file.
+    fn check_database_vs_config(
+        sql_interface_balling: &mut SqlInterfaceBalling,
+        config: &BallingConfig,
+    ) {
+        if config.pump1_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(1) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 1 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump2_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(2) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 2 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump3_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(3) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 3 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump4_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(4) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 4 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
         }
     }
 
@@ -987,15 +1053,22 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
-        }
+        SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
+            .expect("Could not prepare test case");
+
+        // insert balling pump configuration
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
 
         // create the test object
         let balling = Balling::new(config.balling, sql_interface_balling);
@@ -1007,13 +1080,23 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
-    // Helper function to prepare for test cases which require a filled dosing log
+    // Helper function to prepare for test cases which require a filled dosing log.
     // This function inserts dosing events for each of the four pumps.
-    // The time of the dosing events is set to
-    // - 100 seconds in the past for pump #1
-    // - 200 seconds in the past for pump #2
-    // - 300 seconds in the past for pump #3
-    // - 400 seconds in the past for pump #4
+    //
+    // Arguments:
+    // - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+    //                    used here specifically for truncating the dosing log table.
+    // - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+    //                            used for inserting balling dosing events.
+    //
+    // The time of the dosing events is set to:
+    // * 100 seconds in the past for pump #1
+    // * 200 seconds in the past for pump #2
+    // * 300 seconds in the past for pump #3
+    // * 400 seconds in the past for pump #4
+    //
+    // All SQL operations are expected to succeed; any failure will cause a panic,
+    // indicating a test setup issue.
     fn insert_past_dosing_events(
         sql_interface: &mut SqlInterface,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -1031,30 +1114,21 @@ pub mod tests {
         let naive_datetime_400secs_ago = SqlInterface::get_naive_timestamp_from_past(0, 400);
 
         // insert balling dosing events
-        match sql_interface_balling.insert_balling_event(naive_datetime_100secs_ago, 1, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #1 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_200secs_ago, 2, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #2 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_300secs_ago, 3, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #3 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_400secs_ago, 4, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #4 into database: {e:?}")
-            }
-        };
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_100secs_ago, 1, 0.5)
+            .expect("Could not insert Balling dosing event for pump #1 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_200secs_ago, 2, 0.5)
+            .expect("Could not insert Balling dosing event for pump #2 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_300secs_ago, 3, 0.5)
+            .expect("Could not insert Balling dosing event for pump #3 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_400secs_ago, 4, 0.5)
+            .expect("Could not insert Balling dosing event for pump #4 into database");
     }
 
     #[test]
@@ -1073,6 +1147,14 @@ pub mod tests {
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         // create the test object
@@ -1086,7 +1168,22 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
-    // inserts a set of pump configurations to the database
+    // Helper function to prepare for test cases which require balling pump configuration.
+    // This function first truncates the pump configuration table and then
+    // inserts a balling pump configuration into the database for each of the four pumps.
+    //
+    // Arguments:
+    // - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+    //                    used here specifically for truncating the balling set values table.
+    // - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+    //                            used for inserting balling set values.
+    // - `pump1`: flag indicating that a pump configuration for pump #1 should be inserted.
+    // - `pump2`: flag indicating that a pump configuration for pump #2 should be inserted.
+    // - `pump3`: flag indicating that a pump configuration for pump #3 should be inserted.
+    // - `pump4`: flag indicating that a pump configuration for pump #4 should be inserted.
+    //
+    // All SQL operations are expected to succeed; any failure will cause a panic,
+    // indicating a test setup issue.
     fn insert_pump_configurations(
         sql_interface: &mut SqlInterface,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -1718,5 +1815,41 @@ pub mod tests {
                 "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
             );
         });
+    }
+
+    #[test]
+    #[should_panic]
+    // Test case checks if during instantiation of the struct, the implementation checks
+    // if there is a database entry for a pump that is configured as active.
+    // The code shall panic if there is no matching database entry.
+    // Test case uses test database #48.
+    pub fn test_check_database_vs_config() {
+        let mut config: ConfigData = read_balling_config_with_database(48);
+
+        config.balling.pump1_active = true;
+        config.balling.pump2_active = false;
+        config.balling.pump3_active = false;
+        config.balling.pump4_active = false;
+
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        // insert a valid pump configuration for pump #1
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            false,
+            false,
+            false,
+            true, // a different pump is configured as active
+        );
+
+        // create test objects
+        let _ = Balling::new(config.balling, sql_interface_balling);
     }
 }
