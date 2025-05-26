@@ -198,12 +198,15 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::watchmen::watchdog::Watchdog;
     use spin_sleep::SpinSleeper;
+    use std::fs::OpenOptions;
+    use std::io::Read;
     use std::sync::mpsc::{self};
     use std::thread::scope;
     use std::time::Duration;
 
     use crate::stubs::mock_petting::tests::MockPetting;
     use crate::utilities::channel_content::InternalCommand;
+    use crate::watchmen::petting::Petting;
 
     #[test]
     #[should_panic]
@@ -346,6 +349,86 @@ pub mod tests {
                     "Signal was expected to be '{}', but was '{}'",
                     reference_heartbeat_signal,
                     mock_petting.signal_recorder.last().unwrap()
+                );
+            });
+        });
+    }
+
+    #[test]
+    // test if the watchdog is writing the right heartbeat messages to the watchdog file
+    pub fn test_watchdog_check_heartbeat_message() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.watchdog.watchdog_filename = "/var/log/watchdog.log".to_string();
+        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
+        let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
+
+        let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
+        let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
+
+        // Erase content of the watchdog file
+        let file = OpenOptions::new()
+            .write(true)
+            .open(config.watchdog.watchdog_filename.clone())
+            .unwrap();
+        _ = file.set_len(0); // This is the core operation
+
+        let watchdog_filename_for_assert = config.watchdog.watchdog_filename.clone();
+        let mut watchdog = Watchdog::new(config.watchdog);
+        let mut petting = Petting::new();
+
+        scope(|scope| {
+            // thread for the test environment
+            scope.spawn(move || {
+                let sleep_duration_test_environment = Duration::from_millis(3100);
+                let spin_sleeper_test_environment = SpinSleeper::default();
+
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                tx_signal_handler_to_watchdog
+                    .send(InternalCommand::Terminate)
+                    .unwrap();
+                rx_signal_handler_from_watchdog.recv().unwrap();
+            });
+
+            // thread for the assertions
+            scope.spawn(move || {
+                let sleep_duration_assert1 = Duration::from_millis(500);
+                let sleep_duration_assert2 = Duration::from_millis(4500);
+                let spin_sleeper_asserts = SpinSleeper::default();
+
+                // let the test object start writing to the watchdog file
+                spin_sleeper_asserts.sleep(sleep_duration_assert1);
+
+                // assert the heartbeat message
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open(watchdog_filename_for_assert.clone())
+                    .unwrap();
+                let mut content = String::new();
+                file.read_to_string(&mut content).unwrap();
+                assert_eq!(content, reference_heartbeat_signal);
+
+                // wait for the termination of the test object
+                spin_sleeper_asserts.sleep(sleep_duration_assert2);
+
+                // assert the watchdog deactivation message
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open(watchdog_filename_for_assert)
+                    .unwrap();
+                let mut content = String::new();
+                file.read_to_string(&mut content).unwrap();
+                assert_eq!(content, reference_deactivation_signal);
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                watchdog.execute(
+                    tx_watchdog_to_signal_handler,
+                    rx_watchdog_from_signal_handler,
+                    None,
+                    &mut petting,
                 );
             });
         });
