@@ -61,12 +61,21 @@ pub struct VentilationConfig {
     switch_on_when_external_stop: bool,
 }
 
-/// Communicates to relay manager thread via the channel to switch on the ventilation
+/// Commands the relay manager to switch on the ventilation device.
+///
+/// This private helper function sends a `SwitchOn` command for `AquariumDevice::Ventilation`
+/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
+/// incrementing a shared mutex counter (`mutex_device_scheduler_ventilation`) to track actuation.
+/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
+/// device scheduler mutex was blocked.
+///
 /// # Arguments
-/// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_ventilation_to_relay_manager` - Sender part of the channel for communication to relay manager
-/// * `rx_ventilation_from_relay_manager` - Receiver part of the channel for communication from relay manager
-/// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
+/// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
+///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
+/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating the `SwitchOn` command to the relay manager.
+/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting a boolean acknowledgment back from the relay manager.
+/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set to `true` if the
+///   `mutex_device_scheduler_ventilation` was found to be blocked during the `check_if_mutex_is_blocked` call.
 fn switch_on_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
@@ -104,12 +113,21 @@ fn switch_on_ventilation(
     *mutex_data += 1;
 }
 
-/// Communicates to relay manager thread via the channel to switch off the ventilation
+/// Commands the relay manager to switch off the ventilation device.
+///
+/// This private helper function sends a `SwitchOff` command for `AquariumDevice::Ventilation`
+/// to the relay manager thread. It then waits for an acknowledgment from the relay manager,
+/// incrementing a shared mutex counter (`mutex_device_scheduler_ventilation`) to track actuation.
+/// It also updates a flag (`mutex_blocked_during_actuation`) to help manage warnings if the
+/// device scheduler mutex was blocked.
+///
 /// # Arguments
-/// * `mutex_device_scheduler_ventilation` - reference to clone of the mutex for avoiding parallel device actuation.
-/// * `tx_ventilation_to_relay_manager` - Sender part of the channel for communication to relay manager
-/// * `rx_ventilation_from_relay_manager` - Receiver part of the channel for communication from relay manager
-/// * `tx_ventilation_to_data_logger` - Sender part of the channel for communication to data logger
+/// * `mutex_device_scheduler_ventilation` - A reference to an `Arc<Mutex<i32>>` used for
+///   coordinating device actuation, preventing parallel operations, and tracking actuation counts.
+/// * `tx_ventilation_to_relay_manager` - The sender channel for communicating the `SwitchOff` command to the relay manager.
+/// * `rx_ventilation_from_relay_manager` - The receiver channel for getting a boolean acknowledgment back from the relay manager.
+/// * `mutex_blocked_during_actuation` - A mutable boolean flag that is set to `true` if the
+///   `mutex_device_scheduler_ventilation` was found to be blocked during the `check_if_mutex_is_blocked` call.
 fn switch_off_ventilation(
     mutex_device_scheduler_ventilation: &Arc<Mutex<i32>>,
     tx_ventilation_to_relay_manager: &Sender<InternalCommand>,
@@ -225,9 +243,20 @@ pub struct Ventilation {
 impl ProcessExternalRequestTrait for Ventilation {}
 
 impl Ventilation {
-    /// Provides a struct of type Ventilation.
+    /// Creates a new `Ventilation` control instance.
+    ///
+    /// This constructor initializes the ventilation control module with its specific
+    /// configuration. It sets all internal "lock" flags to `false` by default; these
+    /// flags are used during operation to prevent log files from being flooded with
+    /// repeated error or warning messages.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Ventilation control
+    /// * `config` - **Configuration data** for the ventilation control, loaded from a TOML file.
+    ///   This includes parameters such as temperatures for switching on/off, and various
+    ///   behavioral strategies.
+    ///
+    /// # Returns
+    /// A new `Ventilation` struct, ready to manage the aquarium's ventilation system.
     pub fn new(config: VentilationConfig) -> Ventilation {
         Self {
             config,
@@ -242,9 +271,21 @@ impl Ventilation {
         }
     }
 
-    /// Calculates a normalized controller deviation between measured value and target value in the range from zero to one.
+    /// Calculates a **normalized control deviation** based on the measured temperature and configured thresholds.
+    ///
+    /// This private helper function determines how far the `measured_value` deviates
+    /// from the `switch_off_temperature` relative to the total temperature control range
+    /// (`switch_on_temperature` to `switch_off_temperature`). The result is a float
+    /// between `0.0` and `1.0`. A value of `0.0` means the temperature is at or below
+    /// `switch_off_temperature`, and `1.0` means it's at or above `switch_on_temperature`.
+    ///
     /// # Arguments
-    /// * `measured_value` - measured temperature value    
+    /// * `measured_value` - The current measured temperature (`f32`).
+    ///
+    /// # Returns
+    /// An `f32` representing the normalized control deviation, ranging from `0.0` to `1.0`.
+    /// Returns `0.0` if `switch_on_temperature` is not greater than `switch_off_temperature`
+    /// (i.e., `target_value_delta` is not positive), indicating an invalid configuration.
     fn calc_normalized_control_deviation(&self, measured_value: f32) -> f32 {
         let target_value_delta: f32 =
             self.config.switch_on_temperature - self.config.switch_off_temperature;
@@ -256,7 +297,17 @@ impl Ventilation {
         }
     }
 
-    /// check if data logger sent a command and respond
+    /// Checks if the data logger sent a `RequestSignal` command and responds with the current ventilation status.
+    ///
+    /// This private helper function handles incoming requests from the `DataLogger` module.
+    /// If a `RequestSignal` for `AquariumSignal::VentilationControlStatus` is received,
+    /// it sends the current boolean state of the ventilation (`true` if ON, `false` if OFF)
+    /// back to the data logger. Inapplicable commands are logged as warnings.
+    ///
+    /// # Arguments
+    /// * `ventilation_state` - A reference to the current `ActuatorState` of the ventilation device.
+    /// * `tx_ventilation_to_data_logger` - The sender channel for sending the boolean status to the data logger.
+    /// * `rx_ventilation_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
     fn communicate_with_data_logger(
         &mut self,
         ventilation_state: &ActuatorState,
@@ -333,7 +384,21 @@ impl Ventilation {
         };
     }
 
-    /// Helper function to avoid duplicate code warning
+    /// Conditionally switches the ventilation device ON or OFF based on a boolean condition.
+    ///
+    /// This private helper function encapsulates the logic for changing the ventilation's
+    /// state. It only triggers a switch if the `ventilation_state` is not already
+    /// in the desired `condition`. It relies on `switch_on_ventilation` and `switch_off_ventilation`
+    /// to interact with the relay manager.
+    ///
+    /// # Arguments
+    /// * `condition` - A boolean value. If `true`, the function attempts to switch the ventilation ON;
+    ///   if `false`, it attempts to switch it OFF.
+    /// * `ventilation_state` - A mutable reference to the `ActuatorState` representing the
+    ///   current state of the ventilation device, which will be updated by this function.
+    /// * `mutex_device_scheduler_ventilation` - A shared mutex for coordinating device actuation.
+    /// * `ventilation_channels` - A reference to the `VentilationChannels` struct for communication with the relay manager.
+    /// * `mutex_was_blocked_during_actuation` - A mutable flag indicating if the device scheduler mutex was blocked.
     fn conditional_ventilation_switch(
         condition: bool,
         ventilation_state: &mut ActuatorState,
@@ -368,11 +433,25 @@ impl Ventilation {
             }
         }
     }
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+
+    /// Executes the main control loop for the ventilation module.
+    ///
+    /// This function runs continuously, managing the aquarium's ventilation system. It adjusts
+    /// ventilation based on water temperature readings, a calculated sawtooth profile (for
+    /// proportional control), and various external commands and schedule limitations.
+    ///
+    /// The loop periodically reads water temperature, checks schedule permissions, and updates
+    /// the ventilation state via the relay manager. It is responsive to `Start`, `Stop`, and `Quit`
+    /// commands from external channels. The function maintains a fixed cycle time and ensures
+    /// a graceful shutdown upon receiving termination signals.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_ventilation` - clone of the mutex for avoiding parallel device actuation.
-    /// * `refill_channels` - struct with all channels required for Ventilation
-    /// * `mutex_water_temperature` - Mutex which contains water temperature                   
+    /// * `mutex_device_scheduler_ventilation` - An `Arc<Mutex<i32>>` used for coordinating
+    ///   device actuation, preventing parallel operations, and tracking actuation counts.
+    /// * `ventilation_channels` - A `VentilationChannels` struct containing all `mpsc`
+    ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
+    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` from which the latest water temperature
+    ///   reading will be retrieved.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
@@ -690,6 +769,14 @@ pub mod tests {
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
 
+    // Prepares and returns a new `Ventilation` struct for use in test cases.
+    //
+    // This private helper function simplifies test setup by loading the generic
+    // test configuration file and then creating a `Ventilation` instance from its
+    // specific `ventilation` section.
+    //
+    // # Returns
+    // A freshly initialized `Ventilation` struct, ready for testing.
     fn prepare_ventilation_tests() -> Ventilation {
         // prepare struct Ventilation for subsequent tests
         let config: ConfigData =
@@ -697,6 +784,26 @@ pub mod tests {
         Ventilation::new(config.ventilation)
     }
 
+    // Creates a thread that simulates a test environment, managing test duration and sending shutdown signals.
+    //
+    // This private helper function is used in integration tests to control the lifecycle of the
+    // main test object (e.g., `Ventilation` module). It sleeps for a specified duration,
+    // simulating the active test run, and then sends a `Quit` command followed by a `Terminate`
+    // command to the test object, prompting its graceful shutdown.
+    //
+    // # Arguments
+    // * `duration_seconds` - The duration (in seconds) the test environment should "run" before initiating shutdown.
+    // * `tx_signal_handler_to_ventilation` - The sender channel used by this mock environment to send commands to the `Ventilation` test object, simulating the signal handler.
+    // * `rx_signal_handler_from_ventilation` - The receiver channel for this mock environment to receive acknowledgments back from the `Ventilation` test object.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this mock environment thread's completion.
+    //
+    // # Panics
+    // This function will panic if:
+    // - The new thread cannot be spawned.
+    // - It fails to send the `Quit` or `Terminate` command.
+    // - It fails to receive the acknowledgment from the `Ventilation` test object.
     fn create_test_environment(
         duration_seconds: u64,
         tx_signal_handler_to_ventilation: Sender<InternalCommand>,
@@ -714,6 +821,7 @@ pub mod tests {
             })
             .unwrap()
     }
+    
     // Check if the ventilation is switched on when the temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
@@ -849,6 +957,28 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
+    // Creates a mock Relay Manager thread for `test_ventilation_with_measured_temperature_low`.
+    //
+    // This private helper function spawns a new thread that acts as a mock for the `RelayManager`.
+    // It's specifically configured for the `test_ventilation_with_measured_temperature_low` test case,
+    // expecting a precise sequence of actuation commands from the `Ventilation` test object:
+    // 1.  An `InternalCommand::SwitchOff(AquariumDevice::Ventilation)` command.
+    // 2.  An `InternalCommand::SwitchOn(AquariumDevice::Ventilation)` command.
+    //
+    // The mock then asserts that these commands are received in the correct order and type.
+    //
+    // # Arguments
+    // * `tx_relay_manager_to_ventilation` - The sender channel for this mock to send acknowledgments back to the `Ventilation` test object.
+    // * `rx_relay_manager_from_ventilation` - The receiver channel for this mock to get actuation commands from the `Ventilation` test object.
+    //
+    // # Returns
+    // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this mock thread's completion.
+    //
+    // # Panics
+    // This function will panic if:
+    // - The new thread cannot be spawned.
+    // - The expected commands are not received in the correct order or type.
+    // - Any other unexpected command is received.
     fn create_mock_relay_manager(
         tx_relay_manager_to_ventilation: Sender<bool>,
         rx_relay_manager_from_ventilation: Receiver<InternalCommand>,
@@ -875,9 +1005,8 @@ pub mod tests {
             .unwrap()
     }
 
-    // Check if the ventilation is switched off with low temperature and switched back on when exiting the application.
-    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
-    // Check if the ventilation is switched off after sending Quit command and before sending Terminate command.
+    // Check if the ventilation is switched off with low temperature and then switched on during application termination (if configured).
+    // This test also implicitly verifies that the execute function terminates after receiving Quit and Terminate commands.
     #[test]
     pub fn test_ventilation_with_measured_temperature_low() {
         let sleep_duration_100_millis = Duration::from_millis(100);
