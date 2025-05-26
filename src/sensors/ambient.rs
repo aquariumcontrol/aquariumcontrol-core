@@ -122,9 +122,19 @@ impl ProcessExternalRequestTrait for Ambient {}
 impl GetResponseFromSimulatorTrait for Ambient {}
 
 impl Ambient {
-    /// provides a struct of type Ambient
+    /// Creates a new `Ambient` control instance.
+    ///
+    /// This constructor initializes the ambient temperature and humidity measurement module.
+    /// It sets the initial temperature and humidity values to configured replacement values
+    /// and initializes all internal "lock" flags to `false`. These flags help prevent
+    /// log flooding from recurring errors or warnings during operation.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Ambient
+    /// * `config` - Configuration data for the Ambient module, specifying behavior like
+    ///   the use of a simulator versus hardware, and replacement values for sensor readings.
+    ///
+    /// # Returns
+    /// A new `Ambient` struct, ready to collect and provide ambient sensor data.
     pub fn new(config: AmbientConfig) -> Ambient {
         let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
         let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
@@ -146,10 +156,23 @@ impl Ambient {
         }
     }
 
-    /// communication with simulator thread via the channel
+    /// Communicates with a simulator thread via channels to retrieve ambient temperature and humidity.
+    ///
+    /// This private helper function is used when the `Ambient` module is configured
+    /// to run in simulation mode. It sends `RequestSignal` commands for ambient temperature
+    /// and humidity to the simulator and updates the module's internal `ambient_temperature`
+    /// and `ambient_humidity` fields with the responses.
+    ///
     /// # Arguments
-    /// * `tx_ambient_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
-    /// * `rx_ambient_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
+    /// * `tx_ambient_to_tcp_opt` - A reference to an `Option<Sender<InternalCommand>>` used
+    ///   for sending commands to the `TcpCommunication` thread (which acts as the simulator interface).
+    /// * `rx_ambient_from_tcp_opt` - A reference to an `Option<Receiver<f32>>` used for
+    ///   receiving simulated sensor data (temperature and humidity) from the `TcpCommunication` thread.
+    ///
+    /// # Panics
+    /// This function will **panic** if either `tx_ambient_to_tcp_opt` or `rx_ambient_from_tcp_opt`
+    /// are `None`. This is because the `Ambient` module's `execute` function is expected to
+    /// perform checks beforehand to ensure these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
         tx_ambient_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -171,10 +194,23 @@ impl Ambient {
         );
     }
 
-    /// request execution of measurement by Dht
-    /// # Arguments
-    /// * `tx_ambient_to_dht` - reference to sender part of the channel for sending command to Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Sends a request to the DHT sensor thread to perform a new ambient temperature and humidity measurement.
+    ///
+    /// This private helper function is used when the `Ambient` module is configured
+    /// to interact with physical hardware. It sends an `InternalCommand::RequestSignal`
+    /// for `AquariumSignal::AmbientTemperature` (implying both temp and humidity will be read)
+    /// to the DHT sensor thread.
+    ///
+    /// It updates an internal lock flag (`lock_error_channel_send_dht`) to prevent
+    /// repeated error logging if the channel send operation fails.
+    ///
+    /// # Arguments
+    /// * `tx_ambient_to_dht` - A reference to the sender part of the channel, used to
+    ///   send commands to the DHT sensor thread.
+    ///
+    /// # Returns
+    /// `true` if the request was successfully sent; `false` if the channel send operation failed.
     fn send_request_to_dht(&mut self, tx_ambient_to_dht: &Sender<InternalCommand>) -> bool {
         match tx_ambient_to_dht.send(InternalCommand::RequestSignal(
             AquariumSignal::AmbientTemperature,
@@ -203,10 +239,26 @@ impl Ambient {
         }
     }
 
-    /// receive and process response from Dht
-    /// # Arguments
-    /// * `rx_ambient_from_dht` - reference to the receiver part of the channel for receiving data from Dht
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Receives and processes measurement responses from the DHT sensor thread.
+    ///
+    /// This private helper function is used when the `Ambient` module is configured
+    /// for hardware interaction. It attempts to receive a `Result` without blocking
+    /// containing ambient temperature and humidity data from the DHT thread.
+    ///
+    /// If successful, it updates the module's internal `ambient_temperature` and
+    /// `ambient_humidity` fields. It manages various lock flags (`lock_error_dht`,
+    /// `lock_error_channel_receive_dht`) to prevent log flooding from sensor
+    /// reading errors or channel disconnections.
+    ///
+    /// # Arguments
+    /// * `rx_ambient_from_dht` - A reference to the receiver part of the channel, used to
+    ///   get measurement results from the DHT sensor thread.
+    ///
+    /// # Returns
+    /// `true` if a response was expected but not yet received (meaning `receive_response_from_dht`
+    /// should be called again soon, e.g., on the next loop iteration); `false` if a response
+    /// was successfully received and processed, or if a non-empty error occurred.
     fn receive_response_from_dht(
         &mut self,
         rx_ambient_from_dht: &Receiver<Result<(f32, f32), DhtError>>,
@@ -265,11 +317,32 @@ impl Ambient {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the ambient temperature and humidity sensor module.
+    ///
+    /// This function runs continuously, managing the periodic measurement and provision of
+    /// ambient temperature and humidity data. It operates in two main modes:
+    /// - **Simulator Mode**: Fetches simulated sensor data via a TCP communication channel.
+    /// - **Hardware Mode (Linux with `target_hw` feature)**: Interacts directly with a DHT sensor
+    ///   thread, sending requests and receiving actual sensor readings.
+    ///
+    /// The collected data is then written to shared mutexes, making it available to other
+    /// application threads. The loop maintains a measurement countdown and remains
+    /// responsive to `Quit` and `Terminate` commands from the signal handler for graceful shutdown.
+    ///
     /// # Arguments
-    /// * ambient_channels - struct with channels for thread communication
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
-    /// * `mutex_ambient_humidity` - Mutex for ambient humidity
+    /// * `ambient_channels` - A struct containing all `mpsc` channels necessary for inter-thread
+    ///   communication with the `TcpCommunication` (if in simulator mode), `Dht` (if in hardware mode),
+    ///   and the `SignalHandler`.
+    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` into which the latest ambient
+    ///   temperature reading will be written, ensuring thread-safe access for other modules.
+    /// * `mutex_ambient_humidity` - An `Arc<Mutex<f32>>` into which the latest ambient
+    ///   humidity reading will be written, ensuring thread-safe access for other modules.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - It's configured to use the simulator but essential TCP communication channels are missing.
+    /// - It's configured to use the simulator but DHT channels are unexpectedly present.
+    /// - During hardware mode, a fatal error occurs while trying to receive a response from the DHT thread (e.g., channel disconnected permanently).
     pub fn execute(
         &mut self,
         ambient_channels: AmbientChannels,
