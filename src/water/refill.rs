@@ -237,7 +237,13 @@ struct RefillSqlData {
 }
 
 impl RefillSqlData {
-    /// Initializer using all zero data.
+    /// Creates a new `RefillSqlData` instance, with all its fields initialized to zero.
+    ///
+    /// This constructor provides a default, empty state for storing historical refill data,
+    /// suitable for initialization before actual values are retrieved from the database.
+    ///
+    /// # Returns
+    /// A new `RefillSqlData` struct with all numeric fields set to `0` or `0.0`.
     pub fn new() -> RefillSqlData {
         RefillSqlData {
             duration_since_last_refill: 0,
@@ -250,9 +256,18 @@ impl RefillSqlData {
 }
 
 impl fmt::Display for RefillSqlData {
-    /// Function provides output of the struct values for debugging purposes.
+    /// Provides a multi-line, human-readable output of the struct's values for debugging purposes.
+    ///
+    /// This implementation formats all fields of the `RefillSqlData` struct into a detailed
+    /// string representation, summarizing historical refill statistics such as duration since
+    /// the last refill, and total volume and count for both the last 24 hours and the last hour.
+    /// This is particularly useful for inspecting refill data during development and logging.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting    
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -270,10 +285,22 @@ impl fmt::Display for RefillSqlData {
 }
 
 impl Refill {
-    /// Provides a struct of type Refill.
+    /// Creates a new `Refill` control instance.
+    ///
+    /// This constructor initializes the freshwater refill control module with its specified
+    /// configuration and a dedicated SQL database interface. It sets up various internal
+    /// error flags to their default (inactive) state and initializes many "lock" flags
+    /// to `false`. These lock flags are crucial during operation to prevent log files from
+    /// being flooded with repetitive error or warning messages.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for refill control
-    /// * `sql_interface_refill` - specific SQL interface for refill
+    /// * `config` - **Configuration data** for the refill control, loaded from a TOML file.
+    ///   This includes parameters such as refill limits, intervals, and pump flow rates.
+    /// * `sql_interface_refill` - The **specific SQL interface** for refill-related database operations.
+    ///   This instance is moved into the `Refill` struct.
+    ///
+    /// # Returns
+    /// A new **`Refill` struct**, ready to manage the aquarium's freshwater refill system.
     pub fn new(
         config: RefillConfig,
         sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
@@ -313,11 +340,23 @@ impl Refill {
     }
 
     #[cfg(test)]
-    /// Provides a struct of type Refill with RefillErrors as an additional parameter for testing
-    /// # Arguments
-    /// * `config` - configuration data for refill control
-    /// * `sql_interface_refill` - specific SQL interface for refill
-    /// * `refill_errors` - struct containing the error bits
+    // Creates a new `Refill` struct, allowing for explicit control over initial error states.
+    //
+    // This constructor is exclusively used in test environments. It initializes the
+    // refill control module with a provided configuration, a specific SQL interface,
+    // and a predefined `RefillErrors` struct. This allows tests to simulate scenarios
+    // where certain error conditions are already active at startup, enabling more
+    // granular and precise testing of error-handling logic.
+    //
+    // # Arguments
+    // * `config` - **Configuration data** for the refill control, loaded from a TOML file.
+    // * `sql_interface_refill` - A **specific SQL interface** for refill-related database operations,
+    //   typically a mock implementation in test contexts. This instance is moved into the struct.
+    // * `refill_errors` - A **`RefillErrors` struct** containing the initial states of various
+    //   error flags, allowing tests to set up specific error conditions.
+    //
+    // # Returns
+    // A new **`Refill` struct**, with its `refill_errors` field initialized to the provided value.
     pub fn new_with_errors(
         config: RefillConfig,
         sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
@@ -351,14 +390,22 @@ impl Refill {
         }
     }
 
-    /// Retrieves the refill-related information from SQL database:
-    /// - duration since last refill in seconds
-    /// - volume refilled in last 24h
-    /// - number of refill operations in last 24h
-    /// - volume refilled in the last hour
-    /// - number of refill operations in the last hour
+    /// Retrieves comprehensive historic refill data from the SQL database and updates the provided container.
+    ///
+    /// This private helper function queries the `sql_interface_refill` for various statistics
+    /// crucial for refill control:
+    /// - Duration since the last refill operation.
+    /// - Total volume and count of refills in the last 24 hours.
+    /// - Total volume and count of refills in the last hour.
+    ///
+    /// It populates the `refill_sql_data` struct with these values. Errors encountered during
+    /// database communication are logged and cause the `error_sql_get_historic_data_failed` flag
+    /// in `refill_errors` to be set, potentially inhibiting further refills. Internal lock flags
+    /// prevent log flooding.
+    ///
     /// # Arguments
-    /// * `refill_sql_data` - mutable reference to container for historic refill data
+    /// * `refill_sql_data` - A mutable reference to a `RefillSqlData` struct, which will be
+    ///   populated with the retrieved historical data.
     fn get_sql_refill_data(&mut self, refill_sql_data: &mut RefillSqlData) {
         match self.sql_interface_refill.check_empty() {
             Ok(0) => {
@@ -472,20 +519,34 @@ impl Refill {
         };
     }
 
-    /// Checks if the duration since the last refill operation exceeds a configurable limit.
-    /// If yes, then the corresponding error flag is set.
+    /// Checks if the duration since the last refill operation exceeds a configurable safety limit, indicating a potential "switch stuck high" error.
+    ///
+    /// This private helper function compares the `duration_since_last_refill` with `max_duration_since_last_refill` from the configuration.
+    /// If the elapsed time is longer than the configured maximum, it implies that the water level switch might be stuck in a "high"
+    /// position, preventing detection of low water levels and thus inhibiting refills. The corresponding error flag in `refill_errors` is set if this condition is met.
+    /// This helps to detect and log a critical fault condition.
+    ///
     /// # Arguments
-    /// * `duration_since_last_refill` - duration in seconds since last refill operation
+    /// * `duration_since_last_refill` - The duration (in seconds) that has passed since the last refill operation.
     fn check_error_condition_switch_stuck_high(&mut self, duration_since_last_refill: u64) {
         self.refill_errors.error_switch_stuck_high =
             duration_since_last_refill > self.config.max_duration_since_last_refill;
     }
 
-    /// Calculates the inhibition flag depending on the commands received.
+    /// Calculates the **inhibition flag** for the refill control based on received start and stop commands.
+    ///
+    /// This private helper function determines the current operational state (inhibited or active)
+    /// of the refill control. A `Stop` command will inhibit refilling, while a `Start` command
+    /// will activate it. The `Start` command takes precedence over `Stop` if both are received
+    /// simultaneously. It uses internal lock flags to prevent log flooding from repeated info messages.
+    ///
     /// # Arguments
-    /// * `current_state` - current value of the inhibition flag
-    /// * `start_command_received` - flag indicating that start command has been received
-    /// * `stop_command_received` - flag indicating that stop command has been received
+    /// * `current_state` - The current boolean value of the inhibition flag (`true` if inhibited, `false` if active) before processing new commands.
+    /// * `start_command_received` - A flag indicating whether a `Start` command was received from an external source in the current cycle.
+    /// * `stop_command_received` - A flag indicating whether a `Stop` command was received from an external source in the current cycle.
+    ///
+    /// # Returns
+    /// A `bool` representing the **new state of the inhibition flag** after processing the commands.
     fn calc_inhibition_flag(
         &mut self,
         current_state: bool,
@@ -528,10 +589,25 @@ impl Refill {
         new_state
     }
 
-    // Checks if historic refill data does not exceed limitations in terms of count and volume.
-    // The function returns a tuple of boolean variables.
+    /// Checks if historical refill data (volume, count, and time interval) **exceeds configured limitations**.
+    ///
+    /// This private helper function performs a series of checks against the `RefillConfig`'s
+    /// maximum permitted values for:
+    /// - Total refill volume within the last 24 hours.
+    /// - Total refill count within the last 24 hours.
+    /// - Total refill volume within the last hour.
+    /// - Total refill count within the last hour.
+    /// - Minimum time interval since the last refill operation.
+    ///
+    /// If any limit is exceeded, an informational message is logged (once per transgression
+    /// thanks to internal lock flags), indicating a potential issue that might inhibit further refills.
+    ///
     /// # Arguments
-    /// * `sql_refill_data` - reference to data retrieved from SQL database    
+    /// * `sql_refill_data` - A reference to a `RefillSqlData` struct containing the historic
+    ///   refill data retrieved from the SQL database.
+    ///
+    /// # Returns
+    /// `true` if **any** of the configured volume, count, or time limits are exceeded; `false` otherwise.
     fn check_volume_count_time_limits(&mut self, sql_refill_data: &RefillSqlData) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
@@ -630,10 +706,21 @@ impl Refill {
             | refill_check_interval_last_refill
     }
 
-    /// Communicate with the schedule checker to see if actuation is allowed.
+    /// Communicates with the schedule checker to determine if refill actuation is currently permitted.
+    ///
+    /// This private helper function sends a `ScheduleCheck` command to the schedule checker thread
+    /// and waits for a boolean response indicating whether actuation is allowed.
+    ///
+    /// If there's an error during channel communication (either sending the request or receiving the response),
+    /// this function assumes a **fail-safe** posture and returns `true`, indicating that actuation is *allowed*
+    /// despite the communication issue. It uses internal lock flags to prevent log flooding from recurring errors.
+    ///
     /// # Arguments
-    /// * `tx_refill_to_schedule_check` - Reference to sender part of the channel for communication to the schedule checker
-    /// * `rx_refill_from_schedule_check` - Reference to receiver part of the channel for communication from the schedule checker               
+    /// * `tx_refill_to_schedule_check` - A reference to the **sender channel** for sending `InternalCommand::ScheduleCheck` to the `ScheduleCheck` module.
+    /// * `rx_refill_from_schedule_check` - A reference to the **receiver channel** for getting the boolean result (`true` if allowed, `false` if inhibited) back from the `ScheduleCheck` module.
+    ///
+    /// # Returns
+    /// `true` if actuation is allowed by the schedule checker (or if communication fails, leading to a fail-safe `true`); `false` otherwise.
     fn check_schedule(
         &mut self,
         tx_refill_to_schedule_check: &Sender<InternalCommand>,
@@ -672,11 +759,33 @@ impl Refill {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the **main control loop for the refill module**.
+    ///
+    /// This function runs continuously, managing the aquarium's freshwater refill system
+    /// until a termination signal is received. It periodically checks the tank water
+    /// level, assesses historical refill data against configured limits, and initiates
+    /// refill operations when necessary and permitted by schedules.
+    ///
+    /// **Key Operations:**
+    /// - **Initial Wait**: Observes an initial waiting period after application startup before active control begins.
+    /// - **Sensor Data Acquisition**: Reads raw and stabilized tank level switch signals from a shared mutex.
+    /// - **SQL Data Retrieval**: Fetches historical refill data (counts, volumes, last refill time) from the database.
+    /// - **Safety Checks**: Verifies if refill operations are within configured limits (max count/volume per hour/24h) and checks for a "tank level switch stuck high" error.
+    /// - **Schedule & External Control**: Communicates with the `ScheduleCheck` module and responds to `Start`/`Stop` commands to inhibit or enable refilling.
+    /// - **Water Injection**: If all conditions are met (low water, within limits, allowed by schedule, not inhibited), it triggers water injection via the `WaterInjectionTrait`.
+    /// - **Data Logging Communication**: Periodically communicates the refill pump status to the `DataLogger`.
+    /// - **Cycle Management**: Maintains a fixed cycle time, sleeping as necessary, and warning if execution duration exceeds the cycle limit.
+    /// - **Graceful Shutdown**: Responds to `Quit` and `Terminate` commands from the signal handler, ensuring a safe shutdown.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_refill` - clone of the mutex for avoiding parallel device actuation.
-    /// * `water_injection` - Reference to struct implementing WaterInjectionTrait
-    /// * `mutex_tank_level_switch_signals_clone_for_refill` - Mutex for tank level switch signals
+    /// * `mutex_device_scheduler_refill` - A clone of the `Arc<Mutex<i32>>` used to coordinate device
+    ///   actuation across the application, preventing conflicts and tracking activity counts.
+    /// * `refill_channels` - A struct containing all sender and receiver channels for communication
+    ///   with modules like `RelayManager`, `SignalHandler`, `DataLogger`, `ScheduleCheck`, and `Messaging`.
+    /// * `water_injection` - A mutable reference to an object implementing `WaterInjectionTrait`,
+    ///   responsible for the physical control of the refill pump.
+    /// * `mutex_tank_level_switch_signals_clone_for_refill` - The `Arc<Mutex<TankLevelSwitchSignals>>`
+    ///   containing the latest tank level switch readings (raw and stabilized).
     pub fn execute(
         &mut self,
         mutex_device_scheduler_refill: Arc<Mutex<i32>>,
@@ -1045,6 +1154,35 @@ pub mod tests {
 
     use crate::utilities::logger::setup_logger;
 
+    // Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
+    //
+    // This helper function is designed exclusively for testing the `Refill` module. It sets up
+    // a controlled test environment by:
+    // 1.  Loading a generic or specific test configuration file.
+    // 2.  Overriding the `initial_wait_interval` and `check_interval` within the `RefillConfig`.
+    // 3.  Establishing a connection to and providing an `SqlInterface` and `SqlInterfaceRefill` instance.
+    // 4.  Optionally injecting a predefined `RefillErrors` struct into the `Refill` instance's initial state,
+    //     allowing for tests to start with specific error conditions.
+    //
+    // # Arguments
+    // * `refill_errors` - An `Option<RefillErrors>`. If `Some`, the `Refill` instance is initialized
+    //   with these specific error flags; otherwise, default `RefillErrors` (all flags `false`) are used.
+    // * `initial_wait_interval` - The `u64` value to set for `RefillConfig.initial_wait_interval` in the test setup.
+    // * `check_interval` - The `u64` value to set for `RefillConfig.check_interval` in the test setup.
+    // * `test_db_number_opt` - An `Option<u32>`. If `Some`, a test-specific database (`aquarium_test_XX`)
+    //   will be used from the configuration; otherwise, the generic test database is used.
+    //
+    // # Returns
+    // A tuple `(ConfigData, Refill, SqlInterface)`:
+    // - The `ConfigData` struct, containing the loaded and modified configuration used for the test.
+    // - The fully initialized `Refill` struct, ready for test execution.
+    // - The `SqlInterface` instance, providing access to the overall SQL database for test assertions or further setup.
+    //
+    // # Panics
+    // This function will panic if:
+    // - `read_config_file` or `read_config_file_with_test_database` fail (e.g., file not found, invalid DB number).
+    // - It fails to connect to the SQL database.
+    // - It fails to get a connection from the SQL pool for `SqlInterfaceRefill` initialization.
     pub fn prepare_refill_tests(
         refill_errors: Option<RefillErrors>,
         initial_wait_interval: u64,
@@ -1087,6 +1225,34 @@ pub mod tests {
         )
     }
 
+    /// Prepares a `Refill` control instance with a **mock database interface** for isolated testing.
+    ///
+    /// This helper function is designed exclusively for unit and integration testing of the `Refill` module.
+    /// It sets up a controlled environment by:
+    /// 1.  Loading a specific test configuration file (using `test_db_number` to select the database).
+    /// 2.  Overriding the `initial_wait_interval` and `check_interval` within the `RefillConfig` to suit test needs.
+    /// 3.  **Injecting a `MockSqlInterfaceRefill` instance** as the database interface, ensuring that tests
+    ///     do not interact with a real SQL database. This allows for predictable and fast test execution.
+    /// 4.  Optionally providing a predefined `RefillErrors` struct to set up specific error conditions
+    ///     at the `Refill` instance's startup.
+    ///
+    /// # Arguments
+    /// * `refill_errors` - An `Option<RefillErrors>`. If `Some`, the `Refill` instance is initialized
+    ///   with these specific error flags; otherwise, default `RefillErrors` (all flags `false`) are used.
+    /// * `initial_wait_interval` - The `u64` value to set for `RefillConfig.initial_wait_interval` in the test setup.
+    /// * `check_interval` - The `u64` value to set for `RefillConfig.check_interval` in the test setup.
+    /// * `test_db_number` - A **unique `u32` identifier** used to select a specific test database (`aquarium_test_XX`)
+    ///   from the configuration. This ensures test isolation even with database-related config.
+    ///
+    /// # Returns
+    /// A tuple `(ConfigData, Refill)`:
+    /// - The `ConfigData` struct, containing the loaded and modified configuration used for the test.
+    /// - The fully initialized `Refill` struct, with its database interactions handled by `MockSqlInterfaceRefill`.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - `read_config_file_with_test_database` fails (e.g., the configuration file is not found or the `test_db_number` is invalid).
+    /// - There are issues during the initialization of the `Refill` struct (e.g., due to an invalid `refill_config`).
     pub fn prepare_refill_tests_with_mock_database_interface(
         refill_errors: Option<RefillErrors>,
         initial_wait_interval: u64,
