@@ -76,7 +76,7 @@ pub struct AtlasScientificChannels {
 /// Alternatively, TCP communication is used when configured to run with the simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
 /// Sensor data is read periodically and stored.
-/// Requests from data logger, ventilation control and heating control are answered with last measured data.
+/// Requests from data logger, ventilation, and heating control are answered with last measured data.
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Creates the channels and sets up threads.
 /// Thread communication of this component is as follows:
@@ -142,9 +142,19 @@ impl GetResponseFromSimulatorTrait for AtlasScientific {}
 type AtlasScientificMeasurementResult = Result<(f32, f32, f32), I2cError>;
 
 impl AtlasScientific {
-    /// provides a struct of type TankLevelSwitchSignals
+    /// Creates a new `AtlasScientific` control instance.
+    ///
+    /// This constructor initializes the Atlas Scientific sensor module. It sets initial
+    /// sensor values to a default `0.0` and marks them as invalid until actual readings
+    /// are obtained. All internal "lock" flags are also initialized to `false` to
+    /// prevent log flooding from recurring errors or warnings.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for AtlasScientific
+    /// * `config` - Configuration data for the Atlas Scientific module, specifying behavior
+    ///   like the use of a simulator versus hardware, and replacement values for sensor readings.
+    ///
+    /// # Returns
+    /// A new `AtlasScientific` struct, ready to collect and provide sensor data.
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         AtlasScientific {
             config,
@@ -166,10 +176,23 @@ impl AtlasScientific {
         }
     }
 
-    /// communication with simulator thread via channel
+    /// Communicates with a simulator thread via channels to retrieve water temperature, pH, and conductivity readings.
+    ///
+    /// This private helper function is used when the `AtlasScientific` module is configured
+    /// to run in simulation mode. It sends `RequestSignal` commands for each of the three
+    /// sensor types to the simulator and updates the module's internal `water_temperature`,
+    /// `conductivity`, and `pH` fields with the responses.
+    ///
     /// # Arguments
-    /// * `tx_atlas_scientific_to_tcp_opt` - reference to sender part of the channel wrapped in Option for sending command to TcpCommunication
-    /// * `rx_atlas_scientific_from_tcp_opt` - reference to receiver part of the channel wrapped in Option for receiving data from TcpCommunication
+    /// * `tx_atlas_scientific_to_tcp_opt` - A reference to an `Option<Sender<InternalCommand>>` used
+    ///   for sending commands to the `TcpCommunication` thread (which acts as the simulator interface).
+    /// * `rx_atlas_scientific_from_tcp_opt` - A reference to an `Option<Receiver<f32>>` used for
+    ///   receiving simulated sensor data from the `TcpCommunication` thread.
+    ///
+    /// # Panics
+    /// This function will **panic** if either `tx_atlas_scientific_to_tcp_opt` or `rx_atlas_scientific_from_tcp_opt`
+    /// are `None`. This is because the `AtlasScientific` module's `execute` function is expected to
+    /// perform checks beforehand to ensure these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
         tx_atlas_scientific_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -198,10 +221,23 @@ impl AtlasScientific {
         );
     }
 
-    /// request execution of measurement by I2cInterface
-    /// # Arguments
-    /// * `tx_atlas_scientific_to_i2c_interface` - reference to sender part of the channel for sending command to I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Sends a request to the I2C interface thread to perform a new measurement from Atlas Scientific sensors.
+    ///
+    /// This private helper function is used when the `AtlasScientific` module is configured
+    /// to interact with physical hardware. It sends an `InternalCommand::RequestSignal`
+    /// for `AquariumSignal::WaterTemperature` (which implicitly triggers the reading of
+    /// temperature, pH, and conductivity from Atlas Scientific sensors) to the I2CInterface thread.
+    ///
+    /// It updates an internal lock flag (`lock_error_channel_send_i2c_interface`) to prevent
+    /// repeated error logging if the channel send operation fails.
+    ///
+    /// # Arguments
+    /// * `tx_atlas_scientific_to_i2c_interface` - A reference to the sender part of the channel, used to
+    ///   send commands to the I2CInterface thread.
+    ///
+    /// # Returns
+    /// `true` if the measurement request was successfully sent; `false` if the channel send operation failed.
     fn send_request_to_i2c_interface(
         &mut self,
         tx_atlas_scientific_to_i2c_interface: &Sender<InternalCommand>,
@@ -226,10 +262,26 @@ impl AtlasScientific {
         }
     }
 
-    /// receive and process response from I2cInterface
-    /// # Arguments
-    /// * `rx_atlas_scientific_from_i2c_interface` - reference to the receiver part of the channel for receiving data from I2cInterface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Receives and processes measurement responses from the I2C interface thread for Atlas Scientific sensors.
+    ///
+    /// This private helper function is used when the `AtlasScientific` module is configured
+    /// for hardware interaction. It attempts to receive a `Result` without blocking containing
+    /// water temperature, pH, and conductivity data from the `I2CInterface` thread.
+    ///
+    /// If successful, it updates the module's internal sensor fields (`water_temperature`, `pH`, `conductivity`)
+    /// and resets their `_invalid` flags to `false`. It manages various lock flags (`lock_error_i2c_interface`,
+    /// `lock_error_channel_receive_i2c_interface`) to prevent log flooding from sensor reading errors
+    /// or channel disconnections.
+    ///
+    /// # Arguments
+    /// * `rx_atlas_scientific_from_i2c_interface` - A reference to the receiver part of the channel,
+    ///   used to get measurement results from the `I2CInterface` thread.
+    ///
+    /// # Returns
+    /// `true` if a response was expected but not yet received (meaning `receive_response_from_i2c_interface`
+    /// should be called again soon, e.g., on the next loop iteration); `false` if a response
+    /// was successfully received and processed, or if a non-empty error occurred.
     fn receive_response_from_i2c_interface(
         &mut self,
         rx_atlas_scientific_from_i2c_interface: &Receiver<Result<(f32, f32, f32), I2cError>>,
@@ -290,12 +342,33 @@ impl AtlasScientific {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the Atlas Scientific sensor module.
+    ///
+    /// This function runs continuously, managing the periodic measurement and provision of
+    /// water temperature, pH, and conductivity data. It operates in two main modes:
+    /// - **Simulator Mode**: Fetches simulated sensor data via a TCP communication channel.
+    /// - **Hardware Mode (Linux with `target_hw` feature)**: Interacts directly with an I2C interface
+    ///   thread, sending requests and receiving actual sensor readings.
+    ///
+    /// The collected data is then written to shared mutexes, making it available to other
+    /// application threads. The loop maintains a measurement countdown and remains
+    /// responsive to `Quit` and `Terminate` commands from the signal handler for graceful shutdown.
+    ///
     /// # Arguments
-    /// * `atlas_scientific_channels` - struct holding the channels for communication between AtlasScientific and other components
-    /// * `mutex_atlas_scientific_water_temperature` - mutex for the water temperature
-    /// * `mutex_atlas_scientific_ph` - mutex for the pH
-    /// * `mutex_atlas_scientific_conductivity` - mutex for the conductivity
+    /// * `atlas_scientific_channels` - A struct containing all `mpsc` channels necessary for inter-thread
+    ///   communication with the `TcpCommunication` (if in simulator mode), `I2CInterface` (if in hardware mode),
+    ///   and the `SignalHandler`.
+    /// * `mutex_atlas_scientific_water_temperature` - An `Arc<Mutex<f32>>` into which the latest water temperature
+    ///   reading will be written, ensuring thread-safe access for other modules.
+    /// * `mutex_atlas_scientific_ph` - An `Arc<Mutex<f32>>` into which the latest pH reading will be written,
+    ///   ensuring thread-safe access for other modules.
+    /// * `mutex_atlas_scientific_conductivity` - An `Arc<Mutex<f32>>` into which the latest conductivity reading
+    ///   will be written, ensuring thread-safe access for other modules.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - It's configured to use the simulator, but essential TCP communication channels are missing.
+    /// - During hardware mode, a fatal error occurs while trying to receive a response from the I2C thread (e.g., a channel disconnected permanently).
     pub fn execute(
         &mut self,
         atlas_scientific_channels: AtlasScientificChannels,
