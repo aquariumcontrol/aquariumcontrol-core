@@ -53,9 +53,19 @@ impl ProcessExternalRequestTrait for Monitors {}
 impl Monitors {
     const LOG_TARGET_MONITORS: &'static str = "monitors";
 
-    /// Provides a struct of type Monitors.
+    /// Creates a new `Monitors` instance.
+    ///
+    /// This constructor initializes the monitoring module with its specified
+    /// configuration. It sets up internal "lock" flags to `false` by default;
+    /// these flags are used to prevent repetitive error and warning messages
+    /// from flooding the log during operation.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for monitors
+    /// * `config` - **Configuration data** for the monitors, loaded from a TOML file.
+    ///   This includes parameters such as whether the monitors are `active`.
+    ///
+    /// # Returns
+    /// A new **`Monitors` struct**, ready to perform its monitoring tasks.
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self {
             config,
@@ -64,15 +74,29 @@ impl Monitors {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the monitor module.
+    ///
+    /// This function runs continuously, performing periodic monitoring tasks when active.
+    /// It responds to external `Start` and `Stop` commands to enable or inhibit monitoring
+    /// activities. The loop also continuously checks for `Quit` and `Terminate` commands
+    /// from the signal handler to ensure a graceful application shutdown.
+    ///
+    /// Monitoring activities (represented by debug logs) are performed at a rate of
+    /// approximately every 10 seconds, controlled by the `loop_counter` and `sleep_duration`.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_monitors` - clone of the mutex for avoiding parallel device actuation.
-    /// * `tx_to_gpio` - Sender part of the channel for communication to GPIO handler
-    /// * `rx_from_gpio` - Receiver part of the channel for communication from GPIO handler
-    /// * `tx_to_controllino` - Sender part of the channel for communication to Controllino
-    /// * `rx_from_controllino` - Receiver part of the channel for communication from Controllino
-    /// * `tx_to_signal_handler` - Sender part of the channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of the channel for communication from signal handler                
+    /// * `_mutex_device_scheduler_monitors` - (Ignored) A clone of a mutex for device scheduling.
+    ///   This argument is part of a common signature but is not used by this module's logic.
+    /// * `_tx_to_controllino` - (Ignored) The sender channel for communicating with the Controllino device.
+    ///   This argument is present for signature consistency but not used by this function.
+    /// * `_rx_from_controllino` - (Ignored) The receiver channel for communication from the Controllino device.
+    ///   This argument is present for signature consistency but not used by this function.
+    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
+    ///   back to the main signal handler during shutdown.
+    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
+    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing the receiver channel for commands
+    ///   from the messaging system (e.g., `Start`, `Stop`).
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
