@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use std::env;
+use std::fmt::{Display, Formatter};
 
 /// Major version number
 pub const VERSION_MAJOR: i32 = 0;
@@ -84,5 +85,34 @@ impl VersionInformation {
             build: VERSION_BUILD,
             hash,
         }
+    }
+}
+
+impl Display for VersionInformation {
+    /// Formats the `VersionInformation` for display.
+    ///
+    /// This implementation of the `fmt` method for the `Display` trait
+    /// provides a human-readable representation of the version details.
+    /// It outputs the major, minor, build numbers and the commit hash
+    /// in a structured, multi-line format.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A mutable reference to a `Formatter` to which the formatted
+    ///   output will be written.
+    ///
+    /// # Returns
+    ///
+    /// `std::fmt::Result`:
+    /// - `Ok(())` if the formatting was successful.
+    /// - `Err` containing an ` std::fmt::Error ` if an I/O error occurred
+    ///   while writing to the formatter.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Version information:")?;
+        writeln!(f, "  Major: {}", self.major)?;
+        writeln!(f, "  Minor: {}", self.minor)?;
+        writeln!(f, "  Build: {}", self.build)?;
+        writeln!(f, "  Hash:  {}", self.hash)?;
+        Ok(())
     }
 }

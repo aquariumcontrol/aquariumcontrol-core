@@ -163,6 +163,34 @@ impl fmt::Display for ConfigFileDefinitionError {
     }
 }
 
+/// Displays the valid command line parameter combinations
+fn display_usage() {
+    println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");
+    println!("-h, --help: Output this page.");
+    println!("-v, --version: Output version information including hash of executable.");
+}
+
+/// Checks if the string represents a user command and executes related functionality.
+/// # Arguments
+/// * `command` - A string slice representing the potential command.
+/// # Returns
+/// A boolean value if a valid command has been recognized.
+fn check_is_command(command: &str) -> bool {
+    match command {
+        "-h" | "--help" => {
+            display_usage();
+            true
+        },
+        "-v" | "--version" => {
+            // calculate hash of executable
+            let version_information = VersionInformation::new();
+            println!("{}", version_information);
+            true
+        },
+        _ => false, // All other strings do not match
+    }
+}
+
 /// Checks if the provided string is a valid path to a `.toml` configuration file.
 ///
 /// This function validates a user-selected configuration file path by ensuring that:
@@ -336,20 +364,39 @@ fn main() {
 
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
-
-    // initialize with a default file name
+    
+    // initialize with a default configuration file name
     let mut config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
 
+    // Check command line parameters
     if args.len() > 1 {
-        // if the first argument contains a path and file name, then let's use that
+        // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
-            Ok(valid_file_name) => valid_file_name,
+            Ok(valid_file_name) => valid_file_name, // The file is valid. Start operation.
             Err(error_message) => {
-                // if user provided an invalid filename, output error message and abort
-                panic!("{}: {}", LOG_TARGET_MAIN, error_message);
+                let mut user_arg_identified = false;
+                // Iterate through the command line parameters and check if they are valid.
+                for user_arg in args[1..].iter() {
+                    user_arg_identified = check_is_command(user_arg)
+                }
+                if !user_arg_identified {
+                    // If the user provided an invalid filename and no valid command, output error message and abort.
+                    panic!("{}: {}", LOG_TARGET_MAIN, error_message);
+                }
+                else {
+                    // At least one valid user command was provided. Graceful exit.
+                    return;
+                }
             }
         }
     }
+    
+    // calculate hash of executable
+    let version_information = VersionInformation::new();
+    info!(target: LOG_TARGET_MAIN,
+        "{}",
+        version_information
+    );
 
     // read the configuration file for operating the control system
     let config = read_config_file(config_file_name);
@@ -375,13 +422,6 @@ fn main() {
             );
         }
     }));
-
-    // calculate hash of executable
-    let version_information = VersionInformation::new();
-    info!(target: LOG_TARGET_MAIN,
-        "hash of this executable is: {}",
-        version_information.hash
-    );
 
     // connect to SQL database, subsequently setup component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
