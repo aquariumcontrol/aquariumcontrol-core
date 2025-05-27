@@ -18,7 +18,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{
     ActuatorState, AquariumDevice, AquariumSignal, InternalCommand,
@@ -41,7 +41,7 @@ pub trait HeatingStatsDataTransferTrait {
     fn transfer_heating_stats(
         &mut self,
         data: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeating,
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
     );
 }
 
@@ -249,7 +249,7 @@ pub struct Heating {
     config: HeatingConfig,
 
     /// SQL interface for heating control
-    sql_interface_heating: SqlInterfaceHeating,
+    sql_interface_heating: SqlInterfaceHeatingStats,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
     lock_error_channel_receive_schedule_check: bool,
@@ -296,7 +296,7 @@ impl Heating {
     ///
     /// # Returns
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
-    pub fn new(config: HeatingConfig, sql_interface_heating: SqlInterfaceHeating) -> Heating {
+    pub fn new(config: HeatingConfig, sql_interface_heating: SqlInterfaceHeatingStats) -> Heating {
         Self {
             config,
             sql_interface_heating,
@@ -952,8 +952,8 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime};
 
-    use crate::database::sql_interface_heating::{
-        HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculatorTrait,
+    use crate::database::sql_interface_heating_stats::{
+        HeatingStatsEntry, SqlInterfaceHeatingStats, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -1007,7 +1007,7 @@ pub mod tests {
         fn transfer_heating_stats(
             &mut self,
             heating_stats_entry: HeatingStatsEntry,
-            _sql_interface_heating: &mut SqlInterfaceHeating,
+            _sql_interface_heating: &mut SqlInterfaceHeatingStats,
         ) {
             self.heating_stats_entry_previous = self.heating_stats_entry.clone();
             self.heating_stats_entry = heating_stats_entry.clone();
@@ -1127,7 +1127,7 @@ pub mod tests {
         let sql_interface_heating_midnight_calculator = Box::new(
             SqlInterfaceHeatingMockMidnightCalculator::new(seconds_to_midnight),
         );
-        let sql_interface_heating = SqlInterfaceHeating::new(
+        let sql_interface_heating = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
         );
