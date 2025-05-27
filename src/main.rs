@@ -70,6 +70,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
+use nix::unistd;
 
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
@@ -244,20 +245,38 @@ fn check_argument_for_valid_config_file_name(
     }
 }
 
+/// Checks if the current process is running with root (UID 0) privileges.
+///
+/// This function inspects the Effective User ID (EUID) of the process.
+/// On Unix-like systems, if the EUID is 0, the process has root privileges.
+///
+/// # Returns
+/// `true` if the process has root privileges, `false` otherwise.
+///
+/// # Panics
+/// This function may panic if the underlying system call `geteuid` fails,
+/// which is highly unlikely in normal operation.
+fn is_running_as_root() -> bool {
+    let euid = unistd::geteuid();
+    euid.is_root()
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The main entry point of the Aquarium Control application.
 ///
 /// This function initializes and orchestrates all modules of the control system.
 /// It performs the following high-level steps:
 /// 1.  Sets up global logging and handles command-line arguments for configuration file selection.
-/// 2.  Loads the application configuration from the specified `.toml` file.
-/// 3.  Publishes the application's Process ID (PID) to a file and sets up a custom panic hook for cleanup.
-/// 4.  Performs version checks against the database to ensure compatibility.
-/// 5.  Initializes all SQL database interfaces and validates database readiness.
-/// 6.  Sets up all inter-thread communication channels (`mpsc`).
-/// 7.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
-/// 8.  Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
-/// 9.  Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
+/// 2.  Checks if the user has provided specific command line parameters and acts accordingly.
+/// 3.  Checks if the user has root privileges.
+/// 4.  Loads the application configuration from the specified `.toml` file.
+/// 5.  Publishes the application's Process ID (PID) to a file and sets up a custom panic hook for cleanup.
+/// 6.  Performs version checks against the database to ensure compatibility.
+/// 7.  Initializes all SQL database interfaces and validates database readiness.
+/// 8.  Sets up all inter-thread communication channels (`mpsc`).
+/// 9.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
+/// 10. Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
+/// 11. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
 ///
 /// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
 ///
@@ -397,6 +416,11 @@ fn main() {
         "{}",
         version_information
     );
+
+    // check if the user has root privileges
+    if !is_running_as_root() {
+        panic!("{}: This application must be run as root.", LOG_TARGET_MAIN);
+    }
 
     // read the configuration file for operating the control system
     let config = read_config_file(config_file_name);
