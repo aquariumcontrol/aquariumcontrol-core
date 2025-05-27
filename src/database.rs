@@ -33,3 +33,4 @@ pub mod sql_interface_error;
 
 /// Contains all SQL queries as constants with placeholders
 pub mod sql_query_strings;
+pub mod sql_interface_midnight;

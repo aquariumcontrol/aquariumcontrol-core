@@ -29,7 +29,7 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
         mut heating_stats_entry: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
     ) {
-        // two further sections.
+        // Get the current date from the database
         let today = match SqlInterface::get_current_date(&mut sql_interface_heating.conn) {
             Ok(c) => c,
             Err(e) => {
@@ -43,6 +43,7 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
 
         heating_stats_entry.date = today;
 
+        // Insert the heating statistical data into the database
         match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
             Ok(_) => {}
             Err(e) => {

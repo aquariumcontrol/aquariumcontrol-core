@@ -11,10 +11,14 @@ use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-
+use log::{error, warn};
 use crate::database::{
-    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
+    sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
+use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
+
+const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
 
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from a database query which is then updated by the control application.
@@ -51,14 +55,20 @@ impl HeatingStatsEntry {
     ///
     /// # Returns
     /// A new `HeatingStatsEntry` struct with default values for the current date.
-    pub fn new() -> HeatingStatsEntry {
-        let now = Local::now();
-        let year = now.year();
-        let month = now.month();
-        let day = now.day();
-        // Create NaiveDate from components - unwrap is safe in this context
-        let today: NaiveDate = NaiveDate::from_ymd_opt(year, month, day).unwrap();
+    pub fn new(conn: &mut PooledConn) -> HeatingStatsEntry {
 
+        // Get the current date from the database
+        let today: NaiveDate = SqlInterface::get_current_date(conn).unwrap_or_else(|_| {
+            warn!(target: LOG_TARGET_SQL_INTERFACE_HEATING, "Could not get current date from database.");
+            // fall back: calculation using machine-local time
+            let now = Local::now();
+            let year = now.year();
+            let month = now.month();
+            let day = now.day();
+            // Create NaiveDate from components - unwrap is safe in this context
+            NaiveDate::from_ymd_opt(year, month, day).unwrap()
+        });
+        
         Self {
             date: today,
             energy: 0.0,
@@ -188,57 +198,6 @@ pub struct HeatingStatsStringEntry {
     pub heating_control_runtime: i64,
 }
 
-/// Trait for calculation the time interval until midnight in seconds.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait SqlInterfaceHeatingMidnightCalculatorTrait {
-    fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError>;
-}
-
-/// Struct holds connection data to the SQL database and provides implementation for calculating
-/// the time in seconds until midnight.
-pub struct SqlInterfaceHeatingMidnightCalculator {
-    /// Connection to the database
-    pub conn: PooledConn,
-}
-
-impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMidnightCalculator {
-    /// Queries the database to determine the number of seconds remaining until the next midnight.
-    ///
-    /// This function executes an SQL query to retrieve a precise count of seconds
-    /// from the current database time until 00:00:00 of the upcoming day.
-    ///
-    /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(i64)`: The number of seconds remaining until midnight. This value is expected to be non-negative.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving the integer from the database,
-    ///   such as a query failure, or if the database returns an unexpected number of results.
-    fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl SqlInterfaceHeatingMidnightCalculator {
-    /// Creates a new `SqlInterfaceHeatingMidnightCalculator` instance.
-    ///
-    /// This constructor initializes the calculator with an established database connection,
-    /// which it uses to perform time-related queries, such as determining time until midnight.
-    ///
-    /// # Arguments
-    /// * `conn` - An active database connection pool object.
-    ///
-    /// # Returns
-    /// A new `SqlInterfaceHeatingMidnightCalculator` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceHeatingMidnightCalculator {
-        SqlInterfaceHeatingMidnightCalculator { conn }
-    }
-}
-
 /// Contains the configuration and the implementation of the SQL interface for heating.
 pub struct SqlInterfaceHeating {
     /// Connection to the database
@@ -246,7 +205,7 @@ pub struct SqlInterfaceHeating {
 
     /// Struct with implementation of trait for calculation of the time interval until midnight in seconds
     pub sql_interface_heating_midnight_calculator:
-        Box<dyn SqlInterfaceHeatingMidnightCalculatorTrait + Sync + Send>,
+        Box<dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send>,
 }
 
 impl SqlInterfaceHeating {
@@ -267,7 +226,7 @@ impl SqlInterfaceHeating {
     pub fn new(
         conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
-            dyn SqlInterfaceHeatingMidnightCalculatorTrait + Sync + Send,
+            dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send,
         >,
     ) -> SqlInterfaceHeating {
         SqlInterfaceHeating {
@@ -435,6 +394,7 @@ impl SqlInterfaceHeating {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
+                error!(target: LOG_TARGET_SQL_INTERFACE_HEATING, "Error reported from database: {e:?}");
                 Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(
                     "Error when inserting heating stats into database using query: ".to_string() + sql_query_string.as_str(),
                 ))
@@ -465,9 +425,10 @@ pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
     use crate::database::sql_interface_heating::{
-        HeatingStatsEntry, SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
+        HeatingStatsEntry, SqlInterfaceHeating,
     };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -482,7 +443,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let sql_interface_heating_midnight_calculator = Box::new(
-            SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection()),
+            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
         );
         let mut sql_interface_heating = SqlInterfaceHeating::new(
             sql_interface.get_connection(),
@@ -594,17 +555,31 @@ pub mod tests {
         // Create a NaiveDateTime for midnight
         let midnight = NaiveDateTime::new(today, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap());
         // Calculate the difference
-        let duration_until_midnight = 24 * 3600
+        let reference_duration_until_midnight = 24 * 3600
             - SqlInterface::get_duration_from_naive_timestamp_to_local_now(midnight).unwrap();
         match sql_interface_heating.get_duration_until_midnight() {
-            Ok(c) => {
-                assert_eq!(c, duration_until_midnight);
+            Ok(database_duration_until_midnight) => {
+                println!("* checking duration until midnight in seconds (PASS) succeeded (database: {}, reference: {}).",
+                         database_duration_until_midnight, reference_duration_until_midnight);
+                assert_eq!(database_duration_until_midnight, reference_duration_until_midnight);
             }
             Err(_) => {
                 panic!("Call to get_duration_until_midnight failed.");
             }
         }
-        println!("* checking duration until midnight in seconds (PASS) succeeded.");
         // **************************************************************************************
+    }
+    
+    #[test]
+    fn test_create_heating_stats_entry() {
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            36,
+        );
+        
+        let mut sql_interface = SqlInterface::new(config.sql_interface).unwrap();
+        let heating_stats_entry = HeatingStatsEntry::new(&mut sql_interface.conn);
+        
+        println!("{}", heating_stats_entry);
     }
 }

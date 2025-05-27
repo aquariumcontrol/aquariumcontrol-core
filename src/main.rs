@@ -103,8 +103,9 @@ use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
 use crate::database::sql_interface_heating::{
-    SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
+    SqlInterfaceHeating,
 };
+use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::mineral::mineral_injection::MineralInjection;
@@ -442,7 +443,7 @@ fn main() {
         Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
 
     let sql_interface_midnight_calculator =
-        SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection());
+        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection());
 
     let sql_interface_heating = SqlInterfaceHeating::new(
         sql_interface.get_connection(),

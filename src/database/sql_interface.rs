@@ -175,10 +175,14 @@ impl SqlInterface {
             single_string,
         }) {
             Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::SingleStringRequestFailure(
-                "Could not get single string from the database using query:".to_string()
-                    + sql_query_string,
-            )),
+            Err(e) => {
+                error!(target: Self::LOG_TARGET_SQL_INTERFACE, "SQL database query failed: {}", e);
+                Err(SqlInterfaceError::SingleStringRequestFailure(
+                    "Could not get string array from the database using query:".to_string()
+                        + sql_query_string,
+                    )
+                )
+            }
         }
     }
 
@@ -697,6 +701,7 @@ impl SqlInterface {
                 return Err(e);
             }
         };
+        
         // convert data type
         match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
