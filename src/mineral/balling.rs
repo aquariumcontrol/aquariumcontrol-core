@@ -842,112 +842,21 @@ impl Balling {
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::fmt;
-    use std::sync::mpsc::{self, Receiver, Sender};
-    use std::sync::{Arc, Mutex};
-    use std::thread::scope;
-    use std::time::Duration;
-
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::mineral::balling::{Balling, BallingChannels, LOG_TARGET_BALLING};
-    use crate::mineral::mineral_injection::MineralInjectionTrait;
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::stubs::mock_mineral_injection::tests::MockMineralInjection;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
-
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-
-    pub struct MockMineralInjection {
-        pump1_engagement_durations: Vec<u32>,
-        pump2_engagement_durations: Vec<u32>,
-        pump3_engagement_durations: Vec<u32>,
-        pump4_engagement_durations: Vec<u32>,
-    }
-
-    impl MockMineralInjection {
-        // Creates a new `MockMineralInjection` instance.
-        //
-        // This constructor initializes the mock mineral injector for testing purposes.
-        // It sets up empty vectors to record the engagement durations for each of
-        // the four peristaltic pumps, allowing tests to verify if and how long
-        // each pump was "actuated."
-        //
-        // # Returns
-        // A new `MockMineralInjection` struct, ready to record simulated dosing events.
-        pub fn new() -> MockMineralInjection {
-            MockMineralInjection {
-                pump1_engagement_durations: Vec::new(),
-                pump2_engagement_durations: Vec::new(),
-                pump3_engagement_durations: Vec::new(),
-                pump4_engagement_durations: Vec::new(),
-            }
-        }
-    }
-
-    impl MineralInjectionTrait for MockMineralInjection {
-        // Simulates the injection of minerals by recording pump engagement durations.
-        //
-        // This mock implementation of `inject_mineral` does not perform any physical dosing.
-        // Instead, it serves as a testing utility by:
-        // 1. Storing the `dosing_duration_millis` into the appropriate pump's
-        //    engagement duration vector (e.g., `pump1_engagement_durations`).
-        // 2. Printing a console message for debug visibility during test runs.
-        // 3. Always returning `false` for the `quit_command_received` status.
-        // 4. Returning the `dosing_duration_millis` as the `actual_dosing_duration_millis` (simulating perfect execution).
-        //
-        // The channel arguments are ignored in this mock implementation.
-        //
-        // # Arguments
-        // * `_tx_balling_to_relay_manager` - (Ignored) Sender channel for sending commands to the relay manager.
-        // * `_rx_balling_from_relay_manager` - (Ignored) Receiver channel for acknowledgments from the relay manager.
-        // * `_rx_balling_from_signal_handler` - (Ignored) Receiver channel for listening to signals from the signal handler.
-        // * `mineral_pump` - The `AquariumDevice` enum variant representing the peristaltic pump to be "actuated."
-        // * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump would run.
-        //
-        // # Returns
-        // A tuple `(bool, u32)`:
-        // - The `bool` is always `false`, indicating no `Quit` command was received.
-        // - The `u32` is the `dosing_duration_millis` passed in, simulating the actual duration.
-        //
-        // # Panics
-        // This function will panic if invoked with an `AquariumDevice` that is not
-        // one of the peristaltic pumps (e.g., `AquariumDevice::Skimmer`).
-        fn inject_mineral(
-            &mut self,
-            _tx_balling_to_relay_manager: &Sender<InternalCommand>,
-            _rx_balling_from_relay_manager: &Receiver<bool>,
-            _rx_balling_from_signal_handler: &Receiver<InternalCommand>,
-            mineral_pump: AquariumDevice,
-            dosing_duration_millis: u32,
-        ) -> (bool, u32) {
-            // do nothing except for recording the dosing duration for the specific pump
-            match mineral_pump {
-                AquariumDevice::PeristalticPump1 => {
-                    self.pump1_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump2 => {
-                    self.pump2_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump3 => {
-                    self.pump3_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump4 => {
-                    self.pump4_engagement_durations.push(dosing_duration_millis);
-                }
-                _ => {
-                    panic!("inject_mineral (mock) invoked with invalid device.");
-                }
-            }
-            println!(
-                "inject_mineral (mock): recording {}ms engagement for {}",
-                dosing_duration_millis, mineral_pump,
-            );
-            (false, dosing_duration_millis)
-        }
-    }
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{self};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::Duration;
+    use crate::utilities::channel_content::AquariumDevice::{PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4};
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string())
@@ -958,60 +867,6 @@ pub mod tests {
             "/config/aquarium_control_test_generic.toml".to_string(),
             db_number,
         )
-    }
-
-    // Generates a string representation of pump engagement durations.
-    //
-    // This helper function is used exclusively in test environments to create
-    // a human-readable summary of how long a specific pump was "engaged"
-    // during simulated dosing events.
-    //
-    // Arguments:
-    // * `id`: The numerical ID of the pump.
-    // * `v`: A reference to a vector of `u32` representing the recorded
-    //   engagement durations (in milliseconds) for that pump.
-    //
-    // Returns:
-    // A `String` detailing the pump's ID and its recorded engagement durations,
-    // or a message indicating that the pump was not engaged.
-    fn output_vector(id: u32, v: &Vec<u32>) -> String {
-        let mut output: String = "Pump #".into();
-        if v.is_empty() {
-            output += &id.to_string();
-            output += " has not been engaged.";
-        } else {
-            output += &id.to_string();
-            output += " engagement duration(s) (ms): ";
-            for duration in v {
-                output += &duration.to_string();
-                output += " ";
-            }
-        }
-        output
-    }
-
-    impl fmt::Display for MockMineralInjection {
-        // Formats the `MockMineralInjection` struct to display the recorded dosing durations for each pump.
-        //
-        // This implementation is primarily for debugging and testing purposes. It provides
-        // a human-readable, multi-line string summarizing the "engagement" (simulated dosing)
-        // for each of the four peristaltic pumps.
-        //
-        // # Arguments
-        // * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
-        //
-        // # Returns
-        // A `fmt::Result` indicating whether the formatting operation was successful.
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(
-                f,
-                "{}\n{}\n{}\n{}",
-                output_vector(1, &self.pump1_engagement_durations),
-                output_vector(2, &self.pump2_engagement_durations),
-                output_vector(3, &self.pump3_engagement_durations),
-                output_vector(4, &self.pump4_engagement_durations)
-            )
-        }
     }
 
     #[test]
@@ -1851,5 +1706,141 @@ pub mod tests {
 
         // create test objects
         let _ = Balling::new(config.balling, sql_interface_balling);
+    }
+
+    #[test]
+    // The test case executes the test object using dosing requests via the external interface.
+    pub fn test_balling_dosing_external_requests() {
+        let test_db_number = 49;
+        let schedule_allows = true;
+        let execution_count_reference: i32 = 4;
+        let duration_millis = 5000;
+        let sleep_duration_test_environment = Duration::from_millis(duration_millis);
+        let spin_sleeper_test_environment = SpinSleeper::default();
+        let mut config: ConfigData = read_balling_config_with_database(test_db_number);
+
+        config.balling.pump1_active = true;
+        config.balling.dosing_interval_pump1 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.pump2_active = true;
+        config.balling.dosing_interval_pump2 = 3600 * 24; // long interval to avoid regular dosing
+        config.balling.pump3_active = true;
+        config.balling.dosing_interval_pump3 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.pump4_active = true;
+        config.balling.dosing_interval_pump4 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.schedule_check_interval = 100;
+
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
+        insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
+
+        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
+        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+
+        // create the test object
+        let mut balling = Balling::new(config.balling, sql_interface_balling);
+
+        let mut mock_mineral_injection = MockMineralInjection::new();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_balling,
+                    &rx_schedule_check_from_balling,
+                    None,
+                    schedule_allows,
+                )
+            });
+
+            // thread for rest of test environment
+            scope.spawn(move || {
+                let execution_count1: i32;
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                // internal scope to for releasing mutex after read
+                {
+                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
+                }
+                println!("test_balling_dosing: execution_count={}", execution_count1);
+                assert_eq!(execution_count1, 0);
+
+                // send the dosing requests to Balling
+                tx_messaging_to_balling.send(InternalCommand::Execute(2)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(4)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(3)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(1)).unwrap();
+                
+                let execution_count2: i32;
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                // internal scope to for releasing mutex after read
+                {
+                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
+                }
+                println!("test_balling_dosing: execution_count={}", execution_count2);
+                assert_eq!(execution_count2, execution_count_reference);
+
+                // now we can send the quit command
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                rx_signal_handler_from_balling.recv().unwrap();
+                println!(
+                    "test_balling_dosing: Received confirmation of Quit command from test object."
+                );
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                let tx_balling_to_schedule_check_for_test_case_finish =
+                    tx_balling_to_schedule_check.clone();
+
+                let balling_channels = BallingChannels {
+                    tx_balling_to_relay_manager,
+                    rx_balling_from_relay_manager,
+                    tx_balling_to_signal_handler,
+                    rx_balling_from_signal_handler,
+                    tx_balling_to_schedule_check,
+                    rx_balling_from_schedule_check,
+                    rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
+                };
+
+                balling.execute(
+                    mutex_device_scheduler,
+                    balling_channels,
+                    &mut mock_mineral_injection,
+                );
+
+                let _ =
+                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("{}", mock_mineral_injection);
+                
+                let reference_pump_protocol = vec![
+                    PeristalticPump2, PeristalticPump4, PeristalticPump3, PeristalticPump1];
+                
+                assert_eq!(mock_mineral_injection.pump_protocol, reference_pump_protocol);
+            });
+        });
     }
 }
