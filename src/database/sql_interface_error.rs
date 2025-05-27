@@ -42,6 +42,9 @@ pub enum SqlInterfaceError {
     SingleBallingSetValRequestFailure(String),
     InsertDataFrameFailure(String),
     NegativeInteger(i64),
+    HeatingSetValsReadError(String),
+    #[cfg(test)]
+    InsertHeatingSetValuesFailure(String),
     #[cfg(test)]
     SingleDataFrameRequestNoSingleResponse(String),
     #[cfg(test)]

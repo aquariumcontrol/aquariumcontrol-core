@@ -301,10 +301,18 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM feedschedule \
         WHERE Timestamp IS NULL OR ProfileId IS NULL OR ProfileName IS NULL OR IsWeekly IS NULL OR IsDaily IS NULL);";
 
-// preparation for future implementation
-// Checks if the heating set value table contains any NULL values.
-//pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingsetvals \
-//        WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
+/// Checks if the heating set value table contains any NULL values.
+pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingsetvals \
+        WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
+
+/// Reads the heating set values from the database.
+pub const SQL_QUERY_READ_HEATING_SETVALS: &str = "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
+
+#[cfg(test)]
+/// Write heating set values to the database.
+pub const SQL_QUERY_WRITE_HEATING_SETVALS: &str =
+    "INSERT into heatingsetvals(heatingSwitchOffTemp, heatingSwitchOnTemp) values(:heating_switch_off_temp, :heating_switch_on_temp);";
+
 
 // preparation for future implementation
 // Checks if the ventilation set value table contains any NULL values.
