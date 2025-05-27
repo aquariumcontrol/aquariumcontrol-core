@@ -89,8 +89,8 @@ use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels}
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
-use crate::thermal::heating::{Heating, HeatingChannels};
-use crate::thermal::heating_stats_data_transfer::HeatingStatsDataTransfer;
+use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
+use database::sql_interface_heating_stats_data_transfer::SqlInterfaceHeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
@@ -103,6 +103,7 @@ use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
+use crate::database::sql_interface_heating_setvals::{SqlInterfaceHeatingSetVals};
 use crate::database::sql_interface_heating_stats::{
     SqlInterfaceHeatingStats, SqlInterfaceHeatingMidnightCalculator,
 };
@@ -1616,16 +1617,23 @@ fn main() {
         // Heating needs actuation of relay
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
-        let mut heating_stats_transfer = HeatingStatsDataTransfer;
-
+        let mut heating_stats_transfer = SqlInterfaceHeatingStatsDataTransfer;
+        let mut heating_set_value_updater = 
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection());
+        
+        let heating_mutexes = HeatingMutexes {
+            mutex_water_temperature: mutex_atlas_scientific_temperature_clone_for_heating,
+            mutex_ambient_temperature: mutex_ambient_temperature_clone_for_heating,
+            mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
+        };
+        
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
                 heating_channels,
                 &mut heating_stats_transfer,
-                mutex_atlas_scientific_temperature_clone_for_heating,
-                mutex_ambient_temperature_clone_for_heating,
-                mutex_tank_level_switch_signals_clone_for_heating,
+                &mut heating_set_value_updater,
+                heating_mutexes
             );
 
             #[cfg(feature = "debug_main")]

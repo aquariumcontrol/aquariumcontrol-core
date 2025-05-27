@@ -36,3 +36,5 @@ pub mod sql_query_strings;
 
 /// Contains functions for execution of all queries relevant for heating set values (thermal)
 pub mod sql_interface_heating_setvals;
+/// Contains data structure for transfer of heating statistics to the database
+pub mod sql_interface_heating_stats_data_transfer;

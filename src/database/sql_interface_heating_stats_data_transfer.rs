@@ -9,9 +9,9 @@ const LOG_TARGET_HEATING_STATS_DATA_TRANSFER: &str = "HeatingStatsDataTransfer";
 ///
 /// This struct serves as the concrete component for persisting daily heating statistics
 /// into the configured SQL database.
-pub struct HeatingStatsDataTransfer;
+pub struct SqlInterfaceHeatingStatsDataTransfer;
 
-impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
+impl HeatingStatsDataTransferTrait for SqlInterfaceHeatingStatsDataTransfer {
     /// Transfers the provided daily heating statistics entry to the SQL database.
     ///
     /// This implementation updates the `date` of the `heating_stats_entry` to the

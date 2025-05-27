@@ -17,7 +17,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-
+use crate::database::sql_interface_heating_setvals::{HeatingSetValueUpdaterTrait};
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{
@@ -55,10 +55,12 @@ pub struct HeatingConfig {
 
     /// Temperature at which the heater is switched on for 100% of the time.
     /// This temperature must be lower than switch_off_temperature.
+    /// It is overwritten with valid database values once obtained. 
     switch_on_temperature: f32,
 
     /// Temperature at which the heater is switched off for 100% of the time.
     /// This temperature must be higher than switch_on_temperature.
+    /// It is overwritten with valid database values once obtained. 
     switch_off_temperature: f32,
 
     /// Flag to determine behavior in case the refill control has a problem
@@ -223,6 +225,21 @@ pub struct HeatingChannels {
 
     /// Receiver part of the channel for communication from the messaging
     pub rx_heating_from_messaging_opt: Option<Receiver<InternalCommand>>,
+}
+
+/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the heating control.
+///
+/// These mutexes provide thread-safe access to various sensor readings and
+/// device states that are used by the heating control.
+pub struct HeatingMutexes {
+    /// Mutex for the water temperature
+    pub(crate) mutex_water_temperature: Arc<Mutex<f32>>,
+    
+    /// Mutex for the ambient temperature
+    pub(crate) mutex_ambient_temperature: Arc<Mutex<f32>>,
+    
+    /// Mutex for the tank level switch signals
+    pub(crate) mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -481,9 +498,8 @@ impl Heating {
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,
         heating_channels: HeatingChannels,
         heating_stats_transfer: &mut impl HeatingStatsDataTransferTrait,
-        mutex_water_temperature: Arc<Mutex<f32>>,
-        mutex_ambient_temperature: Arc<Mutex<f32>>,
-        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+        heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
+        heating_mutexes: HeatingMutexes
     ) {
         let _refill_error = false;
         let spin_sleeper = SpinSleeper::default();
@@ -555,7 +571,7 @@ impl Heating {
             if self.config.active {
                 // read water temperature from mutex
                 {
-                    measured_water_temperature = match mutex_water_temperature.lock() {
+                    measured_water_temperature = match heating_mutexes.mutex_water_temperature.lock() {
                         Ok(c) => {
                             measurement_error_water_temperature = false;
                             *c
@@ -569,7 +585,7 @@ impl Heating {
 
                 // read ambient temperature from mutex
                 {
-                    measured_ambient_temperature = match mutex_ambient_temperature.lock() {
+                    measured_ambient_temperature = match heating_mutexes.mutex_ambient_temperature.lock() {
                         Ok(c) => {
                             measurement_error_ambient_temperature = false;
                             *c
@@ -586,7 +602,7 @@ impl Heating {
                     (
                         measured_tank_level_switch_position,
                         measured_tank_level_switch_invalid,
-                    ) = match mutex_tank_level_switch_signals.lock() {
+                    ) = match heating_mutexes.mutex_tank_level_switch_signals.lock() {
                         Ok(c) => (c.tank_level_switch_position, c.tank_level_switch_invalid),
                         Err(_) => {
                             (
@@ -641,6 +657,12 @@ impl Heating {
                     }
                 }
 
+                // check if set values need to be updated
+                heating_set_val_updater.update_set_value(
+                    &mut self.config.switch_off_temperature,
+                    &mut self.config.switch_on_temperature
+                );
+                
                 if self.config.stop_on_refill_error
                     && (tank_level_low_counter > self.config.stop_on_refill_error_delay)
                 {
@@ -956,15 +978,14 @@ pub mod tests {
         HeatingStatsEntry, SqlInterfaceHeatingStats, SqlInterfaceHeatingMidnightCalculatorTrait,
     };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
 
-    use crate::thermal::heating::{
-        Heating, HeatingChannels, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING,
-    };
+    use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -1018,6 +1039,31 @@ pub mod tests {
         }
     }
 
+    pub struct HeatingSetValueMockUpdater {
+    }
+
+    impl HeatingSetValueMockUpdater {
+        // Creates a new `HeatingSetValueMockUpdater` instance.
+        //
+        // This constructor initializes the mock set value updater object for testing heating set
+        // value update functionality.
+        //
+        // # Returns
+        // A new `HeatingSetValueMockUpdater` struct.
+        pub fn new() -> HeatingSetValueMockUpdater {
+            Self {}
+        }
+    }
+    
+    impl HeatingSetValueUpdaterTrait for HeatingSetValueMockUpdater {
+        fn update_set_value(
+            &mut self,
+            _heating_switch_off_temperature: &mut f32,
+            _heating_switch_on_temperature: &mut f32) {
+            // do nothing
+        }
+    }
+    
     pub struct SqlInterfaceHeatingMockMidnightCalculator {
         seconds_to_midnight: i64,
     }
@@ -1277,13 +1323,20 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
+                
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1439,13 +1492,20 @@ pub mod tests {
                 };
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
+                
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1707,6 +1767,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -1720,13 +1781,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None,
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1861,6 +1927,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -1874,13 +1941,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2026,6 +2098,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -2039,13 +2112,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,                    
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2291,6 +2369,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -2304,13 +2383,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,                    
+                    heating_mutexes
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2549,6 +2633,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -2562,13 +2647,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None,
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2704,6 +2794,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -2717,13 +2808,18 @@ pub mod tests {
                     rx_heating_from_messaging_opt: None,
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2937,6 +3033,7 @@ pub mod tests {
                     tx_heating_to_relay_manager.clone();
 
                 let mut heating_stats_transfer = HeatingStatsMockDataTransfer::new();
+                let mut heating_set_value_updater = HeatingSetValueMockUpdater::new();
 
                 let heating_channels = HeatingChannels {
                     tx_heating_to_relay_manager,
@@ -2950,14 +3047,20 @@ pub mod tests {
                     rx_heating_from_messaging_opt: Some(rx_heating_from_messaging),
                 };
 
+                let heating_mutexes = HeatingMutexes {
+                    mutex_water_temperature,
+                    mutex_ambient_temperature,
+                    mutex_tank_level_switch_signals
+                };
+                
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
                     &mut heating_stats_transfer,
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals,
+                    &mut heating_set_value_updater,
+                    heating_mutexes,
                 );
+                
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
                     tx_heating_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);

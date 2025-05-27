@@ -21,7 +21,7 @@ pub struct HeatingSetVals {
 
 /// Trait for updating the heating set values with values from the database.
 /// This trait allows running the main control with a mock implementation for testing.
-pub trait SqlInterfaceHeatingSetValueUpdaterTrait {
+pub trait HeatingSetValueUpdaterTrait {
     fn update_set_value(
         &mut self,
         heating_switch_off_temperature: &mut f32,
@@ -164,7 +164,7 @@ impl SqlInterfaceHeatingSetVals {
         }
     }
 }
-impl SqlInterfaceHeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
+impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
     fn update_set_value(
         &mut self,
         heating_switch_off_temperature: &mut f32,
@@ -200,7 +200,7 @@ pub mod tests {
 
     #[test]
     // Test case includes all checks for this table combined in one function to limit the number of additional databases.
-    // Test case uses test database #36 - focussing on heatingsetvals table only.
+    // Test case uses the test database #36 - focussing on heatingsetvals table only.
     pub fn test_sql_interface_heating_setvals() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
