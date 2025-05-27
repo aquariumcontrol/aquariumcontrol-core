@@ -1,10 +1,16 @@
+use std::time::{Duration, Instant};
 use log::warn;
-use mysql::{params, PooledConn};
+use mysql::PooledConn;
+
+#[cfg(test)]
+use mysql::params;
+
 use mysql::prelude::Queryable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL;
+use crate::thermal::heating::HeatingConfig;
 
 const LOG_TARGET_SQL_INTERFACE_HEATING_SETVALS: &str = "sql_interface_heating_setvals";
 
@@ -35,6 +41,12 @@ pub struct SqlInterfaceHeatingSetVals {
 
     /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
     lock_warning_heating_set_value_read_failure: bool,
+    
+    /// recording of time when the database has been polled for the last time 
+    update_time: Option<Instant>,
+    
+    /// target update duration
+    update_duration: Duration,
 }
 
 impl SqlInterfaceHeatingSetVals {
@@ -50,6 +62,7 @@ impl SqlInterfaceHeatingSetVals {
     /// A new `SqlInterfaceHeatingSetVals` struct.
     pub fn new(
         mut conn: PooledConn,
+        config: &HeatingConfig
     ) -> SqlInterfaceHeatingSetVals {
         if SqlInterface::get_single_integer_from_database(
             &mut conn, SQL_QUERY_CHECK_HEATINGSETVALS_NULL)
@@ -60,7 +73,9 @@ impl SqlInterfaceHeatingSetVals {
 
         SqlInterfaceHeatingSetVals {
             conn,
-            lock_warning_heating_set_value_read_failure: false
+            lock_warning_heating_set_value_read_failure: false,
+            update_time: None,
+            update_duration: Duration::from_secs(config.set_value_check_interval)
         }
     }
     
@@ -168,7 +183,13 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
     fn update_set_value(
         &mut self,
         heating_switch_off_temperature: &mut f32,
-        heating_switch_on_temperature: &mut f32) {
+        heating_switch_on_temperature: &mut f32
+    ) {
+        if self.update_time.is_some() &&
+            Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration {
+            // do not update the values if the last update was less than the configured update duration ago
+            return;
+        }
         match self.get_heating_set_values() {
             Ok(Some(heating_set_vals)) => {
                 *heating_switch_off_temperature = heating_set_vals.heating_switch_off_temperature;
@@ -217,7 +238,7 @@ pub mod tests {
 
         // instantiation of the test object
         let mut sql_interface_heating_setvals 
-            = SqlInterfaceHeatingSetVals::new(sql_interface.get_connection());
+            = SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
         
         // check if reading an empty table returns None
         match sql_interface_heating_setvals.get_heating_set_values() {

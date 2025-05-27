@@ -448,7 +448,7 @@ fn main() {
         }
     }));
 
-    // connect to SQL database, subsequently setup component-specific interfaces
+    // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
@@ -1219,6 +1219,8 @@ fn main() {
     let mut data_logger = DataLogger::new(config.data_logger);
 
     let mut refill = Refill::new(config.refill, sql_interface_refill);
+    let mut heating_set_value_updater =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
     let mut feed = Feed::new(config.feed, sql_interface_feed);
     let mut ventilation = Ventilation::new(config.ventilation);
@@ -1618,8 +1620,6 @@ fn main() {
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
         let mut heating_stats_transfer = SqlInterfaceHeatingStatsDataTransfer;
-        let mut heating_set_value_updater = 
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection());
         
         let heating_mutexes = HeatingMutexes {
             mutex_water_temperature: mutex_atlas_scientific_temperature_clone_for_heating,

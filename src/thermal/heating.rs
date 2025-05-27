@@ -83,13 +83,16 @@ pub struct HeatingConfig {
     /// Electrical power consumption of heater in Watt
     heater_power: f32,
 
-    // strategy when schedule check does not allow operation:
-    // true=heating will be switched on; false=heating will be switched off
+    /// strategy when schedule check does not allow operation:
+    /// true=heating will be switched on; false=heating will be switched off
     switch_on_when_out_of_schedule: bool,
 
-    // strategy when the external request for stopping heating control has been received:
-    // true=heating will be switched on; false=heating will be switched off
+    /// strategy when the external request for stopping heating control has been received:
+    /// true=heating will be switched on; false=heating will be switched off
     switch_on_when_external_stop: bool,
+
+    /// interval in seconds for polling SQL database
+    pub set_value_check_interval: u64,
 }
 
 /// Commands the relay manager to switch on the heater.
