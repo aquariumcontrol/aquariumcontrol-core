@@ -15,6 +15,7 @@ use mysql::*;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
+use crate::database::sql_query_strings::{SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL};
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
@@ -422,15 +423,31 @@ impl SqlInterfaceFeed {
     /// Creates a new `SqlInterfaceFeed` instance.
     ///
     /// This constructor initializes the feed management SQL interface
-    /// with an established database connection.
+    /// with an established database connection. Before, it checks whether the feed schedule table
+    /// or the feed pattern table contain any NULL values. If so, it panics, as this indicates a
+    /// data consistency issue.
     ///
     /// # Arguments
     /// * `conn` - An active database connection pool object.
     ///
     /// # Returns
     /// A new `SqlInterfaceFeed` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceFeed {
+    pub fn new(mut conn: PooledConn) -> SqlInterfaceFeed {
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn, SQL_QUERY_CHECK_FEEDPATTERNS_NULL)
+            .expect("Could not check feed pattern table for NULL values.") > 0 {
+            panic!("{}: Feed pattern table may be inconsistent - it contains NULL values.",
+                   LOG_TARGET_SQL_INTERFACE_FEED);
+        }
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL)
+            .expect("Could not check feed schedule table for NULL values.") > 0 {
+            panic!("{}: Feed schedule table may be inconsistent - it contains NULL values.",
+                   LOG_TARGET_SQL_INTERFACE_FEED);
+        }
+
         SqlInterfaceFeed { conn }
+        
     }
 
     /// Retrieves and post-processes feed schedule entries from the database based on a given SQL query.

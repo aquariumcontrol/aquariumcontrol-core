@@ -15,6 +15,8 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
+use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_query_strings::{SQL_QUERY_CHECK_SCHEDULE_NULL};
 
 /// List of all modules that are subject to limitations by schedule.
 /// Background: These activities cause noise - user shall be able to inhibit these noises during nighttime.
@@ -198,14 +200,21 @@ impl SqlInterfaceSchedule {
     /// Provides a new `SqlInterfaceSchedule` instance.
     ///
     /// This constructor initializes the interface with a database connection
-    /// and an empty internal list of schedules.
+    /// and an empty internal list of schedules. Before, it checks whether the schedule table
+    /// contains any NULL values. If so, it panics, as this indicates a data consistency issue.
     ///
     /// # Arguments
     /// * `conn` - The established database connection pool object.
     ///
     /// # Returns
     /// A new `SqlInterfaceSchedule` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceSchedule {
+    pub fn new(mut conn: PooledConn) -> SqlInterfaceSchedule {
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn,SQL_QUERY_CHECK_SCHEDULE_NULL)
+            .expect("Could not check schedule table for NULL values.") > 0 {
+            panic!("{}: Schedule table may be inconsistent - it contains NULL values.",
+                   Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE);
+        }
         Self {
             conn,
             schedules: Vec::new(),

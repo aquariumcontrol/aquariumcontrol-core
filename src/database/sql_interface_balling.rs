@@ -15,6 +15,7 @@ use mysql::*;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
+use crate::database::sql_query_strings::SQL_QUERY_CHECK_BALLING_SETVALS_NULL;
 
 /// Contains the configuration and the implementation of the SQL interface for Balling.
 pub struct SqlInterfaceBalling {
@@ -49,14 +50,23 @@ impl SqlInterfaceBalling {
     /// Creates a new `SqlInterfaceBalling` instance.
     ///
     /// This constructor initializes the Balling SQL interface with an established
-    /// database connection.
+    /// database connection. Before, it checks whether the Balling set value table
+    /// contains any NULL values. If so, it panics, as this indicates a data consistency
+    /// issue.
     ///
     /// # Arguments
     /// * `conn` - An active database connection pool object.
     ///
     /// # Returns
     /// A new `SqlInterfaceBalling` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceBalling {
+    pub fn new(mut conn: PooledConn) -> SqlInterfaceBalling {
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn,SQL_QUERY_CHECK_BALLING_SETVALS_NULL)
+            .expect("Could not check balling set value table for NULL values.") > 0 {
+            panic!("{}: Balling set value table may be inconsistent - it contains NULL values.",
+                Self::LOG_TARGET_SQL_INTERFACE_BALLING);
+        }
+        
         SqlInterfaceBalling { conn }
     }
 
