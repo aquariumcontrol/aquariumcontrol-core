@@ -122,6 +122,7 @@ impl Monitors {
                         "monitors are inhibited after receiving stop command via message.");
                 } else {
                     // run monitors every 10 seconds
+                    #[cfg(test)]
                     debug!(
                         target: Self::LOG_TARGET_MONITORS,
                         "executing monitors"
