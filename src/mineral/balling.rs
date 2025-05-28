@@ -727,6 +727,7 @@ impl Balling {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {
+                        #[cfg(not(test))] // reduce terminal output when testing
                         info!(
                             target: LOG_TARGET_BALLING,
                             "executing external request for actuation of pump #{}",
