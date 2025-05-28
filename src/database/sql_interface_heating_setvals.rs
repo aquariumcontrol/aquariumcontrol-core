@@ -190,6 +190,10 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
             // do not update the values if the last update was less than the configured update duration ago
             return;
         }
+        else {
+            // update the time before reading the values from the database
+            self.update_time = Some(Instant::now());
+        }
         match self.get_heating_set_values() {
             Ok(Some(heating_set_vals)) => {
                 *heating_switch_off_temperature = heating_set_vals.heating_switch_off_temperature;
