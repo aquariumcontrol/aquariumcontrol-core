@@ -114,7 +114,7 @@ schedule_check_interval = 60                            # check every x seconds 
 dosing_interval_pump1 = 200                             # inject Balling minerals with pump 1 after each period
 dosing_interval_pump2 = 200                             # inject Balling minerals with pump 2 after each period
 dosing_interval_pump3 = 100                             # inject Balling minerals with pump 3 after each period
-dosing_interval_pump4 = 50                              # inject Balling minerals with pump 4 after each period
+dosing_interval_pump4 = 150                             # inject Balling minerals with pump 4 after each period
 pump_switch_delay_millis = 250                          # waiting period between usage of different pumps
 
 [monitors]

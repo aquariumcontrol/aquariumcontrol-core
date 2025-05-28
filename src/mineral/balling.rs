@@ -173,6 +173,8 @@ impl Balling {
 
         Self::check_database_vs_config(&mut sql_interface_balling, &config);
 
+        Self::check_valid_dosing_intervals(&config);
+        
         let countdown_dosing_pump1 =
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1);
         let countdown_dosing_pump2 =
@@ -195,6 +197,54 @@ impl Balling {
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
             pump_id_requested: 0,
+        }
+    }
+    
+    /// Compares the dosing intervals against the check interval.
+    ///
+    /// The function checks if all dosing intervals are longer than the check interval.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump and the check interval.
+    ///
+    /// # Panics
+    /// This function will panic if there is one dosing interval that is shorter than the check interval.
+    fn check_valid_dosing_intervals(config: &BallingConfig) {
+        if config.pump1_active && config.dosing_interval_pump1 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #1 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump1,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #2 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump2,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #3 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump3,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #4 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump4,
+                config.schedule_check_interval,
+            );
         }
     }
 
@@ -896,8 +946,8 @@ pub mod tests {
     }
 
     #[test]
-    // When starting, the application checks when the last dosing events took place by analyzing data from the database.
-    // As a prerequisite for this test case, an empty dosing log is required.
+    // When starting, the application checks when the last dosing events took place by analyzing
+    // data from the database. As a prerequisite for this test case, an empty dosing log is required.
     // Test case uses test database #01.
     pub fn test_balling_initialization_empty_dosing_log() {
         let config: ConfigData = read_balling_config_with_database(1);
@@ -1272,7 +1322,7 @@ pub mod tests {
             0,                        // number of dosing events for pump #2
             0,                        // number of dosing events for pump #3
             0,                        // number of dosing events for pump #4
-            60,                       // schedule check interval
+            40,                       // schedule check interval
             Some((50, 200, 100, 50)), // dosing intervals
         );
     }
@@ -1843,5 +1893,30 @@ pub mod tests {
                 assert_eq!(mock_mineral_injection.pump_protocol, reference_pump_protocol);
             });
         });
+    }
+
+    #[test]
+    #[should_panic]
+    // This test case checks if the code checks the dosing interval against the check interval.
+    // It does not operate on any data from SQL database.
+    pub fn test_balling_initialization_invalid_dosing_check_interval() {
+        let mut config: ConfigData = read_balling_config();
+
+        config.balling.dosing_interval_pump1 = 100;
+        config.balling.dosing_interval_pump2 = 100;
+        config.balling.dosing_interval_pump3 = 100;
+        config.balling.dosing_interval_pump4 = 100;
+        config.balling.schedule_check_interval = 200;
+        
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        // create the test object
+        let _ = Balling::new(config.balling, sql_interface_balling);
     }
 }
