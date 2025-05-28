@@ -308,16 +308,22 @@ pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FR
 /// Reads the heating set values from the database.
 pub const SQL_QUERY_READ_HEATING_SETVALS: &str = "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
 
+/// Reads the ventilation set values from the database.
+pub const SQL_QUERY_READ_VENTILATION_SETVALS: &str = "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals;";
+
 #[cfg(test)]
 /// Write heating set values to the database.
 pub const SQL_QUERY_WRITE_HEATING_SETVALS: &str =
     "INSERT into heatingsetvals(heatingSwitchOffTemp, heatingSwitchOnTemp) values(:heating_switch_off_temp, :heating_switch_on_temp);";
 
+#[cfg(test)]
+/// Write ventilation set values to the database.
+pub const SQL_QUERY_WRITE_VENTILATION_SETVALS: &str =
+    "INSERT into ventilationsetvals(ventilationSwitchOffTemp, ventilationSwitchOnTemp) values(:ventilation_switch_off_temp, :ventilation_switch_on_temp);";
 
-// preparation for future implementation
 // Checks if the ventilation set value table contains any NULL values.
-// pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
-//        WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
+pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
+        WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
 
 /// Checks if the heating statistics table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATINGSTATS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingstats \

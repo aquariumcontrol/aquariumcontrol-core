@@ -59,6 +59,9 @@ pub struct VentilationConfig {
     /// The strategy when an external request for stopping ventilation control has been received:
     /// true=ventilation will be switched on; false=ventilation will be switched off
     switch_on_when_external_stop: bool,
+    
+    /// interval in seconds for polling SQL database
+    pub set_value_check_interval: u64,
 }
 
 /// Commands the relay manager to switch on the ventilation device.

@@ -104,6 +104,7 @@ switch_on_when_terminating = true           		# behavior when terminating the ap
 saw_tooth_profile_config = { phase1_length = 6, phase2_length = 1, phase3_length = 6, phase4_length = 1}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
+set_value_check_interval = 300                          # interval in seconds for polling SQL database
 
 [balling]
 active = true

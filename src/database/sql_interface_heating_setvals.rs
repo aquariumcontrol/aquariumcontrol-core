@@ -124,7 +124,7 @@ impl SqlInterfaceHeatingSetVals {
             Err(_) => {
                 return Err(SqlInterfaceError::HeatingSetValsReadError(
                     "Could not get heating set values from the database with query:".to_string()
-                        + sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
+                        + sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
                 ));
             }
         };
