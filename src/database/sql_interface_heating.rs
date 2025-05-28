@@ -322,21 +322,44 @@ impl SqlInterfaceHeating {
         Ok(single_heating_stats_entry)
     }
 
-    /// Retrieves a single heating statistics entry from the database for the day that just passed
-    /// or for the current day in case the control application is terminated.
+    /// Inserts new heating statistical data into the database or updates an existing entry.
     ///
-    /// This function queries the database for heating statistics data, expecting to find
-    /// exactly one record. It then post-processes the raw string-based date into a `NaiveDate`
-    /// and constructs a `HeatingStatsEntry` struct.
+    /// This function attempts to write a `HeatingStatsEntry` into the `heatingstats` table.
+    /// It's designed to handle daily statistics, where only one entry per date is expected.
+    ///
+    /// **Key behavior: **
+    /// - If no record exists for `heating_stats_entry.date`, a new row is inserted.
+    /// - If a record already exists for `heating_stats_entry.date` (due to a `PRIMARY KEY` or `UNIQUE`
+    ///   constraint on the `Date` column), the existing row's `Energy`, `AmbientTempAverage`,
+    ///   `AmbientTempCounter`, `WaterTempAverage`, `WaterTempCounter`, and `HeatingControlRuntime`
+    ///   columns are updated with the values from `heating_stats_entry`.
+    ///
+    /// **Important Note on Query Construction: **
+    /// The `ON DUPLICATE KEY UPDATE` clause uses string replacement for the update values (`#Energy`, etc.)
+    /// within the SQL query string. While parameters are used for the `INSERT` part, the `UPDATE` part
+    /// is built by directly embedding string representations of the data.
+    ///
+    /// # Arguments
+    ///
+    /// * `heating_stats_entry` - A reference to the `HeatingStatsEntry` struct containing the
+    ///   statistical data to be inserted or updated. This entry includes the `date` which
+    ///   serves as the unique identifier for the daily record.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(HeatingStatsEntry)`: The successfully retrieved and parsed heating statistics entry.
-    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestFailure)`: If the database query fails.
-    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse)`: If the query
-    ///   returns zero records or more than one record (indicating a data inconsistency).
-    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the date string
-    ///   retrieved from the database cannot be parsed into a valid `NaiveDate`.
+    ///
+    /// - `Ok(())`: If the data was successfully inserted, or the existing entry was updated.
+    /// - `Err(SqlInterfaceError::InsertHeatingStatsEntryFailure)`: If any error occurs during
+    ///   the database operation, such as a connection issue, a SQL execution problem,
+    ///   or a database-level constraint violation. The error message will include
+    ///   details from the underlying database driver.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an `SqlInterfaceError::InsertHeatingStatsEntryFailure` if:
+    /// - The database connection is lost or invalid.
+    /// - The SQL query fails to execute (e.g., due to syntax errors, table issues).
+    /// - A database-specific error prevents the `INSERT ... ON DUPLICATE KEY UPDATE` operation
+    ///   from completing successfully.
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,
