@@ -68,7 +68,7 @@ impl HeatingStatsEntry {
             // Create NaiveDate from components - unwrap is safe in this context
             NaiveDate::from_ymd_opt(year, month, day).unwrap()
         });
-        
+
         Self {
             date: today,
             energy: 0.0,
@@ -242,7 +242,7 @@ impl SqlInterfaceHeating {
     pub fn get_single_heating_stats_from_database(
         &mut self,
     ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
-        // Get single heating stats entry from database
+        // Get a single heating stats entry from the database
         let single_heating_stats_entry_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
             |(
