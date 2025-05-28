@@ -109,6 +109,7 @@ use crate::database::sql_interface_heating_stats::{
 };
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
@@ -1223,6 +1224,8 @@ fn main() {
         SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
     let mut heating = Heating::new(config.heating, sql_interface_heating);
     let mut feed = Feed::new(config.feed, sql_interface_feed);
+    let mut ventilation_set_value_updater = 
+        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation);
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
@@ -1647,6 +1650,7 @@ fn main() {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
                 ventilation_channels,
+                &mut ventilation_set_value_updater,
                 mutex_atlas_scientific_temperature_clone_for_ventilation,
             );
 

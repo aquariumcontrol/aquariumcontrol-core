@@ -12,18 +12,18 @@ use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
 
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
-
+use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
 use crate::utilities::channel_content::{
     ActuatorState, AquariumDevice, AquariumSignal, InternalCommand,
 };
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
@@ -37,12 +37,14 @@ const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f3
 #[derive(Deserialize)]
 pub struct VentilationConfig {
     active: bool,
-    /// The temperature at which the ventilation is switched on for 100% of the time
-    /// This temperature must be higher than switch_off_temperature
+    /// The temperature at which the ventilation is switched on for 100% of the time.
+    /// This temperature must be higher than switch_off_temperature.
+    /// It is overwritten with valid database values once obtained.
     switch_on_temperature: f32,
 
-    /// The temperature at which the ventilation is switched off for 100% of the time
-    /// this temperature must be lower than switch_on_temperature
+    /// The temperature at which the ventilation is switched off for 100% of the time.
+    /// This temperature must be lower than switch_on_temperature.
+    /// It is overwritten with valid database values once obtained.
     switch_off_temperature: f32,
 
     /// A flag to determine the behavior of the control when the application is terminating
@@ -459,6 +461,7 @@ impl Ventilation {
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: VentilationChannels,
+        ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
         mutex_water_temperature: Arc<Mutex<f32>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -515,7 +518,13 @@ impl Ventilation {
                         }
                     };
                 }
-
+                
+                // check if set values need to be updated
+                ventilation_set_val_updater.update_set_value(
+                    &mut self.config.switch_off_temperature,
+                    &mut self.config.switch_on_temperature
+                );
+                
                 // schedule check to see if actuation is allowed
                 match ventilation_channels
                     .tx_ventilation_to_schedule_check
@@ -771,6 +780,7 @@ pub mod tests {
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::stubs::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
 
     // Prepares and returns a new `Ventilation` struct for use in test cases.
     //
@@ -795,7 +805,7 @@ pub mod tests {
     // command to the test object, prompting its graceful shutdown.
     //
     // # Arguments
-    // * `duration_seconds` - The duration (in seconds) the test environment should "run" before initiating shutdown.
+    // * `duration_seconds` - The duration (in seconds) that the test environment should "run" before initiating shutdown.
     // * `tx_signal_handler_to_ventilation` - The sender channel used by this mock environment to send commands to the `Ventilation` test object, simulating the signal handler.
     // * `rx_signal_handler_from_ventilation` - The receiver channel for this mock environment to receive acknowledgments back from the `Ventilation` test object.
     //
@@ -928,9 +938,12 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: None,
                 };
 
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+                
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
+                    &mut ventilation_set_value_updater,
                     mutex_water_temperature,
                 );
 
@@ -1099,10 +1112,13 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
+                
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
+                    &mut ventilation_set_value_updater,
                     mutex_water_temperature,
                 );
 
@@ -1367,10 +1383,13 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
+                
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
+                    &mut ventilation_set_value_updater,
                     mutex_water_temperature,
                 );
 
@@ -1491,9 +1510,12 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: None,
                 };
 
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+                
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
+                    &mut ventilation_set_value_updater,                    
                     mutex_water_temperature,
                 );
 
@@ -1727,9 +1749,12 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
                 };
 
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
+                    &mut ventilation_set_value_updater,
                     mutex_water_temperature,
                 );
 
@@ -1759,4 +1784,157 @@ pub mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
+    
+    // Check if the ventilation is switched on when the temperature is high.
+    // After a limited time period, increase the set values and observe if the heater is switched off. 
+    // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
+    // Test case uses test database #52.
+    #[test]
+    pub fn test_ventilation_with_decreased_set_values() {
+        let sleep_duration_100_millis = Duration::from_millis(100);
+        let spin_sleeper = SpinSleeper::default();
+
+        let mut ventilation = prepare_ventilation_tests();
+
+        // Channels for the test object. The test environment only uses one of the channels
+        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
+        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
+        let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
+        let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
+            mpsc::channel();
+        let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
+            mpsc::channel();
+        let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
+            mpsc::channel();
+        let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
+            mpsc::channel();
+        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
+            mpsc::channel();
+
+        // thread for mock schedule check
+        let join_handle_mock_schedule_check = thread::Builder::new()
+            .name("mock_schedule_check".to_string())
+            .spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_ventilation,
+                    &rx_schedule_check_from_ventilation,
+                    None,
+                    true,
+                );
+            })
+            .unwrap();
+
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
+
+        // thread for mock Datalogger
+        let join_handle_mock_data_logger = thread::Builder::new()
+            .name("mock_data_logger".to_string())
+            .spawn(move || {
+                mock_data_logger(
+                    &tx_data_logger_to_ventilation,
+                    &rx_data_logger_from_ventilation,
+                    &rx_data_logger_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
+
+        // thread for mock relay manager - includes assertions
+        let join_handle_mock_relay_manager = thread::Builder::new()
+            .name("mock_relay_manager".to_string())
+            .spawn(move || {
+                let mut actuation_events = mock_relay_manager(
+                    &tx_relay_manager_to_ventilation,
+                    &rx_relay_manager_from_ventilation,
+                );
+                assert_eq!(actuation_events.len(), 3);
+                let actuation_event_3 = actuation_events.pop().unwrap();
+                let actuation_event_2 = actuation_events.pop().unwrap();
+                let actuation_event_1 = actuation_events.pop().unwrap();
+                assert_eq!(
+                    actuation_event_1.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+                assert_eq!(
+                    actuation_event_2.command,
+                    InternalCommand::SwitchOff(AquariumDevice::Ventilation)
+                );
+                assert_eq!(
+                    actuation_event_3.command,
+                    InternalCommand::SwitchOn(AquariumDevice::Ventilation)
+                );
+            })
+            .unwrap();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = create_test_environment(
+            12,
+            tx_signal_handler_to_ventilation,
+            rx_signal_handler_from_ventilation,
+        );
+
+        spin_sleeper.sleep(sleep_duration_100_millis);
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of the channels to mock threads so that we can terminate them after execution of the test object
+                let tx_ventilation_to_schedule_check_for_test_case_finish =
+                    tx_ventilation_to_schedule_check.clone();
+                let tx_ventilation_to_relay_manager_for_test_case_finish =
+                    tx_ventilation_to_relay_manager.clone();
+
+                let ventilation_channels = VentilationChannels {
+                    tx_ventilation_to_relay_manager,
+                    rx_ventilation_from_relay_manager,
+                    tx_ventilation_to_signal_handler,
+                    rx_ventilation_from_signal_handler,
+                    tx_ventilation_to_data_logger,
+                    rx_ventilation_from_data_logger,
+                    tx_ventilation_to_schedule_check,
+                    rx_ventilation_from_schedule_check,
+                    rx_ventilation_from_messaging_opt: None,
+                };
+
+                // set up the set value updater to actively manipulate the set values
+                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(
+                    true, Some(30.0), Some(40.0), Some(Duration::from_secs(10)));
+                
+                ventilation.execute(
+                    mutex_device_scheduler_ventilation.clone(),
+                    ventilation_channels,
+                    &mut ventilation_set_value_updater,
+                    mutex_water_temperature,
+                );
+
+                // send Quit signal to mock threads because the test object has terminated
+                let _ = tx_ventilation_to_schedule_check_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                let _ = tx_ventilation_to_relay_manager_for_test_case_finish
+                    .send(InternalCommand::Quit);
+                println!("* [Ventilation] checking reaction to high temperature succeeded.");
+            })
+            .unwrap();
+
+        join_handle_mock_schedule_check
+            .join()
+            .expect("Mock schedule check did not finish.");
+        join_handle_mock_data_logger
+            .join()
+            .expect("Mock Data Logger thread did not finish.");
+        join_handle_mock_relay_manager
+            .join()
+            .expect("Mock relay manager thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+    }
+    
 }

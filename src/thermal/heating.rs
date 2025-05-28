@@ -3178,9 +3178,9 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_duration_ten_seconds = Duration::from_secs(12);
+                let sleep_duration_twelve_seconds = Duration::from_secs(12);
                 let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_ten_seconds);
+                spin_sleeper.sleep(sleep_duration_twelve_seconds);
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 rx_signal_handler_from_heating.recv().unwrap();
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);

@@ -11,13 +11,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK_VENTILATION: &str = "mock_ventilation";
 
+    use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     pub fn mock_ventilation(
         tx_ventilation_to_data_logger: &Sender<bool>,
@@ -127,6 +128,62 @@ pub mod tests {
             };
 
             spin_sleeper.sleep(sleep_duration);
+        }
+    }
+
+    pub struct MockSqlInterfaceVentilationSetVals {
+        active: bool,
+        new_set_value_ventilation_switch_off_temperature: Option<f32>,
+        new_set_value_ventilation_switch_on_temperature: Option<f32>,
+        delay_duration: Option<Duration>,
+        start_time: Instant,
+    }
+
+    impl MockSqlInterfaceVentilationSetVals {
+        // Creates a new `MockSqlInterfaceVentilationSetVals` instance which will either actively
+        // manipulate test data or behave neutrally depending on the parameters.
+        //
+        // # Arguments
+        // * `active` - determine if test data shall be manipulated with the call to update_set_value
+        // * `new_set_value_ventilation_switch_off_temperature` - new set value for switch off temperature
+        //   to be applied to the mutable reference provided in update_set_value
+        // * `new_set_value_ventilation_switch_on_temperature` - new set value for switch on temperature
+        //   to be applied to the mutable reference provided in update_set_value
+        // * `delay_duration` - duration of time which shall pass before manipulating test data
+        //
+        // # Returns
+        // A new `VentilationSetValueMockUpdater` struct.
+        pub fn new(
+            active: bool,
+            new_set_value_ventilation_switch_off_temperature: Option<f32>,
+            new_set_value_ventilation_switch_on_temperature: Option<f32>,
+            delay_duration: Option<Duration>,
+        ) -> MockSqlInterfaceVentilationSetVals {
+            MockSqlInterfaceVentilationSetVals {
+                active,
+                new_set_value_ventilation_switch_off_temperature,
+                new_set_value_ventilation_switch_on_temperature,
+                delay_duration,
+                start_time: Instant::now()
+            }
+        }
+    }
+    impl VentilationSetValueUpdaterTrait for MockSqlInterfaceVentilationSetVals {
+        fn update_set_value(
+            &mut self,
+            ventilation_switch_off_temperature: &mut f32,
+            ventilation_switch_on_temperature: &mut f32
+        ) {
+            if self.active &&
+                self.delay_duration.is_some() &&
+                self.new_set_value_ventilation_switch_off_temperature.is_some() &&
+                self.new_set_value_ventilation_switch_on_temperature.is_some() {
+                // manipulate the test data when enabled and after the delay has passed.
+                if Instant::now().duration_since(self.start_time) > self.delay_duration.unwrap() {
+                    *ventilation_switch_off_temperature = self.new_set_value_ventilation_switch_off_temperature.unwrap();
+                    *ventilation_switch_on_temperature = self.new_set_value_ventilation_switch_on_temperature.unwrap();
+                }
+            }
         }
     }
 }

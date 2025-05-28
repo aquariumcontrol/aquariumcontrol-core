@@ -212,6 +212,7 @@ pub mod tests {
         // * `new_set_value_heating_switch_on_temperature` - new set value for switch on temperature
         //   to be applied to the mutable reference provided in update_set_value
         // * `delay_duration` - duration of time which shall pass before manipulating test data
+        //
         // # Returns
         // A new `HeatingSetValueMockUpdater` struct.
         pub fn new(
