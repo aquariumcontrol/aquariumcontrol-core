@@ -16,6 +16,7 @@ use mysql::*;
 use serde_derive::Deserialize;
 
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
+use crate::database::sql_query_strings::SQL_QUERY_READ_TIMEOUT;
 use crate::utilities::version_information::VersionInformation;
 
 /// This struct holds the configuration data for the SQL interface.
@@ -40,6 +41,9 @@ pub struct SqlInterfaceConfig {
 
     /// array of required tables
     pub db_tables: Vec<String>,
+    
+    /// minimum wait timout - application checks server variable before execution
+    pub db_min_wait_timeout: u64,
 }
 
 /// Struct is used to retrieve a single integer value from the SQL database.
@@ -118,19 +122,21 @@ impl SqlInterface {
         };
 
         // Get connection for requests of the main thread
-        let conn = match pool.get_conn() {
+        let mut conn = match pool.get_conn() {
             Ok(c) => c,
             Err(_) => {
                 panic!("Could not open SQL data base connection.");
             }
         };
 
+        Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout);
+        
         Ok(SqlInterface { config, pool, conn })
     }
 
     /// Retrieves a new connection from the internal database connection pool.
     ///
-    /// This function is used to obtain a fresh connection for executing SQL queries.
+    /// This function is used to get a fresh connection for executing SQL queries.
     /// If the connection pool fails to provide a connection, the function will panic.
     ///
     /// # Returns
@@ -918,6 +924,63 @@ impl SqlInterface {
                 .num_seconds(),
         )
     }
+
+    /// Checks if the database's `wait_timeout` setting meets a minimum required value.
+    ///
+    /// This function retrieves the current `wait_timeout` from the connected database
+    /// and compares it against a `min_wait_timeout` provided by the application.
+    /// It is primarily used to ensure that database connections do not time out
+    /// prematurely from the server's perspective, which could lead to "Broken pipe" errors.
+    /// The function is called in the initialization phase of the control application.
+    /// If the function panics, it will abort the initialization and the control application will
+    /// terminate before starting regular operation.
+    /// 
+    /// # Arguments
+    ///
+    /// * `conn` - A mutable reference to a `PooledConn` (a database connection from a pool).
+    ///            This connection is used to execute the SQL query to fetch the `wait_timeout`.
+    /// * `min_wait_timeout` - The minimum acceptable `wait_timeout` value (in seconds)
+    ///                        that the application requires for stable operation.
+    ///
+    /// # Panics
+    ///
+    /// This function will **panic** in the following scenarios:
+    /// - If it fails to retrieve the `wait_timeout` value from the database (e.g., due to
+    ///   connection issues, query execution errors).
+    /// - If the retrieved `wait_timeout` value from the database is not a valid unsigned 64-bit integer
+    ///   (e.g., if the database returns a value that cannot be converted to `u64`). This indicates
+    ///   an unexpected data type or format from the database.
+    /// - If the `current_wait_timeout` read from the database is less than `min_wait_timeout`.
+    ///   In this case, the application will panic with a message indicating the discrepancy,
+    ///   as it considers an insufficient `wait_timeout` a critical configuration error.
+    pub fn check_wait_timeout(conn: &mut PooledConn, min_wait_timeout: u64) {
+        let current_wait_timeout: u64 = match Self::get_single_integer_from_database(
+            conn,
+            SQL_QUERY_READ_TIMEOUT
+        ) {
+            Ok(c) => match c.try_into() {
+                Ok(c) => c,
+                Err(_) => {
+                    panic!(
+                        "Configuration file contains invalid value for wait_timeout: {}",
+                        c
+                    );
+                }
+            },
+            Err(e) => {
+                panic!("could not retrieve wait_timeout from the database ({e:?})");
+            }
+        };
+        
+        if current_wait_timeout < min_wait_timeout {
+            panic!(
+                "SQL database has wait_timeout configured of {} seconds. \
+                Configuration of control application requires at least {} seconds.",
+                current_wait_timeout,
+                min_wait_timeout
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1108,5 +1171,32 @@ pub mod tests {
             }
         }
         // ***************************************************************************************
+    }
+
+    #[test]
+    // This test case checks if a zero value for the minimum wait timeout allows instantiation. 
+    pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        config.sql_interface.db_min_wait_timeout = 0;
+        println!("Testing with database {}", config.sql_interface.db_name);
+        _ = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
+    }
+    
+    #[test]
+    #[should_panic]
+    // This test case checks if a excessively high value for the minimum wait timeout triggers a panic. 
+    pub fn test_sql_interface_min_wait_timeout_check() {
+        let mut config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        config.sql_interface.db_min_wait_timeout = 1000000;
+        println!("Testing with database {}", config.sql_interface.db_name);
+        _ = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
     }
 }

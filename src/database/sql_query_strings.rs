@@ -169,6 +169,9 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
+/// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
+pub const SQL_QUERY_READ_TIMEOUT: &str = "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'wait_timeout';";
+
 // Deletes the content of a specific table.
 // This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
 #[cfg(test)]
