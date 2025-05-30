@@ -16,7 +16,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -274,6 +274,12 @@ pub struct Heating {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger
     lock_error_send_to_data_logger: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl ProcessExternalRequestTrait for Heating {}
@@ -293,10 +299,15 @@ impl Heating {
     ///   behavioral strategies.
     /// * `sql_interface_heating` - The **specific SQL interface** for heating-related database operations.
     ///   This instance is moved into the `Heating` struct.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
-    pub fn new(config: HeatingConfig, sql_interface_heating: SqlInterfaceHeating) -> Heating {
+    pub fn new(
+        config: HeatingConfig,
+        sql_interface_heating: SqlInterfaceHeating,
+        database_ping_interval: Duration,
+    ) -> Heating {
         Self {
             config,
             sql_interface_heating,
@@ -308,6 +319,8 @@ impl Heating {
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_invalid_signal_request_data_logger: false,
             lock_error_send_to_data_logger: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
@@ -345,7 +358,7 @@ impl Heating {
     /// the precise duration. If an error occurs during the database interaction, it logs the error
     /// and returns a default value of 24 hours (86400 seconds). This approach will suspend
     /// the recording of statistical heating data but also avoid false recordings.
-    /// 
+    ///
     /// # Returns
     /// An `i64` representing the number of seconds remaining until the next midnight.
     /// Returns `24 * 3600` (86400) seconds as a fallback if the database retrieval fails.
@@ -817,7 +830,8 @@ impl Heating {
                             &mut self.sql_interface_heating,
                         );
                         // reset heating stats
-                        heating_stats_opt = Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
+                        heating_stats_opt =
+                            Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
                         duration_until_midnight = self.get_duration_until_midnight();
                     }
                 }
@@ -860,6 +874,12 @@ impl Heating {
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
             spin_sleeper.sleep(sleep_duration);
 
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_heating.ping();
+                self.last_ping_instant = Instant::now();
+            }
+            
             start_time = SystemTime::now(); // start time for the next cycle
         }
 
@@ -945,23 +965,21 @@ impl Heating {
 
 #[cfg(test)]
 pub mod tests {
-    use all_asserts::{assert_ge, assert_le};
-    use chrono::Local;
-    use spin_sleep::SpinSleeper;
-    use std::sync::{mpsc, Arc, Mutex};
-    use std::thread;
-    use std::time::{Duration, SystemTime};
-    use mysql::PooledConn;
-    use crate::database::sql_interface_heating::{
-        HeatingStatsEntry, SqlInterfaceHeating,
-    };
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
+    use all_asserts::{assert_ge, assert_le};
+    use chrono::Local;
+    use mysql::PooledConn;
+    use spin_sleep::SpinSleeper;
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, SystemTime};
 
     use crate::thermal::heating::{
         Heating, HeatingChannels, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING,
@@ -1137,7 +1155,11 @@ pub mod tests {
             config.heating.switch_on_temperature, config.heating.switch_off_temperature
         );
         let heating_config = config.heating.clone();
-        (config, Heating::new(heating_config, sql_interface_heating), sql_interface)
+        (
+            config,
+            Heating::new(heating_config, sql_interface_heating, Duration::from_secs(1000)),
+            sql_interface,
+        )
     }
 
     #[test]
@@ -1148,7 +1170,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600, 11, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 11, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
@@ -1279,7 +1302,7 @@ pub mod tests {
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
-                
+
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
@@ -1330,7 +1353,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -1443,7 +1467,7 @@ pub mod tests {
 
                 let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
-                
+
                 heating.execute(
                     mutex_device_scheduler_heating.clone(),
                     heating_channels,
@@ -1711,7 +1735,7 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let mut heating_stats_transfer = 
+                let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
 
                 let heating_channels = HeatingChannels {
@@ -1770,7 +1794,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3, 14, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3, 14, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -1866,7 +1891,7 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let mut heating_stats_transfer = 
+                let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
 
                 let heating_channels = HeatingChannels {
@@ -1931,7 +1956,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3, 15, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3, 15, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -2032,7 +2058,7 @@ pub mod tests {
                 let tx_heating_to_relay_manager_for_test_case_finish =
                     tx_heating_to_relay_manager.clone();
 
-                let mut heating_stats_transfer = 
+                let mut heating_stats_transfer =
                     HeatingStatsMockDataTransfer::new(&mut sql_interface.get_connection());
 
                 let heating_channels = HeatingChannels {
@@ -2197,7 +2223,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3, 16, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3, 16, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -2463,7 +2490,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -2614,7 +2642,8 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3, 18, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3, 18, None);
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
@@ -2771,7 +2800,8 @@ pub mod tests {
     // resumes operation.
     // Test case uses test database #19.
     pub fn test_messaging_stops_starts_heating() {
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
+        let (_, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
 
         let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();

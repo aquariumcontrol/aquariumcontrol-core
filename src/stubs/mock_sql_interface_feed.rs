@@ -61,6 +61,10 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
+        fn ping(&mut self) {
+            // do nothing
+        }
+
         #[cfg(test)]
         fn insert_feed_schedule_entry(
             &mut self,

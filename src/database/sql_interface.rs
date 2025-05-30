@@ -15,8 +15,8 @@ use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
 
+use crate::database::sql_query_strings::{SQL_QUERY_PING, SQL_QUERY_READ_TIMEOUT};
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
-use crate::database::sql_query_strings::SQL_QUERY_READ_TIMEOUT;
 use crate::utilities::version_information::VersionInformation;
 
 /// This struct holds the configuration data for the SQL interface.
@@ -41,9 +41,12 @@ pub struct SqlInterfaceConfig {
 
     /// array of required tables
     pub db_tables: Vec<String>,
-    
+
     /// minimum wait timout - application checks server variable before execution
     pub db_min_wait_timeout: u64,
+
+    /// the database-ping interval in seconds
+    pub db_ping_interval: u64,
 }
 
 /// Struct is used to retrieve a single integer value from the SQL database.
@@ -130,7 +133,7 @@ impl SqlInterface {
         };
 
         Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout);
-        
+
         Ok(SqlInterface { config, pool, conn })
     }
 
@@ -186,8 +189,7 @@ impl SqlInterface {
                 Err(SqlInterfaceError::SingleStringRequestFailure(
                     "Could not get string array from the database using query:".to_string()
                         + sql_query_string,
-                    )
-                )
+                ))
             }
         }
     }
@@ -707,7 +709,7 @@ impl SqlInterface {
                 return Err(e);
             }
         };
-        
+
         // convert data type
         match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
             Ok(c) => Ok(c),
@@ -934,13 +936,13 @@ impl SqlInterface {
     /// The function is called in the initialization phase of the control application.
     /// If the function panics, it will abort the initialization and the control application will
     /// terminate before starting regular operation.
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `conn` - A mutable reference to a `PooledConn` (a database connection from a pool).
-    ///            This connection is used to execute the SQL query to fetch the `wait_timeout`.
+    ///   This connection is used to execute the SQL query to fetch the `wait_timeout`.
     /// * `min_wait_timeout` - The minimum acceptable `wait_timeout` value (in seconds)
-    ///                        that the application requires for stable operation.
+    ///   that the application requires for stable operation.
     ///
     /// # Panics
     ///
@@ -954,31 +956,68 @@ impl SqlInterface {
     ///   In this case, the application will panic with a message indicating the discrepancy,
     ///   as it considers an insufficient `wait_timeout` a critical configuration error.
     pub fn check_wait_timeout(conn: &mut PooledConn, min_wait_timeout: u64) {
-        let current_wait_timeout: u64 = match Self::get_single_integer_from_database(
-            conn,
-            SQL_QUERY_READ_TIMEOUT
-        ) {
-            Ok(c) => match c.try_into() {
-                Ok(c) => c,
-                Err(_) => {
-                    panic!(
-                        "Configuration file contains invalid value for wait_timeout: {}",
-                        c
-                    );
+        let current_wait_timeout: u64 =
+            match Self::get_single_integer_from_database(conn, SQL_QUERY_READ_TIMEOUT) {
+                Ok(c) => match c.try_into() {
+                    Ok(c) => c,
+                    Err(_) => {
+                        panic!(
+                            "Configuration file contains invalid value for wait_timeout: {}",
+                            c
+                        );
+                    }
+                },
+                Err(e) => {
+                    panic!("could not retrieve wait_timeout from the database ({e:?})");
                 }
-            },
-            Err(e) => {
-                panic!("could not retrieve wait_timeout from the database ({e:?})");
-            }
-        };
-        
+            };
+
         if current_wait_timeout < min_wait_timeout {
             panic!(
                 "SQL database has wait_timeout configured of {} seconds. \
                 Configuration of control application requires at least {} seconds.",
-                current_wait_timeout,
-                min_wait_timeout
+                current_wait_timeout, min_wait_timeout
             );
+        }
+    }
+
+    /// Pings the database to check connection health and prevent timeouts.
+    ///
+    /// This function executes a lightweight SQL query (`SQL_QUERY_PING`, typically `SELECT 1;`)
+    /// against the provided database connection. Its primary purpose is to:
+    /// 1. **Keep the connection alive:** By sending a query, it resets the database server's
+    ///    idle timeout counters (`wait_timeout`), preventing the
+    ///    server from unilaterally closing the connection due to inactivity.
+    /// 2. **Verify connection status: ** A successful ping indicates that the connection
+    ///    is still active and able to communicate with the database.
+    ///
+    /// If the ping query fails (e.g., due to a broken connection, network issue, or
+    /// database server unavailability), an error is logged, and an `Err` is returned.
+    ///
+    /// # Arguments
+    ///
+    /// * `conn` - A mutable reference to a `PooledConn`, representing an active
+    ///   database connection obtained from a connection pool.
+    /// * `source_thread` - A string slice indicating the name of the calling thread or
+    ///   module. This is used as the logging target for any errors
+    ///   generated by this function.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())`: If the database was successfully pinged, indicating the connection
+    ///   is healthy and its idle timeout has been reset.
+    /// - `Err(SqlInterfaceError::PingNotSuccessful)`: If the ping query failed for any
+    ///   reason (e.g., network issues, database server unresponsiveness, connection closed).
+    ///   An error message is also logged with the `source_thread` as the target.
+    pub fn ping_database(conn: &mut PooledConn, source_thread: &str) {
+        match SqlInterface::get_single_integer_from_database(conn, SQL_QUERY_PING) {
+            Ok(_) => { /* do nothing */ }
+            Err(e) => {
+                error!(
+                    target: source_thread,
+                    "could not ping database ({e:?})",
+                );
+            }
         }
     }
 }
@@ -1174,7 +1213,7 @@ pub mod tests {
     }
 
     #[test]
-    // This test case checks if a zero value for the minimum wait timeout allows instantiation. 
+    // This test case checks if a zero value for the minimum wait timeout allows instantiation.
     pub fn test_sql_interface_min_wait_timeout_check_deactivated() {
         let mut config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -1185,10 +1224,10 @@ pub mod tests {
         _ = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
     }
-    
+
     #[test]
     #[should_panic]
-    // This test case checks if a excessively high value for the minimum wait timeout triggers a panic. 
+    // This test case checks if an excessively high value for the minimum wait timeout triggers a panic.
     pub fn test_sql_interface_min_wait_timeout_check() {
         let mut config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -1198,5 +1237,18 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         _ = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed with min wait timeout=0.");
+    }
+
+    #[test]
+    // This test case checks if the ping query can be executed
+    pub fn test_sql_interface_ping() {
+        let config: ConfigData = read_config_file_with_test_database(
+            "/config/aquarium_control_test_generic.toml".to_string(),
+            28,
+        );
+        let sql_interface = SqlInterface::new(config.sql_interface)
+            .expect("Initialization of SQL interface for test failed");
+
+        SqlInterface::ping_database(&mut sql_interface.get_connection(), "test_ping");
     }
 }

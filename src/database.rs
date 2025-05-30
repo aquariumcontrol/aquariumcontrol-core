@@ -31,6 +31,6 @@ pub mod sql_interface_schedule;
 /// Contains enum with error definitions
 pub mod sql_interface_error;
 
+pub mod sql_interface_midnight;
 /// Contains all SQL queries as constants with placeholders
 pub mod sql_query_strings;
-pub mod sql_interface_midnight;

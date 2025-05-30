@@ -15,6 +15,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
+use crate::database::sql_interface::SqlInterface;
 
 /// List of all modules that are subject to limitations by schedule.
 /// Background: These activities cause noise - user shall be able to inhibit these noises during nighttime.
@@ -284,6 +285,11 @@ impl SqlInterfaceSchedule {
         Err(SqlInterfaceError::ScheduleTypeNotFound(
             schedule_type.to_string(),
         ))
+    }
+
+    /// Execute a ping to the database to avoid timeout.
+    pub(crate) fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE);
     }
 }
 

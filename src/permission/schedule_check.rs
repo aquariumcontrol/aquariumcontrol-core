@@ -13,7 +13,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;
@@ -136,6 +136,12 @@ pub struct ScheduleCheck {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
     lock_warn_inapplicable_command_heating: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl ScheduleCheck {
@@ -153,12 +159,14 @@ impl ScheduleCheck {
     ///   behavior like check intervals and strategies for missing schedules.
     /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
     ///   the interface to the SQL database for retrieving schedule entries.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new `ScheduleCheck` struct, ready to monitor and evaluate schedules.
     pub fn new(
         config: ScheduleCheckConfig,
         sql_interface_schedule: SqlInterfaceSchedule,
+        database_ping_interval: Duration,
     ) -> ScheduleCheck {
         ScheduleCheck {
             config,
@@ -179,6 +187,8 @@ impl ScheduleCheck {
             lock_warn_inapplicable_command_ventilation: false,
             lock_warn_inapplicable_command_refill: false,
             lock_warn_inapplicable_command_heating: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
@@ -434,12 +444,18 @@ impl ScheduleCheck {
             //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-
+            
             loop_counter += 1;
 
             // avoid overflow
             if loop_counter == 1_000_000 {
                 loop_counter = 0;
+            }
+
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_schedule.ping();
+                self.last_ping_instant = Instant::now();
             }
         }
 

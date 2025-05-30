@@ -7,16 +7,14 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
+use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use chrono::*;
+use log::{error, warn};
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-use log::{error, warn};
-use crate::database::{
-    sql_interface_error::SqlInterfaceError, sql_query_strings,
-};
-use crate::database::sql_interface::SqlInterface;
-use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
 
 const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
 
@@ -56,7 +54,6 @@ impl HeatingStatsEntry {
     /// # Returns
     /// A new `HeatingStatsEntry` struct with default values for the current date.
     pub fn new(conn: &mut PooledConn) -> HeatingStatsEntry {
-
         // Get the current date from the database
         let today: NaiveDate = SqlInterface::get_current_date(conn).unwrap_or_else(|_| {
             warn!(target: LOG_TARGET_SQL_INTERFACE_HEATING, "Could not get current date from database.");
@@ -441,17 +438,20 @@ impl SqlInterfaceHeating {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
     }
+
+    /// Execute a ping to the database to avoid timeout.
+    pub fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_HEATING);
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
-    use crate::database::sql_interface_heating::{
-        HeatingStatsEntry, SqlInterfaceHeating,
-    };
-    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
+    use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -584,7 +584,10 @@ pub mod tests {
             Ok(database_duration_until_midnight) => {
                 println!("* checking duration until midnight in seconds (PASS) succeeded (database: {}, reference: {}).",
                          database_duration_until_midnight, reference_duration_until_midnight);
-                assert_eq!(database_duration_until_midnight, reference_duration_until_midnight);
+                assert_eq!(
+                    database_duration_until_midnight,
+                    reference_duration_until_midnight
+                );
             }
             Err(_) => {
                 panic!("Call to get_duration_until_midnight failed.");
@@ -592,17 +595,17 @@ pub mod tests {
         }
         // **************************************************************************************
     }
-    
+
     #[test]
     fn test_create_heating_stats_entry() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
             36,
         );
-        
+
         let mut sql_interface = SqlInterface::new(config.sql_interface).unwrap();
         let heating_stats_entry = HeatingStatsEntry::new(&mut sql_interface.conn);
-        
+
         println!("{}", heating_stats_entry);
     }
 }

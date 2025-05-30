@@ -18,7 +18,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
@@ -224,6 +224,12 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to send the response to the data logger
     pub lock_error_send_to_data_logger: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl Refill {
@@ -240,12 +246,14 @@ impl Refill {
     ///   This includes parameters such as refill limits, intervals, and pump flow rates.
     /// * `sql_interface_refill` - The **specific SQL interface** for refill-related database operations.
     ///   This instance is moved into the `Refill` struct.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new **`Refill` struct**, ready to manage the aquarium's freshwater refill system.
     pub fn new(
         config: RefillConfig,
         sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
+        database_ping_interval: Duration,
     ) -> Refill {
         Self {
             config,
@@ -278,6 +286,8 @@ impl Refill {
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_invalid_signal_request_data_logger: false,
             lock_error_send_to_data_logger: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
@@ -329,6 +339,8 @@ impl Refill {
             lock_warn_inapplicable_command_data_logger: false,
             lock_error_invalid_signal_request_data_logger: false,
             lock_error_send_to_data_logger: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval: Duration::from_secs(1000),
         }
     }
 
@@ -990,6 +1002,12 @@ impl Refill {
                         break;
                     }
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
+                    
+                    // Check for how long ago the last database ping happened.
+                    if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                        self.sql_interface_refill.ping();
+                        self.last_ping_instant = Instant::now();
+                    }
 
                     cycle_time_exceeded = false;
                 }
@@ -1161,7 +1179,7 @@ pub mod tests {
                     Box::new(sql_interface_refill),
                     refill_errors.unwrap(),
                 ),
-                false => Refill::new(refill_config, Box::new(sql_interface_refill)),
+                false => Refill::new(refill_config, Box::new(sql_interface_refill), Duration::from_millis(1000)),
             },
             sql_interface,
         )
@@ -1221,7 +1239,7 @@ pub mod tests {
                     Box::new(sql_interface_refill),
                     refill_errors.unwrap(),
                 ),
-                false => Refill::new(refill_config, Box::new(sql_interface_refill)),
+                false => Refill::new(refill_config, Box::new(sql_interface_refill), Duration::from_millis(1000)),
             },
         )
     }
