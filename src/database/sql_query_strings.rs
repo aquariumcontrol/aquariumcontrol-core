@@ -307,15 +307,13 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM feedschedule \
         WHERE Timestamp IS NULL OR ProfileId IS NULL OR ProfileName IS NULL OR IsWeekly IS NULL OR IsDaily IS NULL);";
 
-// preparation for future implementation
 // Checks if the heating set value table contains any NULL values.
-//pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingsetvals \
-//        WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
+pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingsetvals \
+        WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
 
-// preparation for future implementation
 // Checks if the ventilation set value table contains any NULL values.
-// pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
-//        WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
+ pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
+        WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
 
 /// Checks if the heating statistics table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATINGSTATS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingstats \

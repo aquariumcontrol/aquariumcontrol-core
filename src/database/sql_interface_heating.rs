@@ -11,12 +11,11 @@ use chrono::*;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-
+use log::{error, warn};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait
 };
-use crate::database::sql_query_strings::{/*SQL_QUERY_CHECK_HEATINGSETVALS_NULL,*/ SQL_QUERY_CHECK_HEATINGSTATS_NULL};
 
 const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
 
@@ -197,73 +196,6 @@ pub struct HeatingStatsStringEntry {
     pub heating_control_runtime: i64,
 }
 
-/// Trait for calculation the time interval until midnight in seconds.
-/// This trait allows running the main control with a mock implementation for testing.
-pub trait SqlInterfaceHeatingMidnightCalculatorTrait {
-    fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError>;
-}
-
-/// Struct holds connection data to the SQL database and provides implementation for calculating
-/// the time in seconds until midnight.
-pub struct SqlInterfaceHeatingMidnightCalculator {
-    /// Connection to the database
-    pub conn: PooledConn,
-}
-
-impl SqlInterfaceHeatingMidnightCalculatorTrait for SqlInterfaceHeatingMidnightCalculator {
-    /// Queries the database to determine the number of seconds remaining until the next midnight.
-    ///
-    /// This function executes an SQL query to retrieve a precise count of seconds
-    /// from the current database time until 00:00:00 of the upcoming day.
-    ///
-    /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(i64)`: The number of seconds remaining until midnight. This value is expected to be non-negative.
-    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving the integer from the database,
-    ///   such as a query failure, or if the database returns an unexpected number of results.
-    fn get_duration_until_midnight(&mut self) -> Result<i64, SqlInterfaceError> {
-        match SqlInterface::get_single_integer_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl SqlInterfaceHeatingMidnightCalculator {
-    /// Creates a new `SqlInterfaceHeatingMidnightCalculator` instance.
-    ///
-    /// This constructor initializes the calculator with an established database connection,
-    /// which it uses to perform time-related queries, such as determining time until midnight.
-    /// Before, it checks whether the heating set value table or the heating stats table
-    /// contain any NULL values. If so, it panics, as this indicates a data consistency issue.
-    ///
-    /// # Arguments
-    /// * `conn` - An active database connection pool object.
-    ///
-    /// # Returns
-    /// A new `SqlInterfaceHeatingMidnightCalculator` struct.
-    pub fn new(mut conn: PooledConn) -> SqlInterfaceHeatingMidnightCalculator {
-        // preparation for future implementation
-        //if SqlInterface::get_single_integer_from_database(
-        //    &mut conn, SQL_QUERY_CHECK_HEATINGSETVALS_NULL)
-        //    .expect("Could not check heating set value table for NULL values.") > 0 {
-        //    panic!("{}: Heating set value table may be inconsistent - it contains NULL values.",
-        //           LOG_TARGET_SQL_INTERFACE_HEATING);
-        //}
-        if SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_HEATINGSTATS_NULL)
-            .expect("Could not check heating stats table for NULL values.") > 0 {
-            panic!("{}: Heating stats table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_HEATING);
-        }
-
-        SqlInterfaceHeatingMidnightCalculator { conn }
-    }
-}
-
 /// Contains the configuration and the implementation of the SQL interface for heating.
 pub struct SqlInterfaceHeating {
     /// Connection to the database
@@ -290,11 +222,23 @@ impl SqlInterfaceHeating {
     /// # Returns
     /// A new `SqlInterfaceHeating` struct.
     pub fn new(
-        conn: PooledConn,
+        mut conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
             dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send,
         >,
     ) -> SqlInterfaceHeating {
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn, sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL)
+            .expect("Could not check heating set value table for NULL values.") > 0 {
+            panic!("{}: Heating set value table may be inconsistent - it contains NULL values.",
+                   LOG_TARGET_SQL_INTERFACE_HEATING);
+        }
+        if SqlInterface::get_single_integer_from_database(
+            &mut conn, sql_query_strings::SQL_QUERY_CHECK_HEATINGSTATS_NULL)
+            .expect("Could not check heating statistics table for NULL values.") > 0 {
+            panic!("{}: Heating statistics table may be inconsistent - it contains NULL values.",
+                   LOG_TARGET_SQL_INTERFACE_HEATING);
+        }
         SqlInterfaceHeating {
             conn,
             sql_interface_heating_midnight_calculator,

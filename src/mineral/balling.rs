@@ -1854,7 +1854,7 @@ pub mod tests {
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
         // create the test object
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
+        let mut balling = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
 
         let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -1960,6 +1960,6 @@ pub mod tests {
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // create the test object
-        let _ = Balling::new(config.balling, sql_interface_balling);
+        let _ = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
     }
 }
