@@ -19,8 +19,8 @@ pub mod sql_interface_data;
 /// Contains functions for execution of all queries relevant for feed (food)
 pub mod sql_interface_feed;
 
-/// Contains functions for execution of all queries relevant for heating (thermal)
-pub mod sql_interface_heating;
+/// Contains functions for execution of all queries relevant for heating statistics (thermal)
+pub mod sql_interface_heating_stats;
 
 /// Contains functions for execution of all queries relevant for refill (water)
 pub mod sql_interface_refill;
@@ -34,3 +34,12 @@ pub mod sql_interface_error;
 pub mod sql_interface_midnight;
 /// Contains all SQL queries as constants with placeholders
 pub mod sql_query_strings;
+
+/// Contains functions for execution of all queries relevant for heating set values (thermal)
+pub mod sql_interface_heating_setvals;
+
+/// Contains functions for execution of all queries relevant for ventilation set values (thermal)
+pub mod sql_interface_ventilation_setvals;
+
+/// Contains data structure for transfer of heating statistics to the database
+pub mod sql_interface_heating_stats_data_transfer;

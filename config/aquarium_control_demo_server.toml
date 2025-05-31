@@ -94,6 +94,7 @@ switch_on_when_terminating = false           		# behavior when terminating the a
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
+set_value_check_interval = 300                          # interval in seconds for polling SQL database
 
 [balling]
 active = true
@@ -123,6 +124,7 @@ heater_power = 200                                      # The electrical power c
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
+set_value_check_interval = 300                          # interval in seconds for polling SQL database
 
 [ambient]
 use_simulator = true                                    # if true, then do not use real HW

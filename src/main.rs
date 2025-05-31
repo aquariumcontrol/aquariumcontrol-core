@@ -89,8 +89,8 @@ use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels}
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
-use crate::thermal::heating::{Heating, HeatingChannels};
-use crate::thermal::heating_stats_data_transfer::HeatingStatsDataTransfer;
+use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
+use database::sql_interface_heating_stats_data_transfer::SqlInterfaceHeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
@@ -103,10 +103,13 @@ use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-use crate::database::sql_interface_heating::SqlInterfaceHeating;
-use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
+use crate::database::sql_interface_heating_setvals::{SqlInterfaceHeatingSetVals};
+use crate::database::sql_interface_heating_stats::{
+    SqlInterfaceHeatingStats, SqlInterfaceHeatingMidnightCalculator,
+};
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
@@ -180,13 +183,13 @@ fn check_is_command(command: &str) -> bool {
         "-h" | "--help" => {
             display_usage();
             true
-        }
+        },
         "-v" | "--version" => {
             // calculate hash of executable
             let version_information = VersionInformation::new();
             println!("{}", version_information);
             true
-        }
+        },
         _ => false, // All other strings do not match
     }
 }
@@ -382,7 +385,7 @@ fn main() {
 
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
-
+    
     // initialize with a default configuration file name
     let mut config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
 
@@ -400,14 +403,15 @@ fn main() {
                 if !user_arg_identified {
                     // If the user provided an invalid filename and no valid command, output error message and abort.
                     panic!("{}: {}", LOG_TARGET_MAIN, error_message);
-                } else {
+                }
+                else {
                     // At least one valid user command was provided. Graceful exit.
                     return;
                 }
             }
         }
     }
-
+    
     // calculate hash of executable
     let version_information = VersionInformation::new();
     info!(target: LOG_TARGET_MAIN,
@@ -448,7 +452,7 @@ fn main() {
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
 
-    // connect to SQL database, subsequently setup component-specific interfaces
+    // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
@@ -467,7 +471,7 @@ fn main() {
         Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
 
     let sql_interface_midnight_calculator =
-        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection());
+        SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection());
 
     let sql_interface_heating = SqlInterfaceHeating::new(
         sql_interface.get_connection(),
@@ -1213,14 +1217,10 @@ fn main() {
     let mut ambient = Ambient::new(config.ambient);
 
     let mut relay_manager = RelayManager::new(config.relay_manager.clone());
-    let mut schedule_check = ScheduleCheck::new(
-        config.schedule_check,
-        sql_interface_schedule,
-        database_ping_duration,
-    );
+    let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
 
     let mut data_injection = DataInjection;
-    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration);
+    let mut data_logger = DataLogger::new(config.data_logger);
 
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
     let mut heating = Heating::new(
@@ -1229,12 +1229,15 @@ fn main() {
         database_ping_duration,
     );
     let mut feed = Feed::new(config.feed, sql_interface_feed, database_ping_duration);
+    let mut refill = Refill::new(config.refill, sql_interface_refill);
+    let mut heating_set_value_updater =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+    let mut heating = Heating::new(config.heating, sql_interface_heating);
+    let mut feed = Feed::new(config.feed, sql_interface_feed);
+    let mut ventilation_set_value_updater =
+        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation);
     let mut ventilation = Ventilation::new(config.ventilation);
-    let mut balling = Balling::new(
-        config.balling,
-        sql_interface_balling,
-        database_ping_duration,
-    );
+    let mut balling = Balling::new(config.balling, sql_interface_balling);
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 

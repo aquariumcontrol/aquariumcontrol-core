@@ -1,4 +1,6 @@
 use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
 use log::error;
 
@@ -25,10 +27,23 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     ///   used for database interaction.
     fn transfer_heating_stats(
         &mut self,
-        heating_stats_entry: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeating,
+        mut heating_stats_entry: HeatingStatsEntry,
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
     ) {
-        // Insert the heating statistical data into the database
+        // two further sections.
+        let today = match SqlInterface::get_current_date(&mut sql_interface_heating.conn) {
+            Ok(c) => c,
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_HEATING_STATS_DATA_TRANSFER,
+                    "could not get current date from SQL database ({e:?}) - not inserting heating stats into database"
+                );
+                return;
+            }
+        };
+
+        heating_stats_entry.date = today;
+
         match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
             Ok(_) => {}
             Err(e) => {
