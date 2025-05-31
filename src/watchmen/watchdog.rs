@@ -45,9 +45,29 @@ pub struct Watchdog {
 }
 
 impl Watchdog {
-    /// Provides a struct of type Watchdog.
+    /// Creates a new `Watchdog` instance.
+    ///
+    /// This constructor initializes the watchdog communication module with its specified
+    /// configuration. It performs critical **validation checks** on the configuration
+    /// parameters to ensure the watchdog can operate correctly and safely.
+    ///
+    /// **Validation Checks Performed:**
+    /// - `heartbeat_duration_millis` must be greater than zero.
+    /// - `watchdog_filename` cannot be an empty string.
+    /// - `watchdog_heartbeat` message cannot be an empty string.
+    /// - `watchdog_deactivation` message cannot be an empty string.
+    /// - `watchdog_heartbeat` and `watchdog_deactivation` messages must be different.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Watchdog communication
+    /// * `config` - **Configuration data** for the watchdog communication, loaded from a TOML file.
+    ///   This includes filename, heartbeat messages, and timing parameters.
+    ///
+    /// # Returns
+    /// A new **`Watchdog` struct**, ready for sending heartbeats or respond to termination requests.
+    ///
+    /// # Panics
+    /// This function will **panic** if any of the configuration validation checks fail,
+    /// as an incorrectly configured watchdog can lead to system instability or unintended resets.
     pub fn new(config: WatchdogConfig) -> Watchdog {
         if config.heartbeat_duration_millis == 0 {
             panic!(
@@ -83,10 +103,33 @@ impl Watchdog {
         Watchdog { config }
     }
 
-    /// Executes the watchdog communication in a loop until the signal handler commands termination.
+    /// Executes the main control loop for the watchdog communication module.
+    ///
+    /// This function runs continuously, managing the periodic sending of heartbeats
+    /// to a system watchdog. It ensures the application's liveness is maintained
+    /// and handles various external commands for controlling its operation.
+    ///
+    /// **Key Operations:**
+    /// - **Heartbeat Sending**: If `active` and not `inhibited`, it calls the `petting.pet()`
+    ///   method to send a heartbeat message to the configured `watchdog_filename`.
+    /// - **Cycle Management**: It sleeps for the configured `heartbeat_duration_millis`
+    ///   between each heartbeat.
+    /// - **External Control**: It processes `Start` and `Stop` commands received from
+    ///   messaging or the signal handler to `inhibit` or re-enable watchdog activity.
+    /// - **Graceful Deactivation**: Upon receiving a `Quit` command, it sends a final
+    ///   `watchdog_deactivation` message before exiting the loop.
+    /// - **Shutdown Confirmation**: After exiting the loop, it sends a confirmation back
+    ///   to the signal handler.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - receiver part of the channel for communication from signal handler                
-    /// * `rx_from_messaging_opt` - receiver part of the channel communication wrapped in Option from Messaging
+    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
+    ///   back to the main signal handler during shutdown.
+    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
+    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing the receiver channel for commands
+    ///   (e.g., `Start`, `Stop`) from the messaging system.
+    /// * `petting` - A mutable reference to an object implementing the `PettingTrait`,
+    ///   responsible for the actual writing of heartbeat/deactivation messages to the watchdog file.
     pub fn execute(
         &mut self,
         tx_to_signal_handler: Sender<bool>,
@@ -155,12 +198,15 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use crate::watchmen::watchdog::Watchdog;
     use spin_sleep::SpinSleeper;
+    use std::fs::OpenOptions;
+    use std::io::Read;
     use std::sync::mpsc::{self};
     use std::thread::scope;
     use std::time::Duration;
 
     use crate::stubs::mock_petting::tests::MockPetting;
     use crate::utilities::channel_content::InternalCommand;
+    use crate::watchmen::petting::Petting;
 
     #[test]
     #[should_panic]
@@ -303,6 +349,86 @@ pub mod tests {
                     "Signal was expected to be '{}', but was '{}'",
                     reference_heartbeat_signal,
                     mock_petting.signal_recorder.last().unwrap()
+                );
+            });
+        });
+    }
+
+    #[test]
+    // test if the watchdog is writing the right heartbeat messages to the watchdog file
+    pub fn test_watchdog_check_heartbeat_message() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.watchdog.watchdog_filename = "/var/log/watchdog.log".to_string();
+        let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
+        let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
+
+        let reference_heartbeat_signal = config.watchdog.watchdog_heartbeat.clone();
+        let reference_deactivation_signal = config.watchdog.watchdog_deactivation.clone();
+
+        // Erase content of the watchdog file
+        let file = OpenOptions::new()
+            .write(true)
+            .open(config.watchdog.watchdog_filename.clone())
+            .unwrap();
+        _ = file.set_len(0); // This is the core operation
+
+        let watchdog_filename_for_assert = config.watchdog.watchdog_filename.clone();
+        let mut watchdog = Watchdog::new(config.watchdog);
+        let mut petting = Petting::new();
+
+        scope(|scope| {
+            // thread for the test environment
+            scope.spawn(move || {
+                let sleep_duration_test_environment = Duration::from_millis(3100);
+                let spin_sleeper_test_environment = SpinSleeper::default();
+
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                tx_signal_handler_to_watchdog
+                    .send(InternalCommand::Terminate)
+                    .unwrap();
+                rx_signal_handler_from_watchdog.recv().unwrap();
+            });
+
+            // thread for the assertions
+            scope.spawn(move || {
+                let sleep_duration_assert1 = Duration::from_millis(500);
+                let sleep_duration_assert2 = Duration::from_millis(4500);
+                let spin_sleeper_asserts = SpinSleeper::default();
+
+                // let the test object start writing to the watchdog file
+                spin_sleeper_asserts.sleep(sleep_duration_assert1);
+
+                // assert the heartbeat message
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open(watchdog_filename_for_assert.clone())
+                    .unwrap();
+                let mut content = String::new();
+                file.read_to_string(&mut content).unwrap();
+                assert_eq!(content, reference_heartbeat_signal);
+
+                // wait for the termination of the test object
+                spin_sleeper_asserts.sleep(sleep_duration_assert2);
+
+                // assert the watchdog deactivation message
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open(watchdog_filename_for_assert)
+                    .unwrap();
+                let mut content = String::new();
+                file.read_to_string(&mut content).unwrap();
+                assert_eq!(content, reference_deactivation_signal);
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                watchdog.execute(
+                    tx_watchdog_to_signal_handler,
+                    rx_watchdog_from_signal_handler,
+                    None,
+                    &mut petting,
                 );
             });
         });

@@ -11,13 +11,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     const LOG_TARGET_MOCK_HEATING: &str = "mock_heating";
 
-    use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-    use std::time::Duration;
-
+    use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::time::{Duration, Instant};
+    use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 
     pub fn mock_heating(
         tx_heating_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
@@ -78,29 +79,12 @@ pub mod tests {
                 None => { /* do nothing */ }
             };
 
-            match rx_heating_from_signal_handler.try_recv() {
-                Ok(c) => {
-                    match c {
-                        InternalCommand::Quit => {
-                            break;
-                        }
-                        _ => {
-                            panic!("{}: Received invalid command.", LOG_TARGET_MOCK_HEATING);
-                        }
-                    };
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from signal handler: {e:?}",
-                                LOG_TARGET_MOCK_HEATING
-                            );
-                        }
-                    }
-                }
-            };
+            if mock_common_receive_from_signal_handler(
+                rx_heating_from_signal_handler,
+                LOG_TARGET_MOCK_HEATING,
+            ) {
+                break;
+            }
 
             // communicate with data logger
             match rx_heating_from_data_logger_opt {
@@ -206,6 +190,63 @@ pub mod tests {
             };
 
             spin_sleeper.sleep(sleep_duration);
+        }
+    }
+    
+    pub struct MockSqlInterfaceHeatingSetVals {
+        active: bool,
+        new_set_value_heating_switch_off_temperature: Option<f32>,
+        new_set_value_heating_switch_on_temperature: Option<f32>,
+        delay_duration: Option<Duration>,
+        start_time: Instant,
+    }
+    
+    impl MockSqlInterfaceHeatingSetVals {
+        // Creates a new `MockSqlInterfaceHeatingSetVals` instance which will either actively
+        // manipulate test data or behave neutrally depending on the parameters.
+        //
+        // # Arguments
+        // * `active` - determine if test data shall be manipulated with the call to update_set_value
+        // * `new_set_value_heating_switch_off_temperature` - new set value for switch off temperature
+        //   to be applied to the mutable reference provided in update_set_value
+        // * `new_set_value_heating_switch_on_temperature` - new set value for switch on temperature
+        //   to be applied to the mutable reference provided in update_set_value
+        // * `delay_duration` - duration of time which shall pass before manipulating test data
+        //
+        // # Returns
+        // A new `HeatingSetValueMockUpdater` struct.
+        pub fn new(
+            active: bool,
+            new_set_value_heating_switch_off_temperature: Option<f32>,
+            new_set_value_heating_switch_on_temperature: Option<f32>,
+            delay_duration: Option<Duration>,
+        )
+        -> MockSqlInterfaceHeatingSetVals {
+            MockSqlInterfaceHeatingSetVals {
+                active,
+                new_set_value_heating_switch_off_temperature,
+                new_set_value_heating_switch_on_temperature,
+                delay_duration,
+                start_time: Instant::now()
+            }
+        }
+    }
+    impl HeatingSetValueUpdaterTrait for MockSqlInterfaceHeatingSetVals {
+        fn update_set_value(
+            &mut self,
+            heating_switch_off_temperature: &mut f32,
+            heating_switch_on_temperature: &mut f32
+        ) {
+            if self.active &&
+                self.delay_duration.is_some() &&
+                self.new_set_value_heating_switch_off_temperature.is_some() &&
+                self.new_set_value_heating_switch_on_temperature.is_some() {
+                // manipulate the test data when enabled and after the delay has passed.
+                if Instant::now().duration_since(self.start_time) > self.delay_duration.unwrap() {
+                    *heating_switch_off_temperature = self.new_set_value_heating_switch_off_temperature.unwrap();
+                    *heating_switch_on_temperature = self.new_set_value_heating_switch_on_temperature.unwrap();
+                }
+            }
         }
     }
 }

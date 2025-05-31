@@ -18,17 +18,28 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// Trait for the execution of the Balling mineral dosing.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait MineralInjectionTrait {
-    /// Actuates the peristaltic pumps for injecting a mineral solution into the main tank.
+    /// Actuates a specific peristaltic pump to inject a mineral solution into the main tank for a defined duration.
+    ///
+    /// This method controls the selected `mineral_pump` by sending `SwitchOn` and `SwitchOff` commands
+    /// to the relay manager. It runs the pump for the `dosing_duration_millis` or until a
+    /// `Quit` command is received from the signal handler, allowing for early termination.
+    ///
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of the channel for communication to Controllino
-    /// * `rx_from_controllino` - Reference to Receiver part of the channel for communication from Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication from signal handler
-    /// * `mineral_pump` - pump to be actuated of type AquariumDevice
-    /// * `dosing_duration_millis` - dosing duration in milliseconds
+    /// * `tx_to_relay_manager` - The sender channel for communicating commands to the relay manager (e.g., Controllino).
+    /// * `rx_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager after a command.
+    /// * `rx_from_signal_handler` - The receiver channel for listening to `InternalCommand` signals from the main signal handler.
+    /// * `mineral_pump` - The `AquariumDevice` enum variant identifying which peristaltic pump to actuate.
+    /// * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump should run.
+    ///
+    /// # Returns
+    /// A tuple `(bool, u32)`:
+    /// - The `bool` is `true` if a `Quit` command was received from the signal handler during injection,
+    ///   indicating that the operation was interrupted. It's `false` otherwise.
+    /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
     fn inject_mineral(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        tx_to_relay_manager: &Sender<InternalCommand>,
+        rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
@@ -41,8 +52,8 @@ pub trait MineralInjectionTrait {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     mineral_injection[Mineral injection] --> controllino[Controllino]
-///     controllino --> mineral_injection
+///     mineral_injection[Mineral injection] --> relay_manager[Relay Manager]
+///     relay_manager --> mineral_injection
 ///     signal_handler[Signal handler] --> mineral_injection
 /// ```
 pub struct MineralInjection;
@@ -55,17 +66,30 @@ impl MineralInjection {
 }
 
 impl MineralInjectionTrait for MineralInjection {
-    /// Switches on one of the peristaltic pumps for a defined period of time, or until a Quit command is received from the signal handler.
+    /// Switches on one of the peristaltic pumps for a defined period, or until a `Quit` command is received.
+    ///
+    /// This implementation for `inject_mineral` controls the specified `mineral_pump`.
+    /// It sends a `SwitchOn` command to the relay manager, then enters a loop
+    /// to keep the pump active for `dosing_duration_millis`. During this period,
+    /// it continuously checks for a `Quit` command from the signal handler,
+    /// allowing for immediate termination. Once the duration is met or a `Quit`
+    /// command is received, it sends a `SwitchOff` command to the pump.
+    ///
     /// # Arguments
-    /// * `tx_to_controllino` - Reference to sender part of the channel for communication with Controllino
-    /// * `rx_from_controllino` - Reference to receiver part of the channel for communication with Controllino
-    /// * `rx_from_signal_handler` - Reference to receiver part of the channel for communication with signal handler
-    /// * `mineral_pump` - parameter defining which pump shall be switched on
-    /// * `dosing_duration_millis` - dosing duration in milliseconds    
+    /// * `tx_to_relay_manager` - The sender channel for communicating commands to the relay manager.
+    /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
+    /// * `rx_from_signal_handler` - The receiver channel for listening to `InternalCommand` signals from the signal handler.
+    /// * `mineral_pump` - The `AquariumDevice` variant identifying which pump to actuate.
+    /// * `dosing_duration_millis` - The target duration (in milliseconds) for which the pump should run.
+    ///
+    /// # Returns
+    /// A tuple `(bool, u32)`:
+    /// - The `bool` is `true` if a `Quit` command was received during injection; otherwise `false`.
+    /// - The `u32` is the actual duration (in milliseconds) the pump ran before stopping or being interrupted.
     fn inject_mineral(
         &mut self,
-        tx_to_controllino: &Sender<InternalCommand>,
-        rx_from_controllino: &Receiver<bool>,
+        tx_to_relay_manager: &Sender<InternalCommand>,
+        rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
@@ -77,15 +101,15 @@ impl MineralInjectionTrait for MineralInjection {
         let mut quit_command_received: bool;
         let mut dosing_counter = 0;
 
-        match tx_to_controllino.send(InternalCommand::SwitchOn(mineral_pump.clone())) {
+        match tx_to_relay_manager.send(InternalCommand::SwitchOn(mineral_pump.clone())) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_MINERAL_INJECTION,
-                            "receiving answer from Controllino when switching on dosing pump failed ({e:?})"
+                            "receiving answer from relay manager when switching on dosing pump failed ({e:?})"
                         );
                     }
                 };
@@ -93,7 +117,7 @@ impl MineralInjectionTrait for MineralInjection {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_MINERAL_INJECTION,
-                    "channel communication to Controllino when switching on dosing pump failed ({e:?})"
+                    "channel communication to relay manager when switching on dosing pump failed ({e:?})"
                 );
             }
         }
@@ -115,15 +139,15 @@ impl MineralInjectionTrait for MineralInjection {
             }
         }
 
-        match tx_to_controllino.send(InternalCommand::SwitchOff(mineral_pump)) {
+        match tx_to_relay_manager.send(InternalCommand::SwitchOff(mineral_pump)) {
             Ok(_) => {
                 // now listen for the response
-                match rx_from_controllino.recv() {
+                match rx_from_relay_manager.recv() {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
                             target: LOG_TARGET_MINERAL_INJECTION,
-                            "receiving answer from Controllino when switching off dosing pump failed ({e:?})"
+                            "receiving answer from relay manager when switching off dosing pump failed ({e:?})"
                         );
                     }
                 };
@@ -131,7 +155,7 @@ impl MineralInjectionTrait for MineralInjection {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_MINERAL_INJECTION,
-                    "channel communication to Controllino when switching off dosing pump failed ({e:?})"
+                    "channel communication to relay manager when switching off dosing pump failed ({e:?})"
                 );
             }
         }
@@ -151,14 +175,36 @@ pub mod tests {
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 
+    // Simulates the Relay Manager's behavior for Mineral Injection tests.
+    //
+    // This helper function acts as a mock for the Relay Manager. It waits to receive
+    // either a `SwitchOn` or `SwitchOff` command from the `MineralInjection` test object.
+    // Upon receiving a command, it sends a `true` acknowledgment back to the sender
+    // and returns the received command. This is used to verify that the
+    // `MineralInjection` module sends the correct commands.
+    //
+    // Arguments:
+    // * `tx_relay_manager_to_mineral_injection`: The sender channel for this mock to send
+    //   acknowledgments back to the `MineralInjection` test object.
+    // * `rx_relay_manager_from_mineral_injection`: The receiver channel for this mock to get
+    //   actuation commands from the `MineralInjection` test object.
+    //
+    // Returns:
+    // The `InternalCommand` that was received from the `MineralInjection` test object.
+    //
+    // Panics:
+    // This function will panic if:
+    // - It fails to receive a command from the `MineralInjection` test object.
+    // - It receives an `InternalCommand` that is neither `SwitchOn` nor `SwitchOff`.
+    // - It fails to send the acknowledgment back.
     fn test_mineral_injection_receive_actuation_command_send_confirmation(
-        tx_controllino_to_mineral_injection: &Sender<bool>,
-        rx_controllino_from_mineral_injection: &Receiver<InternalCommand>,
+        tx_relay_manager_to_mineral_injection: &Sender<bool>,
+        rx_relay_manager_from_mineral_injection: &Receiver<InternalCommand>,
     ) -> InternalCommand {
         let command: InternalCommand;
 
         // receive command from the test object
-        match rx_controllino_from_mineral_injection.recv() {
+        match rx_relay_manager_from_mineral_injection.recv() {
             Ok(c) => match c {
                 InternalCommand::SwitchOn(_) => command = c,
                 InternalCommand::SwitchOff(_) => command = c,
@@ -174,7 +220,7 @@ pub mod tests {
         }
 
         // send confirmation back
-        match tx_controllino_to_mineral_injection.send(true) {
+        match tx_relay_manager_to_mineral_injection.send(true) {
             Ok(_) => {}
             Err(e) => {
                 panic!("MineralInjection: Error when sending back actuation command confirmation to test object: {e:?}");
@@ -187,9 +233,9 @@ pub mod tests {
     // This test case executes the mineral injection without interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_happy_case() {
-        let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
+        let (tx_mineral_injection_to_relay_manager, rx_relay_manager_from_mineral_injection) =
             mpsc::channel();
-        let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
+        let (tx_relay_manager_to_mineral_injection, rx_mineral_injection_from_relay_manager) =
             mpsc::channel();
         let (_tx_signal_handler_to_mineral_injection, rx_mineral_injection_from_signal_handler) =
             mpsc::channel();
@@ -203,14 +249,14 @@ pub mod tests {
             scope.spawn(move || {
                 // allow switching on peristaltic pump
                 test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_controllino_to_mineral_injection,
-                    &rx_controllino_from_mineral_injection,
+                    &tx_relay_manager_to_mineral_injection,
+                    &rx_relay_manager_from_mineral_injection,
                 );
 
                 // allow switching off peristaltic pump
                 test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_controllino_to_mineral_injection,
-                    &rx_controllino_from_mineral_injection,
+                    &tx_relay_manager_to_mineral_injection,
+                    &rx_relay_manager_from_mineral_injection,
                 );
             });
 
@@ -218,8 +264,8 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(
-                        &tx_mineral_injection_to_controllino,
-                        &rx_mineral_injection_from_controllino,
+                        &tx_mineral_injection_to_relay_manager,
+                        &rx_mineral_injection_from_relay_manager,
                         &rx_mineral_injection_from_signal_handler,
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,
@@ -233,9 +279,9 @@ pub mod tests {
     // This test case executes the mineral injection with interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_interrupted() {
-        let (tx_mineral_injection_to_controllino, rx_controllino_from_mineral_injection) =
+        let (tx_mineral_injection_to_relay_manager, rx_relay_manager_from_mineral_injection) =
             mpsc::channel();
-        let (tx_controllino_to_mineral_injection, rx_mineral_injection_from_controllino) =
+        let (tx_relay_manager_to_mineral_injection, rx_mineral_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_mineral_injection, rx_mineral_injection_from_signal_handler) =
             mpsc::channel();
@@ -258,14 +304,14 @@ pub mod tests {
             scope.spawn(move || {
                 // allow switching on peristaltic pump
                 test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_controllino_to_mineral_injection,
-                    &rx_controllino_from_mineral_injection,
+                    &tx_relay_manager_to_mineral_injection,
+                    &rx_relay_manager_from_mineral_injection,
                 );
 
                 // allow switching off peristaltic pump
                 test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_controllino_to_mineral_injection,
-                    &rx_controllino_from_mineral_injection,
+                    &tx_relay_manager_to_mineral_injection,
+                    &rx_relay_manager_from_mineral_injection,
                 );
             });
 
@@ -273,8 +319,8 @@ pub mod tests {
             scope.spawn(move || {
                 let (quit_command_received, actual_dosing_duration_millis) = mineral_injection
                     .inject_mineral(
-                        &tx_mineral_injection_to_controllino,
-                        &rx_mineral_injection_from_controllino,
+                        &tx_mineral_injection_to_relay_manager,
+                        &rx_mineral_injection_from_relay_manager,
                         &rx_mineral_injection_from_signal_handler,
                         AquariumDevice::PeristalticPump1,
                         target_dosing_duration_millis,

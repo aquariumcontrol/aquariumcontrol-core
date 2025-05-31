@@ -6,7 +6,6 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
 use crate::relays::controllino_message::{ControllinoMessage, ControllinoMessageContent};
 use crate::relays::relay_manager::{RelayActuationTrait, RelayError};
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
@@ -14,9 +13,14 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
+use std::collections::HashSet;
 use std::time::Duration;
 
 const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
+
+const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
+const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
+
 /// Contains constants for communication with Controllino
 #[allow(unused)]
 pub mod controllino_constants {
@@ -54,10 +58,23 @@ pub mod controllino_constants {
     pub const SLEEP_AFTER_CLEAR_BUFFER_MILLIS: u64 = 2000;
 }
 
-/// Calculates the checksums of the byte sequence received from Controllino
-/// and compares it with the checksums received
+/// Calculates and validates the checksums of a byte sequence received from the Controllino.
+///
+/// This private helper function computes two XOR-based checksums from specific bytes
+/// within the input `data` array and compares them against the checksums embedded
+/// in the received data itself. It's crucial for verifying the integrity of
+/// messages sent by the Controllino device.
+///
+/// If the checksums do not match, a warning is logged with detailed information
+/// about the discrepancy, aiding in debugging communication issues.
+///
 /// # Arguments
-/// * `data` - array of u8
+/// * `data` - A slice of `u8` bytes representing the message received from the Controllino.
+///   It is expected to be at least 8 bytes long.
+///
+/// # Returns
+/// `true` if both calculated checksums match the received checksums, indicating data integrity;
+/// `false` otherwise.
 fn check_controllino_checksums(data: &[u8]) -> bool {
     let first_checksum = data[0] ^ data[1] ^ data[2];
     let second_checksum = data[4] ^ data[5] ^ data[6];
@@ -78,6 +95,11 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+/// Configuration settings for direct hardware actuation via the Controllino device.
+///
+/// This struct holds all parameters required to establish and manage communication
+/// with the Controllino (e.g., serial port settings) and maps application-level
+/// devices to their specific relay IDs on the Controllino board.
 pub struct ActuateControllinoConfig {
     /// Baud rate for communication via serial port
     baud_rate: u32,
@@ -138,6 +160,7 @@ pub struct ActuateControllinoConfig {
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
 pub struct ActuateControllino {
+    /// Configuration for setup of Controllino device
     config: ActuateControllinoConfig,
 
     /// Object is used frequently to wait for a determined period of time, so storing it instead of recreating when needed.
@@ -205,12 +228,22 @@ fn create_command_message(
     }
 }
 
-/// Provides one of two enum values of type InternalCommand wrapping the relay number.
-/// Alternative relay logic can be considered here by choosing either SetRelay or UnsetRelay.
+/// Creates a Controllino-specific message from a high-level internal command.
+///
+/// This private helper function translates a generic `InternalCommand` (like `SwitchOn`, `SwitchOff`, or `Pulse`)
+/// into the precise `ControllinoMessage` format required for serial communication with the Controllino hardware.
+/// It uses the provided configuration to map `AquariumDevice` types to their
+/// corresponding relay IDs and to determine the correct relay actuation logic (e.g., `SetRelay` vs. `UnsetRelay`).
+///
 /// # Arguments
-/// * `internal_command` - enum value which is interpreted
-/// * `device` - enum value for which the function shall provide the relay id
-/// * `config` - Controllino configuration read from .toml file
+/// * `internal_command` - The `InternalCommand` enum value representing the desired action (e.g., switching a device on/off or pulsing a relay).
+/// * `config` - A reference to the `ActuateControllinoConfig`, which provides device-to-relay ID mappings and other settings.
+///
+/// # Returns
+/// A `Result` which is:
+/// - `Ok(ControllinoMessage)`: The successfully constructed message ready to be sent to the Controllino.
+/// - `Err(RelayError::IrrelevantCommand)`: If the `internal_command` is not one that this function can translate for Controllino actuation (e.g., `ResetAllErrors`).
+/// - `Err(RelayError::PulseNotAllowedForDevice)`: If a `Pulse` command is issued for a device that does not support pulsing.
 pub fn get_relay_command(
     internal_command: &InternalCommand,
     device: AquariumDevice,
@@ -359,11 +392,25 @@ pub fn get_relay_command(
 }
 
 impl RelayActuationTrait for ActuateControllino {
-    /// Triggers actuation on Controllino hardware via serial port communication
-    /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
-    /// considering relay id and relay logic.
+    /// Actuates a specific relay on the Controllino hardware via serial port communication.
+    ///
+    /// This function translates high-level `InternalCommand`s (`SwitchOn`, `SwitchOff`, `Pulse`)
+    /// into low-level serial messages for the Controllino. It sends the command, waits for
+    /// the Controllino to process it (including any pulse durations), and then reads
+    /// and validates the response, including checksum verification.
+    ///
     /// # Arguments
-    /// * `internal_command` - enum value used for identifying content which shall be sent
+    /// * `internal_command` - The `InternalCommand` specifying the device and desired action (e.g., `SwitchOn(Heater)`, `Pulse(PeristalticPump1, 500)`).
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the command was sent successfully and a valid acknowledgment was received from the Controllino.
+    /// - `Err(RelayError::FailureCommandMessageCreation)` if there's an issue preparing the Controllino message.
+    /// - `Err(RelayError::WriteError)` if the command cannot be written to the serial port.
+    /// - `Err(RelayError::ReadError)` if a response cannot be read from the serial port.
+    /// - `Err(RelayError::IncorrectChecksum)` if the received response has an invalid checksum.
+    /// - `Err(RelayError::IrrelevantCommand)` if an inapplicable command is provided.
+    /// - `Err(RelayError::PulseNotAllowedForDevice)` if a `Pulse` command is attempted on a non-pulsable device.
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
@@ -450,6 +497,27 @@ impl RelayActuationTrait for ActuateControllino {
     }
 }
 
+/// Opens and initializes a serial port connection to the Controllino device.
+///
+/// This function attempts to establish a serial communication link using the
+/// provided port name and baud rate. It also configures the port timeout,
+/// performs a DTR reset, and clears input/output buffers to ensure a clean
+/// communication state before returning the opened port.
+///
+/// # Arguments
+/// * `port_name` - The name of the serial port (e.g., "/dev/ttyUSB0" on Linux).
+/// * `baud_rate` - The baud rate for serial communication (e.g., 9600).
+/// * `timeout_millis` - The read/write timeout for serial port operations in milliseconds.
+///
+/// # Returns
+/// A `Box<dyn SerialPort>` representing the opened and configured serial port.
+///
+/// # Panics
+/// This function will panic if:
+/// - It fails to open the serial port with the specified parameters.
+/// - It fails to set the read/write timeout on the serial port.
+/// - It encounters an error when clearing the Data Terminal Ready (DTR) signal.
+/// - It encounters an error when clearing the serial port buffers.
 fn controllino_open_serial_port(
     port_name: String,
     baud_rate: u32,
@@ -514,8 +582,102 @@ fn controllino_open_serial_port(
 }
 
 impl ActuateControllino {
+    /// Validates the provided relay ID configuration for the Controllino.
+    ///
+    /// This function performs two critical checks:
+    /// 1. Ensures that all configured relay IDs fall within the permissible range
+    ///    defined by `CONTROLLINO_MIN_RELAY_ID` and `CONTROLLINO_MAX_RELAY_ID`.
+    /// 2. Confirms that all assigned relay IDs are unique, preventing conflicts
+    ///    where multiple devices might be configured to the same physical relay.
+    ///
+    /// Errors (out-of-range or duplicate IDs) are logged to the console/main log,
+    /// with `println!` used in test configurations for direct output.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the `ActuateControllinoConfig` containing the
+    ///   relay ID mappings for various aquarium devices.
+    ///
+    /// # Returns
+    /// `true` if all relay IDs are valid (within range and distinct); `false` otherwise.
+    pub fn check_valid_relay_id_config(config: &ActuateControllinoConfig) -> bool {
+        // check if relay ids are in valid range and if they are distinct
+        let mut seen_values = HashSet::new();
+
+        let relay_id_values = [
+            config.aux_pump1_id,
+            config.aux_pump2_id,
+            config.feeder_id,
+            config.heater_id,
+            config.main_pump1_id,
+            config.main_pump2_id,
+            config.peristaltic_pump1_id,
+            config.peristaltic_pump2_id,
+            config.peristaltic_pump3_id,
+            config.peristaltic_pump4_id,
+            config.refill_pump_id,
+            config.ventilation_id,
+        ];
+
+        for &value in &relay_id_values {
+            if !(CONTROLLINO_MIN_RELAY_ID..=CONTROLLINO_MAX_RELAY_ID).contains(&value) {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "Not all relay IDs are inside permissible range."
+                );
+                #[cfg(test)]
+                println!("Not all relay IDs are inside permissible range.");
+                return false; // Value is out of the allowed range
+            }
+            if !seen_values.insert(value) {
+                #[cfg(not(test))]
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "Not all relay IDs are distinct - duplicate values found."
+                );
+                #[cfg(test)]
+                println!("Not all relay IDs are distinct - duplicate values found.");
+                return false; // Duplicate value found
+            }
+        }
+
+        true
+    }
+
+    /// Creates a new `ActuateControllino` instance, establishing communication with the Controllino hardware.
+    ///
+    /// This constructor performs essential setup for hardware actuation. It validates the provided
+    /// relay ID configuration for correctness and uniqueness, ensures a serial port name is provided,
+    /// and then opens and initializes the serial port connection to the Controllino device.
+    ///
+    /// # Arguments
+    /// * `config` - Configuration data for the Controllino relays, including serial port settings and device-to-relay mappings.
+    ///
+    /// # Returns
+    /// A new `ActuateControllino` struct, ready for sending commands to the hardware.
+    ///
+    /// # Panics
+    /// This function will **panic** if:
+    /// - The provided `config` contains **invalid relay ID mappings** (e.g., IDs outside the permissible range or duplicate IDs).
+    /// - The `port_name` in the configuration is **empty**.
+    /// - It fails to **open or initialize the serial port** connection to the Controllino.
     pub fn new(config: ActuateControllinoConfig) -> ActuateControllino {
         let spin_sleeper = SpinSleeper::default();
+
+        // check validity of configuration
+        if !Self::check_valid_relay_id_config(&config) {
+            panic!(
+                "{}: Relay ID configuration is invalid.",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
+        }
+
+        if config.port_name.is_empty() {
+            panic!(
+                "{}: Port name for communication with Controllino is empty.",
+                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+            );
+        }
 
         let serial_port = controllino_open_serial_port(
             config.port_name.clone(),
@@ -553,10 +715,44 @@ pub mod tests {
         PeristalticPump2, PeristalticPump3, PeristalticPump4, Skimmer, Ventilation,
     };
 
-    use crate::relays::actuate_controllino::{controllino_constants, create_command_message};
+    use crate::relays::actuate_controllino::{
+        controllino_constants, create_command_message, ActuateControllino,
+        CONTROLLINO_MAX_RELAY_ID, CONTROLLINO_MIN_RELAY_ID,
+    };
     use crate::relays::relay_manager::RelayError;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_id_config_low() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MIN_RELAY_ID - 1;
+
+        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+    }
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_id_config_high() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID + 1;
+
+        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+    }
+    #[test]
+    #[should_panic]
+    pub fn test_invalid_relay_config_duplicate() {
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID;
+        config.controllino_relay.main_pump2_id = CONTROLLINO_MAX_RELAY_ID;
+
+        let _gpio_handler = ActuateControllino::new(config.controllino_relay);
+    }
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
     fn get_platform_specific_configuration_file() -> String {

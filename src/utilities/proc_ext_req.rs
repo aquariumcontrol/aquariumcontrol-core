@@ -30,16 +30,38 @@ use crate::water::{refill::Refill, water_injection::WaterInjection};
 
 const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
 
-/// The trait implements processing for repeated patterns of the channel communication from signal handler and from messaging.
-/// The default implementation is used by heating control, ventilation control and monitors.
-/// The following modules use specific implementations of this trait: Refill control, Data logger, Balling,
-/// Food injection, Water injection, Mineral injection, Schedule check, Controllino, Gpio handler,
-/// Feed, Messaging, TCP communication.
+/// This trait defines a common interface for processing external requests, such as
+/// commands received from a signal handler or a messaging system. It's designed
+/// to be implemented by various control modules in the system.
+///
+/// The default implementation provided here handles basic "Quit," "Start," and "Stop"
+/// commands, logging warnings for other inapplicable commands and errors for channel
+/// disconnection. This default is used by modules like heating control, ventilation control,
+/// and monitors.
+///
+/// More specialized modules, including Refill control, Data logger, Balling, Food injection,
+/// Water injection, Mineral injection, Schedule check, Controllino, Gpio handler, Feed,
+/// Messaging, and TCP communication, provide their own specific implementations of this trait.
 pub trait ProcessExternalRequestTrait {
-    /// Checks if there are new messages in the channels.
+    /// Checks for and processes new commands received from the signal handler and an optional messaging channel.
+    ///
+    /// This function attempts to receive `InternalCommand` messages without blocking from two potential sources:
+    /// a required channel from the signal handler and an optional channel from a messaging system.
+    /// It specifically looks for `Quit` commands from the signal handler and `Start`/`Stop` commands
+    /// from the messaging channel, ignoring other commands and logging warnings for them.
+    /// Channel disconnection errors are also logged.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to the receiver part of the channel for communication from messaging wrapped in Option
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing a reference to the receiver end
+    ///   of the channel for commands from the messaging system. This channel is optional.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of specific commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received from the signal handler; otherwise `false`.
+    /// - The second `bool` is `true` if a `Start` command was received from messaging; otherwise `false`.
+    /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -112,12 +134,24 @@ pub trait ProcessExternalRequestTrait {
 }
 
 impl ProcessExternalRequestTrait for Refill {
-    /// Checks if there are new messages in the channels.
-    /// Implementation for Refill
-    /// If the message contains the command to reset all errors, the function will reset all error bits.
+    /// Checks for and processes new commands relevant to the Refill control module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `Refill` module.
+    /// In addition to handling standard "Quit", "Start", and "Stop" commands, it specifically
+    /// intercepts the `InternalCommand::ResetAllErrors` command from the messaging channel
+    /// to reset the refill control's internal error states.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `rx_from_messaging` - reference to the receiver part of the channel for communication from messaging wrapped in Option
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing a reference to the receiver end
+    ///   of the channel for commands from the messaging system. This channel is optional.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of specific commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received from the signal handler; otherwise `false`.
+    /// - The second `bool` is `true` if a `Start` command was received from messaging; otherwise `false`.
+    /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -198,10 +232,22 @@ impl ProcessExternalRequestTrait for Refill {
     }
 }
 
-/// Checks if there are new messages in the channel.
-/// Associated function used by implementation for structs which only use signal handler and no messaging
+/// Checks for new commands from the signal handler, specifically for modules that don't use messaging.
+///
+/// This associated function provides a streamlined way to process external requests
+/// for components that only listen to the signal handler channel. It attempts to
+/// receive without blocking `InternalCommand` messages and specifically looks for
+/// a `Quit` command.
+///
 /// # Arguments
-/// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
+/// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+///   for commands originating from the signal handler.
+///
+/// # Returns
+/// A tuple `(bool, bool, bool)` indicating the status of commands received:
+/// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+/// - The second `bool` is always `false` as "Start" commands are not processed by this function.
+/// - The third `bool` is always `false` as "Stop" commands are not processed by this function.
 fn process_external_request_without_messaging(
     rx_from_signal_handler: &Receiver<InternalCommand>,
 ) -> (bool, bool, bool) {
@@ -235,11 +281,24 @@ fn process_external_request_without_messaging(
 }
 
 impl ProcessExternalRequestTrait for DataLogger {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for DataLogger
+    /// Checks for and processes new commands relevant to the Data Logger module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `DataLogger`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `DataLogger` only processes commands from the signal handler and
+    /// ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `DataLogger` does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -250,11 +309,24 @@ impl ProcessExternalRequestTrait for DataLogger {
 }
 
 impl ProcessExternalRequestTrait for FoodInjection {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for FoodInjection
+    /// Checks for and processes new commands relevant to the Food Injection module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `FoodInjection`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `FoodInjection` module only processes commands from the signal handler
+    /// and ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `FoodInjection` module does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -265,11 +337,24 @@ impl ProcessExternalRequestTrait for FoodInjection {
 }
 
 impl ProcessExternalRequestTrait for MineralInjection {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for MineralInjection
+    /// Checks for and processes new commands relevant to the Mineral Injection module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `MineralInjection`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `MineralInjection` module only processes commands from the signal handler
+    /// and ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `MineralInjection` module does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -280,11 +365,24 @@ impl ProcessExternalRequestTrait for MineralInjection {
 }
 
 impl ProcessExternalRequestTrait for WaterInjection {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for WaterInjection
+    /// Checks for and processes new commands relevant to the Water Injection module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `WaterInjection`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `WaterInjection` module only processes commands from the signal handler
+    /// and ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `WaterInjection` module does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -295,11 +393,24 @@ impl ProcessExternalRequestTrait for WaterInjection {
 }
 
 impl ProcessExternalRequestTrait for ScheduleCheck {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for ScheduleCheck
+    /// Checks for and processes new commands relevant to the Schedule Check module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `ScheduleCheck`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `ScheduleCheck` module only processes commands from the signal handler
+    /// and ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `ScheduleCheck` module does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -310,11 +421,24 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
 }
 
 impl ProcessExternalRequestTrait for RelayManager {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for Controllino
+    /// Checks for and processes new commands relevant to the Relay Manager module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `RelayManager`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `RelayManager` (which often interacts with hardware like Controllino)
+    /// only processes commands from the signal handler and ignores any input from a messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `RelayManager` does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -326,11 +450,27 @@ impl ProcessExternalRequestTrait for RelayManager {
 
 #[cfg(target_os = "linux")]
 impl ProcessExternalRequestTrait for Messaging {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for Messaging
+    /// Checks for and processes new commands relevant to the Messaging module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `Messaging`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `Messaging` module only processes commands from the signal handler
+    /// and ignores any input from a separate messaging channel.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `Messaging` module does not process
+    ///   messages from a secondary messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
+    ///
+    /// This code is specific for a Linux operating system because the messaging system
+    /// is only implemented for that platform.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -341,11 +481,24 @@ impl ProcessExternalRequestTrait for Messaging {
 }
 
 impl ProcessExternalRequestTrait for TcpCommunication {
-    /// Checks if there are new messages in the channel.
-    /// Implementation for TcpCommunication
+    /// Checks for and processes new commands relevant to the TCP Communication module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `TcpCommunication`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `TcpCommunication` module primarily processes commands from the signal handler
+    /// and does not use a separate messaging channel for external requests.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
-    /// * `_` - ignored
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `TcpCommunication` module does not process
+    ///   messages from a messaging channel in this context.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -355,10 +508,19 @@ impl ProcessExternalRequestTrait for TcpCommunication {
     }
 }
 
-/// Checks if there are new messages in the channel.
-/// Associated function used by implementation for structs which only use signal handler and no messaging
+/// Checks for specific standard commands (Terminate or Quit) from the signal handler channel.
+///
+/// This associated function is a streamlined helper for implementations that
+/// primarily need to react to global termination signals. It attempts
+/// to receive without blocking `InternalCommand` messages and returns `true` if either
+/// a `Terminate` or `Quit` command is found. Other commands are logged as warnings.
+///
 /// # Arguments
-/// * `rx_from_signal_handler` - reference to the receiver part of the channel for communication from signal handler
+/// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+///   for commands originating from the signal handler.
+///
+/// # Returns
+/// `true` if either a `Terminate` or `Quit` command was received; otherwise `false`.
 fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) -> bool {
     match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -390,11 +552,25 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
 }
 
 impl ProcessExternalRequestTrait for Feed {
-    /// Checks if there are new messages in the channels.
-    /// Implementation for Feed
+    /// Checks for and processes new commands relevant to the Feed control module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `Feed` module.
+    /// It handles standard "Terminate" or "Quit" commands from the signal handler.
+    /// From the messaging channel, it specifically processes "Start," "Stop," "ResetAllErrors,"
+    /// and "Execute" commands, updating internal state variables based on these commands.
+    /// Inapplicable commands are ignored with warnings.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
-    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing a reference to the receiver end
+    ///   of the channel for commands from the messaging system. This channel is optional.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of specific commands received:
+    /// - The first `bool` is `true` if a `Quit` or `Terminate` command was received from the signal handler; otherwise `false`.
+    /// - The second `bool` is `true` if a `Start` command was received from messaging; otherwise `false`.
+    /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -460,11 +636,25 @@ impl ProcessExternalRequestTrait for Feed {
 }
 
 impl ProcessExternalRequestTrait for Balling {
-    /// Checks if there are new messages in the channels.
-    /// Implementation for Balling
+    /// Checks for and processes new commands relevant to the Balling control module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `Balling` module.
+    /// It handles standard "Terminate" or "Quit" commands from the signal handler.
+    /// From the messaging channel, it specifically processes "Start," "Stop," and "Execute" commands,
+    /// updating internal state variables (`execute_command_received`, `pump_id_requested`) based on these commands.
+    /// Inapplicable commands are ignored with warnings.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
-    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing a reference to the receiver end
+    ///   of the channel for commands from the messaging system. This channel is optional.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of specific commands received:
+    /// - The first `bool` is `true` if a `Quit` or `Terminate` command was received from the signal handler; otherwise `false`.
+    /// - The second `bool` is `true` if a `Start` command was received from messaging; otherwise `false`.
+    /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,
@@ -521,11 +711,24 @@ impl ProcessExternalRequestTrait for Balling {
 }
 
 impl ProcessExternalRequestTrait for Watchdog {
-    /// Checks if there are new messages in the channels
-    /// Implementation for Watchdog
+    /// Checks for and processes new commands relevant to the Watchdog module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for the `Watchdog`.
+    /// It handles standard "Terminate" or "Quit" commands from the signal handler.
+    /// From the messaging channel, it specifically processes "Start" and "Stop" commands,
+    /// ignoring other inapplicable commands with warnings.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - reference to the receiver part of the channel    
-    /// * `rx_from_messaging_opt` - reference to the receiver part of the channel wrapped in Option
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `rx_from_messaging_opt` - An `Option` containing a reference to the receiver end
+    ///   of the channel for commands from the messaging system. This channel is optional.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of specific commands received:
+    /// - The first `bool` is `true` if a `Quit` or `Terminate` command was received from the signal handler; otherwise `false`.
+    /// - The second `bool` is `true` if a `Start` command was received from messaging; otherwise `false`.
+    /// - The third `bool` is `true` if a `Stop` command was received from messaging; otherwise `false`.
     fn process_external_request(
         &mut self,
         rx_from_signal_handler: &Receiver<InternalCommand>,

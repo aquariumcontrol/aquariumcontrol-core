@@ -60,10 +60,19 @@ pub struct TankLevelSwitchSignals {
 }
 
 impl TankLevelSwitchSignals {
-    /// provides a struct of type TankLevelSwitchSignals for non-Linux platforms when not running on target HW
+    /// Creates a new `TankLevelSwitchSignals` struct with initial status values.
+    ///
+    /// This constructor sets the initially measured position, the calculated stabilized position,
+    /// and the validity flag of the tank level switch. It's a general-purpose constructor
+    /// for this data-holding struct.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for TankLevelSwitch
-    /// * `initial_position_stabilized` - assumed initial position of tank level before the first measurement
+    /// * `tank_level_switch_position` - The initial measured pin state (`true` for high water, `false` for low).
+    /// * `tank_level_switch_position_stabilized` - The initial calculated stabilized pin state.
+    /// * `tank_level_switch_invalid` - The initial flag indicating if the switch position is considered invalid.
+    ///
+    /// # Returns
+    /// A new `TankLevelSwitchSignals` struct.
     pub fn new(
         tank_level_switch_position: bool,
         tank_level_switch_position_stabilized: bool,
@@ -133,10 +142,23 @@ impl GetResponseFromSimulatorTrait for TankLevelSwitch {}
 
 impl TankLevelSwitch {
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-    /// provides a struct of type TankLevelSwitch for non-Linux platforms when not running on target HW
+    /// Creates a new **`TankLevelSwitch`** instance for **development or unsupported platforms**.
+    ///
+    /// This constructor is activated when the application is compiled for a non-Linux
+    /// operating system or when the `target_hw` feature is not enabled. In this mode,
+    /// it acts as a **mock or placeholder**, allowing basic testing and compilation
+    /// without requiring actual GPIO hardware. It initializes the sensor position to
+    /// `true` (high water) and the invalid flag to `false` by default, but sets the
+    /// stabilized position based on the provided `initial_position_stabilized` argument.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for TankLevelSwitch
-    /// * `initial_position_stabilized` - assumed initial position of tank level before the first measurement
+    /// * `config` - **Configuration data** for the tank level switch, primarily dictating
+    ///   the `use_simulator` flag and stabilization logic.
+    /// * `initial_position_stabilized` - The **assumed initially stabilized position** of the
+    ///   tank level (`true` for high water, `false` for low) before any actual measurements.
+    ///
+    /// # Returns
+    /// A new **`TankLevelSwitch` struct**, configured for simulated or non-hardware operation.
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -153,12 +175,29 @@ impl TankLevelSwitch {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// provides a struct of type TankLevelSwitchSignals for target HW
+    /// Creates a new **`TankLevelSwitch`** instance for **target hardware platforms**.
+    ///
+    /// This constructor initializes the tank level switch monitoring module by establishing
+    /// access to the physical GPIO pin. It configures the pin as an input with a pull-up
+    /// resistor and sets the initial measured and stabilized positions, along with various
+    /// internal flags for error handling and logging.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for TankLevelSwitch
-    /// * `initial_position_stabilized` - assumed initial position of tank level before the first measurement
-    /// * `gpio_lib_handle_opt` - interface to GPIO lib wrapped in Option
-    /// * `gpio_tank_level` - GPIO number of tank level
+    /// * `config` - **Configuration data** for the tank level switch, including simulation settings.
+    /// * `initial_position_stabilized` - The **assumed initially stabilized position** of the tank
+    ///   level (`true` for high water, `false` for low) before the first actual measurement.
+    /// * `gpio_lib_handle_opt` - An **`Option<Gpio>`** providing the interface to the GPIO library.
+    ///   This must be `Some(Gpio)` if `config.use_simulator` is `false`
+    ///   (i.e., when running on target hardware).
+    /// * `gpio_tank_level` - The **GPIO pin** (as `u8`) connected to the tank level switch sensor.
+    ///
+    /// # Returns
+    /// A new **`TankLevelSwitch` struct**, configured for hardware-based operation.
+    ///
+    /// # Panics
+    /// This function will **panic** if:
+    /// - `config.use_simulator` is `false` (hardware mode), but `gpio_lib_handle_opt` is `None`.
+    /// - It **fails to acquire or configure** the specified `gpio_tank_level` pin as an input.
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
@@ -199,12 +238,21 @@ impl TankLevelSwitch {
         }
     }
 
-    /// Executes either
-    /// - the measurement of GPIO pin position or
-    /// - the channel communication to update the tank level switch position signal.
+    /// Updates the measured tank level switch signals, either by reading a physical GPIO pin or communicating with a simulator.
+    ///
+    /// This function determines the source of the tank level switch position and invalid status based on the `use_simulator`
+    /// configuration.
+    /// - In **simulator mode**, it requests the `TankLevelSwitchPosition` and `TankLevelSwitchInvalid` signals
+    ///   from a TCP-based simulator via channels.
+    /// - In **hardware mode** (Linux with `target_hw` feature), it directly reads the state of the configured GPIO input pin.
+    ///
+    /// Errors encountered during hardware interaction (e.g., if the GPIO pin is unavailable) are logged.
+    ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - sender part of the channel for communication via TCP wrapped as optional
-    /// * `rx_from_tcp_opt` - receiver part of the channel for communication via TCP wrapped as optional
+    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel for communication with the TCP simulator.
+    ///   This is used in simulator mode to request sensor data.
+    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel for communication from the TCP simulator.
+    ///   This is used in simulator mode to receive sensor data.
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -217,6 +265,11 @@ impl TankLevelSwitch {
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
+            ) > 0.0;
+            self.tank_level_switch_invalid = Self::get_response_from_simulator(
+                tx_to_tcp,
+                rx_from_tcp,
+                InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
             ) > 0.0;
         } else {
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -241,16 +294,25 @@ impl TankLevelSwitch {
         }
     }
 
-    /// Calculates a stabilized tank level switch position signal considering:
-    /// If the invalid bit of signal is true, then use the current value of the stabilized position signal.
-    /// If the new signal is true (indicating high water level), then set the stabilized signal immediately to true (high).
-    /// If the new signal is false (indicating low water level), then set increase the stabilization counter.
-    /// If the stabilization counter exceeds the configured limit, then set the counter to zero and set the stabilized.
-    /// Signal value 'true' indicates high water level.
+    /// Calculates a **stabilized tank level switch position signal**, applying asymmetric delay and handling invalid inputs.
+    ///
+    /// This private helper function updates the `tank_level_switch_position_stabilized` flag based on the
+    /// raw `tank_level_switch_position` and `tank_level_switch_invalid` flags. It implements the following logic:
+    ///
+    /// * **Invalid Signal**: If `tank_level_switch_invalid` is `true`, the stabilized position is immediately
+    ///   forced to `true` (indicating a safe, high water level state), overriding any raw input.
+    /// * **High Water Level (True)**: If the raw `tank_level_switch_position` is `true` (high water),
+    ///   the stabilized signal is set to `true` **immediately**, and the low-level stabilization counter is reset.
+    /// * **Low Water Level (False) - with Delay**: If the raw `tank_level_switch_position` is `false` (low water),
+    ///   a stabilization counter increments. The stabilized signal will only change to `false`
+    ///   (low water) **after** this counter exceeds the configured `tank_level_switch_position_low_stabilization_count`.
+    ///   This introduces a debouncing to prevent flickering from momentary low readings.
     fn calc_tank_level_switch_position_stabilized(&mut self) {
         if self.tank_level_switch_invalid {
             // go to safe position if the input signal is invalid
             self.tank_level_switch_position_stabilized = true;
+            // in case the sensor recovers, the counter shall start from zero again
+            self.tank_level_switch_position_low_stabilization_counter = 0;
         } else {
             // consider asymmetric delay for calculation
             self.tank_level_switch_position_stabilized = match self.tank_level_switch_position {
@@ -276,7 +338,7 @@ impl TankLevelSwitch {
                              self.tank_level_switch_position_low_stabilization_counter,
                              self.tank_level_switch_position_stabilized
                         );
-                        self.tank_level_switch_position_stabilized //
+                        self.tank_level_switch_position_stabilized
                     } else {
                         false
                     }
@@ -285,13 +347,29 @@ impl TankLevelSwitch {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the tank level switch module.
+    ///
+    /// This function runs continuously, managing the measurement, stabilization,
+    /// and provision of the tank water level position. It periodically updates
+    /// its internal state by reading from either a physical GPIO pin or a simulator.
+    /// The stabilized and raw sensor data is then written to a shared mutex for
+    /// access by other application threads.
+    ///
+    /// The loop is designed to maintain a fixed cycle time and remains
+    /// responsive to `Quit` commands from the signal handler for graceful shutdown.
+    ///
     /// # Arguments
-    /// * `tx_to_tcp_opt` - Sender part of the channel for communication via TCP wrapped as optional
-    /// * `rx_from_tcp_opt` - Receiver part of the channel for communication via TCP wrapped as optional
-    /// * `tx_to_signal_handler` - Sender part of the channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of the channel for communication from signal handler                
-    /// * `mutex_tank_level_switch_signals` - Mutex containing tank level switch signals
+    /// * `tx_to_tcp_opt` - An `Option` containing the sender channel for communication
+    ///   with the TCP simulator. This is used in simulator mode to request sensor data.
+    /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel for communication
+    ///   from the TCP simulator. This is used in simulator mode to receive sensor data.
+    /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
+    ///   back to the main signal handler during shutdown.
+    /// * `rx_from_signal_handler` - The receiver channel for this module to receive commands
+    ///   (e.g., `Quit`, `Terminate`) from the main signal handler.
+    /// * `mutex_tank_level_switch_signals` - An `Arc<Mutex<TankLevelSwitchSignals>>` into
+    ///   which the latest tank level switch signals (raw and stabilized) will be written,
+    ///   ensuring thread-safe access for other modules.
     pub fn execute(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
@@ -300,7 +378,6 @@ impl TankLevelSwitch {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) {
-        let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
 
@@ -327,6 +404,7 @@ impl TankLevelSwitch {
             self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
 
             self.calc_tank_level_switch_position_stabilized();
+            
             // Write calculated signals to mutex
             {
                 match mutex_tank_level_switch_signals.lock() {
@@ -344,7 +422,16 @@ impl TankLevelSwitch {
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
-                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+                match stop_time.duration_since(start_time) {
+                    Ok(c) => c.as_millis() as u64,
+                    Err(e) => {
+                        warn!(
+                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                            "Could not calculated execution time: {e:?}."
+                        );
+                        0 // provide default value
+                    }
+                };
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS {
@@ -354,13 +441,12 @@ impl TankLevelSwitch {
                         execution_duration_millis,
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
-                } else {
-                    lock_warn_cycle_time_exceeded = false;
                 }
                 remaining_sleep_time_millis = 0;
             } else {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS - execution_duration_millis;
+                lock_warn_cycle_time_exceeded = false;
             }
             // sleep time does not need to be split up because cycle time is 100 milliseconds only
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
@@ -383,6 +469,7 @@ impl TankLevelSwitch {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
+        let sleep_duration_one_millis = Duration::from_millis(1);
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => match c {
@@ -427,7 +514,7 @@ pub mod tests {
 
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::mock_tcp::tests::mock_tcp;
+    use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -456,18 +543,18 @@ pub mod tests {
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         let mutex_tank_level_switch_signals =
-            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, true)));
 
         // thread for mock tcp
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
-                    true,
                     false,
+                    true,
                 );
             })
             .unwrap();
@@ -497,6 +584,8 @@ pub mod tests {
                 let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
                 let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
 
+                let mutex_tank_level_switch_signals_for_assert =
+                    mutex_tank_level_switch_signals.clone();
                 tank_level_switch.execute(
                     &tx_tank_level_switch_to_tcp_opt,
                     &rx_tank_level_switch_from_tcp_opt,
@@ -504,6 +593,14 @@ pub mod tests {
                     &rx_tank_level_switch_from_signal_handler,
                     mutex_tank_level_switch_signals,
                 );
+
+                // Get the final state after execution.
+                let signals_after_test_run =
+                    mutex_tank_level_switch_signals_for_assert.lock().unwrap();
+                // Assert that the stabilized position is forced to true (safe state) due to invalidity.
+                assert!(signals_after_test_run.tank_level_switch_position_stabilized);
+                // Confirm invalid-flag remained true
+                assert!(signals_after_test_run.tank_level_switch_invalid);
 
                 // send Quit signal to mock threads because the test object has terminated
                 let _ =
@@ -556,7 +653,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
@@ -652,7 +749,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),
@@ -748,7 +845,7 @@ pub mod tests {
         let join_handle_mock_tcp = thread::Builder::new()
             .name("mock_tcp".to_string())
             .spawn(move || {
-                mock_tcp(
+                mock_tcp_for_tank_level_switch(
                     &tx_tcp_to_tank_level_switch,
                     &rx_tcp_from_tank_level_switch,
                     Some(&rx_tcp_from_test_environment),

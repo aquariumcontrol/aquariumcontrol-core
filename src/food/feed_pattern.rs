@@ -9,8 +9,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 /// Holds the configuration data of one feed pattern.
 pub struct Feedpattern {
-    /// numeric ID of the feed profile
-    /// Data is not used in the implementation. Therefore, is tagged as unused.
+    /// Numeric ID of the feed profile
+    /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
     pub profile_id: i32,
 
@@ -22,8 +22,14 @@ pub struct Feedpattern {
 }
 
 impl Feedpattern {
-    /// Calculate the total run time of the feeder for the feed pattern.
-    /// Data is inserted into feed log.
+    /// Calculates the total duration (in seconds) that the feeder motor will be active for this feed pattern.
+    ///
+    /// This function iterates through all defined `FeedPhase`es within the pattern and sums
+    /// their individual `feed_duration` values. This total runtime is typically logged
+    /// as part of a completed feed event.
+    ///
+    /// # Returns
+    /// The total feeder run time for this pattern, expressed as an `f64` in seconds.
     pub fn calc_feeder_runtime(&self) -> f64 {
         let mut feeder_run_time = 0.0;
 
@@ -76,8 +82,29 @@ pub struct FeedPhase {
 }
 
 impl FeedPhase {
-    /// Provides a struct of type FeedPhase - used only for testing
     #[cfg(test)]
+    // Creates a new `FeedPhase` struct with explicitly provided values.
+    //
+    // This constructor is intended exclusively for use in test environments.
+    // It allows for the direct creation of a `FeedPhase` instance by setting
+    // all its properties, bypassing typical deserialization or logic.
+    //
+    // # Arguments
+    // * `pause_duration` - The duration of the pause phase in milliseconds.
+    // * `pause_skimmer` - Flag indicating if the protein skimmer is active during the pause phase.
+    // * `pause_main_pump_1` - Flag indicating if main pump #1 is active during the pause phase.
+    // * `pause_main_pump_2` - Flag indicating if main pump #2 is active during the pause phase.
+    // * `pause_aux_pump_1` - Flag indicating if auxiliary pump #1 is active during the pause phase.
+    // * `pause_aux_pump_2` - Flag indicating if auxiliary pump #2 is active during the pause phase.
+    // * `feed_duration` - The duration of the feed phase in milliseconds.
+    // * `feed_skimmer` - Flag indicating if the protein skimmer is active during the feed phase.
+    // * `feed_main_pump_1` - Flag indicating if main pump #1 is active during the feed phase.
+    // * `feed_main_pump_2` - Flag indicating if main pump #2 is active during the feed phase.
+    // * `feed_aux_pump_1` - Flag indicating if auxiliary pump #1 is active during the feed phase.
+    // * `feed_aux_pump_2` - Flag indicating if auxiliary pump #2 is active during the feed phase.
+    //
+    // # Returns
+    // A new `FeedPhase` struct initialized with the provided values.
     pub fn new(
         pause_duration: i16,
         pause_skimmer: bool,

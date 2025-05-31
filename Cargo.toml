@@ -29,6 +29,7 @@ fern = "0.7.1"
 humantime = "2.1.0"
 cfg-if = "1.0.0"
 loc = "0.5.0"
+nix = { version = "0.27.0", features = ["user"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rppal = "0.22.1"

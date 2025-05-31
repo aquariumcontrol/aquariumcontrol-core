@@ -8,10 +8,19 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use std::sync::{Arc, Mutex};
 
-/// Function checks if a mutex is already blocked.
-/// The result of this function is used to reduce the probability of a false triggering a thread timing warning.
+/// Checks if a given mutex is currently locked without blocking.
+///
+/// This function attempts to acquire the mutex immediately. If successful, it means
+/// the mutex was not blocked. If unsuccessful, it indicates the mutex is currently held by
+/// another thread. This function is used by time-critical control algorithms
+/// (e.g., heating or ventilation) to identify root causes for excessive cycle times.
+///
 /// # Arguments
-/// * `mutex` - reference to the mutex for avoiding parallel device actuation.
+/// * `mutex` - A reference to the `Arc<Mutex<i32>>` to be checked for its locked status.
+///
+/// # Returns
+/// `true` if the mutex is currently blocked (locked by another thread);
+/// `false` if the mutex is not blocked and could be acquired immediately.
 pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
     match mutex.try_lock() {
         Ok(_) => {
@@ -27,10 +36,20 @@ pub fn check_if_mutex_is_blocked(mutex: &Arc<Mutex<i32>>) -> bool {
 
 #[cfg(test)]
 pub mod tests {
-    // Function checks if a given value is exceeding a previous maximum value or
-    // if the given value is below a previous minimum.
-    // Depending on the result, either previous minimum/maximum values are returned
-    // or one of the thresholds is updated with the given value.
+    // Updates the minimum and maximum observed actuation durations based on a new sample.
+    //
+    // This function takes current minimum and maximum actuation durations and a new
+    // observed duration. If the new duration is lower than the current minimum, it
+    // becomes the new minimum. Similarly, if it's higher than the current maximum,
+    // it becomes the new maximum.
+    //
+    // Arguments:
+    // * `min_actuation_duration`: The current minimum recorded actuation duration.
+    // * `max_actuation_duration`: The current maximum recorded actuation duration.
+    // * `new_actuation_duration`: The latest observed actuation duration.
+    //
+    // Returns:
+    // A tuple `(u128, u128)` containing the updated minimum and maximum actuation durations.
     pub fn update_min_max_actuation_duration(
         min_actuation_duration: u128,
         max_actuation_duration: u128,

@@ -13,7 +13,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;
@@ -136,18 +136,37 @@ pub struct ScheduleCheck {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
     lock_warn_inapplicable_command_heating: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl ScheduleCheck {
     const LOG_TARGET_SCHEDULE_CHECK: &'static str = "schedule_check";
 
-    /// Provides a struct of type ScheduleCheck.
+    /// Creates a new `ScheduleCheck` instance.
+    ///
+    /// This constructor initializes the schedule checking module with its specific
+    /// configuration and a connection to the SQL database interface responsible
+    /// for schedule data. It also sets up all internal lock flags to `false`,
+    /// which are used to prevent log flooding during operation.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
-    /// * `sql_interface_schedule` - specific SQL interface for ScheduleCheck           
+    /// * `config` - Configuration data for the schedule checker, dictating
+    ///   behavior like check intervals and strategies for missing schedules.
+    /// * `sql_interface_schedule` - A `SqlInterfaceSchedule` instance providing
+    ///   the interface to the SQL database for retrieving schedule entries.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
+    ///
+    /// # Returns
+    /// A new `ScheduleCheck` struct, ready to monitor and evaluate schedules.
     pub fn new(
         config: ScheduleCheckConfig,
         sql_interface_schedule: SqlInterfaceSchedule,
+        database_ping_interval: Duration,
     ) -> ScheduleCheck {
         ScheduleCheck {
             config,
@@ -168,19 +187,34 @@ impl ScheduleCheck {
             lock_warn_inapplicable_command_ventilation: false,
             lock_warn_inapplicable_command_refill: false,
             lock_warn_inapplicable_command_heating: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
-    /// Checks if there are new messages in the channel from either Balling, Refill, Ventilation or Heating.
-    /// If the message contains the ScheduleCheck command, then the function returns a flag indicating
-    /// if the thread is allowed to actuate the device.
+    /// Checks for and processes a pending `ScheduleCheck` request from another module.
+    ///
+    /// This private helper function is called repeatedly for each control module
+    /// (Balling, Refill, Ventilation, Heating). It attempts to receive
+    /// a `ScheduleCheck` command without blocking. If received, it evaluates whether actuation is
+    /// currently allowed based on the provided `schedule_entry` and the configured
+    /// `strategy_if_schedule_not_found`. The result (a boolean) is then returned
+    /// to the calling module.
+    ///
+    /// The function uses several "lock" flags to prevent repetitive logging of the same error/warning.
+    ///
     /// # Arguments
-    /// * `tx` - sender part of the channel for communication to one of the above-mentioned threads
-    /// * `rx` - receiver part of the channel for communication from one of the above-mentioned threads
-    /// * `schedule_entry` - schedule data for the specific thread
-    /// * `lock_error_channel_receive` - reference to lock variable for avoiding flooding of the log file
-    /// * `lock_error_channel_send` - reference to lock variable for avoiding flooding of the log file
-    /// * `lock_warn_inapplicable_command` - reference to lock variable for avoiding flooding of the log file
+    /// * `config` - A reference to the `ScheduleCheckConfig` for general strategy settings.
+    /// * `tx` - The sender channel to send the `bool` result (actuation allowed/disallowed) back to the requesting module.
+    /// * `rx` - The receiver channel to receive `InternalCommand` (specifically `ScheduleCheck`) from the requesting module.
+    /// * `schedule_entry` - An `Option` containing the `ScheduleEntry` relevant to the requesting module,
+    ///   or `None` if no schedule was found for that module.
+    /// * `lock_error_channel_receive` - A mutable reference to a boolean flag that, when `true`,
+    ///   inhibits repeated error logging for channel receive failures.
+    /// * `lock_error_channel_send` - A mutable reference to a boolean flag that, when `true`,
+    ///   inhibits repeated error logging for channel send failures.
+    /// * `lock_warn_inapplicable_command` - A mutable reference to a boolean flag that, when `true`,
+    ///   inhibits repeated warning logging for inapplicable commands received.
     fn check_pending_schedule_request(
         config: &ScheduleCheckConfig,
         tx: &Sender<bool>,
@@ -245,9 +279,22 @@ impl ScheduleCheck {
         };
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the schedule checker.
+    ///
+    /// This function runs continuously, managing the validation of various device schedules
+    /// against the current time. It periodically reads the latest schedule entries from
+    /// the SQL database and, for each relevant module (Ventilation, Heating, Refill, Balling),
+    /// it checks if that module is currently allowed to actuate its devices based on its schedule.
+    /// The result of this check is communicated back to the respective module via channels.
+    ///
+    /// The loop continues until a `Quit` command is received from the signal handler.
+    /// Upon receiving `Quit`, it sends a confirmation back to the signal handler and
+    /// then waits for a `Terminate` command to complete its shutdown.
+    ///
     /// # Arguments
-    /// * `schedule_check_channels` - Struct with all channels for communication with other components
+    /// * `schedule_check_channels` - A `ScheduleCheckChannels` struct containing all
+    ///   necessary `mpsc` sender and receiver channels for communication with
+    ///   other application modules and the signal handler.
     pub fn execute(&mut self, schedule_check_channels: ScheduleCheckChannels) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -397,12 +444,18 @@ impl ScheduleCheck {
             //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-
+            
             loop_counter += 1;
 
             // avoid overflow
             if loop_counter == 1_000_000 {
                 loop_counter = 0;
+            }
+
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_schedule.ping();
+                self.last_ping_instant = Instant::now();
             }
         }
 

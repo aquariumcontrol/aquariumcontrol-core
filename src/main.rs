@@ -70,26 +70,27 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
+use nix::unistd;
 
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::DataLogger;
+use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
-use crate::sensors::ambient::Ambient;
+use crate::sensors::ambient::{Ambient, AmbientChannels};
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
-use crate::thermal::heating::HeatingStatsDataTransfer;
-use crate::thermal::heating::{Heating, HeatingChannels};
+use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
+use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
@@ -102,11 +103,12 @@ use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-use crate::database::sql_interface_heating::{
-    SqlInterfaceHeating, SqlInterfaceHeatingMidnightCalculator,
-};
+use crate::database::sql_interface_heating_setvals::{SqlInterfaceHeatingSetVals};
+use crate::database::sql_interface_heating_stats::SqlInterfaceHeating;
+use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
+use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
@@ -143,9 +145,16 @@ enum ConfigFileDefinitionError {
 }
 
 impl fmt::Display for ConfigFileDefinitionError {
-    /// Function provides output of the error messages wrapped by enum values
+    /// Formats `ConfigFileDefinitionError` enum variants into human-readable error messages.
+    ///
+    /// This implementation allows these errors to be displayed directly, providing
+    /// informative messages about issues with the user-provided configuration file path.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting    
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConfigFileDefinitionError::PathDoesNotExist(c) => write!(f, "{}", c),
@@ -156,9 +165,49 @@ impl fmt::Display for ConfigFileDefinitionError {
     }
 }
 
-/// Check if the string provided contains a valid file name to be used as the configuration file
-/// # Arguments    
-/// * `user_selected_config_file_name` - reference to string provided by command line parameter
+/// Displays the valid command line parameter combinations
+fn display_usage() {
+    println!("aquarium_control requires a configuration file to be specified to enter operation. Alternatively, the following options are available:");
+    println!("-h, --help: Output this page.");
+    println!("-v, --version: Output version information including hash of executable.");
+}
+
+/// Checks if the string represents a user command and executes related functionality.
+/// # Arguments
+/// * `command` - A string slice representing the potential command.
+/// # Returns
+/// A boolean value if a valid command has been recognized.
+fn check_is_command(command: &str) -> bool {
+    match command {
+        "-h" | "--help" => {
+            display_usage();
+            true
+        },
+        "-v" | "--version" => {
+            // calculate hash of executable
+            let version_information = VersionInformation::new();
+            println!("{}", version_information);
+            true
+        },
+        _ => false, // All other strings do not match
+    }
+}
+
+/// Checks if the provided string is a valid path to a `.toml` configuration file.
+///
+/// This function validates a user-selected configuration file path by ensuring that:
+/// - The path exists on the file system.
+/// - It points to a regular file (not a directory).
+/// - The file has an extension.
+/// - The file's extension is `.toml`.
+///
+/// # Arguments
+/// * `user_selected_config_file_name` - A string slice representing the potential path to the configuration file.
+///
+/// # Returns
+/// A `Result<String, ConfigFileDefinitionError>`:
+/// - `Ok(String)`: The validated and owned file path if all checks pass.
+/// - `Err(ConfigFileDefinitionError)`: If any validation check fails, with a descriptive error message.
 fn check_argument_for_valid_config_file_name(
     user_selected_config_file_name: &str,
 ) -> Result<String, ConfigFileDefinitionError> {
@@ -197,8 +246,41 @@ fn check_argument_for_valid_config_file_name(
     }
 }
 
+/// Checks if the current process is running with root (UID 0) privileges.
+///
+/// This function inspects the Effective User ID (EUID) of the process.
+/// On Unix-like systems, if the EUID is 0, the process has root privileges.
+///
+/// # Returns
+/// `true` if the process has root privileges, `false` otherwise.
+///
+/// # Panics
+/// This function may panic if the underlying system call `geteuid` fails,
+/// which is highly unlikely in normal operation.
+fn is_running_as_root() -> bool {
+    let euid = unistd::geteuid();
+    euid.is_root()
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Creates the channels and sets up threads.
+/// The main entry point of the Aquarium Control application.
+///
+/// This function initializes and orchestrates all modules of the control system.
+/// It performs the following high-level steps:
+/// 1.  Sets up global logging and handles command-line arguments for configuration file selection.
+/// 2.  Checks if the user has provided specific command line parameters and acts accordingly.
+/// 3.  Checks if the user has root privileges.
+/// 4.  Loads the application configuration from the specified `.toml` file.
+/// 5.  Publishes the application's Process ID (PID) to a file and sets up a custom panic hook for cleanup.
+/// 6.  Performs version checks against the database to ensure compatibility.
+/// 7.  Initializes all SQL database interfaces and validates database readiness.
+/// 8.  Sets up all inter-thread communication channels (`mpsc`).
+/// 9.  Initializes all application modules (sensors, controls, managers) with their respective configurations and channels/mutexes.
+/// 10. Spawns each module in its own dedicated thread within a `std::thread::scope` for structured concurrency.
+/// 11. Manages the initial data acquisition phase, waiting for sensors to provide first readings before control loops become fully active.
+///
+/// This function is responsible for the overall lifecycle of the application, including graceful startup and panic handling.
+///
 /// Global thread communication is as follows:
 /// ```mermaid
 /// graph LR
@@ -302,19 +384,43 @@ fn main() {
 
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
-
-    // initialize with a default file name
+    
+    // initialize with a default configuration file name
     let mut config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
 
+    // Check command line parameters
     if args.len() > 1 {
-        // if the first argument contains a path and file name, then let's use that
+        // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
-            Ok(valid_file_name) => valid_file_name,
+            Ok(valid_file_name) => valid_file_name, // The file is valid. Start operation.
             Err(error_message) => {
-                // if user provided an invalid filename, output error message and abort
-                panic!("{}: {}", LOG_TARGET_MAIN, error_message);
+                let mut user_arg_identified = false;
+                // Iterate through the command line parameters and check if they are valid.
+                for user_arg in args[1..].iter() {
+                    user_arg_identified = check_is_command(user_arg)
+                }
+                if !user_arg_identified {
+                    // If the user provided an invalid filename and no valid command, output error message and abort.
+                    panic!("{}: {}", LOG_TARGET_MAIN, error_message);
+                }
+                else {
+                    // At least one valid user command was provided. Graceful exit.
+                    return;
+                }
             }
         }
+    }
+    
+    // calculate hash of executable
+    let version_information = VersionInformation::new();
+    info!(target: LOG_TARGET_MAIN,
+        "{}",
+        version_information
+    );
+
+    // check if the user has root privileges
+    if !is_running_as_root() {
+        panic!("{}: This application must be run as root.", LOG_TARGET_MAIN);
     }
 
     // read the configuration file for operating the control system
@@ -342,14 +448,10 @@ fn main() {
         }
     }));
 
-    // calculate hash of executable
-    let version_information = VersionInformation::new();
-    info!(target: LOG_TARGET_MAIN,
-        "hash of this executable is: {}",
-        version_information.hash
-    );
+    // instantiate the duration for the database ping
+    let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
 
-    // connect to SQL database, subsequently setup component-specific interfaces
+    // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
@@ -368,7 +470,7 @@ fn main() {
         Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
 
     let sql_interface_midnight_calculator =
-        SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection());
+        SqlInterfaceMidnightCalculator::new(sql_interface.get_connection());
 
     let sql_interface_heating = SqlInterfaceHeating::new(
         sql_interface.get_connection(),
@@ -1114,16 +1216,32 @@ fn main() {
     let mut ambient = Ambient::new(config.ambient);
 
     let mut relay_manager = RelayManager::new(config.relay_manager.clone());
-    let mut schedule_check = ScheduleCheck::new(config.schedule_check, sql_interface_schedule);
+    let mut schedule_check = ScheduleCheck::new(
+        config.schedule_check,
+        sql_interface_schedule,
+        database_ping_duration,
+    );
 
     let mut data_injection = DataInjection;
-    let mut data_logger = DataLogger::new(config.data_logger);
+    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration);
 
-    let mut refill = Refill::new(config.refill, sql_interface_refill);
-    let mut heating = Heating::new(config.heating, sql_interface_heating);
-    let mut feed = Feed::new(config.feed, sql_interface_feed);
+    let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
+    let mut heating_set_value_updater =
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+    let mut heating = Heating::new(
+        config.heating,
+        sql_interface_heating,
+        database_ping_duration,
+    );
+    let mut feed = Feed::new(config.feed, sql_interface_feed, database_ping_duration);
+    let mut ventilation_set_value_updater =
+        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation);
     let mut ventilation = Ventilation::new(config.ventilation);
-    let mut balling = Balling::new(config.balling, sql_interface_balling);
+    let mut balling = Balling::new(
+        config.balling,
+        sql_interface_balling,
+        database_ping_duration,
+    );
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
@@ -1134,18 +1252,18 @@ fn main() {
     let mut ds18b20 = Ds18b20::new(config.ds18b20);
 
     let relay_manager_channels = RelayManagerChannels {
-        tx_relay_manager_to_refill: tx_relay_manager_to_refill,
-        rx_relay_manager_from_refill: rx_relay_manager_from_refill,
-        tx_relay_manager_to_heating: tx_relay_manager_to_heating,
-        rx_relay_manager_from_heating: rx_relay_manager_from_heating,
-        tx_relay_manager_to_ventilation: tx_relay_manager_to_ventilation,
-        rx_relay_manager_from_ventilation: rx_relay_manager_from_ventilation,
-        tx_relay_manager_to_balling: tx_relay_manager_to_balling,
-        rx_relay_manager_from_balling: rx_relay_manager_from_balling,
-        tx_relay_manager_to_feed: tx_relay_manager_to_feed,
-        rx_relay_manager_from_feed: rx_relay_manager_from_feed,
-        tx_relay_manager_to_signal_handler: tx_relay_manager_to_signal_handler,
-        rx_relay_manager_from_signal_handler: rx_relay_manager_from_signal_handler,
+        tx_relay_manager_to_refill,
+        rx_relay_manager_from_refill,
+        tx_relay_manager_to_heating,
+        rx_relay_manager_from_heating,
+        tx_relay_manager_to_ventilation,
+        rx_relay_manager_from_ventilation,
+        tx_relay_manager_to_balling,
+        rx_relay_manager_from_balling,
+        tx_relay_manager_to_feed,
+        rx_relay_manager_from_feed,
+        tx_relay_manager_to_signal_handler,
+        rx_relay_manager_from_signal_handler,
     };
 
     let atlas_scientific_channels = AtlasScientificChannels {
@@ -1212,7 +1330,7 @@ fn main() {
     };
 
     let tcp_communication_channels = TcpCommunicationChannels {
-        rx_tcp_communication_from_relay_manager_opt: rx_tcp_communication_from_relay_manager_opt,
+        rx_tcp_communication_from_relay_manager_opt,
         rx_tcp_communication_from_ambient_opt,
         tx_tcp_communication_to_ambient_opt,
         rx_tcp_communication_from_atlas_scientific_opt,
@@ -1418,13 +1536,17 @@ fn main() {
         }
 
         scope.spawn(move || {
-            ambient.execute(
-                &tx_ambient_to_tcp_opt,
-                &rx_ambient_from_tcp_opt,
+            let ambient_channels = AmbientChannels {
+                tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
+                rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
                 tx_ambient_to_dht_opt,
                 rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
+            };
+
+            ambient.execute(
+                ambient_channels,
                 mutex_ambient_temperature,
                 mutex_ambient_humidity,
             );
@@ -1445,25 +1567,38 @@ fn main() {
         println!("starting control...");
 
         scope.spawn(move || {
+            let data_logger_channels = DataLoggerChannels {
+                tx_to_refill: &tx_data_logger_to_refill,
+                rx_from_refill: &rx_data_logger_from_refill,
+                tx_to_heating: &tx_data_logger_to_heating,
+                rx_from_heating: &rx_data_logger_from_heating,
+                tx_to_ventilation: &tx_data_logger_to_ventilation,
+                rx_from_ventilation: &rx_data_logger_from_ventilation,
+                tx_to_signal_handler: &tx_data_logger_to_signal_handler,
+                rx_from_signal_handler: &rx_data_logger_from_signal_handler,
+            };
+
+            let data_logger_mutexes = DataLoggerMutexes {
+                mutex_water_temperature_ds18b20:
+                    mutex_ds18b20_water_temperature_clone_for_data_logger,
+                mutex_ambient_temperature_dsb18b20:
+                    mutex_ds18b20_ambient_temperature_clone_for_data_logger,
+                mutex_atlas_scientific_temperature:
+                    mutex_atlas_scientific_temperature_clone_for_data_logger,
+                mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_data_logger,
+                mutex_atlas_scientific_conductivity:
+                    mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
+                mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
+                mutex_tank_level_switch_signals:
+                    mutex_tank_level_switch_signals_clone_for_data_logger,
+            };
+
             data_logger.execute(
                 &mut data_injection,
                 sql_interface_data,
-                tx_data_logger_to_refill,
-                rx_data_logger_from_refill,
-                tx_data_logger_to_heating,
-                rx_data_logger_from_heating,
-                tx_data_logger_to_ventilation,
-                rx_data_logger_from_ventilation,
-                tx_data_logger_to_signal_handler,
-                rx_data_logger_from_signal_handler,
-                mutex_ds18b20_water_temperature_clone_for_data_logger,
-                mutex_ds18b20_ambient_temperature_clone_for_data_logger,
-                mutex_atlas_scientific_temperature_clone_for_data_logger,
-                mutex_atlas_scientific_ph_clone_for_data_logger,
-                mutex_atlas_scientific_conductivity_clone_for_data_logger,
-                mutex_ambient_temperature_clone_for_data_logger,
-                mutex_ambient_humidity_clone_for_data_logger,
-                mutex_tank_level_switch_signals_clone_for_data_logger,
+                data_logger_channels,
+                data_logger_mutexes,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1502,15 +1637,20 @@ fn main() {
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
         let mut heating_stats_transfer = HeatingStatsDataTransfer;
-
+        
+        let heating_mutexes = HeatingMutexes {
+            mutex_water_temperature: mutex_atlas_scientific_temperature_clone_for_heating,
+            mutex_ambient_temperature: mutex_ambient_temperature_clone_for_heating,
+            mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
+        };
+        
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
                 heating_channels,
                 &mut heating_stats_transfer,
-                mutex_atlas_scientific_temperature_clone_for_heating,
-                mutex_ambient_temperature_clone_for_heating,
-                mutex_tank_level_switch_signals_clone_for_heating,
+                &mut heating_set_value_updater,
+                heating_mutexes
             );
 
             #[cfg(feature = "debug_main")]
@@ -1524,6 +1664,7 @@ fn main() {
             ventilation.execute(
                 mutex_device_scheduler_ventilation,
                 ventilation_channels,
+                &mut ventilation_set_value_updater,
                 mutex_atlas_scientific_temperature_clone_for_ventilation,
             );
 

@@ -169,6 +169,179 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
+/// Checks if the balling set value table contains any NULL values.
+pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ballingsetvals \
+        WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL);";
+
+/// Checks if the feed patterns table contains any NULL values.
+pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM feedpatterns \
+        WHERE ProfileID IS NULL OR ProfileName IS NULL OR \
+        Pause01Duration IS NULL OR \
+        Pause01Skimmer IS NULL OR \
+        Pause01MPmp1 IS NULL OR \
+        Pause01MPmp2 IS NULL OR \
+        Pause01APmp1 IS NULL OR \
+        Pause01APmp2 IS NULL OR \
+        Feed01Duration IS NULL OR \
+        Feed01Skimmer IS NULL OR \
+        Feed01MPmp1 IS NULL OR \
+        Feed01MPmp2 IS NULL OR \
+        Feed01APmp1 IS NULL OR \
+        Feed01APmp2 IS NULL OR \
+        Pause02Duration IS NULL OR \
+        Pause02Skimmer IS NULL OR \
+        Pause02MPmp1 IS NULL OR \
+        Pause02MPmp2 IS NULL OR \
+        Pause02APmp1 IS NULL OR \
+        Pause02APmp2 IS NULL OR \
+        Feed02Duration IS NULL OR \
+        Feed02Skimmer IS NULL OR \
+        Feed02MPmp1 IS NULL OR \
+        Feed02MPmp2 IS NULL OR \
+        Feed02APmp1 IS NULL OR \
+        Feed02APmp2 IS NULL OR \
+        Pause03Duration IS NULL OR \
+        Pause03Skimmer IS NULL OR \
+        Pause03MPmp1 IS NULL OR \
+        Pause03MPmp2 IS NULL OR \
+        Pause03APmp1 IS NULL OR \
+        Pause03APmp2 IS NULL OR \
+        Feed03Duration IS NULL OR \
+        Feed03Skimmer IS NULL OR \
+        Feed03MPmp1 IS NULL OR \
+        Feed03MPmp2 IS NULL OR \
+        Feed03APmp1 IS NULL OR \
+        Feed03APmp2 IS NULL OR \
+        Pause04Duration IS NULL OR \
+        Pause04Skimmer IS NULL OR \
+        Pause04MPmp1 IS NULL OR \
+        Pause04MPmp2 IS NULL OR \
+        Pause04APmp1 IS NULL OR \
+        Pause04APmp2 IS NULL OR \
+        Feed04Duration IS NULL OR \
+        Feed04Skimmer IS NULL OR \
+        Feed04MPmp1 IS NULL OR \
+        Feed04MPmp2 IS NULL OR \
+        Feed04APmp1 IS NULL OR \
+        Feed04APmp2 IS NULL OR \
+        Pause05Duration IS NULL OR \
+        Pause05Skimmer IS NULL OR \
+        Pause05MPmp1 IS NULL OR \
+        Pause05MPmp2 IS NULL OR \
+        Pause05APmp1 IS NULL OR \
+        Pause05APmp2 IS NULL OR \
+        Feed05Duration IS NULL OR \
+        Feed05Skimmer IS NULL OR \
+        Feed05MPmp1 IS NULL OR \
+        Feed05MPmp2 IS NULL OR \
+        Feed05APmp1 IS NULL OR \
+        Feed05APmp2 IS NULL OR \
+        Pause06Duration IS NULL OR \
+        Pause06Skimmer IS NULL OR \
+        Pause06MPmp1 IS NULL OR \
+        Pause06APmp1 IS NULL OR \
+        Pause06MPmp2 IS NULL OR \
+        Pause06APmp2 IS NULL OR \
+        Feed06Duration IS NULL OR \
+        Feed06Skimmer IS NULL OR \
+        Feed06MPmp1 IS NULL OR \
+        Feed06MPmp2 IS NULL OR \
+        Feed06APmp1 IS NULL OR \
+        Feed06APmp2 IS NULL OR \
+        Pause07Duration IS NULL OR \
+        Pause07Skimmer IS NULL OR \
+        Pause07MPmp1 IS NULL OR \
+        Pause07MPmp2 IS NULL OR \
+        Pause07APmp1 IS NULL OR \
+        Pause07APmp2 IS NULL OR \
+        Feed07Duration IS NULL OR \
+        Feed07Skimmer IS NULL OR \
+        Feed07MPmp1 IS NULL OR \
+        Feed07MPmp2 IS NULL OR \
+        Feed07APmp1 IS NULL OR \
+        Feed07APmp2 IS NULL OR \
+        Pause08Duration IS NULL OR \
+        Pause08Skimmer IS NULL OR \
+        Pause08MPmp1 IS NULL OR \
+        Pause08MPmp2 IS NULL OR \
+        Pause08APmp1 IS NULL OR \
+        Pause08APmp2 IS NULL OR \
+        Feed08Duration IS NULL OR \
+        Feed08Skimmer IS NULL OR \
+        Feed08MPmp1 IS NULL OR \
+        Feed08MPmp2 IS NULL OR \
+        Feed08APmp1 IS NULL OR \
+        Feed08APmp2 IS NULL OR \
+        Pause09Duration IS NULL OR \
+        Pause09Skimmer IS NULL OR \
+        Pause09MPmp1 IS NULL OR \
+        Pause09MPmp2 IS NULL OR \
+        Pause09APmp1 IS NULL OR \
+        Pause09APmp2 IS NULL OR \
+        Feed09Duration IS NULL OR \
+        Feed09Skimmer IS NULL OR \
+        Feed09MPmp1 IS NULL OR \
+        Feed09MPmp2 IS NULL OR \
+        Feed09APmp1 IS NULL OR \
+        Feed09APmp2 IS NULL OR \
+        Pause10Duration IS NULL OR \
+        Pause10Skimmer IS NULL OR \
+        Pause10MPmp1 IS NULL OR \
+        Pause10MPmp2 IS NULL OR \
+        Pause10APmp1 IS NULL OR \
+        Pause10APmp2 IS NULL OR \
+        Feed10Duration IS NULL OR \
+        Feed10Skimmer IS NULL OR \
+        Feed10MPmp1 IS NULL OR \
+        Feed10MPmp2 IS NULL OR \
+        Feed10APmp1 IS NULL OR \
+        Feed10APmp2 IS NULL);";
+
+/// Checks if the feed schedule table contains any NULL values.
+pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM feedschedule \
+        WHERE Timestamp IS NULL OR ProfileId IS NULL OR ProfileName IS NULL OR IsWeekly IS NULL OR IsDaily IS NULL);";
+
+/// Checks if the heating set value table contains any NULL values.
+pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingsetvals \
+        WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
+
+/// Reads the heating set values from the database.
+pub const SQL_QUERY_READ_HEATING_SETVALS: &str = "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
+
+/// Reads the ventilation set values from the database.
+pub const SQL_QUERY_READ_VENTILATION_SETVALS: &str = "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals;";
+
+#[cfg(test)]
+/// Write heating set values to the database.
+pub const SQL_QUERY_WRITE_HEATING_SETVALS: &str =
+    "INSERT into heatingsetvals(heatingSwitchOffTemp, heatingSwitchOnTemp) values(:heating_switch_off_temp, :heating_switch_on_temp);";
+
+#[cfg(test)]
+/// Write ventilation set values to the database.
+pub const SQL_QUERY_WRITE_VENTILATION_SETVALS: &str =
+    "INSERT into ventilationsetvals(ventilationSwitchOffTemp, ventilationSwitchOnTemp) values(:ventilation_switch_off_temp, :ventilation_switch_on_temp);";
+
+// Checks if the ventilation set value table contains any NULL values.
+pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
+        WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
+
+/// Checks if the heating statistics table contains any NULL values.
+pub const SQL_QUERY_CHECK_HEATINGSTATS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM heatingstats \
+        WHERE Date IS NULL OR Energy IS NULL OR \
+        AmbientTempAverage IS NULL OR AmbientTempCounter IS NULL OR \
+        WaterTempAverage IS NULL OR WaterTempCounter IS NULL OR \
+        HeatingControlRuntime IS NULL);";
+
+/// Checks if the schedule table contains any NULL values.
+pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM schedule \
+        WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive);";
+
+/// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
+pub const SQL_QUERY_READ_TIMEOUT: &str = "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'wait_timeout';";
+
+/// Minimal request to the database to avoid timeouts
+pub const SQL_QUERY_PING: &str = "SELECT 1;";
+
 // Deletes the content of a specific table.
 // This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
 #[cfg(test)]

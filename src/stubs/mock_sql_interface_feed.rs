@@ -37,13 +37,6 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
-        fn get_single_feedpattern_from_database(
-            &mut self,
-            _profile_id: i32,
-        ) -> Result<Feedpattern, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
-        }
-
         fn insert_feed_event(
             &mut self,
             _timestamp: NaiveDateTime,
@@ -54,11 +47,22 @@ pub mod tests {
             Err(SqlInterfaceError::MockError)
         }
 
+        fn get_single_feedpattern_from_database(
+            &mut self,
+            _profile_id: i32,
+        ) -> Result<Feedpattern, SqlInterfaceError> {
+            Err(SqlInterfaceError::MockError)
+        }
+
         fn update_feedschedule_entries_in_database(
             &mut self,
             _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
+        }
+
+        fn ping(&mut self) {
+            // do nothing
         }
 
         #[cfg(test)]

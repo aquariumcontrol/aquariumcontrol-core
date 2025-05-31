@@ -57,12 +57,12 @@ pub struct Ds18b20Config {
     /// system driver file name
     pub system_driver_file_name: String,
 
-    /// max. number of retries
     #[allow(unused)]
+    /// max. number of retries
     pub max_retries: u32,
 
-    /// duration between retries in milliseconds
     #[allow(unused)]
+    /// duration between retries in milliseconds
     pub retry_pause_duration_millis: u64,
 
     /// unique 64-bit ID of water temperature sensor
@@ -72,23 +72,32 @@ pub struct Ds18b20Config {
     pub ambient_temperature_sensor_id: String,
 }
 
-pub mod ds18b20_constants {}
-
-#[derive(Debug, PartialEq)]
-pub enum Ds18b20Error {}
-
 pub struct Ds18b20 {
-    // configuration for communication with DHT sensor
     #[allow(unused)]
+    /// configuration for communication with Ds18b20 sensor
     config: Ds18b20Config,
 }
 
 impl ProcessExternalRequestTrait for Ds18b20 {}
 
 impl Ds18b20 {
-    /// Provides a struct of type Ds18b20 - Linux platform-specific version
+    /// Provides a struct of type Ds18b20.
+    ///
+    /// This constructor initializes the DS18B20 sensor module, preparing it to read
+    /// temperatures from 1-Wire devices via the Linux sysfs interface. It validates
+    /// the provided configuration paths and sensor IDs.
+    ///
     /// # Arguments
-    /// * `config` - configuration for communication with DHT sensor
+    /// * `config` - Configuration data for the DS18B20 sensor, including driver paths,
+    ///   sensor IDs, and retry settings.
+    ///
+    /// # Returns
+    /// A new `Ds18b20` struct.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - `system_driver_base_path`, `system_driver_sensor_path_prefix`, or `system_driver_file_name` are empty.
+    /// - `active` is true, but both `water_temperature_sensor_id` and `ambient_temperature_sensor_id` are empty.
     pub fn new(config: Ds18b20Config) -> Ds18b20 {
         if config.system_driver_base_path.is_empty() {
             panic!(
@@ -117,8 +126,27 @@ impl Ds18b20 {
         Ds18b20 { config }
     }
 
-    /// reads temperature from DS18B20 sensor
     #[allow(unused)]
+    /// Reads temperature from a DS18B20 1-Wire sensor via the Linux sysfs interface.
+    ///
+    /// This function attempts to read temperature data from a specific DS18B20 sensor,
+    /// identified by its `sensor_id`. It constructs the file path based on the configured
+    /// system driver paths. The function includes a retry mechanism for robust reading,
+    /// as 1-Wire communication can sometimes be flaky.
+    ///
+    /// The sensor reports temperature in milli-celsius (e.g., 24500 for 24.5°C), which
+    /// this function converts to `f32` degrees Celsius. It also verifies the "YES"
+    /// flag in the sysfs output to ensure a valid reading.
+    ///
+    /// # Arguments
+    /// * `sensor_id` - A string slice containing the unique 64-bit ID of the DS18B20 sensor
+    ///   to read (e.g., "28-00000abcde12").
+    ///
+    /// # Returns
+    /// A `Result<f32, io::Error>`:
+    /// - `Ok(f32)`: The temperature in degree Celsius if successfully read and parsed.
+    /// - `Err(io::Error)`: If the sensor's device folder or file is not found, or if
+    ///   reading fails after all retries (e.g., due to communication errors, invalid data format).
     pub fn read(&self, sensor_id: &str) -> Result<f32, io::Error> {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
@@ -160,11 +188,20 @@ impl Ds18b20 {
         ))
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the DS18B20 sensor module.
+    ///
+    /// This function runs continuously, managing the periodic measurement of water and ambient
+    /// temperatures from DS18B20 sensors via the Linux sysfs 1-Wire interface.
+    /// It updates shared mutexes with the latest sensor readings, making them available to other
+    /// application threads. The loop maintains a measurement countdown and remains
+    /// responsive to `Quit` commands from the signal handler for graceful shutdown.
+    ///
     /// # Arguments
-    /// * `rx_from_signal_handler` - Receiver part of the channel for communication from signal handler                
-    /// * `mutex_water_temperature` - Mutex for water temperature                
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature                
+    /// * `rx_from_signal_handler` - The receiver channel for commands (e.g., `Quit`) from the main signal handler.
+    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` into which the latest water temperature reading
+    ///   will be written, ensuring thread-safe access for other modules.
+    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` into which the latest ambient temperature reading
+    ///   will be written, ensuring thread-safe access for other modules.
     pub fn execute(
         &mut self,
         rx_from_signal_handler: Receiver<InternalCommand>,
@@ -205,7 +242,7 @@ impl Ds18b20 {
                                 }
                             }
                         } else {
-                            *water_temperature = self.config.replacement_value_water_temperature;
+                            *ambient_temperature = self.config.replacement_value_water_temperature;
                         }
                         if !self.config.water_temperature_sensor_id.is_empty() {
                             match self.read(self.config.water_temperature_sensor_id.as_str()) {
@@ -267,12 +304,12 @@ pub mod tests {
         }
     }
 
-    // This test case reads from a real DS18B20 sensor.
-    // For this test case to succeed, the DS18B20 sensor needs to be connected,
-    // and the 1-wire interface needs to be enabled (see rasp-config)
     #[test]
     #[ignore]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    // This test case reads from a real DS18B20 sensor.
+    // For this test case to succeed, the DS18B20 sensor needs to be connected,
+    // and the 1-wire interface needs to be enabled (see rasp-config)
     fn test_read_ds18b20() {
         let config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -293,8 +330,8 @@ pub mod tests {
     }
 
     #[test]
-    // This test case read sensor data provided by a file.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
+    // This test case read sensor data provided by a file.
     fn test_read_ds18b20_from_file() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 

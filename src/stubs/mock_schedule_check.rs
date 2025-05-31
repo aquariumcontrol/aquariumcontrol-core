@@ -19,7 +19,7 @@ pub mod tests {
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
 
-    // send via channel a value to the test object to indicate if actuation is permitted.
+    // send via the channel a value to the test object to indicate if actuation is permitted.
     pub fn mock_schedule_check(
         tx_schedule_check_to_test_object: &Sender<bool>,
         rx_schedule_check_from_test_object: &Receiver<InternalCommand>,

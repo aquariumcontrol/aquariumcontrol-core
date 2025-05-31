@@ -9,7 +9,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 const LOG_TARGET_LOGGER: &str = "logger";
 
-/// setup of logging
+/// Sets up and configures the application's logger using the `fern` crate.
+///
+/// This function initializes a global logger that outputs messages to both
+/// standard output (console) and a log file located at `/var/log/aquarium.log`.
+/// Log messages are formatted with a timestamp, log level, and target.
+/// The default logging level is set to `Debug`.
+///
+/// # Panics
+/// This function will panic if it fails to open or create the log file
+/// at `/var/log/aquarium.log`. This typically indicates a permissions
+/// issue or an invalid path.
 pub fn setup_logger() {
     // open the file for logging
     let log_file = match fern::log_file("/var/log/aquarium.log") {
@@ -25,15 +35,17 @@ pub fn setup_logger() {
     // configure logger
     let _ = fern::Dispatch::new()
         .format(|out, message, record| {
+            let local_time = chrono::Local::now(); // Get current local time
             out.finish(format_args!(
                 "[{} {} {}] {}",
-                humantime::format_rfc3339(std::time::SystemTime::now()),
+                local_time.format("%Y-%m-%d %H:%M:%S%.3f %:z"),
                 record.level(),
                 record.target(),
                 message
             ))
         })
         .level(log::LevelFilter::Debug)
+        // not utilized:
         //        .level_for("hyper", log::LevelFilter::Info)
         .chain(std::io::stdout()) // output to stdout
         .chain(log_file) // output to file

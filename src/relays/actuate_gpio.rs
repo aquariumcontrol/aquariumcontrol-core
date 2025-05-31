@@ -43,6 +43,19 @@ pub struct ActuateGpioConfig {
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl ActuateGpioConfig {
+    /// Creates a new `ActuateGpioConfig` by mapping GPIO pins from a `GpioHandlerConfig`.
+    ///
+    /// This constructor is used to extract and organize the specific GPIO pin assignments
+    /// for each aquarium device from a more general GPIO configuration structure.
+    /// It's used during the application's initialization exclusively on Linux systems
+    /// with the target hardware.
+    ///
+    /// # Arguments
+    /// * `gpio_handler_config` - A reference to the `GpioHandlerConfig` struct, which contains
+    ///   the raw GPIO pins for various devices.
+    ///
+    /// # Returns
+    /// A new `ActuateGpioConfig` struct with device-specific GPIO pin assignments.
     pub fn new(gpio_handler_config: &GpioHandlerConfig) -> ActuateGpioConfig {
         ActuateGpioConfig {
             gpio_skimmer: gpio_handler_config.skimmer,
@@ -118,6 +131,24 @@ pub struct ActuateGpio {
 }
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
+/// Acquires and configures a specific GPIO pin as an output pin.
+///
+/// This private helper function attempts to get access to a GPIO pin by its number
+/// and then sets its mode to output. This is a critical step for controlling
+/// hardware devices connected to the GPIOs.
+///
+/// # Arguments
+/// * `gpio` - A reference to the `Gpio` instance, which provides access to the GPIO interface.
+/// * `gpio_number` - The physical GPIO pin to configure.
+/// * `device_name` - A descriptive name of the device connected to this pin (used for error logging).
+///
+/// # Returns
+/// An `OutputPin` instance, ready to be used for setting the pin's state (high or low).
+///
+/// # Panics
+/// This function will panic if it fails to:
+/// - Obtain access to the specified GPIO pin (e.g., if the pin is invalid or already in use).
+/// - Configure the pin as an output.
 fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> OutputPin {
     match gpio.get(gpio_number) {
         Ok(c) => c.into_output(),
@@ -132,6 +163,25 @@ fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> OutputPin 
 
 impl ActuateGpio {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Creates a new `ActuateGpio` instance by configuring and acquiring all necessary GPIO output pins.
+    ///
+    /// This constructor is responsible for initializing the direct GPIO hardware control.
+    /// It iterates through the `ActuateGpioConfig` to get each device's assigned GPIO pin,
+    /// then acquires and sets up each pin as an `OutputPin` using the `rppal` library.
+    ///
+    /// # Arguments
+    /// * `gpio` - A `Gpio` instance, which is the entry point for accessing the GPIO interface
+    ///   on a Linux system (e.g., Raspberry Pi).
+    /// * `config` - An `ActuateGpioConfig` struct, containing the mapping of aquarium devices to their
+    ///   specific GPIO pins.
+    ///
+    /// # Returns
+    /// A new `ActuateGpio` struct, holding all the configured `OutputPin` ready for direct control.
+    ///
+    /// # Panics
+    /// This function will **panic** if it fails to acquire or configure any of the specified
+    /// GPIO pins (e.g., if a pin is invalid, already in use, or if there's a low-level
+    /// GPIO access error).
     pub fn new(gpio: Gpio, config: ActuateGpioConfig) -> ActuateGpio {
         let output_pin_skimmer = get_output_pin(&gpio, config.gpio_skimmer, "skimmer");
         let output_pin_main_pump1 = get_output_pin(&gpio, config.gpio_main_pump1, "main pump 1");
@@ -170,11 +220,22 @@ impl ActuateGpio {
 }
 
 impl RelayActuationTrait for ActuateGpio {
-    /// Triggers actuation of relays via GPIO
-    /// It translates the commands SwitchOn and SwitchOff to SetRelay and UnsetRelay
-    /// considering relay id and relay logic.
+    /// Triggers actuation of relays via GPIO.
+    ///
+    /// This function translates `SwitchOn` and `SwitchOff` commands for specific aquarium devices
+    /// into direct GPIO pin manipulations (`set_low()` or `set_high()`). It applies the correct
+    /// relay logic (e.g., whether `set_low()` means "on" or "off" for a given device).
+    ///
+    /// This implementation is active only on Linux systems when the `target_hw` feature is enabled.
+    ///
     /// # Arguments
-    /// * `internal_command` - enum value used for identifying content which shall be sent
+    /// * `internal_command` - The `InternalCommand` specifying the `AquariumDevice` and the desired state (`SwitchOn` or `SwitchOff`).
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the GPIO pin state was successfully set.
+    /// - `Err(RelayError::IrrelevantCommand)` if the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
+    /// - `Err(RelayError::PulseNotAllowedForDevice)` if `get_relay_command_gpio` returns an error (which it does for `Pulse` commands on non-pulsable devices).
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)
@@ -228,7 +289,47 @@ impl RelayActuationTrait for ActuateGpio {
                         }
                         false => {
                             #[cfg(all(target_os = "linux", feature = "target_hw"))]
-                            self.output_pin_skimmer.set_high();
+                            match aquarium_device {
+                                AquariumDevice::Skimmer => {
+                                    self.output_pin_skimmer.set_high();
+                                }
+                                AquariumDevice::MainPump1 => {
+                                    self.output_pin_main_pump1.set_high();
+                                }
+                                AquariumDevice::MainPump2 => {
+                                    self.output_pin_main_pump2.set_high();
+                                }
+                                AquariumDevice::AuxPump1 => {
+                                    self.output_pin_aux_pump1.set_high();
+                                }
+                                AquariumDevice::AuxPump2 => {
+                                    self.output_pin_aux_pump2.set_high();
+                                }
+                                AquariumDevice::Feeder => {
+                                    self.output_pin_feeder.set_high();
+                                }
+                                AquariumDevice::RefillPump => {
+                                    self.output_pin_refill_pump.set_high();
+                                }
+                                AquariumDevice::Heater => {
+                                    self.output_pin_heater.set_high();
+                                }
+                                AquariumDevice::Ventilation => {
+                                    self.output_pin_ventilation.set_high();
+                                }
+                                AquariumDevice::PeristalticPump1 => {
+                                    self.output_pin_peristaltic_pump1.set_high();
+                                }
+                                AquariumDevice::PeristalticPump2 => {
+                                    self.output_pin_peristaltic_pump2.set_high();
+                                }
+                                AquariumDevice::PeristalticPump3 => {
+                                    self.output_pin_peristaltic_pump3.set_high();
+                                }
+                                AquariumDevice::PeristalticPump4 => {
+                                    self.output_pin_peristaltic_pump4.set_high();
+                                }
+                            }
                             Ok(())
                         }
                     },

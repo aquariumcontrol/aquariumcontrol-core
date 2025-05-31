@@ -20,7 +20,7 @@ use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -107,6 +107,65 @@ pub struct DataLoggerConfig {
 
     /// output file name (in ramdisk) for the ambient temperature measured by DS18B20 sensor
     output_file_name_ambient_temperature_ds18b20: String,
+}
+
+/// Struct acts as a central hub for communication channels used by the DataLogger.
+/// It's a way to bundle together all the necessary mpsc (Multi-Producer, Single-Consumer) channel
+/// endpoints that the data logger needs to interact with other parts of your application.
+pub struct DataLoggerChannels<'a> {
+    /// Sender part of the channel for communication to Refill
+    pub tx_to_refill: &'a Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from Refill
+    pub rx_from_refill: &'a Receiver<bool>,
+
+    /// Sender part of the channel for communication to Heating
+    pub tx_to_heating: &'a Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from Heating
+    pub rx_from_heating: &'a Receiver<bool>,
+
+    /// Sender part of the channel for communication to Ventilation
+    pub tx_to_ventilation: &'a Sender<InternalCommand>,
+
+    /// Receiver part of the channel for communication from Ventilation
+    pub rx_from_ventilation: &'a Receiver<bool>,
+
+    /// Sender part of the channel for communication to the signal handler
+    pub tx_to_signal_handler: &'a Sender<bool>,
+
+    /// Receiver part of the channel for communication from the signal handler                
+    pub rx_from_signal_handler: &'a Receiver<InternalCommand>,
+}
+
+/// Contains `Arc<Mutex>`-wrapped shared data points accessed by the data logger.
+///
+/// These mutexes provide thread-safe access to various sensor readings and
+/// device states that are collected by the data logger for recording and filtering.
+pub struct DataLoggerMutexes {
+    /// Mutex for water temperature from DS18B20 sensor
+    pub mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
+
+    /// Mutex for ambient temperature from DS18B20 sensor
+    pub mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
+
+    /// Mutex for temperature from Atlas Scientific
+    pub mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
+
+    /// Mutex for pH from Atlas Scientific
+    pub mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
+
+    /// Mutex for conductivity DS18B20 sensor
+    pub mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
+
+    /// Mutex for ambient temperature
+    pub mutex_ambient_temperature: Arc<Mutex<f32>>,
+
+    /// Mutex for ambient humidity
+    pub mutex_ambient_humidity: Arc<Mutex<f32>>,
+
+    /// Mutex for tank level switch signals
+    pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -199,13 +258,39 @@ pub struct DataLogger {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature from DS18B20 sensor to disk
     lock_error_output_signal_ambient_temperature_ds18b20: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl DataLogger {
-    /// Returns a struct of type DataLogger
+    /// Creates a new `DataLogger` instance.
+    ///
+    /// This constructor initializes the data logger module with its configuration,
+    /// sets up Infinite Impulse Response (IIR) filters for various sensor signals,
+    /// and prepares output files on disk (if enabled). It also initializes many
+    /// internal "lock" flags designed to prevent log flooding during operation.
+    ///
+    /// The IIR filters for water temperature, pH, and conductivity are initialized
+    /// with a zero initial value and a 1-second time step.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for data logger
-    pub fn new(config: DataLoggerConfig) -> DataLogger {
+    /// * `config` - Configuration data for the data logger, defining logging intervals,
+    ///   filter coefficients, output file paths, and other operational parameters.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
+    ///
+    /// # Returns
+    /// A new `DataLogger` struct, ready to collect, filter, and log sensor data.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - Any of the required output file names in the `config` are empty when `output_to_disk` is `true`.
+    /// - It fails to reset the content of any configured output file on disk (e.g., due to permissions issues).
+    /// - An `IIRFilter` cannot be initialized (e.g., if a filter coefficient is invalid).
+    pub fn new(config: DataLoggerConfig, database_ping_interval: Duration) -> DataLogger {
         let filter_water_temperature = IIRFilter::new_requires_initial(
             &config.filter_coefficient_water_temperature,
             0.0, // initialization value (measured value not available at this time)
@@ -329,13 +414,32 @@ impl DataLogger {
             lock_error_channel_receive_termination: false,
             lock_error_output_signal_water_temperature_ds18b20: false,
             lock_error_output_signal_ambient_temperature_ds18b20: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
-    /// Outputs non-binary signal to a file (in RAM disk).
+    /// Outputs a non-binary sensor signal to a specified file, typically located on a RAM disk.
+    ///
+    /// This private helper function converts a floating-point `signal` into a human-readable
+    /// string format (determined by `signal_type`) and attempts to write it to the given
+    /// `output_file_name`. The operation only proceeds if `output_to_disk` is enabled in
+    /// the data logger's configuration.
+    ///
+    /// Error logging for writing failures is managed by the `inhibit_error_log` flag,
+    /// preventing a flood of repetitive error messages.
+    ///
     /// # Arguments
-    /// * `signal` - signal which shall be converted to humanly readable format and written to file
-    /// * `output_file_name` - name of the file where the value shall be written to    
+    /// * `signal` - The `f32` sensor value to be written to the file.
+    /// * `signal_type` - An `AquariumSignal` enum variant, used to determine the correct
+    ///   formatting for the `signal` value (e.g., number of decimal places).
+    /// * `output_file_name` - A reference to the `String` containing the full path to the output file.
+    /// * `inhibit_error_log` - A boolean flag that, if `true`, will prevent this specific
+    ///   error from being logged to the console/main log if a write operation fails.
+    ///
+    /// # Returns
+    /// `true` if an error occurred during the file write operation; `false` otherwise (including
+    /// when `output_to_disk` is `false` and no write is attempted).
     fn output_signal(
         &self,
         signal: f32,
@@ -408,10 +512,27 @@ impl DataLogger {
         }
     }
 
-    /// Outputs string to a file (in RAM disk).
+    /// Outputs a boolean (binary) signal's state to a specified file, typically located on a RAM disk.
+    ///
+    /// This private helper function converts a boolean `state` into a descriptive string
+    /// (e.g., "ON"/"OFF", "HIGH"/"LOW") using provided labels and attempts to write it
+    /// to the given `output_file_name`. This operation only occurs if `output_to_disk`
+    /// is enabled in the data logger's configuration.
+    ///
+    /// Error logging for writing failures is controlled by the `inhibit_error_log` flag,
+    /// preventing a flood of repetitive error messages.
+    ///
     /// # Arguments
-    /// * `data` - string data to be written to file
-    /// * `output_file_name` - name of the file where the value shall be written to    
+    /// * `state` - The `bool` value of the binary signal (e.g., `true` for ON, `false` for OFF).
+    /// * `state_description_true` - The string label to write to the file when `state` is `true`.
+    /// * `state_description_false` - The string label to write to the file when `state` is `false`.
+    /// * `output_file_name` - A reference to the `String` containing the full path to the output file.
+    /// * `inhibit_error_log` - A boolean flag that, if `true`, will prevent this specific
+    ///   error from being logged to the console/main log if a write operation fails.
+    ///
+    /// # Returns
+    /// `true` if an error occurred during the file write operation; `false` otherwise (including
+    /// when `output_to_disk` is `false` and no write is attempted).
     fn output_timestamp(
         &self,
         timestamp: NaiveDateTime,
@@ -441,13 +562,28 @@ impl DataLogger {
         }
     }
 
-    /// Get information from refill/ventilation/heating thread
+    /// Retrieves the ON/OFF status of a control module (Refill, Ventilation, or Heating) and writes it to a file.
+    ///
+    /// This private helper function attempts to get boolean signal information from a
+    /// control module by sending a `RequestSignal` command through its channel. If a response
+    /// is received, it updates the local `signal` boolean and then calls `output_state`
+    /// to write this status (as "ON" or "OFF") to the configured file on disk.
+    ///
+    /// It also tracks channel disconnections to prevent continuous error logging if a module
+    /// is no longer reachable.
+    ///
     /// # Arguments
-    /// * `signal` - reference to variable for storing control status information of refill/ventilation/heating
-    /// * `signal_name` - enum indicating which signal shall be measured
-    /// * `tx_to_on_off_thread` - reference to sender part of the channel for communication to refill/ventilation/heating
-    /// * `rx_from_on_off_thread` - reference to receiver part of the channel for communication from refill/ventilation/heating
-    /// * `lock_error_output_state` - information if error has already occurred
+    /// * `signal` - A mutable reference to a `bool` where the retrieved ON/OFF status will be stored.
+    /// * `refill_channel_disconnected` - A mutable reference to a `bool` flag indicating if the channel
+    ///   to the specific module is disconnected. This flag will be updated if a disconnection is detected.
+    /// * `signal_name` - An `AquariumSignal` enum variant (`RefillPumpStatus`, `VentilationControlStatus`, or `HeatingControlStatus`)
+    ///   specifying which signal is being requested.
+    /// * `tx_to_on_off_thread` - The sender channel to send the `RequestSignal` command to the target module.
+    /// * `rx_from_on_off_thread` - The receiver channel to get the boolean ON/OFF information from the target module.
+    /// * `lock_error_output_state` - A boolean flag used to inhibit repeated error logging if file output fails.
+    ///
+    /// # Returns
+    /// `true` if an error occurred during the channel communication or file output; `false` otherwise.
     fn update_on_off_signal(
         &mut self,
         signal: &mut bool,
@@ -527,12 +663,18 @@ impl DataLogger {
         lock_error_output_state
     }
 
-    /// Get information from Ambient thread
+    /// Retrieves current ambient temperature and humidity readings from shared mutexes and outputs them to files.
+    ///
+    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for ambient temperature
+    /// and humidity. It updates the corresponding `Option<f32>` variables with the retrieved values
+    /// and then calls `output_signal` to write these readings to their respective configured files on disk.
+    /// If a mutex lock fails, the corresponding `Option` will be set to `None`.
+    ///
     /// # Arguments
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
-    /// * `mutex_humidity` - reference to receiver part of the channel for communication from Ambient
-    /// * `ambient_temperature` - reference to variable for storing signal
-    /// * `humidity` - reference to variable for storing signal
+    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` holding the latest ambient temperature reading.
+    /// * `mutex_humidity` - An `Arc<Mutex<f32>>` holding the latest ambient humidity reading.
+    /// * `ambient_temperature` - A mutable reference to an `Option<f32>` where the retrieved ambient temperature will be stored.
+    /// * `humidity` - A mutable reference to an `Option<f32>` where the retrieved ambient humidity will be stored.
     fn update_ambient_signals(
         &mut self,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
@@ -569,81 +711,79 @@ impl DataLogger {
         }
     }
 
-    /// Executes thread communication and filter calculation for all signals
+    /// Retrieves current ON/OFF status signals from Refill, Heating, and Ventilation control modules via channels.
+    ///
+    /// This function sends a `RequestSignal` command to each of the specified
+    /// control modules (Refill, Heating, Ventilation) and updates the provided
+    /// status flags based on their responses. It also tracks channel disconnection
+    /// status to prevent repeated errors.
+    ///
     /// # Arguments
-    /// * `tx_to_refill` - reference to sender part of channel for communication to Refill
-    /// * `rx_from_refill` - reference to receiver part of channel for communication from Refill
-    /// * `tx_to_heating` - reference to sender part of channel for communication to Heating
-    /// * `rx_from_heating` - reference to receiver part of channel for communication from Heating
-    /// * `tx_to_ventilation` - reference to sender part of channel for communication to Ventilation
-    /// * `rx_from_ventilation` - reference to receiver part of channel for communication from Ventilation
-    /// * `refill_in_progress` - reference to variable for storing refill in progress information
-    /// * `refill_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `heater_is_on` - reference to variable for storing heating control status information
-    /// * `heating_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `ventilation_is_on` - reference to variable for storing ventilation control status information
-    /// * `ventilation_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `water_temperature` - reference to variable for storing signal
-    /// * `ph` - reference to variable for storing signal
-    /// * `conductivity` - reference to variable for storing signal
-    /// * `atlas_scientific_channel_disconnected` - reference to variable for storing health status of channel
-    /// * `ambient_temperature` - reference to variable for storing signal
-    /// * `ambient_humidity` - reference to variable for storing signal
-    /// * `ambient_channel_disconnected` - reference to variable for storing health status of channel
+    /// * `data_logger_channels` - A reference to the container of channels for communication with other threads.
+    /// * `refill_status` - A mutable tuple `(in_progress: bool, channel_disconnected: bool)` for the refill module's status.
+    /// * `heater_status` - A mutable tuple `(is_on: bool, channel_disconnected: bool)` for the heating module's status.
+    /// * `ventilation_status` - A mutable tuple `(is_on: bool, channel_disconnected: bool)` for the ventilation module's status.
     fn update_signals(
         &mut self,
-        tx_to_refill: &Sender<InternalCommand>,
-        rx_from_refill: &Receiver<bool>,
-        tx_to_heating: &Sender<InternalCommand>,
-        rx_from_heating: &Receiver<bool>,
-        tx_to_ventilation: &Sender<InternalCommand>,
-        rx_from_ventilation: &Receiver<bool>,
-        refill_in_progress: &mut bool,
-        refill_channel_disconnected: &mut bool,
-        heater_is_on: &mut bool,
-        heating_channel_disconnected: &mut bool,
-        ventilation_is_on: &mut bool,
-        ventilation_channel_disconnected: &mut bool,
+        data_logger_channels: &DataLoggerChannels,
+        refill_status: &mut (bool, bool), // (in_progress, channel_disconnected)
+        heater_status: &mut (bool, bool), // (is_on, channel_disconnected)
+        ventilation_status: &mut (bool, bool), // (is_on, channel_disconnected)
     ) {
+        // Extract the individual parameters from the tuples
+        let (mut refill_in_progress, mut refill_channel_disconnected) = *refill_status;
+        let (mut heater_is_on, mut heating_channel_disconnected) = *heater_status;
+        let (mut ventilation_is_on, mut ventilation_channel_disconnected) = *ventilation_status;
+
         //*** communication with refill thread ***
         self.lock_error_output_state_refill_in_progress = self.update_on_off_signal(
-            refill_in_progress,
-            refill_channel_disconnected,
+            &mut refill_in_progress,
+            &mut refill_channel_disconnected,
             AquariumSignal::RefillPumpStatus,
-            tx_to_refill,
-            rx_from_refill,
+            data_logger_channels.tx_to_refill,
+            data_logger_channels.rx_from_refill,
             self.lock_error_output_state_refill_in_progress,
         );
+        *refill_status = (refill_in_progress, refill_channel_disconnected);
 
         //*** communication with heating thread ***
         self.lock_error_output_state_heating_is_on = self.update_on_off_signal(
-            heater_is_on,
-            heating_channel_disconnected,
+            &mut heater_is_on,
+            &mut heating_channel_disconnected,
             AquariumSignal::HeatingControlStatus,
-            tx_to_heating,
-            rx_from_heating,
+            data_logger_channels.tx_to_heating,
+            data_logger_channels.rx_from_heating,
             self.lock_error_output_state_heating_is_on,
         );
+        *heater_status = (heater_is_on, heating_channel_disconnected);
 
         //*** communication with ventilation thread ***
         self.lock_error_output_state_ventilation_is_on = self.update_on_off_signal(
-            ventilation_is_on,
-            ventilation_channel_disconnected,
+            &mut ventilation_is_on,
+            &mut ventilation_channel_disconnected,
             AquariumSignal::VentilationControlStatus,
-            tx_to_ventilation,
-            rx_from_ventilation,
+            data_logger_channels.tx_to_ventilation,
+            data_logger_channels.rx_from_ventilation,
             self.lock_error_output_state_ventilation_is_on,
         );
+        *ventilation_status = (ventilation_is_on, ventilation_channel_disconnected);
     }
 
-    /// Read values of Atlas Scientific from Mutex and write them to RAM disk
+    /// Retrieves current sensor readings from Atlas Scientific devices via shared mutexes and outputs them to files.
+    ///
+    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for water temperature,
+    /// pH, and conductivity readings from Atlas Scientific sensors. It updates the corresponding
+    /// `Option<f32>` variables with the retrieved values and then calls `output_signal` to write
+    /// these readings to their respective configured files on disk. If a mutex lock fails, the
+    /// corresponding `Option` will be set to `None`.
+    ///
     /// # Arguments
-    /// * `mutex_temperature` - Mutex for water temperature
-    /// * `mutex_ph` - Mutex for pH
-    /// * `mutex_conductivity` - Mutex for conductivity
-    /// * `temperature` - Reference to temperature variable
-    /// * `ph` - Reference to pH variable
-    /// * `conductivity` - Reference to conductivity variable
+    /// * `mutex_temperature` - An `Arc<Mutex<f32>>` holding the latest water temperature reading from Atlas Scientific.
+    /// * `mutex_ph` - An `Arc<Mutex<f32>>` holding the latest pH reading from Atlas Scientific.
+    /// * `mutex_conductivity` - An `Arc<Mutex<f32>>` holding the latest conductivity reading from Atlas Scientific.
+    /// * `temperature` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
+    /// * `ph` - A mutable reference to an `Option<f32>` where the retrieved pH value will be stored.
+    /// * `conductivity` - A mutable reference to an `Option<f32>` where the retrieved conductivity value will be stored.
     fn update_atlas_scientific_signals(
         &mut self,
         mutex_temperature: Arc<Mutex<f32>>,
@@ -736,12 +876,19 @@ impl DataLogger {
         }
     }
 
-    /// Read values of tank level switch from Mutex and write them to RAM disk
+    /// Retrieves current temperature readings from DS18B20 sensors via shared mutexes and outputs them to files.
+    ///
+    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for water temperature
+    /// and ambient temperature readings from DS18B20 sensors. It updates the corresponding
+    /// `Option<f32>` variables with the retrieved values and then calls `output_signal` to write
+    /// these readings to their respective configured files on disk. If a mutex lock fails, the
+    /// corresponding `Option` will be set to `None`.
+    ///
     /// # Arguments
-    /// * `mutex_tank_level_switch_signals` - Mutex for tank level switch signals
-    /// * `tank_level_switch_position_opt` - Reference to tank level switch position variable wrapped in Option
-    /// * `tank_level_switch_position_stabilized_opt` - Reference to tank level switch position stabilized variable wrapped in Option
-    /// * `tank_level_switch_invalid_opt` - Reference to tank level switch invalid variable wrapped in Option
+    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` holding the latest water temperature reading from a DS18B20 sensor.
+    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` holding the latest ambient temperature reading from a DS18B20 sensor.
+    /// * `water_temperature` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
+    /// * `ambient_temperature` - A mutable reference to an `Option<f32>` where the retrieved ambient temperature will be stored.
     fn update_tank_level_switch_signals(
         &mut self,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -796,11 +943,22 @@ impl DataLogger {
         }
     }
 
-    /// Calculate filtered values and output them to (RAM disk) files
+    /// Calculates filtered values for water temperature, pH, and conductivity, then outputs them to files.
+    ///
+    /// This private helper function takes raw (unfiltered) sensor readings. For each valid reading,
+    /// it applies its corresponding `IIRFilter` to smooth the data. The resulting filtered values
+    /// are then stored in new `Option<f32>` variables and written to their designated files on disk.
+    /// If a raw reading is `None`, no filtering or output occurs for that signal.
+    ///
     /// # Arguments
-    /// * `water_temperature` - measured water temperature wrapped in Option
-    /// * `ph` - measured ph temperature wrapped in Option
-    /// * `conductivity` - measured conductivity temperature wrapped in Option
+    /// * `water_temperature` - The measured water temperature, wrapped in an `Option`.
+    /// * `ph` - The measured pH value, wrapped in an `Option`.
+    /// * `conductivity` - The measured conductivity value, wrapped in an `Option`.
+    ///
+    /// # Returns
+    /// A tuple `(Option<f32>, Option<f32>, Option<f32>)` containing the filtered
+    /// water temperature, pH, and conductivity values, respectively. Each value is
+    /// `Some` if the corresponding input was valid and filtered, or `None` otherwise.
     fn calculate_filtered_signals(
         &mut self,
         water_temperature: Option<f32>,
@@ -857,9 +1015,19 @@ impl DataLogger {
         )
     }
 
-    /// get timestamp either from SQL server or application-generated
-    /// # Arguments    
-    /// * `conn` - connection to SQL database
+    /// Retrieves the current timestamp, either from the SQL database or generated locally by the application.
+    ///
+    /// This private helper function determines the timestamp source based on the `use_sql_timestamp`
+    /// configuration setting. If `use_sql_timestamp` is `true`, it attempts to fetch the timestamp
+    /// from the connected SQL database. If that fails, it falls back to using a locally generated
+    /// timestamp and logs an error. If `use_sql_timestamp` is `false`, it always uses a local timestamp.
+    /// The chosen timestamp is also written to a configured file on the disk.
+    ///
+    /// # Arguments
+    /// * `conn` - A mutable reference to an active SQL database connection, used if the SQL timestamp option is enabled.
+    ///
+    /// # Returns
+    /// A `NaiveDateTime` representing the current timestamp, sourced either from the database or the local system.
     fn update_timestamp(&mut self, conn: &mut PooledConn) -> NaiveDateTime {
         match self.config.use_sql_timestamp {
             true => match SqlInterface::get_current_timestamp(conn) {
@@ -887,49 +1055,35 @@ impl DataLogger {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the data logger module.
+    ///
+    /// This function runs continuously, acting as the central data collection and logging hub for
+    /// the application.
+    /// It performs the following key tasks in a recurring cycle:
+    /// 1. **Signal Retrieval**: Gathers current status (ON/OFF) from control modules (Refill, Heating, Ventilation) via channels.
+    /// 2. **Sensor Data Acquisition**: Reads raw sensor values (temperatures, pH, conductivity, ambient conditions, tank level switch states) from shared mutexes, which are updated by other sensor-reading threads.
+    /// 3. **Signal Filtering**: Applies IIR (Infinite Impulse Response) filters to sensor signals (e.g., water temperature, pH, conductivity) to produce smoothed values.
+    /// 4. **Timestamping**: Determines the current timestamp, either from the SQL database or generated locally, based on configuration.
+    /// 5. **DataFrame Construction**: Assembles all collected and processed data into a comprehensive `RecorderDataFrame`.
+    /// 6. **Data Injection & Disk Output**: Transfers the `RecorderDataFrame` to the SQL database (via the `data_injection` trait) and writes various individual signal/state values to designated files on a RAM disk (if configured).
+    /// 7. **Cycle Management**: Calculates the execution time of the current cycle and idles for the remaining duration to meet the configured `logging_interval`, ensuring precise data logging frequency. It warns if the cycle time is exceeded.
+    /// 8. **Responsiveness**: Remains responsive to `Quit` commands from the signal handler during idle periods to enable graceful shutdown.
+    ///
+    /// The loop continues indefinitely until a `Quit` command is received from the signal handler.
+    /// Upon receiving `Quit`, it performs a graceful exit sequence: sending confirmation back
+    /// to the signal handler and then waiting for a `Terminate` command before finally exiting the thread.
+    ///
     /// # Arguments
-    /// * `data_injection` - Trait method for transferring data to database or mock data structure
-    /// * `sql_interface_data` - Interface to SQL database for manipulation of data table
-    /// * `tx_to_ambient` - Sender part of channel for communication to Ambient
-    /// * `rx_from_ambient` - Receiver part of channel for communication from Ambient
-    /// * `tx_to_tank_level_switch` - Sender part of channel for communication to Tank Level Switch
-    /// * `rx_from_tank_level_switch` - Receiver part of channel for communication from Tank Level Switch
-    /// * `tx_to_refill` - Sender part of channel for communication to Refill
-    /// * `rx_from_refill` - Receiver part of channel for communication from Refill
-    /// * `rx_from_heating` - Sender part of channel for communication to Heating
-    /// * `rx_from_heating` - Receiver part of channel for communication from Heating
-    /// * `tx_to_ventilation` - Sender part of channel for communication to Ventilation
-    /// * `rx_from_ventilation` - Receiver part of channel for communication from Ventilation
-    /// * `tx_to_signal_handler` - Sender part of channel for communication to signal handler
-    /// * `rx_from_signal_handler` - Receiver part of channel for communication from signal handler                
-    /// * `mutex_water_temperature_ds18b20` - Mutex for water temperature from DS18B20 sensor
-    /// * `mutex_ambient_temperature_ds18b20` - Mutex for ambient temperature from DS18B20 sensor
-    /// * `mutex_atlas_scientific_temperature` - Mutex for temperature from Atlas Scientific
-    /// * `mutex_atlas_scientific_ph` - Mutex for pH from Atlas Scientific
-    /// * `mutex_atlas_scientific_conductivity` - Mutex for conductivity DS18B20 sensor
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
-    /// * `mutex_ambient_humidity` - Mutex for ambient humidity
+    /// * `data_injection` - An object implementing the `DataInjectionTrait`, used for transferring the collected `RecorderDataFrame` to the SQL database or a mock data structure during testing.
+    /// * `sql_interface_data` - A `SqlInterfaceData` instance, providing the direct interface for writing `RecorderDataFrame`s to the SQL database.
+    /// * `data_logger_channels` - A `DataLoggerChannels` struct, containing all the `mpsc` sender and receiver channels necessary for inter-thread communication with other modules and the signal handler.
+    /// * `data_logger_mutexes` - A `DataLoggerMutexes` struct, providing access to shared `Arc<Mutex>` protected sensor data and device states.
     pub fn execute(
         &mut self,
         data_injection: &mut impl DataInjectionTrait,
         mut sql_interface_data: SqlInterfaceData,
-        tx_to_refill: Sender<InternalCommand>,
-        rx_from_refill: Receiver<bool>,
-        tx_to_heating: Sender<InternalCommand>,
-        rx_from_heating: Receiver<bool>,
-        tx_to_ventilation: Sender<InternalCommand>,
-        rx_from_ventilation: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
-        mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
-        mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
-        mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
-        mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
-        mutex_ambient_temperature: Arc<Mutex<f32>>,
-        mutex_ambient_humidity: Arc<Mutex<f32>>,
-        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+        data_logger_channels: DataLoggerChannels,
+        data_logger_mutexes: DataLoggerMutexes,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -959,34 +1113,38 @@ impl DataLogger {
 
         loop {
             // update signals via channel communication
+            let mut refill_status = (refill_in_progress, refill_channel_disconnected);
+            let mut heater_status = (heater_is_on, heating_channel_disconnected);
+            let mut ventilation_status = (ventilation_is_on, ventilation_channel_disconnected);
             self.update_signals(
-                &tx_to_refill,
-                &rx_from_refill,
-                &tx_to_heating,
-                &rx_from_heating,
-                &tx_to_ventilation,
-                &rx_from_ventilation,
-                &mut refill_in_progress,
-                &mut refill_channel_disconnected,
-                &mut heater_is_on,
-                &mut heating_channel_disconnected,
-                &mut ventilation_is_on,
-                &mut ventilation_channel_disconnected,
+                &data_logger_channels,
+                &mut refill_status,
+                &mut heater_status,
+                &mut ventilation_status,
             );
+            (refill_in_progress, refill_channel_disconnected) = refill_status;
+            (heater_is_on, heating_channel_disconnected) = heater_status;
+            (ventilation_is_on, ventilation_channel_disconnected) = ventilation_status;
 
             // update signals by accessing mutex for DS18B20 sensor signals
             self.update_ds18b20_signals(
-                mutex_water_temperature_ds18b20.clone(),
-                mutex_ambient_temperature_dsb18b20.clone(),
+                data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
+                data_logger_mutexes
+                    .mutex_ambient_temperature_dsb18b20
+                    .clone(),
                 &mut water_temperature_ds18b20,
                 &mut ambient_temperature_ds18b20,
             );
 
             // update signals by accessing mutex for Atlas Scientific signals
             self.update_atlas_scientific_signals(
-                mutex_atlas_scientific_temperature.clone(),
-                mutex_atlas_scientific_ph.clone(),
-                mutex_atlas_scientific_conductivity.clone(),
+                data_logger_mutexes
+                    .mutex_atlas_scientific_temperature
+                    .clone(),
+                data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
+                data_logger_mutexes
+                    .mutex_atlas_scientific_conductivity
+                    .clone(),
                 &mut water_temperature,
                 &mut ph,
                 &mut conductivity,
@@ -994,15 +1152,15 @@ impl DataLogger {
 
             // update signals by accessing mutex for ambient signal
             self.update_ambient_signals(
-                mutex_ambient_temperature.clone(),
-                mutex_ambient_humidity.clone(),
+                data_logger_mutexes.mutex_ambient_temperature.clone(),
+                data_logger_mutexes.mutex_ambient_humidity.clone(),
                 &mut ambient_temperature,
                 &mut ambient_humidity,
             );
 
             // update signals by accessing mutex for tank level switch signals
             self.update_tank_level_switch_signals(
-                &mutex_tank_level_switch_signals,
+                &data_logger_mutexes.mutex_tank_level_switch_signals,
                 &mut tank_level_switch_position,
                 &mut tank_level_switch_position_stabilized,
                 &mut tank_level_switch_invalid,
@@ -1074,8 +1232,8 @@ impl DataLogger {
             while i < remaining_sleep_time_millis || cycle_time_exceeded {
                 i += 100;
                 spin_sleeper.sleep(sleep_duration_hundred_millis);
-                (quit_command_received, _, _) =
-                    self.process_external_request(&rx_from_signal_handler, None);
+                (quit_command_received, _, _) = self
+                    .process_external_request(data_logger_channels.rx_from_signal_handler, None);
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(
@@ -1087,34 +1245,40 @@ impl DataLogger {
 
                 // once per second, retrieve signals and write them to the RAM disk
                 if i % 1000 == 0 {
+                    // update signals via channel communication
+                    let mut refill_status = (refill_in_progress, refill_channel_disconnected);
+                    let mut heater_status = (heater_is_on, heating_channel_disconnected);
+                    let mut ventilation_status =
+                        (ventilation_is_on, ventilation_channel_disconnected);
                     self.update_signals(
-                        &tx_to_refill,
-                        &rx_from_refill,
-                        &tx_to_heating,
-                        &rx_from_heating,
-                        &tx_to_ventilation,
-                        &rx_from_ventilation,
-                        &mut refill_in_progress,
-                        &mut refill_channel_disconnected,
-                        &mut heater_is_on,
-                        &mut heating_channel_disconnected,
-                        &mut ventilation_is_on,
-                        &mut ventilation_channel_disconnected,
+                        &data_logger_channels,
+                        &mut refill_status,
+                        &mut heater_status,
+                        &mut ventilation_status,
                     );
+                    (refill_in_progress, refill_channel_disconnected) = refill_status;
+                    (heater_is_on, heating_channel_disconnected) = heater_status;
+                    (ventilation_is_on, ventilation_channel_disconnected) = ventilation_status;
 
                     // update signals by accessing mutex for DS18B20 sensor signals
                     self.update_ds18b20_signals(
-                        mutex_water_temperature_ds18b20.clone(),
-                        mutex_ambient_temperature_dsb18b20.clone(),
+                        data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
+                        data_logger_mutexes
+                            .mutex_ambient_temperature_dsb18b20
+                            .clone(),
                         &mut water_temperature_ds18b20,
                         &mut ambient_temperature_ds18b20,
                     );
 
                     // update signals by accessing mutex for Atlas Scientific signals
                     self.update_atlas_scientific_signals(
-                        mutex_atlas_scientific_temperature.clone(),
-                        mutex_atlas_scientific_ph.clone(),
-                        mutex_atlas_scientific_conductivity.clone(),
+                        data_logger_mutexes
+                            .mutex_atlas_scientific_temperature
+                            .clone(),
+                        data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
+                        data_logger_mutexes
+                            .mutex_atlas_scientific_conductivity
+                            .clone(),
                         &mut water_temperature,
                         &mut ph,
                         &mut conductivity,
@@ -1122,15 +1286,15 @@ impl DataLogger {
 
                     // update signals by accessing mutex for ambient signal
                     self.update_ambient_signals(
-                        mutex_ambient_temperature.clone(),
-                        mutex_ambient_humidity.clone(),
+                        data_logger_mutexes.mutex_ambient_temperature.clone(),
+                        data_logger_mutexes.mutex_ambient_humidity.clone(),
                         &mut ambient_temperature,
                         &mut ambient_humidity,
                     );
 
                     // update signals by accessing mutex for tank level switch signals
                     self.update_tank_level_switch_signals(
-                        &mutex_tank_level_switch_signals,
+                        &data_logger_mutexes.mutex_tank_level_switch_signals,
                         &mut tank_level_switch_position,
                         &mut tank_level_switch_position_stabilized,
                         &mut tank_level_switch_invalid,
@@ -1147,13 +1311,19 @@ impl DataLogger {
                 target: LOG_TARGET_DATA_LOGGER,
                 "finished idling restarting loop"
             );
+            
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                sql_interface_data.ping();
+                self.last_ping_instant = Instant::now();
+            }
 
             start_time = SystemTime::now(); // start time for the next cycle
         }
 
         // application received request to terminate, that is why the loop was left.
         // answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tx_to_signal_handler.send(true) {
+        match data_logger_channels.tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
                 error!(
@@ -1168,7 +1338,8 @@ impl DataLogger {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
+            termination_command_received = match data_logger_channels.rx_from_signal_handler.recv()
+            {
                 Ok(c) => match c {
                     InternalCommand::Terminate => {
                         self.lock_warn_inapplicable_command = false;
@@ -1205,7 +1376,9 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
-    use crate::recorder::data_logger::{DataLogger, DataLoggerConfig};
+    use crate::recorder::data_logger::{
+        DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes,
+    };
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
@@ -1219,6 +1392,40 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::{fs, sync::mpsc, thread, time::Duration};
 
+    #[cfg(test)]
+    // Asserts the content of all data logger output files on disk.
+    //
+    // This comprehensive helper function is used in test environments to verify that
+    // the `DataLogger` correctly writes various sensor signals and device states
+    // to their respective configured files. It reads each file, parses its content
+    // (for floating-point numbers) or compares it directly (for boolean states),
+    // and asserts that it matches the expected target values.
+    //
+    // Arguments:
+    // * `data_logger_config`: The `DataLoggerConfig` struct containing the names of all output files.
+    // * `target_water_temperature`: The expected `f32` value for water temperature.
+    // * `target_water_temperature_filtered`: The expected `f32` value for filtered water temperature.
+    // * `target_water_ph`: The expected `f32` value for pH.
+    // * `target_water_ph_filtered`: The expected `f32` value for filtered pH.
+    // * `target_water_conductivity`: The expected `f32` value for conductivity.
+    // * `target_water_conductivity_filtered`: The expected `f32` value for filtered conductivity.
+    // * `_target_water_conductivity_compensated`: (Ignored) Placeholder for a compensated conductivity value.
+    // * `target_refill_in_progress`: The expected `bool` state for refill in progress.
+    // * `target_tank_level_switch_position`: The expected `bool` state for tank level switch position.
+    // * `target_tank_level_switch_invalid`: The expected `bool` state for tank level switch invalid status.
+    // * `target_tank_level_switch_position_stabilized`: The expected `bool` state for stabilized tank level switch position.
+    // * `target_surface_ventilation_status`: The expected `bool` state for surface ventilation status.
+    // * `target_ambient_temperature`: The expected `f32` value for ambient temperature.
+    // * `target_ambient_humidity`: The expected `f32` value for ambient humidity.
+    // * `target_heater_status`: The expected `bool` state for heater status.
+    // * `target_water_temperature_ds18b20`: The expected `f32` value for DS18B20 water temperature.
+    // * `target_ambient_temperature_ds18b20`: The expected `f32` value for DS18B20 ambient temperature.
+    //
+    // Panics:
+    // This function will panic if:
+    // - It fails to read any of the specified output files.
+    // - It fails to parse a file's content into the expected numeric type.
+    // - The content of any file does not match its corresponding target value.
     fn assert_output_file_contents(
         data_logger_config: &DataLoggerConfig,
         target_water_temperature: f32,
@@ -1415,7 +1622,7 @@ pub mod tests {
             }
         };
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
-        let mut data_logger = DataLogger::new(config.data_logger);
+        let mut data_logger = DataLogger::new(config.data_logger, Duration::from_millis(1000));
 
         let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(10.0));
         let mutex_atlas_scientific_temperature_clone_for_data_logger =
@@ -1591,25 +1798,37 @@ pub mod tests {
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let data_logger_channels = DataLoggerChannels {
+                    tx_to_refill: &tx_data_logger_to_refill,
+                    rx_from_refill: &rx_data_logger_from_refill,
+                    tx_to_heating: &tx_data_logger_to_heating,
+                    rx_from_heating: &rx_data_logger_from_heating,
+                    tx_to_ventilation: &tx_data_logger_to_ventilation,
+                    rx_from_ventilation: &rx_data_logger_from_ventilation,
+                    tx_to_signal_handler: &tx_data_logger_to_signal_handler,
+                    rx_from_signal_handler: &rx_data_logger_from_signal_handler,
+                };
+
+                let data_logger_mutexes = DataLoggerMutexes {
+                    mutex_water_temperature_ds18b20:
+                        mutex_ds18b20_water_temperature_clone_for_data_logger,
+                    mutex_ambient_temperature_dsb18b20:
+                        mutex_ds18b20_ambient_temperature_clone_for_data_logger,
+                    mutex_atlas_scientific_temperature:
+                        mutex_atlas_scientific_temperature_clone_for_data_logger,
+                    mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_data_logger,
+                    mutex_atlas_scientific_conductivity:
+                        mutex_atlas_scientific_conductivity_clone_for_data_logger,
+                    mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
+                    mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
+                    mutex_tank_level_switch_signals,
+                };
+
                 data_logger.execute(
                     &mut mock_data_injection,
                     sql_interface_data,
-                    tx_data_logger_to_refill,
-                    rx_data_logger_from_refill,
-                    tx_data_logger_to_heating,
-                    rx_data_logger_from_heating,
-                    tx_data_logger_to_ventilation,
-                    rx_data_logger_from_ventilation,
-                    tx_data_logger_to_signal_handler,
-                    rx_data_logger_from_signal_handler,
-                    mutex_ds18b20_water_temperature_clone_for_data_logger,
-                    mutex_ds18b20_ambient_temperature_clone_for_data_logger,
-                    mutex_atlas_scientific_temperature_clone_for_data_logger,
-                    mutex_atlas_scientific_ph_clone_for_data_logger,
-                    mutex_atlas_scientific_conductivity_clone_for_data_logger,
-                    mutex_ambient_temperature_clone_for_data_logger,
-                    mutex_ambient_humidity_clone_for_data_logger,
-                    mutex_tank_level_switch_signals,
+                    data_logger_channels,
+                    data_logger_mutexes,
                 );
 
                 println!("Printing recorded data:");

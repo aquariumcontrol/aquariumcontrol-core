@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::info;
 
 use std::env;
+use std::fmt::{Display, Formatter};
 
 /// Major version number
 pub const VERSION_MAJOR: i32 = 0;
@@ -39,7 +40,23 @@ pub struct VersionInformation {
 impl VersionInformation {
     const LOG_TARGET_VERSION_INFORMATION: &'static str = "version_information";
 
-    /// Provides a struct of type VersionInformation.
+    /// Creates a new `VersionInformation` instance, populating it with
+    /// the application's compiled-in version numbers and an SHA-256 hash
+    /// of its executable file.
+    ///
+    /// This constructor is responsible for identifying the currently running
+    /// executable and computing a unique fingerprint (hash) of its binary content.
+    /// This hash is used to verify the integrity or version compatibility
+    /// of the running application against a database schema.
+    ///
+    /// # Returns
+    /// A new `VersionInformation` struct containing the major, minor, build,
+    /// and the calculated executable hash.
+    ///
+    /// # Panics
+    /// This function will panic if it fails to:
+    /// - Determine the path of the current executable.
+    /// - Read the contents of the executable file (e.g., due to permissions or file system errors).
     pub fn new() -> VersionInformation {
         // get the fully qualified path and file name
         let pathfilename = match env::current_exe() {
@@ -68,5 +85,34 @@ impl VersionInformation {
             build: VERSION_BUILD,
             hash,
         }
+    }
+}
+
+impl Display for VersionInformation {
+    /// Formats the `VersionInformation` for display.
+    ///
+    /// This implementation of the `fmt` method for the `Display` trait
+    /// provides a human-readable representation of the version details.
+    /// It outputs the major, minor, build numbers and the commit hash
+    /// in a structured, multi-line format.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A mutable reference to a `Formatter` to which the formatted
+    ///   output will be written.
+    ///
+    /// # Returns
+    ///
+    /// `std::fmt::Result`:
+    /// - `Ok(())` if the formatting was successful.
+    /// - `Err` containing an ` std::fmt::Error ` if an I/O error occurred
+    ///   while writing to the formatter.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Version information:")?;
+        writeln!(f, "  Major: {}", self.major)?;
+        writeln!(f, "  Minor: {}", self.minor)?;
+        writeln!(f, "  Build: {}", self.build)?;
+        writeln!(f, "  Hash:  {}", self.hash)?;
+        Ok(())
     }
 }

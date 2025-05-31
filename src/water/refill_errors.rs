@@ -1,4 +1,4 @@
-/* Copyright 2024 Uwe Martinuuu
+/* Copyright 2024 Uwe Martin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -18,7 +18,12 @@ pub struct RefillErrors {
 }
 
 impl RefillErrors {
-    /// Resets all error bits of the struct.
+    /// Resets all internal error flags to `false`.
+    ///
+    /// This method clears all error conditions within the `RefillErrors` struct,
+    /// effectively setting the refill system back to a state where no current
+    /// errors are actively reported. This is typically invoked after the user having addressed
+    /// the root cause of an error.
     pub fn reset_all_errors(&mut self) {
         self.error_switch_stuck_high = false;
         self.error_switch_stuck_low = false;
@@ -28,6 +33,14 @@ impl RefillErrors {
     }
 
     #[cfg(test)]
+    // Checks if any error flag within the struct is currently set to `true`.
+    //
+    // This helper function is used exclusively in test environments to quickly
+    // determine if the `Refill` module has encountered any error conditions.
+    //
+    // # Returns
+    // `true` if at least one error flag (e.g., `error_switch_stuck_high`, `error_sql_update_failed`)
+    // is set to `true`; otherwise, returns `false`.
     pub fn has_error(&mut self) -> bool {
         self.error_switch_stuck_high
             || self.error_switch_stuck_low
@@ -38,9 +51,17 @@ impl RefillErrors {
 }
 
 impl fmt::Display for RefillErrors {
-    /// Function provides output of RefillErrors for development purposes
+    /// Formats the `RefillErrors` struct into a concise, single-line string for development purposes.
+    ///
+    /// This implementation is designed for quick inspection of the refill control's
+    /// error states. It displays the boolean value of each error flag, making it
+    /// easy to see which specific error conditions are currently active.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
             "error_switch_stuck_high: {}, error_switch_stuck_low: {}, error_receive_tank_level_switch_position: {},  error_sql_update_failed: {}, error_sql_get_historic_data_failed: {}",

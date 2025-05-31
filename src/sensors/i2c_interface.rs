@@ -52,15 +52,15 @@ pub struct I2cInterfaceConfig {
     #[allow(unused)]
     timeout_transaction: u32,
 
-    /// sleep time in milliseconds before after writing before reading from pH sensor unit
+    /// sleep time in milliseconds before after writing before reading from the pH sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_ph: u64,
 
-    /// sleep time in milliseconds before after writing before reading from conductivity sensor unit
+    /// sleep time in milliseconds before after writing before reading from the conductivity sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_conductivity: u64,
 
-    /// sleep time in milliseconds before after writing before reading from temperature sensor unit
+    /// sleep time in milliseconds before after writing before reading from the temperature sensor unit
     #[allow(unused)]
     sleep_time_atlas_scientific_temperature: u64,
 
@@ -80,11 +80,11 @@ pub struct I2cInterfaceConfig {
     #[allow(unused)]
     min_val_atlas_scientific_temperature: f32,
 
-    /// maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    /// maximum allowed value for conductivity used to assess if the conductivity sensor reading is valid
     #[allow(unused)]
     max_val_atlas_scientific_conductivity: f32,
 
-    /// minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+    /// minimum allowed value for conductivity used to assess if the conductivity sensor reading is valid
     #[allow(unused)]
     min_val_atlas_scientific_conductivity: f32,
 }
@@ -93,30 +93,30 @@ pub struct I2cInterfaceConfig {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum AtlasScientificError {
-    /// first character in message sent from sensor unit does not match required magic number
+    /// The first character in the message sent from the sensor does not match the required magic number.
     FirstCharacterNotMagic,
 
-    /// last character in message sent from sensor unit does not match required magic number    
+    /// The last character in the message sent from the sensor does not match the required magic number.
     LastCharacterNotMagic,
 
-    /// message sent from sensor unit contains non-numeric characters in data section
+    /// The message sent from the sensor unit contains non-numeric characters in the data section
     ContainsInvalidCharacter,
 
-    /// error is masked by other checks. However signature of function to convert from u8 array slice to String throws an error.
+    /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
     InvalidUtf8Sequence,
 
-    /// conversion from String to f32 failed
+    /// Conversion from String to f32 failed.
     ConversionFailure,
 }
 
 /// communication error codes
 #[derive(Debug, PartialEq)]
 pub enum I2cError {
-    /// message could not be sent
+    /// the message could not be sent
     #[allow(unused)]
     WriteFailure,
 
-    /// command could not be sent completely to sensor unit
+    /// command could not be sent completely to the sensor unit
     #[allow(unused)]
     InsufficientWrite,
 
@@ -132,7 +132,7 @@ pub enum I2cError {
     #[allow(unused)]
     SetAddressError(u16),
 
-    /// Signal requested cannot be provided by this crate
+    /// This crate cannot provide the requested signal.
     #[allow(unused)]
     InvalidSignalRequest(AquariumSignal),
 }
@@ -143,22 +143,22 @@ mod atlas_scientific_constants {
     /// command sent to sensor unit for initiating response
     pub const COMMAND_READ: u8 = b'R';
 
-    /// length of message received from sensor unit (number of byte)
+    /// length of the message received from the sensor (number of bytes)
     pub const MESSAGE_SIZE: usize = 8;
 
-    /// location of first character to be checked inside message from sensor unit
+    /// location of the first character to be checked inside the message from the sensor
     pub const INDEX_FIRST_CHARACTER: usize = 0;
 
-    /// start of data inside message from sensor unit
+    /// start of data inside the message from the sensor
     pub const INDEX_CONTENT_START: usize = 1;
 
-    /// finish of data inside message from sensor unit
+    /// finish of data inside the message from the sensor
     pub const INDEX_PENULTIMATE_CHARACTER: usize = 6;
 
-    /// location of last character to be checked inside message from sensor unit
+    /// location of the last character to be checked inside the message from the sensor
     pub const INDEX_LAST_CHARACTER: usize = 7;
 
-    /// ASCII value for representation of zero figure
+    /// ASCII value for representation of figure zero
     pub const ASCII_VAL_ZERO: u8 = 48;
 
     /// ASCII value for representation of figure nine
@@ -167,18 +167,22 @@ mod atlas_scientific_constants {
     /// decimal point
     pub const DECIMAL_POINT: u8 = b'.';
 
-    /// negative sign (note: positive sign does not occurr in message from sensor)
+    /// negative sign (note: positive sign does not occur in the message from the sensor)
     pub const NEGATIVE_SIGN: u8 = b'-';
 
-    /// magic number at front position inside message which identifies valid response from sensor unit
+    /// magic number at front position inside the message which identifies valid response from sensor unit
     pub const MESSAGE_START_MAGIC: u8 = 1;
 
-    /// magic number at finish position inside message which identifies valid response from sensor unit
+    /// magic number at finish position inside the message which identifies valid response from sensor unit
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
 }
 
 #[allow(dead_code)]
-/// Contains the configuration and the implementation for the GPIO handler.
+/// Contains the configuration and the implementation for communication with **Atlas Scientific sensors via I2C**.
+/// Alternatively, TCP communication is used when configured to run with the simulator.
+/// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
+/// Sensor data is read periodically and stored.
+/// Requests from data logger, ventilation control, and heating control are answered with last measured data.
 pub struct I2cInterface {
     /// I2C interface of rppal library
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -204,10 +208,24 @@ impl I2cInterface {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     const LOG_TARGET_I2C_INTERFACE: &'static str = "i2c_interface";
 
-    /// Provides a struct of type I2cInterface
-    /// # Arguments    
-    /// * `config` - configuration for I2C interface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Creates a new **`I2cInterface`** instance, establishing and configuring the I2C bus for sensor communication.
+    ///
+    /// This constructor initializes the I2C interface on target hardware. It opens the I2C bus,
+    /// sets a global transaction timeout, and pre-calculates specific sleep durations for each Atlas Scientific
+    /// sensor type (pH, conductivity, temperature) to optimize response waiting times.
+    ///
+    /// # Arguments
+    /// * `config` - **Configuration data** for the I2C interface, including sensor I2C addresses,
+    ///   transaction timeouts, and per-sensor sleep times.
+    ///
+    /// # Returns
+    /// A new **`I2cInterface` struct**, ready to communicate with Atlas Scientific sensors.
+    ///
+    /// # Panics
+    /// This function will **panic** if:
+    /// - It **fails to open the I2C bus** (e.g., I2C is not enabled, permissions issues).
+    /// - It **fails to set the global transaction timeout** for the I2C bus.
     pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
         I2cInterface {
             i2c: {
@@ -246,14 +264,20 @@ impl I2cInterface {
         }
     }
 
-    /// Checks if character is part of a numeric description:
-    /// - returns true if character is either a figureor a decimal point
-    /// - returns true/fale depending on parameter is character is a negative sign
-    /// - returns false elsewise
-    /// # Arguments    
-    /// * `character` - character to be checked
-    /// * `negative_allowed` - flag indicating if a negative sign is allowed    
     #[allow(dead_code)]
+    /// Checks if a given character is a valid part of a numeric string, considering optional negative signs.
+    ///
+    /// This private helper function is used during the parsing of sensor responses to validate
+    /// that each character in the data section is either a digit (`0`-`9`), a decimal point (`.`),
+    /// or, if `negative_allowed` is `true`, a negative sign (`-`).
+    ///
+    /// # Arguments
+    /// * `character` - The `u8` byte value of the character to be checked (typically an ASCII representation).
+    /// * `negative_allowed` - A `bool` flag. If `true`, a negative sign character (`-`) will be considered
+    ///   valid; otherwise, it will be considered invalid.
+    ///
+    /// # Returns
+    /// `true` if the character is a valid numeric component based on the rules; `false` otherwise.
     fn is_numeric(character: u8, negative_allowed: bool) -> bool {
         match character {
             atlas_scientific_constants::ASCII_VAL_ZERO
@@ -264,13 +288,29 @@ impl I2cInterface {
         }
     }
 
-    /// Evaluates response from Atlas Scientific sensor unit and provides wrapped in Result type either
-    /// - result
-    /// - error code
-    /// # Arguments
-    /// * `buf` - array of u8
-    /// * `is_ph` - flag indicating if sensor unit is pH unit
     #[allow(dead_code)]
+    /// Evaluates a raw byte array response from an Atlas Scientific sensor unit, validating its format and converting it to `f32`.
+    ///
+    /// This private helper function performs several critical steps to parse sensor data:
+    /// 1.  **Magic Number Check**: Verifies the protocol's start and end "magic" bytes.
+    /// 2.  **Numeric Content Validation**: Ensures all characters within the data section are valid numeric components (digits, decimal point, and optionally negative sign).
+    /// 3.  **UTF-8 Conversion**: Converts the validated numeric byte sequence into a `String`.
+    /// 4.  **Float Parsing**: Attempts to parse the `String` into an `f32` floating-point value.
+    ///
+    /// The `is_ph` flag specifically controls whether a negative sign is allowed, as pH values are non-negative by definition.
+    ///
+    /// # Arguments
+    /// * `buffer` - A fixed-size array of `u8` bytes representing the complete message received from the Atlas Scientific sensor.
+    /// * `is_ph` - A `bool` flag indicating whether the response is expected from a pH sensor (`true`) or another type (`false`).
+    ///
+    /// # Returns
+    /// A `Result<f32, AtlasScientificError>`:
+    /// - `Ok(f32)`: The successfully parsed floating-point sensor reading.
+    /// - `Err(AtlasScientificError::FirstCharacterNotMagic)`: If the message's first byte is incorrect.
+    /// - `Err(AtlasScientificError::LastCharacterNotMagic)`: If the message's last byte is incorrect.
+    /// - `Err(AtlasScientificError::ContainsInvalidCharacter)`: If the data section contains non-numeric characters (or an unexpected negative sign for pH).
+    /// - `Err(AtlasScientificError::InvalidUtf8Sequence)`: If the numeric byte sequence is not valid UTF-8.
+    /// - `Err(AtlasScientificError::ConversionFailure)`: If the valid numeric string cannot be parsed into an `f32`.
     fn check_response(
         buffer: [u8; atlas_scientific_constants::MESSAGE_SIZE],
         is_ph: bool,
@@ -288,11 +328,11 @@ impl I2cInterface {
             return Err(AtlasScientificError::LastCharacterNotMagic);
         }
 
-        // get slice of array
+        // get a slice of the array
         let numeric_content = &buffer[atlas_scientific_constants::INDEX_CONTENT_START
             ..atlas_scientific_constants::INDEX_PENULTIMATE_CHARACTER];
 
-        // third check: all characters inbetween belong to a number
+        // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
                 return Err(AtlasScientificError::ContainsInvalidCharacter);
@@ -312,13 +352,32 @@ impl I2cInterface {
         }
     }
 
-    /// Reads and checks response from Atlas Scientific sensor.
-    /// Provide wrapped into Result type either
-    /// - result
-    /// - error code
-    /// # Arguments
-    /// * `signal` - enum value describing which sensor shall be read
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Reads a specific sensor signal from an Atlas Scientific sensor unit via I2C.
+    ///
+    /// This function performs a complete I2C communication cycle to retrieve a sensor reading:
+    /// 1.  Selects the correct I2C address based on the `AquariumSignal` type.
+    /// 2.  Sends a "read" command to the sensor unit.
+    /// 3.  Pauses for a signal-specific duration to allow the sensor to process the command.
+    /// 4.  Reads the response byte array from the sensor.
+    /// 5.  Validates and parses the raw response using `check_response` to convert it into an `f32` value.
+    ///
+    /// Errors encountered at any stage (e.g., I2C communication issues, invalid signal requests,
+    /// or malformed sensor responses) are logged and returned as `I2cError` variants.
+    ///
+    /// # Arguments
+    /// * `signal` - An `AquariumSignal` enum value (e.g., `pH`, `Conductivity`, `WaterTemperature`)
+    ///   describing which sensor reading is requested.
+    ///
+    /// # Returns
+    /// A `Result<f32, I2cError>`:
+    /// - `Ok(f32)`: The successfully read and parsed sensor value.
+    /// - `Err(I2cError::InvalidSignalRequest)`: If the `signal` type is not supported by this interface.
+    /// - `Err(I2cError::SetAddressError)`: If setting the I2C slave address fails.
+    /// - `Err(I2cError::WriteFailure)`: If the command cannot be written to the sensor.
+    /// - `Err(I2cError::InsufficientWrite)`: If the command write is incomplete.
+    /// - `Err(I2cError::InsufficientRead)`: If the full response cannot be read from the sensor.
+    /// - `Err(I2cError::ResponseEvaluationFailure)`: If the sensor's response message is malformed or invalid.
     pub fn get_response_from_i2c(&mut self, signal: AquariumSignal) -> Result<f32, I2cError> {
         let i2c_address = match signal {
             AquariumSignal::pH => self.config.address_atlas_scientific_ph,
@@ -419,10 +478,17 @@ impl I2cInterface {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    // measures all three signals sequentially
-    // In case one measurement yields an error, the function return this error.
-    // In case all measurements yield success, the function returns a tuple of
-    // all three signals wrapped in Ok.
+    /// Retrieves all three sensor readings (water temperature, pH, and conductivity) sequentially from Atlas Scientific sensors.
+    ///
+    /// This private helper function calls `get_response_from_i2c` for each of the three
+    /// sensor types in order. If any individual sensor reading fails (returns an `Err`),
+    /// this function immediately propagates that error, stopping further measurements.
+    /// If all three measurements are successful, their values are returned in a tuple.
+    ///
+    /// # Returns
+    /// A `Result<(f32, f32, f32), I2cError>`:
+    /// - `Ok((f32, f32, f32))`: A tuple containing the measured water temperature, pH, and conductivity (in that order).
+    /// - `Err(I2cError)`: If any of the sequential sensor readings fails. The specific error from the failed reading will be returned.
     fn get_all_data(&mut self) -> Result<(f32, f32, f32), I2cError> {
         let measured_water_temperature =
             match self.get_response_from_i2c(AquariumSignal::WaterTemperature) {
@@ -451,7 +517,25 @@ impl I2cInterface {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// receives and response to requests via channel        
+    /// Executes the main loop for the I2C interface thread, processing incoming requests and sending sensor data responses.
+    ///
+    /// This function runs indefinitely, acting as a dedicated service for communicating with
+    /// Atlas Scientific I2C sensors. It continuously waits for `InternalCommand` messages
+    /// from other modules (like `AtlasScientific` or the `SignalHandler`).
+    ///
+    /// When a `RequestSignal` command for water temperature, pH, or conductivity is received,
+    /// it triggers a full sensor measurement cycle using `self.get_all_data()`. The `Result`
+    /// of this measurement (containing all three sensor values or an error) is then sent back
+    /// to the requesting module.
+    ///
+    /// The loop also handles `Quit` commands for graceful shutdown and logs errors or warnings
+    /// for invalid commands or channel communication issues, using internal lock flags to prevent log flooding.
+    ///
+    /// # Arguments
+    /// * `tx_to_atlas_scientific` - The sender channel for sending `Result<(f32, f32, f32), I2cError>`
+    ///   measurement data back to the `AtlasScientific` module.
+    /// * `rx_from_atlas_scientific_or_signal_handler` - The receiver channel for getting `InternalCommand`s
+    ///   (e.g., `RequestSignal`, `Quit`) from the `AtlasScientific` module or the `SignalHandler`.
     pub fn execute(
         &mut self,
         tx_to_atlas_scientific: Sender<Result<(f32, f32, f32), I2cError>>,
@@ -557,7 +641,7 @@ pub mod tests {
                 assert_float_absolute_eq!(c, 8.0, 0.001);
             }
             Err(e) => {
-                panic!("i2c_interfcae_check_response_valid_pH returned error: {e:?}");
+                panic!("i2c_interface_check_response_valid_pH returned error: {e:?}");
             }
         }
     }
@@ -583,7 +667,7 @@ pub mod tests {
         );
     }
 
-    // happy case for evaluating response from conductivity sensor unit
+    // happy case for evaluating response from conductivity sensor
     #[test]
     pub fn test_i2c_interface_check_response_valid_conductivity() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -607,7 +691,7 @@ pub mod tests {
         }
     }
 
-    // happy case for evaluating response from temperature sensor unit
+    // happy case for evaluating the response from the temperature sensor unit
     #[test]
     pub fn test_i2c_interface_check_response_valid_temperature() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -631,7 +715,7 @@ pub mod tests {
         }
     }
 
-    // checking if incorrect magic number in the front of the message is identified correctly
+    // checking if an incorrect magic number in the front of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_front() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -650,7 +734,7 @@ pub mod tests {
         );
     }
 
-    // checking if incorrect magic number in the rear part of the message is identified correctly
+    // checking if an incorrect magic number in the rear part of the message is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_magic_rear() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -669,7 +753,7 @@ pub mod tests {
         );
     }
 
-    // checking if incorrect sequence of numeric characters is identified correctly
+    // checking if an incorrect sequence of numeric characters is identified correctly
     #[test]
     pub fn test_i2c_interface_check_response_invalid_conversion() {
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
@@ -739,8 +823,8 @@ pub mod tests {
         }
     }
 
-    // test the error response of get_response_from_i2c when requesting an invalid signal.
-    // This test case only runs on the target hardware, because it requires initialization of the I2C subsystem.
+    // Test the error response of get_response_from_i2c when requesting an invalid signal.
+    // This test case only runs on the target hardware because it requires initialization of the I2C subsystem.
     #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn test_i2c_error_response_to_invalid_signal_request() {

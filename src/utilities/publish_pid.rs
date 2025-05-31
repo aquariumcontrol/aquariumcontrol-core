@@ -32,12 +32,34 @@ pub struct PublishPid {
 impl PublishPid {
     const LOG_TARGET_PUBLISH_PID: &'static str = "publish_pid";
 
-    /// Checks if PID file already contains published PID.
-    /// If yes, then application will panic.
-    /// If no, then function publishes PID provides a struct of type PublishPid
-    /// If publishing does not work, then the application will panic.
+    /// Creates a new `PublishPid` instance and publishes the current process ID (PID) to a file.
+    ///
+    /// This constructor performs a critical step of publishing the application's PID to a
+    /// designated file, preventing multiple instances of the application from running
+    /// concurrently.
+    ///
+    /// The process involves:
+    /// 1. Reading the content of the specified PID file.
+    /// 2. If the file already contains a non-empty, valid, and positive PID, the function panics,
+    ///    indicating that another instance of the application is likely already running.
+    /// 3. If the file is empty, does not exist, or contains invalid content (and it's not a valid PID),
+    ///    the current process's PID is written to the file.
+    /// 4. If writing the PID to the file fails, the function panics.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for PublishPid
+    /// * `config` - Configuration data for publishing the PID, primarily containing
+    ///   the `pid_filename` (the path to the file where the PID should be written).
+    ///
+    /// # Returns
+    /// A new `PublishPid` struct if the PID is successfully published.
+    ///
+    /// # Panics
+    /// This function will panic in several error scenarios:
+    /// - If it's unable to read the specified PID file.
+    /// - If the PID file exists and already contains a valid, non-zero PID (indicating a potential
+    ///   duplicate instance).
+    /// - If the PID file contains invalid or unparseable content.
+    /// - If it fails to write the current process's PID to the file (e.g., due to permissions).
     pub fn new(config: PublishPidConfig) -> PublishPid {
         let file_data = fs::read_to_string(config.pid_filename.clone())
             .expect("PublishPid: Unable to read PID file.");
@@ -84,7 +106,7 @@ impl PublishPid {
         PublishPid { config }
     }
 
-    /// Erases PID from previously generated file
+    /// Erases PID from the file previously generated
     pub fn erase_pid(&self) {
         fs::write(self.config.pid_filename.clone(), "0").expect("PublishPid: Could not erase PID.");
     }
@@ -106,7 +128,7 @@ pub mod tests {
         fs::write(pid_filename.clone(), "0".to_string())
             .expect("test_publish_PID: Could not erase PID.");
 
-        // create test object and run code to be tested
+        // create the test object and run code to be tested
         _ = PublishPid::new(config.publish_pid);
 
         let process_id_numeric: u32 = process::id();

@@ -17,7 +17,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 use crate::mineral::mineral_injection::MineralInjectionTrait;
@@ -69,7 +69,7 @@ pub struct BallingChannels {
     /// sender part of the channel for communication to relay manager
     pub tx_balling_to_relay_manager: Sender<InternalCommand>,
 
-    /// receiver part of the channel for communication from relay manager
+    /// receiver part of the channel for communication from the relay manager
     pub rx_balling_from_relay_manager: Receiver<bool>,
 
     /// sender part of the channel for communication to the signal handler
@@ -103,7 +103,7 @@ pub struct BallingChannels {
 ///     schedule_check --> balling
 ///     messaging[Messaging] --> balling
 /// ```
-/// Communication channel to and from relay manager is forwarded to implementation of MineralInjectionTrait.
+/// Communication channel to and from the relay manager is forwarded to implementation of MineralInjectionTrait.
 /// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
 pub struct Balling {
     /// configuration data for Balling dosing control
@@ -141,14 +141,40 @@ pub struct Balling {
 
     /// communication from trait implementation: id of pump to be executed requested externally
     pub pump_id_requested: i32,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl Balling {
-    /// Provides a struct of type Balling.
+    /// Creates a new `Balling` control instance.
+    ///
+    /// This constructor initializes the Balling dosing control module. It performs
+    /// initial setup, including validating the `schedule_check_interval` from the
+    /// configuration and calculating the initial countdowns for each dosing pump
+    /// based on their last recorded dosing times in the database.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for Balling dosing control
-    /// * `sql_interface_balling` - specific SQL interface for Balling dosing control           
-    pub fn new(config: BallingConfig, mut sql_interface_balling: SqlInterfaceBalling) -> Balling {
+    /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
+    /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
+    ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
+    ///
+    /// # Returns
+    /// A new `Balling` struct, ready for managing dosing schedules.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The `schedule_check_interval` in the `config` is `0`, as this is an invalid value.
+    /// - Any error occurs during the initial calculation of pump countdowns (e.g., database connection issues).
+    pub fn new(
+        config: BallingConfig,
+        mut sql_interface_balling: SqlInterfaceBalling,
+        database_ping_interval: Duration,
+    ) -> Balling {
         if config.schedule_check_interval == 0 {
             panic!(
                 "{}: schedule check interval is zero - please assign a value > 0",
@@ -156,6 +182,10 @@ impl Balling {
             );
         }
 
+        Self::check_database_vs_config(&mut sql_interface_balling, &config);
+
+        Self::check_valid_dosing_intervals(&config);
+        
         let countdown_dosing_pump1 =
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1);
         let countdown_dosing_pump2 =
@@ -178,15 +208,146 @@ impl Balling {
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
             pump_id_requested: 0,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
+        }
+    }
+    
+    /// Compares the dosing intervals against the check interval.
+    ///
+    /// The function checks if all dosing intervals are longer than the check interval.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump and the check interval.
+    ///
+    /// # Panics
+    /// This function will panic if there is one dosing interval that is shorter than the check interval.
+    fn check_valid_dosing_intervals(config: &BallingConfig) {
+        if config.pump1_active && config.dosing_interval_pump1 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #1 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump1,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #2 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump2,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #3 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump3,
+                config.schedule_check_interval,
+            );
+        }
+        if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
+            panic!(
+                "{}: Invalid dosing interval for pump #4 in configuration file: \
+                Dosing interval ({}) is shorter than check interval ({}).",
+                LOG_TARGET_BALLING,
+                config.dosing_interval_pump4,
+                config.schedule_check_interval,
+            );
         }
     }
 
-    /// Retrieves duration since last dosing event from the database and calculates
+    /// Compares the database configuration against the configuration file.
+    ///
+    /// The function checks if there is a database entry available for each pump that is
+    /// active in the given configuration. If there is no database entry available, the
+    /// function will panic. The content of the database entry is not checked.
+    ///
     /// # Arguments
-    /// the remaining time in seconds until next dosing for a specific pump
-    /// * `config` - reference to configuration data for Balling dosing control       
-    /// * `sql_interface_balling` - reference to specific SQL interface for Balling dosing control           
-    /// * `pump_id` - id of pump for which the count-down shall be calculated
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
+    ///   used to retrieve historical dosing data from the database.
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
+    ///
+    /// # Panics
+    /// This function will panic if there is no database entry available for any of the pumps
+    /// configured as active in the configuration file.
+    fn check_database_vs_config(
+        sql_interface_balling: &mut SqlInterfaceBalling,
+        config: &BallingConfig,
+    ) {
+        if config.pump1_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(1) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 1 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump2_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(2) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 2 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump3_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(3) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 3 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+        if config.pump4_active {
+            match sql_interface_balling.get_single_balling_setval_from_database(4) {
+                Ok(_) => (),
+                Err(e) => {
+                    panic!(
+                        "{}: Could not get set values for pump 4 from database: {e:?}",
+                        LOG_TARGET_BALLING
+                    );
+                }
+            }
+        }
+    }
+
+    /// Calculates the remaining time (countdown) until the next scheduled dosing for a specific pump.
+    ///
+    /// This private helper function determines how many seconds are left until a pump's
+    /// next dosing event. It first retrieves the target dosing interval from the configuration
+    /// for the given `pump_id`. Then, it fetches the duration since the last dosing event
+    /// from the database. The countdown is calculated by subtracting this elapsed duration
+    /// from the target interval, saturating at zero to ensure no negative results.
+    ///
+    /// # Arguments
+    /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
+    /// * `sql_interface_balling` - A mutable reference to the `SqlInterfaceBalling` instance,
+    ///   used to retrieve historical dosing data from the database.
+    /// * `pump_id` - The unique identifier of the pump (1, 2, 3, or 4) for which the countdown is being calculated.
+    ///
+    /// # Returns
+    /// A `u32` representing the number of seconds remaining until the next dosing event.
+    /// This value is `0` if the dosing is overdue or scheduled for the current moment.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - An invalid `pump_id` (not 1, 2, 3, or 4) is provided.
+    /// - The `target_dosing_interval` for the given `pump_id` in the configuration is `0`.
+    /// - A fatal error occurs while retrieving the duration since the last dosing event from the database.
     fn calc_countdown_next_dosing(
         config: &BallingConfig,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -253,9 +414,19 @@ impl Balling {
         countdown
     }
 
-    /// Calculates target dosing duration based on set values read from the database.
+    /// Calculates the target dosing duration in milliseconds based on the pump's flow rate and desired volume.
+    ///
+    /// This private helper function determines how long a dosing pump needs to run
+    /// to dispense a specific volume of fluid, given its flow rate.
+    ///
     /// # Arguments
-    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
+    /// * `balling_setval` - A reference to a `BallingSetVal` struct, which contains
+    ///   the `dosing_speed` (flow rate in ml/sec) and `dosing_volume` (target volume in ml).
+    ///
+    /// # Returns
+    /// A `u32` representing the calculated dosing duration in milliseconds.
+    /// Returns `0` if either `dosing_speed` or `dosing_volume` is zero or negative,
+    /// indicating that no dosing should occur due to invalid parameters.
     fn calc_target_dosing_duration_millis(balling_setval: &BallingSetVal) -> u32 {
         if balling_setval.dosing_speed > 0.0 && balling_setval.dosing_volume > 0.0 {
             let dosing_duration_seconds =
@@ -266,10 +437,20 @@ impl Balling {
         }
     }
 
-    /// Calculates actual dosing volume based on actual dosing duration and pump flow.
+    /// Calculates the actual volume of fluid dosed based on the pump's flow rate and the actual run duration.
+    ///
+    /// This private helper function determines the precise volume dispensed, taking into account
+    /// the pump's calibrated flow rate and the actual time it was active.
+    ///
     /// # Arguments
-    /// * `balling_setval` - struct of type BallingSetVal containing flow rate of pump and target dosing volume
-    /// * `actual_dosing_duration_millis` - actual dosing duration in milliseconds
+    /// * `balling_setval` - A reference to a `BallingSetVal` struct, containing the pump's
+    ///   `dosing_speed` (flow rate in ml/sec).
+    /// * `actual_dosing_duration_millis` - The actual duration (in milliseconds) that the pump was active.
+    ///
+    /// # Returns
+    /// An `f32` representing the actual volume of fluid dosed (in milliliters).
+    /// Returns `0.0` if `dosing_speed` is zero or negative, or if `actual_dosing_duration_millis` is zero,
+    /// indicating that no fluid was dispensed.
     fn calc_actual_dosing_volume(
         balling_setval: &BallingSetVal,
         actual_dosing_duration_millis: u32,
@@ -281,16 +462,30 @@ impl Balling {
         }
     }
 
-    /// Executes the dosing for a specific pump including
-    /// - reading set values from the database
-    /// - invoking mineral injection
-    /// - writing the result back to the database
+    /// Orchestrates the dosing process for a specific peristaltic pump.
+    ///
+    /// This function performs the complete cycle of a dosing event:
+    /// 1. Retrieves the pump's set values (e.g., flow rate, target volume) from the database.
+    /// 2. Calculates the required dosing duration.
+    /// 3. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
+    /// 4. Calculates the actual volume dosed based on the actual run time.
+    /// 5. Logs the completed Balling dosing event, including the actual volume, back to the database.
+    ///
+    /// The function also monitors for a `Quit` command from the signal handler during the injection process.
+    ///
     /// # Arguments
-    /// * `pump_id` - id of the pump to be actuated.
-    /// * `pump_device` - value of enum AquariumDevice corresponding to the pump id
-    /// * `mineral_injection` - refence to struct implementing MineralInjectionTrait
-    /// * `tx_balling_to_relay_manager` - sender part of channel communication to send command to relay manager
-    /// * `rx_balling_from_relay_manager` - receiver part of channel communication to receive confirmation back from relay manager
+    /// * `pump_id` - The unique numerical ID of the peristaltic pump to be actuated (e.g., 1, 2, 3, 4).
+    /// * `pump_device` - The `AquariumDevice` enum variant corresponding to the `pump_id`,
+    ///   representing the physical device.
+    /// * `mineral_injection` - A mutable reference to an object implementing `MineralInjectionTrait`,
+    ///   responsible for the physical control of the pump.
+    /// * `rx_balling_from_signal_handler` - The receiver channel for listening to signals (like `Quit`) from the signal handler.
+    /// * `tx_balling_to_relay_manager` - The sender channel for sending commands to the relay manager (Controllino).
+    /// * `rx_balling_from_relay_manager` - The receiver channel for receiving acknowledgments from the relay manager.
+    ///
+    /// # Returns
+    /// A `bool` which is `true` if a `Quit` command was received from the signal handler
+    /// during the dosing process, indicating that the application should shut down; otherwise `false`.
     fn execute_dosing(
         &mut self,
         pump_id: u32,
@@ -348,9 +543,20 @@ impl Balling {
         quit_command_received
     }
 
-    /// Select the pump from the ID received externally
+    /// Selects the appropriate peristaltic pump and its corresponding device representation based on a given ID.
+    ///
+    /// This function acts as a mapping from a numerical pump ID
+    /// to a tuple containing the pump's `u32` ID and its `AquariumDevice` enum variant.
+    /// Numerical pump IDs are used in external commands and in the database.
+    ///
     /// # Arguments
-    /// * `pump_id` - ID of pump to be actuated as i32
+    /// * `pump_id` - The numerical ID of the pump (e.g., 1, 2, 3, 4) to be selected.
+    ///
+    /// # Returns
+    /// An `Option<(u32, AquariumDevice)>`:
+    /// - `Some((u32, AquariumDevice))`: If the `pump_id` matches one of the known peristaltic pumps,
+    ///   returning its `u32` ID and the corresponding `AquariumDevice` variant.
+    /// - `None`: If the provided `pump_id` does not correspond to a known peristaltic pump.
     pub fn get_pump_from_id(pump_id: i32) -> Option<(u32, AquariumDevice)> {
         match pump_id {
             1 => Some((1, AquariumDevice::PeristalticPump1)),
@@ -361,11 +567,26 @@ impl Balling {
         }
     }
 
-    /// Executes the main control in a loop until the signal handler commands quitting and termination.
+    /// Executes the main control loop for the Balling dosing module.
+    ///
+    /// This function runs continuously, managing the automatic dosing schedule for
+    /// multiple peristaltic pumps, processing external commands, and ensuring a
+    /// graceful shutdown. It periodically checks the dosing countdowns for each pump
+    /// and, if due, initiates the dosing process, respecting schedule limitations.
+    ///
+    /// The loop continues until a `Quit` command is received from the signal handler.
+    /// After exiting the main loop, it sends a confirmation back to the signal handler
+    /// and then waits for a `Terminate` command to complete its shutdown sequence.
+    ///
     /// # Arguments
-    /// * `mutex_device_scheduler_balling` - clone of the mutex for avoiding parallel device actuation.
-    /// * `balling_channels` - struct containing channels for communication with other components
-    /// * `mineral_injection`- reference to struct implementing MineralInjectionTrait
+    /// * `mutex_device_scheduler_balling` - An `Arc<Mutex<i32>>` used for coordinating
+    ///   access to device scheduling, preventing parallel actuation across different
+    ///   control modules. It holds a counter of the completed actuation.
+    /// * `balling_channels` - A `BallingChannels` struct containing all necessary `mpsc`
+    ///   sender and receiver channels for inter-thread communication (e.g., with
+    ///   the signal handler, relay manager, and schedule checker).
+    /// * `mineral_injection` - A mutable reference to an object implementing the
+    ///   `MineralInjectionTrait`, responsible for the physical control of the dosing pumps.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_balling: Arc<Mutex<i32>>,
@@ -569,6 +790,7 @@ impl Balling {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {
+                        #[cfg(not(test))] // reduce terminal output when testing
                         info!(
                             target: LOG_TARGET_BALLING,
                             "executing external request for actuation of pump #{}",
@@ -630,6 +852,12 @@ impl Balling {
             if loop_counter == 1_000_000 {
                 loop_counter = 0;
             }
+
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_balling.ping();
+                self.last_ping_instant = Instant::now();
+            }
         }
         // Application received the request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
@@ -643,8 +871,8 @@ impl Balling {
             }
         };
 
-        // This thread has channel connection to underlying threads (relay manager).
-        // These threads have to stop receiving commands from this thread.
+        // This thread has channel connections to underlying threads (relay manager).
+        // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
@@ -684,76 +912,21 @@ impl Balling {
 
 #[cfg(test)]
 pub mod tests {
-    use spin_sleep::SpinSleeper;
-    use std::fmt;
-    use std::sync::mpsc::{self, Receiver, Sender};
-    use std::sync::{Arc, Mutex};
-    use std::thread::scope;
-    use std::time::Duration;
-
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::mineral::balling::{Balling, BallingChannels, LOG_TARGET_BALLING};
-    use crate::mineral::mineral_injection::MineralInjectionTrait;
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::stubs::mock_mineral_injection::tests::MockMineralInjection;
+    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
-
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-
-    pub struct MockMineralInjection {
-        pump1_engagement_durations: Vec<u32>,
-        pump2_engagement_durations: Vec<u32>,
-        pump3_engagement_durations: Vec<u32>,
-        pump4_engagement_durations: Vec<u32>,
-    }
-
-    impl MockMineralInjection {
-        pub fn new() -> MockMineralInjection {
-            MockMineralInjection {
-                pump1_engagement_durations: Vec::new(),
-                pump2_engagement_durations: Vec::new(),
-                pump3_engagement_durations: Vec::new(),
-                pump4_engagement_durations: Vec::new(),
-            }
-        }
-    }
-
-    impl MineralInjectionTrait for MockMineralInjection {
-        fn inject_mineral(
-            &mut self,
-            _tx_balling_to_relay_manager: &Sender<InternalCommand>,
-            _rx_balling_from_relay_manager: &Receiver<bool>,
-            _rx_balling_from_signal_handler: &Receiver<InternalCommand>,
-            mineral_pump: AquariumDevice,
-            dosing_duration_millis: u32,
-        ) -> (bool, u32) {
-            // do nothing except for recording the dosing duration for the specific pump
-            match mineral_pump {
-                AquariumDevice::PeristalticPump1 => {
-                    self.pump1_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump2 => {
-                    self.pump2_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump3 => {
-                    self.pump3_engagement_durations.push(dosing_duration_millis);
-                }
-                AquariumDevice::PeristalticPump4 => {
-                    self.pump4_engagement_durations.push(dosing_duration_millis);
-                }
-                _ => {
-                    panic!("inject_mineral (mock) invoked with invalid device.");
-                }
-            }
-            println!(
-                "inject_mineral (mock): recording {}ms engagement for {}",
-                dosing_duration_millis, mineral_pump,
-            );
-            (false, dosing_duration_millis)
-        }
-    }
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{self};
+    use std::sync::{Arc, Mutex};
+    use std::thread::scope;
+    use std::time::Duration;
+    use crate::utilities::channel_content::AquariumDevice::{PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4};
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string())
@@ -764,38 +937,6 @@ pub mod tests {
             "/config/aquarium_control_test_generic.toml".to_string(),
             db_number,
         )
-    }
-
-    fn output_vector(id: u32, v: &Vec<u32>) -> String {
-        let mut output: String = "Pump #".into();
-        if v.is_empty() {
-            output += &id.to_string();
-            output += " has not been engaged.";
-        } else {
-            output += &id.to_string();
-            output += " engagement duration(s) (ms): ";
-            for duration in v {
-                output += &duration.to_string();
-                output += " ";
-            }
-        }
-        output
-    }
-
-    impl fmt::Display for MockMineralInjection {
-        /// Provides output of the struct for debugging purposes.
-        /// # Arguments
-        /// * `f` - configuration for formatting
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(
-                f,
-                "{}\n{}\n{}\n{}",
-                output_vector(1, &self.pump1_engagement_durations),
-                output_vector(2, &self.pump2_engagement_durations),
-                output_vector(3, &self.pump3_engagement_durations),
-                output_vector(4, &self.pump4_engagement_durations)
-            )
-        }
     }
 
     #[test]
@@ -820,12 +961,16 @@ pub mod tests {
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // create the test object
-        let _ = Balling::new(config.balling, sql_interface_balling);
+        let _ = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
     }
 
     #[test]
-    // When starting, the application checks when the last dosing events took place by analyzing data from the database.
-    // As a prerequisite for this test case, an empty dosing log is required.
+    // When starting, the application checks when the last dosing events took place by analyzing
+    // data from the database. As a prerequisite for this test case, an empty dosing log is required.
     // Test case uses test database #01.
     pub fn test_balling_initialization_empty_dosing_log() {
         let config: ConfigData = read_balling_config_with_database(1);
@@ -837,18 +982,29 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // empty the Balling dosing log table
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not prepare test case: {e:?}")
-            }
-        }
+        SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
+            .expect("Could not prepare test case");
+
+        // insert balling pump configuration
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
 
         // create the test object
-        let balling = Balling::new(config.balling, sql_interface_balling);
+        let balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         // check if the countdown calculation was correct
         assert_eq!(balling.countdown_dosing_pump1, 0);
@@ -857,13 +1013,23 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
-    // Helper function to prepare for test cases which require a filled dosing log
+    // Helper function to prepare for test cases which require a filled dosing log.
     // This function inserts dosing events for each of the four pumps.
-    // The time of the dosing events is set to
-    // - 100 seconds in the past for pump #1
-    // - 200 seconds in the past for pump #2
-    // - 300 seconds in the past for pump #3
-    // - 400 seconds in the past for pump #4
+    //
+    // Arguments:
+    // - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+    //                    used here specifically for truncating the dosing log table.
+    // - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+    //                            used for inserting balling dosing events.
+    //
+    // The time of the dosing events is set to:
+    // * 100 seconds in the past for pump #1
+    // * 200 seconds in the past for pump #2
+    // * 300 seconds in the past for pump #3
+    // * 400 seconds in the past for pump #4
+    //
+    // All SQL operations are expected to succeed; any failure will cause a panic,
+    // indicating a test setup issue.
     fn insert_past_dosing_events(
         sql_interface: &mut SqlInterface,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -881,30 +1047,21 @@ pub mod tests {
         let naive_datetime_400secs_ago = SqlInterface::get_naive_timestamp_from_past(0, 400);
 
         // insert balling dosing events
-        match sql_interface_balling.insert_balling_event(naive_datetime_100secs_ago, 1, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #1 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_200secs_ago, 2, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #2 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_300secs_ago, 3, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #3 into database: {e:?}")
-            }
-        };
-        match sql_interface_balling.insert_balling_event(naive_datetime_400secs_ago, 4, 0.5) {
-            Ok(_) => {}
-            Err(e) => {
-                panic!("Could not insert Balling dosing event for pump #4 into database: {e:?}")
-            }
-        };
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_100secs_ago, 1, 0.5)
+            .expect("Could not insert Balling dosing event for pump #1 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_200secs_ago, 2, 0.5)
+            .expect("Could not insert Balling dosing event for pump #2 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_300secs_ago, 3, 0.5)
+            .expect("Could not insert Balling dosing event for pump #3 into database");
+
+        sql_interface_balling
+            .insert_balling_event(naive_datetime_400secs_ago, 4, 0.5)
+            .expect("Could not insert Balling dosing event for pump #4 into database");
     }
 
     #[test]
@@ -923,10 +1080,22 @@ pub mod tests {
         };
         let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         // create the test object
-        let balling = Balling::new(config.balling, sql_interface_balling);
+        let balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         // check if the countdown calculation was correct:
         // the countdown depends on the pump-specific dosing interval and the timing of the last dosing event.
@@ -936,7 +1105,22 @@ pub mod tests {
         assert_eq!(balling.countdown_dosing_pump4, 0);
     }
 
-    // inserts a set of pump configurations to the database
+    // Helper function to prepare for test cases which require balling pump configuration.
+    // This function first truncates the pump configuration table and then
+    // inserts a balling pump configuration into the database for each of the four pumps.
+    //
+    // Arguments:
+    // - `sql_interface`: A mutable reference to the main `SqlInterface` for database operations,
+    //                    used here specifically for truncating the balling set values table.
+    // - `sql_interface_balling`: A mutable reference to the `SqlInterfaceBalling`,
+    //                            used for inserting balling set values.
+    // - `pump1`: flag indicating that a pump configuration for pump #1 should be inserted.
+    // - `pump2`: flag indicating that a pump configuration for pump #2 should be inserted.
+    // - `pump3`: flag indicating that a pump configuration for pump #3 should be inserted.
+    // - `pump4`: flag indicating that a pump configuration for pump #4 should be inserted.
+    //
+    // All SQL operations are expected to succeed; any failure will cause a panic,
+    // indicating a test setup issue.
     fn insert_pump_configurations(
         sql_interface: &mut SqlInterface,
         sql_interface_balling: &mut SqlInterfaceBalling,
@@ -1071,7 +1255,11 @@ pub mod tests {
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
         // create the test object
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
+        let mut balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -1169,7 +1357,7 @@ pub mod tests {
             0,                        // number of dosing events for pump #2
             0,                        // number of dosing events for pump #3
             0,                        // number of dosing events for pump #4
-            60,                       // schedule check interval
+            40,                       // schedule check interval
             Some((50, 200, 100, 50)), // dosing intervals
         );
     }
@@ -1421,7 +1609,11 @@ pub mod tests {
         );
 
         // create test objects
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
+        let mut balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
         let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
@@ -1568,5 +1760,206 @@ pub mod tests {
                 "* [Messaging] checking if messaging can stop and start balling dosing succeeded."
             );
         });
+    }
+
+    #[test]
+    #[should_panic]
+    // Test case checks if during instantiation of the struct, the implementation checks
+    // if there is a database entry for a pump that is configured as active.
+    // The code shall panic if there is no matching database entry.
+    // Test case uses test database #48.
+    pub fn test_check_database_vs_config() {
+        let mut config: ConfigData = read_balling_config_with_database(48);
+
+        config.balling.pump1_active = true;
+        config.balling.pump2_active = false;
+        config.balling.pump3_active = false;
+        config.balling.pump4_active = false;
+
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        // insert a valid pump configuration for pump #1
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            false,
+            false,
+            false,
+            true, // a different pump is configured as active
+        );
+
+        // create test objects
+        let _ = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
+    }
+
+    #[test]
+    // The test case executes the test object using dosing requests via the external interface.
+    pub fn test_balling_dosing_external_requests() {
+        let test_db_number = 49;
+        let schedule_allows = true;
+        let execution_count_reference: i32 = 4;
+        let duration_millis = 5000;
+        let sleep_duration_test_environment = Duration::from_millis(duration_millis);
+        let spin_sleeper_test_environment = SpinSleeper::default();
+        let mut config: ConfigData = read_balling_config_with_database(test_db_number);
+
+        config.balling.pump1_active = true;
+        config.balling.dosing_interval_pump1 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.pump2_active = true;
+        config.balling.dosing_interval_pump2 = 3600 * 24; // long interval to avoid regular dosing
+        config.balling.pump3_active = true;
+        config.balling.dosing_interval_pump3 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.pump4_active = true;
+        config.balling.dosing_interval_pump4 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.schedule_check_interval = 100;
+
+        println!("Testing with database {}", config.sql_interface.db_name);
+        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        insert_pump_configurations(
+            &mut sql_interface,
+            &mut sql_interface_balling,
+            true,
+            true,
+            true,
+            true,
+        );
+        insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
+
+        let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
+        let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
+        let (tx_signal_handler_to_balling, rx_balling_from_signal_handler) = mpsc::channel();
+        let (tx_balling_to_signal_handler, rx_signal_handler_from_balling) = mpsc::channel();
+        let (tx_schedule_check_to_balling, rx_balling_from_schedule_check) = mpsc::channel();
+        let (tx_balling_to_schedule_check, rx_schedule_check_from_balling) = mpsc::channel();
+        let (tx_messaging_to_balling, rx_balling_from_messaging) = mpsc::channel();
+
+        let mutex_device_scheduler = Arc::new(Mutex::new(0));
+        let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
+
+        // create the test object
+        let mut balling = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
+
+        let mut mock_mineral_injection = MockMineralInjection::new();
+
+        scope(|scope| {
+            // thread for schedule check
+            scope.spawn(move || {
+                mock_schedule_check(
+                    &tx_schedule_check_to_balling,
+                    &rx_schedule_check_from_balling,
+                    None,
+                    schedule_allows,
+                )
+            });
+
+            // thread for rest of test environment
+            scope.spawn(move || {
+                let execution_count1: i32;
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                // internal scope to for releasing mutex after read
+                {
+                    execution_count1 = *mutex_device_scheduler_environment.lock().unwrap();
+                }
+                println!("test_balling_dosing: execution_count={}", execution_count1);
+                assert_eq!(execution_count1, 0);
+
+                // send the dosing requests to Balling
+                tx_messaging_to_balling.send(InternalCommand::Execute(2)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(4)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(3)).unwrap();
+                tx_messaging_to_balling.send(InternalCommand::Execute(1)).unwrap();
+                
+                let execution_count2: i32;
+                spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
+                // internal scope to for releasing mutex after read
+                {
+                    execution_count2 = *mutex_device_scheduler_environment.lock().unwrap();
+                }
+                println!("test_balling_dosing: execution_count={}", execution_count2);
+                assert_eq!(execution_count2, execution_count_reference);
+
+                // now we can send the quit command
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Quit);
+                rx_signal_handler_from_balling.recv().unwrap();
+                println!(
+                    "test_balling_dosing: Received confirmation of Quit command from test object."
+                );
+                let _ = tx_signal_handler_to_balling.send(InternalCommand::Terminate);
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                let tx_balling_to_schedule_check_for_test_case_finish =
+                    tx_balling_to_schedule_check.clone();
+
+                let balling_channels = BallingChannels {
+                    tx_balling_to_relay_manager,
+                    rx_balling_from_relay_manager,
+                    tx_balling_to_signal_handler,
+                    rx_balling_from_signal_handler,
+                    tx_balling_to_schedule_check,
+                    rx_balling_from_schedule_check,
+                    rx_balling_from_messaging_opt: Some(rx_balling_from_messaging),
+                };
+
+                balling.execute(
+                    mutex_device_scheduler,
+                    balling_channels,
+                    &mut mock_mineral_injection,
+                );
+
+                let _ =
+                    tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
+
+                println!("{}", mock_mineral_injection);
+                
+                let reference_pump_protocol = vec![
+                    PeristalticPump2, PeristalticPump4, PeristalticPump3, PeristalticPump1];
+                
+                assert_eq!(mock_mineral_injection.pump_protocol, reference_pump_protocol);
+            });
+        });
+    }
+
+    #[test]
+    #[should_panic]
+    // This test case checks if the code checks the dosing interval against the check interval.
+    // It does not operate on any data from SQL database.
+    pub fn test_balling_initialization_invalid_dosing_check_interval() {
+        let mut config: ConfigData = read_balling_config();
+
+        config.balling.dosing_interval_pump1 = 100;
+        config.balling.dosing_interval_pump2 = 100;
+        config.balling.dosing_interval_pump3 = 100;
+        config.balling.dosing_interval_pump4 = 100;
+        config.balling.schedule_check_interval = 200;
+        
+        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not connect to SQL database: {e:?}");
+            }
+        };
+        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+
+        // create the test object
+        let _ = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
     }
 }

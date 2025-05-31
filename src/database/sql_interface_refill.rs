@@ -20,11 +20,7 @@ use crate::database::{
 /// This trait is prerequisite to use mock implementation for testing
 pub trait DatabaseInterfaceRefillTrait {
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError>;
-    /// Executes an SQL query which provides an integer value and returns the result as u64
-    /// if it is positive.
-    /// It provides wrapped into Result type either
-    /// - the integer value as u64
-    /// - or a value from enum SqlInterfaceError
+
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
@@ -47,6 +43,8 @@ pub trait DatabaseInterfaceRefillTrait {
         volume: f64,
         error_code: i32,
     ) -> Result<(), SqlInterfaceError>;
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self);
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Refill.
@@ -58,17 +56,31 @@ pub struct SqlInterfaceRefill {
 impl SqlInterfaceRefill {
     const LOG_TARGET_SQL_INTERFACE_REFILL: &'static str = "sql_interface_refill";
 
-    /// Provides a struct of type SqlInterfaceRefill.
+    /// Creates a new `SqlInterfaceRefill` instance.
+    ///
+    /// This constructor initializes the refill management SQL interface with an established
+    /// database connection.
+    ///
     /// # Arguments
-    /// * `conn` - connection to SQL database
+    /// * `conn` - An active database connection pool object.
+    ///
+    /// # Returns
+    /// A new `SqlInterfaceRefill` struct.
     pub fn new(conn: PooledConn) -> SqlInterfaceRefill {
         SqlInterfaceRefill { conn }
     }
 
-    /// Retrieves the timestamp of the last refill event from the database.
-    /// It provides wrapped into Result type either
-    /// - timestamp of the last refill event as type NaiveDateTime
-    /// - or a value from enum SqlInterfaceError
+    /// Fetches the timestamp of the most recent water refill event from the database.
+    ///
+    /// This private helper function queries the database for the latest recorded
+    /// refill event and converts its timestamp into a `NaiveDateTime` object.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(NaiveDateTime)`: The timestamp of the last refill event.
+    /// - `Err(SqlInterfaceError)`: If there's an issue retrieving or parsing the timestamp,
+    ///   such as the table being empty, a database communication error, or a timestamp
+    ///   conversion failure.
     fn get_last_refill_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
         SqlInterface::get_timestamp(
             &mut self.conn,
@@ -78,10 +90,22 @@ impl SqlInterfaceRefill {
 }
 
 impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
-    /// Requests current timestamp and timestamp of the last refill event and calculates the difference between them in seconds.
-    /// It provides wrapped into Result type either
-    /// - number of seconds since the last refill event
-    /// - or a value from enum SqlInterfaceError    
+    /// Calculates the time elapsed in seconds since the most recent water refill event.
+    ///
+    /// This function determines the duration by comparing the current database timestamp
+    /// with the timestamp of the last recorded refill event. It ensures the result
+    /// is a non-negative duration.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(u64)`: The number of seconds that have passed since the last refill event.
+    ///   Returns 0 if the last refill was precisely at the current moment or in the future
+    ///   (which would indicate a data anomaly).
+    /// - `Err(SqlInterfaceError::NegativeInteger)`: If the calculated duration is negative
+    ///   (meaning the "last refill" timestamp is in the future relative to the current timestamp,
+    ///   suggesting data corruption).
+    /// - `Err(SqlInterfaceError)`: If any error occurs while retrieving either the
+    ///   current timestamp or the last refill timestamp from the database.
     fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
         let current_datetime = match SqlInterface::get_current_timestamp(&mut self.conn) {
             Ok(c) => c,
@@ -106,11 +130,21 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Executes an SQL query which provides an integer value and returns the result as u64
-    /// if it is positive.
-    /// It provides wrapped into Result type either
-    /// - the integer value as u64
-    /// - or a value from enum SqlInterfaceError
+    /// Executes an SQL query to retrieve a single integer value, validating it as non-negative.
+    ///
+    /// This private helper function is used for database queries that are expected to return
+    /// a single integer. It further ensures that the retrieved integer is non-negative,
+    /// converting it to `u64` on success, or returning a specific error if it's negative.
+    ///
+    /// # Arguments
+    /// * `sql_query_string` - The SQL query string to be executed, expected to yield a single integer result.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(u64)`: The retrieved integer value, successfully converted to an unsigned 64-bit integer.
+    /// - `Err(SqlInterfaceError::NegativeInteger)`: If the database query returns a negative integer.
+    /// - `Err(SqlInterfaceError)`: If the underlying `get_single_integer_from_database` call fails
+    ///   (e.g., query execution error, no result, or multiple results).
     fn get_positive_integer_value_from_database(
         &mut self,
         sql_query_string: &str,
@@ -127,41 +161,65 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Checks if the SQL table of refill events is empty.
-    /// It returns wrapped into Result type either
-    /// - a value of one if there is at least one entry in the table or
-    /// - a value of zero if there is no entry in the table or
-    /// - a value from enum SqlInterfaceError
+    /// Checks whether the refill events table in the database is empty.
+    ///
+    /// This function executes an SQL query to determine if any entries exist
+    /// in the refill log.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(0)` if the refill table contains no entries.
+    /// - `Ok(1)` if the refill table contains at least one entry.
+    /// - `Err(SqlInterfaceError)` if a database error occurs during the check,
+    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
     fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_CHECK_REFILL_EMPTY,
         )
     }
 
-    /// Retrieves the number of water refill events in the last hour.
-    /// It returns wrapped into Result type either
-    /// - the number of refill events in the last hour
-    /// - or a value from enum SqlInterfaceError
+    /// Retrieves the total count of water refill events that occurred within the last hour.
+    ///
+    /// This function queries the database to count all refill events whose timestamps
+    /// fall within the most recent 60-minute period.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(u64)`: The number of refill events recorded in the last hour.
+    /// - `Err(SqlInterfaceError)`: If a database error occurs during the count retrieval,
+    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
         )
     }
 
-    /// Retrieves the number of water refill events in the last 24 hours.
-    /// It returns wrapped into Result type either
-    /// - the number of refill events in the last 24 hours
-    /// - or a value from enum SqlInterfaceError    
+    /// Retrieves the total count of water refill events that occurred within the last 24 hours.
+    ///
+    /// This function queries the database to count all refill events whose timestamps
+    /// fall within the most recent 24-hour period.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(u64)`: The number of refill events recorded in the last 24 hours.
+    /// - `Err(SqlInterfaceError)`: If a database error occurs during the count retrieval,
+    ///   or if an unexpected (e.g., negative or multiple) integer result is returned.
     fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
         )
     }
 
-    /// Retrieves the water volume refilled in the last 24 hours
-    /// It returns wrapped into Result type either
-    /// - the refill volume in liters of the last 24 hours
-    /// - or a value from enum SqlInterfaceError
+    /// Retrieves the total volume of water (in liters) refilled within the last 24 hours.
+    ///
+    /// This function queries the database to sum the volume of all refill events
+    /// that occurred within the most recent 24-hour period.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(f64)`: The total volume of water refilled in the last 24 hours.
+    /// - `Err(SqlInterfaceError)`: If a database error occurs during the volume retrieval,
+    ///   or if an unexpected (e.g., zero or multiple) float result is returned.
     fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -178,10 +236,16 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Retrieves the water volume refilled in the last hour
-    /// It returns wrapped into Result type either
-    /// - the refill volume in liters of the last hour
-    /// - or a value from enum SqlInterfaceError
+    /// Retrieves the total volume of water (in liters) refilled within the last hour.
+    ///
+    /// This function queries the database to sum the volume of all refill events
+    /// that occurred within the most recent 60-minute period.
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(f64)`: The total volume of water refilled in the last hour.
+    /// - `Err(SqlInterfaceError)`: If a database error occurs during the volume retrieval,
+    ///   or if an unexpected (e.g., zero or multiple) float result is returned.
     fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
         match SqlInterface::get_single_float_from_database(
             &mut self.conn,
@@ -198,15 +262,22 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         }
     }
 
-    /// Inserts one dataset of refill event into the database.
-    /// It provides wrapped into Result type either
-    /// - an empty Ok value
-    /// - or a value of enum SqlInterfaceError
+    /// Inserts a new water refill event record into the database.
+    ///
+    /// This function logs the details of a completed water refill operation,
+    /// including its timestamp, duration, volume, and any associated error code.
+    ///
     /// # Arguments
-    /// * `timestamp` - timestamp of refill event to be inserted as type NaiveDateTime
-    /// * `duration` - duration of refill event to be inserted in seconds
-    /// * `volume` - volume of refill event to be inserted in liters
-    /// * `error_code` - numerical error code of refill event to be inserted in liters    
+    /// * `timestamp` - The `NaiveDateTime` when the refill event occurred.
+    /// * `duration` - The duration (in seconds) of the refill event.
+    /// * `volume` - The volume (in liters) of water dispensed during the refill.
+    /// * `error_code` - A numerical error code associated with the refill event (0 for success, non-zero for errors).
+    ///
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Ok(())` if the refill event record was successfully inserted.
+    /// - `Err(SqlInterfaceError::InsertRefillEventFailure)` if an error occurs
+    ///   during the database insertion.
     fn insert_refill_event(
         &mut self,
         timestamp: NaiveDateTime,
@@ -235,6 +306,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 ))
             }
         }
+    }
+
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_REFILL)
     }
 }
 

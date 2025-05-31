@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/// Contains constants representing commands received from control application.
+/// Contains constants representing commands received from the control application.
 #[allow(dead_code)]
 pub mod command {
     /// command to switch on a relay (not necessarily switching on a device)
@@ -19,10 +19,10 @@ pub mod command {
     /// command to retrieve the status of Controllino (currently not used)
     pub const GETSTATUS: &str = "GETSTATUS";
 
-    /// command to switch on and off a relay for defined, short time period
+    /// command to switch on and off a relay for a defined, short time
     pub const PULSE: &str = "PULSE";
 
-    /// command to send an alive signal to the Controllino
+    /// command to send a live signal to the Controllino
     pub const HEARTBEAT: &str = "HEARTBEAT";
 
     /// command to retrieve the status of a certain relay (currently not used)
@@ -32,7 +32,7 @@ pub mod command {
     pub const INITIALIZED: &str = "INITIALIZED";
 }
 
-/// Contains constants representing the category received from control application.
+/// Contains constants representing the category received from the control application.
 /// The category describes the device to which the command shall be applied.
 #[allow(dead_code)]
 pub mod category {
@@ -52,7 +52,7 @@ pub mod category {
     pub const REFILLCONTROL: &str = "REFILLCTRL";
 }
 
-/// Contains constants representing the signal request received from control application.
+/// Contains constants representing the signal request received from the control application.
 #[allow(dead_code)]
 pub mod signal {
     #[allow(dead_code)]

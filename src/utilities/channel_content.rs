@@ -54,9 +54,16 @@ pub enum AquariumDevice {
 }
 
 impl fmt::Display for AquariumDevice {
-    /// Provides output of the enum values for debugging purposes.
+    /// Formats the `AquariumDevice` enum into its human-readable string representation.
+    ///
+    /// This implementation enables `AquariumDevice` variants to be printed directly
+    /// using macros like `println!` or `format!`, returning the name of the device.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AquariumDevice::Skimmer => write!(f, "Skimmer"),
@@ -121,6 +128,18 @@ pub enum AquariumSignal {
 }
 
 impl AquariumSignal {
+    /// Formats a given floating-point signal value into a `String` based on the specific `AquariumSignal` type.
+    ///
+    /// This function applies specific formatting rules (e.g., number of decimal places)
+    /// for common aquarium sensor signals to ensure consistent output strings,
+    /// suitable for display or logging.
+    ///
+    /// # Arguments
+    /// * `signal` - The `f32` floating-point value of the signal to be formatted.
+    ///
+    /// # Returns
+    /// A `String` representation of the signal, formatted according to its `AquariumSignal` type.
+    /// For example, `WaterTemperature` is formatted to one decimal place, `pH` to two, etc.
     pub fn output_file_string(&self, signal: f32) -> String {
         match self {
             AquariumSignal::WaterTemperature => format!("{:.1}", signal),
@@ -136,9 +155,16 @@ impl AquariumSignal {
 }
 
 impl fmt::Display for AquariumSignal {
-    /// Function provides output of the enum values for debugging purposes.
+    /// Formats the `AquariumSignal` enum into its human-readable string representation.
+    ///
+    /// This implementation enables `AquariumSignal` variants to be printed directly
+    /// using macros like `println!` or `format!`, returning the descriptive name of the signal.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting    
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AquariumSignal::WaterTemperature => write!(f, "WaterTemperature"),
@@ -219,9 +245,18 @@ pub enum InternalCommand {
 }
 
 impl fmt::Display for InternalCommand {
-    /// Provides output of the enum values for debugging purposes.
+    /// Formats the `InternalCommand` enum into its human-readable string representation.
+    ///
+    /// This implementation allows `InternalCommand` variants to be displayed directly
+    /// using macros like `println!` or `format!`, returning the name of the command.
+    /// For variants that hold data (e.g., `SwitchOn(_)`), only the command name is displayed,
+    /// not the associated data.
+    ///
     /// # Arguments
-    /// * `f` - configuration for formatting
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             InternalCommand::SwitchOn(_) => write!(f, "SwitchOn"),

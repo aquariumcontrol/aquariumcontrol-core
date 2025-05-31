@@ -21,12 +21,17 @@ pub struct ControllinoMessageContent {
 }
 
 impl ControllinoMessageContent {
-    /// Provides a struct of type ControllinoMessage.
-    /// The struct serves as a container for the data to be sent to Controllino.
-    /// It is used as input to generate a struct of type ControllinoMessage.
+    /// Provides a new `ControllinoMessageContent` struct.
+    ///
+    /// This struct serves as a container for the data that will eventually be
+    /// assembled into a full `ControllinoMessage` for serial transmission.
+    /// It initializes the message content with the specified command, ID, and
+    /// pulse duration, setting reserved bytes to zero.
+    ///
     /// # Arguments
-    /// * `command` - character representing command
-    /// * `id` - identifier for relay or digital out in case a status change is requested
+    /// * `command` - The character representing the command to be sent to Controllino.
+    /// * `id` - The identifier for the relay or digital output relevant to the command.
+    /// * `duration_millis` - The pulse duration in milliseconds, or `0` if not applicable to the command.
     pub fn new(command: char, id: u8, duration_millis: u16) -> ControllinoMessageContent {
         ControllinoMessageContent {
             command,
@@ -46,11 +51,19 @@ pub struct ControllinoMessage {
 }
 
 impl ControllinoMessage {
-    /// Provides a struct of type ControllinoMessage.
-    /// This function transfers the content into an array of u8 and
-    /// calculates the checksums. The array is then sent to Controllino.
+    /// Creates a new `ControllinoMessage` from `ControllinoMessageContent`.
+    ///
+    /// This crucial function takes the structured message content, converts its fields
+    /// into a raw 8-byte array (`[u8; 8]`) suitable for serial transmission, and
+    /// **calculates and embeds the necessary checksums** into the data array.
+    /// The resulting `ControllinoMessage` is ready to be sent directly to the Controllino hardware.
+    ///
     /// # Arguments
-    /// * `content` - struct of type ControllinoMessageContent
+    /// * `content` - The `ControllinoMessageContent` struct containing the command, ID,
+    ///   and payload (e.g., pulse duration) to be packed into the message.
+    ///
+    /// # Returns
+    /// A new `ControllinoMessage` struct with its `data` field populated, including checksums.
     pub fn new(content: ControllinoMessageContent) -> ControllinoMessage {
         // transfer content into data structure and calculate checksum
         let mut data: [u8; controllino_constants::MESSAGE_SIZE] =

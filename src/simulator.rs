@@ -10,8 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Contains the main functionality for communication with the test server
 pub mod tcp_communication;
 
-/// Contains trait implementation for other threads to communicate with thread defined in tcp_communication
+/// Contains trait implementation for other threads to communicate with the thread defined in tcp_communication
 pub mod get_resp_sim;
 
-/// Contains definition of data to be exchanged with test server
+/// Contains definition of data to be exchanged with the test server
 pub mod tcp_data;

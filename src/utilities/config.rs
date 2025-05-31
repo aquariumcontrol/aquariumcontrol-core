@@ -124,12 +124,24 @@ pub struct ConfigData {
     pub ds18b20: Ds18b20Config,
 }
 
-/// Loads the configuration data described in a struct of type ConfigData from the .toml file - version for execution.
-/// In case of failure, the function panics.
-/// In success case, the function returns a variable of type ConfigData.
-/// # Arguments:
-/// * `filename` - Fully qualified filename (folder and file name).
 #[cfg(not(test))]
+/// Loads configuration data from a specified `.toml` file into a `ConfigData` struct.
+///
+/// This version of the function is intended for execution environments (`#[cfg(not(test))]`).
+/// It reads the entire content of the `.toml` file and then attempts to parse
+/// it into the `ConfigData` structure.
+///
+/// # Arguments
+/// * `filename` - The fully qualified path (including directory and file name)
+///   of the `.toml` configuration file to be read.
+///
+/// # Returns
+/// A `ConfigData` struct containing the parsed configuration if successful.
+///
+/// # Panics
+/// This function will panic in the following scenarios:
+/// - If the specified file cannot be read (e.g., file not found, permission denied).
+/// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
 pub fn read_config_file(filename: String) -> ConfigData {
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
 
@@ -166,12 +178,26 @@ pub fn read_config_file(filename: String) -> ConfigData {
     }
 }
 
-/// Loads the configuration data described in a struct of type ConfigData from the .toml file - version for testing.
-/// In case of failure, the function panics.
-/// In success case, the function returns a variable of type ConfigData.
-/// # Arguments:
-/// * `filename` - configuration file shall be stored in a subfolder of the cargo base folder. The variable contains the name of the subfolder.
 #[cfg(test)]
+// Loads configuration data from a specified `.toml` file into a `ConfigData` struct for testing.
+//
+// This version of the function is specifically designed for test environments (`#[cfg(test)]`).
+// It constructs the full file path by prepending the `CARGO_MANIFEST_DIR`
+// environment variable (which points to the root of the current Cargo package)
+// to the provided `filename`. It then reads and attempts to parse the TOML content.
+//
+// # Arguments
+// * `filename` - The relative path to the configuration file, expected to be located
+//   within a subfolder of the Cargo base directory.
+//
+// # Returns
+// A `ConfigData` struct containing the parsed configuration if successful.
+//
+// # Panics
+// This function will panic in the following scenarios:
+// - If the `CARGO_MANIFEST_DIR` environment variable is not set.
+// - If the specified file cannot be read (e.g., file not found, permissions issues).
+// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
 pub fn read_config_file(filename: String) -> ConfigData {
     let filename_test = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
         panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
@@ -212,6 +238,27 @@ pub fn read_config_file(filename: String) -> ConfigData {
 }
 
 #[cfg(test)]
+#[cfg(test)]
+// Loads configuration data from a `.toml` file and overrides the database name for testing.
+//
+// This helper function is exclusively used in test environments. It reads the
+// configuration from a specified `.toml` file (relative to `CARGO_MANIFEST_DIR`)
+// and then *replaces* the `db_name` within the `SqlInterfaceConfig` to point
+// to a unique test database, ensuring test isolation.
+//
+// # Arguments
+// * `relative_path` - The relative path to the configuration file within the Cargo base folder.
+// * `test_db_number` - A unique number (between 1 and 99, inclusive) used to
+//   construct the specific test database name (e.g., `aquarium_test_01`, `aquarium_test_28`).
+//
+// # Returns
+// A `ConfigData` struct with the database name specifically set for testing.
+//
+// # Panics
+// This function will panic in the following scenarios:
+// - If `test_db_number` is 0 or greater than 99.
+// - If `read_config_file` (the underlying function it calls) panics
+//   (e.g., file not found, invalid TOML, `CARGO_MANIFEST_DIR` not set).
 pub fn read_config_file_with_test_database(
     relative_path: String,
     test_db_number: u32,

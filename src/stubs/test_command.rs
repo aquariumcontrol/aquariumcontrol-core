@@ -20,7 +20,7 @@ pub mod tests {
         /// Request to update a signal in to be used by mock thread
         UpdateSignal(MockSignal),
 
-        /// give feedback to test environment that water injection has been triggered
+        /// give feedback to the test environment that water injection has been triggered
         InformWaterInjectionEvent,
     }
 

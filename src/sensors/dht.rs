@@ -33,7 +33,7 @@ cfg_if::cfg_if! {
    }
 }
 
-/// Holds the configuration data for the GPIO handler.
+/// Holds the configuration data for interacting with GPIO
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
@@ -50,7 +50,7 @@ pub struct DhtConfig {
     #[allow(unused)]
     sensor_init_input_duration_micros: u64,
 
-    /// maximum permissible duration for sensor to respond in microseconds
+    /// maximum permissible duration for the sensor to respond in microseconds
     #[allow(unused)]
     timeout_duration_micros: u64,
 
@@ -67,6 +67,7 @@ pub struct DhtConfig {
     sensor_pause_duration_millis: u64,
 }
 
+/// Contains constants for communication with the DHT22 sensor.
 pub mod dht22_constants {
     #[allow(unused)]
     pub const DHT22_DATA_LEN: usize = 5;
@@ -132,6 +133,7 @@ pub mod dht22_constants {
 }
 
 #[derive(Debug, PartialEq)]
+/// Enum codifies the errors the program may encounter in communication with DHT sensor.
 pub enum DhtError {
     /// Vcc pin acquisition failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -149,7 +151,7 @@ pub enum DhtError {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     CouldNotSetInterrupt,
 
-    /// Could not clear interrupt
+    /// Could not clear the interrupt
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     CouldNotClearInterrupt,
 
@@ -157,51 +159,62 @@ pub enum DhtError {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     InterruptFailed,
 
-    // transmission yields wrong number of valid bits
+    // transmission yields a wrong number of valid bits
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     WrongNumberOfValidTicks,
 
-    // error occurred during calculation of checksum
+    /// the error occurred during calculation of checksum
     ChecksumCalculationError,
 
-    // calculated checksum does not match received value
+    /// calculated checksum does not match the received value
     ChecksumError,
 
-    // timeout during transmission of data
+    /// timeout during transmission of data
     #[allow(unused)]
     Timeout,
 
-    // temperature value is out of range
+    /// the temperature value is out of range
     TemperatureOutOfRange,
 
-    // humidity value is out of range
+    /// humidity value is out of range
     HumidityOutOfRange,
 }
 
 pub struct Dht {
-    // configuration for communication with DHT sensor
     #[allow(unused)]
+    /// configuration for communication with DHT sensor
     config: DhtConfig,
 
-    // reference to GPIO interface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// GPIO interface
     gpio: Gpio,
 
-    /// GPIO for communication with DHT22 sensor
     #[allow(unused)]
+    /// numeric GPIO pin for communication with DHT22 sensor
     gpio_dht22_io: u8,
 
-    /// GPIO pin number for providing power to DHT22 sensor
+    /// numeric GPIO pin for providing power to the DHT22 sensor
     #[allow(unused)]
     gpio_dht22_vcc: u8,
 }
 
 impl Dht {
-    /// Provides a struct of type Dht - Linux platform specific version
-    /// # Arguments    
-    /// * `config` - configuration for communication with DHT sensor
-    /// * `gpio` - reference to GPIO interface
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on a Linux system.
+    ///
+    /// This constructor initializes the DHT sensor module, configuring it with the provided
+    /// settings and gaining access to the necessary GPIO pins for communication and power supply
+    /// to the DHT22 sensor. This specific implementation is enabled only for Linux targets
+    /// when the `target_hw` feature is active.
+    ///
+    /// # Arguments
+    /// * `config` - **Configuration data** for the DHT sensor, including timing parameters for communication.
+    /// * `gpio` - A **`Gpio` instance** from `rppal`, providing the interface to the system's GPIO pins.
+    /// * `gpio_dht22_io` - The **GPIO pin** used for data input/output with the DHT22 sensor.
+    /// * `gpio_dht22_vcc` - The **GPIO pin** used to control the power supply (VCC) to the DHT22 sensor.
+    ///
+    /// # Returns
+    /// A new **`Dht` struct**, ready to read temperature and humidity.
     pub fn new(config: DhtConfig, gpio: Gpio, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
         Dht {
             config,
@@ -211,11 +224,23 @@ impl Dht {
         }
     }
 
-    /// calculates bit array from timing sequence of signal change
-    /// # Arguments
-    /// * `ticks` - timing information stored in array
-    /// * `valid_ticks_received` - number valid (without timeout) interrupt events received
     #[allow(unused)]
+    /// Calculates the raw data bits from the timing sequence of GPIO signal changes during DHT22 sensor communication.
+    ///
+    /// This private helper function interprets the pulse widths measured from the DHT22 sensor.
+    /// It differentiates between "neutral" pauses (which are ignored) and actual data bits
+    /// (distinguished by their duration relative to `DHT22_BIT_TIMING_LIMIT`).
+    /// Longer pulses are interpreted as `true` bits, shorter as `false` bits.
+    ///
+    /// # Arguments
+    /// * `ticks` - An array of `u64` values, where each value represents the duration (in microseconds)
+    ///   of a specific pulse or pause observed on the data line.
+    /// * `valid_ticks_received` - The actual number of valid (non-timeout) interrupt events captured,
+    ///   indicating how many entries in `ticks` are relevant.
+    ///
+    /// # Returns
+    /// A fixed-size array of `bool` representing the extracted data bits from the sensor.
+    /// This array contains `true` for a '1' bit and `false` for a '0' bit.
     pub fn calc_data_bits(
         ticks: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX],
         valid_ticks_received: usize,
@@ -240,9 +265,19 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// arranges bit information of one byte
+    /// Converts a specific range of raw boolean data bits into a single `u8` byte.
+    ///
+    /// This private helper function takes a segment of the `data_bits` array,
+    /// shifts bits to the left, and sets them according to their boolean value
+    /// to reconstruct the corresponding byte.
+    ///
     /// # Arguments
-    /// * `data_bits` - array with bit data received from sensor
+    /// * `data_bits` - The array of `bool` representing the raw data bits received from the sensor.
+    /// * `start_index` - The starting index (inclusive) within `data_bits` for the byte's data.
+    /// * `stop_index` - The ending index (inclusive) within `data_bits` for the byte's data.
+    ///
+    /// # Returns
+    /// A `u8` representing the reconstructed byte.
     pub fn calc_byte(
         data_bits: [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1],
         start_index: usize,
@@ -264,9 +299,18 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// arranges the bit information received from sensor into a byte array
+    /// Arranges the raw boolean bit information received from the DHT22 sensor into a 5-byte array.
+    ///
+    /// This private helper function takes the array of individual data bits (extracted from pulse timings)
+    /// and reconstructs the full data payload from the sensor, byte by byte, according to the
+    /// DHT22 communication protocol.
+    ///
     /// # Arguments
-    /// * `data_bits` - array with bit data received from sensor
+    /// * `data_bits` - The fixed-size array of `bool` representing the raw data bits received from the sensor.
+    ///
+    /// # Returns
+    /// A fixed-size array of `u8` (5 bytes) containing the reconstructed sensor data,
+    /// ready for checksum validation and signal calculation.
     pub fn calc_byte_array(
         data_bits: [bool; dht22_constants::DHT22_BYTE4_STOP_IDX + 1],
     ) -> [u8; dht22_constants::DHT22_DATA_LEN] {
@@ -306,9 +350,25 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// calculates checksum from byte array
+    /// Calculates the checksum of the DHT22 sensor data and validates it against the received checksum.
+    ///
+    /// This private helper function computes an 8-bit sum (modulo 256) of the first four data bytes
+    /// received from the DHT22 sensor. It then compares this calculated checksum with the checksum
+    /// byte provided by the sensor itself.
+    ///
+    /// If the checksums do not match, a warning or error is logged (depending on build configuration),
+    /// and a `DhtError` is returned, indicating data corruption during transmission.
+    ///
     /// # Arguments
-    /// * `byte_vals` - array with data received from sensor
+    /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the sensor's raw data,
+    ///   where the last byte is the received checksum.
+    ///
+    /// # Returns
+    /// A `Result<u8, DhtError>`:
+    /// - `Ok(u8)`: The calculated checksum if it matches the received one.
+    /// - `Err(DhtError::ChecksumCalculationError)`: If an unexpected error occurs during the checksum calculation process.
+    /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum,
+    ///   indicating invalid sensor data.
     pub fn calc_checksum(byte_vals: [u8; dht22_constants::DHT22_DATA_LEN]) -> Result<u8, DhtError> {
         // calculate and compare checksum
         let mut checksum_intermediate: u16 =
@@ -333,9 +393,22 @@ impl Dht {
     }
 
     #[allow(unused)]
-    /// calculates temperature and humidity values from byte array
+    /// Calculates temperature and humidity values (as `f32`) from the raw byte array received from a DHT22 sensor.
+    ///
+    /// This private helper function reconstructs the 16-bit integer values for humidity and temperature
+    /// from their respective byte pairs in the `byte_vals` array. It then performs range checks
+    /// to ensure the values are within the sensor's specified operating limits. Finally, it converts
+    /// these scaled integer values into standard floating-point `f32` representations.
+    ///
     /// # Arguments
-    /// * `byte_vals` - array with data received from sensor
+    /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the sensor's raw data,
+    ///   where the first four bytes represent humidity and temperature, and the last is the checksum.
+    ///
+    /// # Returns
+    /// A `Result<(f32, f32), DhtError>`:
+    /// - `Ok((f32, f32))`: A tuple containing the calculated temperature in °C and humidity in %.
+    /// - `Err(DhtError::TemperatureOutOfRange)`: If the calculated temperature is outside the permissible limits.
+    /// - `Err(DhtError::HumidityOutOfRange)`: If the calculated humidity is outside the permissible limits.
     pub fn calc_signals(
         byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
     ) -> Result<(f32, f32), DhtError> {
@@ -381,9 +454,32 @@ impl Dht {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// reads temperature and humidity from DHT sensor
+    /// Performs a low-level read operation to get temperature and humidity data from a DHT22 sensor.
+    ///
+    /// This function directly interacts with the GPIO pins to implement the DHT22 communication protocol.
+    /// It handles sending the start signal, setting up interrupts to capture response timings,
+    /// and then processing these timings into raw data bits and bytes. It includes checks
+    /// for timeouts and validates checksums.
+    ///
     /// # Arguments
-    /// * `reset_sensor` - flag to indicate if power supply to the sensor shall be interrupted before measuring
+    /// * `reset_sensor` - A boolean flag. If `true`, the sensor's power supply (VCC) will be briefly
+    ///   interrupted and restored before measurement, which can act as a hardware reset.
+    ///   If `false`, a pause duration is observed instead.
+    ///
+    /// # Returns
+    /// A `Result<(f32, f32), DhtError>`:
+    /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
+    /// - `Err(DhtError::VccPinAcquisitionFailed)`: If the VCC GPIO pin cannot be acquired.
+    /// - `Err(DhtError::DataPinOutputAcquisitionFailed)`: If the data GPIO pin cannot be acquired for output.
+    /// - `Err(DhtError::DataPinInputAcquisitionFailed)`: If the data GPIO pin cannot be acquired for input.
+    /// - `Err(DhtError::CouldNotSetInterrupt)`: If setting the GPIO interrupt fails.
+    /// - `Err(DhtError::InterruptFailed)`: If an error occurs during interrupt polling.
+    /// - `Err(DhtError::Timeout)`: If the sensor does not respond within the expected time frame.
+    /// - `Err(DhtError::WrongNumberOfValidTicks)`: If the number of signal transitions received is incorrect.
+    /// - `Err(DhtError::ChecksumCalculationError)`: If an error occurs during the checksum calculation.
+    /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum.
+    /// - `Err(DhtError::TemperatureOutOfRange)`: If the measured temperature is outside the sensor's specified range.
+    /// - `Err(DhtError::HumidityOutOfRange)`: If the measured humidity is outside the sensor's specified range.
     pub fn read(&self, reset_sensor: bool) -> Result<(f32, f32), DhtError> {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
@@ -414,7 +510,7 @@ impl Dht {
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_DHT,
-                        "failed to aquire pin {} for triggering DHT sensor ({e:?})",
+                        "failed to acquire pin {} for triggering DHT sensor ({e:?})",
                         self.gpio_dht22_io,
                     );
                     return Err(DhtError::DataPinOutputAcquisitionFailed);
@@ -459,15 +555,15 @@ impl Dht {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 error!(
-                    "failed to aquire pin {} for reading from DHT sensor ({e:?})",
+                    "failed to acquire pin {} for reading from DHT sensor ({e:?})",
                     self.gpio_dht22_io,
                 );
                 return Err(DhtError::DataPinInputAcquisitionFailed);
             }
         };
 
-        // interrupts shall be triggered for both falling and rising edge
-        // debouncing does not work, hence no (None) debouncing time provided
+        // The interrupt shall be triggered for both, falling and rising edge.
+        // Debouncing does not work, hence no (None) debouncing time provided
         match data_pin.set_interrupt(Trigger::Both, None) {
             Ok(()) => {}
             Err(_) => {
@@ -486,7 +582,7 @@ impl Dht {
 
         // observe level changes and record the timing
         for i in 0..dht22_constants::DHT22_TRANSMISSION_END_IDX {
-            // poll the interrupt
+            // poll interrupt
             let event_opt = match data_pin.poll_interrupt(false, Some(timeout_duration)) {
                 Ok(c) => c,
                 Err(_) => {
@@ -513,7 +609,7 @@ impl Dht {
             }
             duration_before = duration_after;
 
-            // abort measuring, if timeout occurred
+            // abort measurement if timeout occurred
             if ticks[i] > self.config.timeout_duration_micros {
                 timeout_occurred = true;
                 break;
@@ -534,7 +630,7 @@ impl Dht {
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
             error!(
                 target: LOG_TARGET_DHT,
-                "incorrect number of balid ticks received: target={}, measured={}",
+                "incorrect number of valid ticks received: target={}, measured={}",
                 dht22_constants::DHT22_TRANSMISSION_END_IDX - 1,
                 valid_ticks_received
             );
@@ -556,19 +652,30 @@ impl Dht {
         Self::calc_signals(byte_vals)
     }
 
-    /// initiates reading and postprocesses data read from sensor
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    /// Initiates the reading process from the DHT22 sensor, including retry logic and post-processing of data.
+    ///
+    /// This function attempts to read temperature and humidity data from the DHT22 sensor.
+    /// It includes an internal retry mechanism (`DHT22_MAX_RETRIES`) for transient
+    /// errors like timeouts or checksum mismatches, making the sensor reading more robust.
+    /// If an unrecoverable error occurs or all retries fail, an appropriate `DhtError` is returned.
+    ///
+    /// # Returns
+    /// A `Result<(f32, f32), DhtError>`:
+    /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
+    /// - `Err(DhtError)`: An error indicating various failure modes, including sensor communication issues,
+    ///   checksum errors, timeouts after all retries, or out-of-range sensor values.
     pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
 
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
-        let mut dht_error = DhtError::Timeout; // to avoid compiler error. Value will be overwritten in error case.
+        let mut dht_error = DhtError::Timeout; // Avoid compiler error. Value will be overwritten in the error case.
 
         while !measurement_successful {
             match self.read(
-                retry_counter == 0, /* reset power supply for first read attempt */
+                retry_counter == 0, /* reset power supply for the first read */
             ) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
@@ -615,7 +722,21 @@ impl Dht {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// receives and response to requests via channel        
+    /// Executes the main loop for the DHT sensor thread, receiving requests and sending measurement responses.
+    ///
+    /// This function runs indefinitely, acting as a dedicated service for reading ambient
+    /// temperature and humidity from the DHT22 sensor. It waits for incoming `InternalCommand`
+    /// from other modules (like `Ambient` or `SignalHandler`).
+    ///
+    /// When a `RequestSignal` for ambient temperature or humidity is received, it performs
+    /// a sensor reading (using `self.get_data()`) and sends the `Result` back. It handles
+    /// `Quit` commands for graceful shutdown and logs errors/warnings for invalid commands or channel issues.
+    ///
+    /// # Arguments
+    /// * `tx_to_ambient` - The sender channel for sending `Result<(f32, f32), DhtError>`
+    ///   measurement data back to the `Ambient` module.
+    /// * `rx_from_ambient_or_signal_handler` - The receiver channel for getting `InternalCommand`s
+    ///   (e.g., `RequestSignal`, `Quit`) from the `Ambient` module or the `SignalHandler`.
     pub fn execute(
         &mut self,
         tx_to_ambient: Sender<Result<(f32, f32), DhtError>>,
@@ -718,13 +839,13 @@ pub mod tests {
 
     #[test]
     // Test case checks if the implementation correctly processes the bit information into a byte array
-    // Test case does not require any communication with SQL database.
+    // The test case does not require any communication with SQL database.
     pub fn test_dht_calc_byte_array() {
         let stimuli: [bool; 40] = [
             false, // initial interrupt - to be ignored
             false, false, false, false, false, false, true, false, // Byte 0
             true, true, false, false, true, true, false, true, // Byte 1
-            false, false, false, false, false, false, false, // Byte 2 - 7 bits only
+            false, false, false, false, false, false, false, // Byte 2-7 bits only
             true, true, true, true, false, true, false, true, // Byte 3
             true, true, false, false, false, true, false, false, // Byte 4
         ];
@@ -748,7 +869,7 @@ pub mod tests {
 
     #[test]
     // Test case checks if the implementation correctly calculates a valid checksum.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_valid() {
         setup_logger();
 
@@ -761,7 +882,7 @@ pub mod tests {
 
     #[test]
     // Test case checks if the implementation correctly calculates an invalid checksum.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_error() {
         setup_logger();
 
@@ -775,7 +896,7 @@ pub mod tests {
     #[test]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given valid input data.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_valid() {
         setup_logger();
 
@@ -796,7 +917,7 @@ pub mod tests {
     #[test]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given invalid input data for the humidity.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_humidity_too_high() {
         setup_logger();
 
@@ -811,7 +932,7 @@ pub mod tests {
     #[test]
     // Test case checks if the implementation correctly calculates the signals from the byte array
     // given invalid input data for the temperature.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_temperature_too_high() {
         setup_logger();
 
@@ -826,14 +947,14 @@ pub mod tests {
     #[cfg(all(feature = "target_hw", target_os = "linux"))]
     #[test]
     // Test case executes a read operation from real hardware.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_dht_read() {
         setup_logger();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
-        // open interface to GPIO library
+        // open interface to the GPIO library
         let gpio = match Gpio::new() {
             Ok(c) => c,
             Err(e) => {
@@ -864,7 +985,7 @@ pub mod tests {
     #[test]
     // Test case checks if the implementation correctly calculates the bit array from
     // a sample set of GPIO pin timings.
-    // Test case does not require any communication with SQL database.
+    // Test case does not require any communication with the database.
     pub fn test_calc_data_bits() {
         let stimuli: [u64; dht22_constants::DHT22_TRANSMISSION_END_IDX] = [
             0, 23, 51, 25, 51, 25, 51, 25, 51, 25, 51, 25, 51, 71, 51, 26, 51, 71, 51, 71, 51, 71,

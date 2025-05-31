@@ -15,65 +15,75 @@ use std::fmt;
 /// The None value is represented as NULL in the SQL database.
 /// The struct only contains minimal implementation for development purposes.
 pub struct RecorderDataFrame {
-    /// timestamp when the frame was captured
+    // timestamp when the frame was captured
     pub timestamp: NaiveDateTime,
 
-    /// measured water temperature in °C
+    // measured water temperature in °C
     pub water_temperature: Option<f32>,
 
-    /// filtered water temperature in °C
+    // filtered water temperature in °C
     pub water_temperature_filtered: Option<f32>,
 
-    /// measured pH value of water
+    // measured pH value of water
     pub ph: Option<f32>,
 
-    /// filtered pH value of water
+    // filtered pH value of water
     pub ph_filtered: Option<f32>,
 
-    /// measured conductivity of water in uS/cm
+    // measured conductivity of water in uS/cm
     pub conductivity: Option<f32>,
 
-    /// filtered conductivity of water in uS/cm
+    // filtered conductivity of water in uS/cm
     pub conductivity_filtered: Option<f32>,
 
-    /// conductivity in uS/cm compensated for temperature deviation
+    // conductivity in uS/cm compensated for temperature deviation
     pub conductivity_compensated: Option<f32>,
 
-    /// status bit indicating that fresh water refill is ongoing
+    // status bit indicating that fresh water refill is ongoing
     pub refill_in_progress: Option<bool>,
 
-    /// measured tank level switch position (true=high, false=low)
+    // measured tank level switch position (true=high, false=low)
     pub tank_level_switch_position: Option<bool>,
 
-    /// calculated tank level switch stabilized position (true=high, false=low)
+    // calculated tank level switch stabilized position (true=high, false=low)
     pub tank_level_switch_position_stabilized: Option<bool>,
 
-    /// tank level switch validity bit (true=invalid, false=valid)
+    // tank level switch validity bit (true=invalid, false=valid)
     pub tank_level_switch_invalid: Option<bool>,
 
-    /// status bit indicating that ventilation is switched on
+    // status bit indicating that ventilation is switched on
     pub surface_ventilation_status: Option<bool>,
 
-    /// measured ambient temperature in °C
+    // measured ambient temperature in °C
     pub ambient_temperature: Option<f32>,
 
-    /// measured ambient humidity in %
+    // measured ambient humidity in %
     pub ambient_humidity: Option<f32>,
 
-    /// status bit indicating that the heater is switched on
+    // status bit indicating that the heater is switched on
     pub heater_status: Option<bool>,
 
-    /// measured water temperature from DS18B20 sensor in °C
+    // measured water temperature from DS18B20 sensor in °C
     pub water_temperature_ds18b20: Option<f32>,
 
-    /// measured ambient temperature from DS18B20 sensor in °C
+    // measured ambient temperature from DS18B20 sensor in °C
     pub ambient_temperature_ds18b20: Option<f32>,
 }
 
-/// Provides output of the enum values for debugging purposes.
-/// # Arguments
-/// * `f` - configuration for formatting
 impl fmt::Display for RecorderDataFrame {
+    /// Provides a multi-line, human-readable output of the struct's values for debugging purposes.
+    ///
+    /// This implementation formats all fields of the `RecorderDataFrame` into a detailed
+    /// string representation. `Option` fields are displayed as their contained value or
+    /// the string "None" if empty. Boolean `Option` fields are converted to descriptive
+    /// words like "yes"/"no", "high"/"low", etc. This is particularly useful for
+    /// inspecting the contents of data frames during development and logging.
+    ///
+    /// # Arguments
+    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
+    ///
+    /// # Returns
+    /// A `fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let none_string = "None".to_string();
         let water_temperature_string = match self.water_temperature {
@@ -202,6 +212,36 @@ impl fmt::Display for RecorderDataFrame {
 
 #[cfg(test)]
 impl RecorderDataFrame {
+    // Asserts that all fields of this `RecorderDataFrame` match a set of target values.
+    //
+    // This helper function is used in unit tests to perform comprehensive
+    // equality checks on a `RecorderDataFrame` instance. It compares each
+    // `Option<T>` field of the current frame against the corresponding
+    // `target_X` `Option<T>` value provided.
+    //
+    // # Arguments
+    // * `target_water_temperature` - Expected `Option<f32>` for water temperature.
+    // * `target_water_temperature_filtered` - Expected `Option<f32>` for filtered water temperature.
+    // * `target_water_ph` - Expected `Option<f32>` for pH.
+    // * `target_water_ph_filtered` - Expected `Option<f32>` for filtered pH.
+    // * `target_water_conductivity` - Expected `Option<f32>` for conductivity.
+    // * `target_water_conductivity_filtered` - Expected `Option<f32>` for filtered conductivity.
+    // * `target_water_conductivity_compensated` - Expected `Option<f32>` for compensated conductivity.
+    // * `target_refill_in_progress` - Expected `Option<bool>` for refill in progress status.
+    // * `target_tank_level_switch_position` - Expected `Option<bool>` for tank level switch position.
+    // * `target_tank_level_switch_position_stabilized` - Expected `Option<bool>` for stabilized tank level switch position.
+    // * `target_tank_level_switch_invalid` - Expected `Option<bool>` for tank level switch invalid status.
+    // * `target_surface_ventilation_status` - Expected `Option<bool>` for surface ventilation status.
+    // * `target_ambient_temperature` - Expected `Option<f32>` for ambient temperature.
+    // * `target_ambient_humidity` - Expected `Option<f32>` for ambient humidity.
+    // * `target_heater_status` - Expected `Option<bool>` for heater status.
+    // * `target_water_temperature_ds18b20` - Expected `Option<f32>` for DS18B20 water temperature.
+    // * `target_ambient_temperature_ds18b20` - Expected `Option<f32>` for DS18B20 ambient temperature.
+    //
+    // # Panics
+    // This function will panic if any field of `self` does not strictly
+    // equal its corresponding `target_X` value (including matching `Some(value)`
+    // with `Some(value)` or `None` with `None`).
     pub fn assert(
         &self,
         target_water_temperature: Option<f32>,

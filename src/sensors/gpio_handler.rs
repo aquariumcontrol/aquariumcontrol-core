@@ -87,11 +87,20 @@ pub struct GpioHandler {
 
 impl GpioHandler {
     #[allow(unused)]
-    /// checks if the GPIO pin configuration valid:
-    /// - GPIOs shall be within permissible range
-    /// - GPIOs shall be distinct
+    /// Checks if the GPIO pin configuration is **valid and free from conflicts**.
+    ///
+    /// This function performs two essential validation checks on the configured GPIO pins:
+    /// 1.  **Range Check**: Ensures all pin IDs fall within a permissible operating range (currently 4 to 27, inclusive).
+    /// 2.  **Uniqueness Check**: Verifies that all assigned pin IDs are distinct, preventing multiple devices from being configured to the same physical pin.
+    ///
+    /// Errors (out-of-range or duplicate IDs) are logged to the console/main log unless in testing mode
+    /// and printed to stdout in test builds for immediate visibility.
+    ///
     /// # Arguments
-    /// * `config` - configuration of GPIO handler
+    /// * `config` - The `GpioHandlerConfig` struct containing the GPIO pin assignments for various aquarium devices.
+    ///
+    /// # Returns
+    /// `true` if all GPIO pin IDs are valid (within range and distinct); `false` otherwise.
     pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
         // check if pin ids are in valid range and if they are distinct
         let mut seen_values = HashSet::new();
@@ -130,10 +139,10 @@ impl GpioHandler {
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_GPIO_HANDLER,
-                    "Not all GPIOs distinct - duplicate values found."
+                    "Not all GPIOs are distinct - duplicate values found."
                 );
                 #[cfg(test)]
-                println!("Not all GPIOs distinct - duplicate values found.");
+                println!("Not all GPIOs are distinct - duplicate values found.");
                 return false; // Duplicate value found
             }
         }
@@ -142,9 +151,25 @@ impl GpioHandler {
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// This function returns a struct of type GpioHandler after opening the interface to GPIO and I2C.
+    /// This function returns a struct of type GpioHandler after opening the interface to GPIO.
+    ///
+    /// This constructor initializes the GPIO handler. If `use_simulator` is false (meaning
+    /// hardware is being targeted), it attempts to open the system's GPIO interface via `rppal`.
+    /// If `use_simulator` is true, it creates a handler without a real GPIO interface.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for GPIO handler
+    /// * `config` - Configuration data for the GPIO handler, specifying pins and simulation mode.
+    ///
+    /// # Returns
+    /// An `Option<GpioHandler>`:
+    /// - `Some(GpioHandler)` containing a handle to the GPIO interface if `use_simulator` is false and opening succeeds.
+    /// - `Some(GpioHandler)` with `gpio_lib_handle_opt` as `None` if `use_simulator` is true.
+    /// - `None` on unsupported platforms/features (handled by the other `new` implementation).
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - The `config` contains invalid GPIO pin mappings (e.g., out-of-range or duplicate IDs).
+    /// - `use_simulator` is false, and it fails to open the underlying GPIO interface.
     pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
         let use_simulator = config.use_simulator; // create copy because the struct is moved
 
@@ -180,9 +205,24 @@ impl GpioHandler {
 
     #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
     #[allow(unused)]
-    /// This function returns a struct of type GpioHandler for development purposes.
+    /// Creates a new `GpioHandler` instance for **development platforms**.
+    ///
+    /// This constructor is activated when the application is compiled for a non-Linux
+    /// operating system or when the `target_hw` feature is not enabled. In this mode,
+    /// it acts as a placeholder or a mock, primarily to allow compilation and basic testing
+    /// without requiring actual GPIO hardware. It always returns `None` as its GPIO
+    /// library-handle.
+    ///
     /// # Arguments
-    /// * `config` - configuration data for GPIO handler
+    /// * `config` - Configuration data for the GPIO handler, including pin assignments and simulation settings.
+    ///
+    /// # Returns
+    /// Always returns `None`, indicating that a live GPIO interface is not available on this platform or configuration.
+    ///
+    /// # Panics
+    /// This function will panic if:
+    /// - `use_simulator` in the `config` is `false` (meaning a hardware setup is attempted on an unsupported platform).
+    /// - The `config` contains **invalid GPIO pin mappings** (e.g., out-of-range or duplicate IDs).
     pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
         if !config.use_simulator {
             panic!(
@@ -245,7 +285,7 @@ pub mod tests {
 
         config.gpio_handler.dht22_io = 40;
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.dht);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.gpio_handler);
     }
 
     mod commissioning_prep {

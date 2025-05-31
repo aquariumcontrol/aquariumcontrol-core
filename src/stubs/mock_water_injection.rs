@@ -9,16 +9,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::mpsc::Sender;
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::test_command::tests::TestCommand;
-    use crate::utilities::channel_content::InternalCommand;
     use crate::water::refill_errors::RefillErrors;
-    use crate::water::water_injection::WaterInjectionTrait;
+    use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
@@ -34,8 +33,7 @@ pub mod tests {
             refill_errors: RefillErrors,
         ) -> MockWaterInjection {
             MockWaterInjection {
-                tx_water_injection_to_test_environment_opt:
-                    tx_water_injection_to_test_environment_opt,
+                tx_water_injection_to_test_environment_opt,
                 injection_recorder: Vec::new(),
                 stimuli_refill_errors: refill_errors,
             }
@@ -45,11 +43,7 @@ pub mod tests {
     impl WaterInjectionTrait for MockWaterInjection {
         fn inject_water(
             &mut self,
-            _tx_to_controllino: &Sender<InternalCommand>,
-            _rx_from_controllino: &Receiver<bool>,
-            _rx_from_signal_handler: &Receiver<InternalCommand>,
-            _tx_to_data_logger: &Sender<bool>,
-            _rx_from_data_logger: &Receiver<InternalCommand>,
+            _water_injection_channels: WaterInjectionChannels,
             refill_errors: &mut RefillErrors,
             _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
             _mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
@@ -60,7 +54,7 @@ pub mod tests {
                     .clone()
                     .unwrap();
 
-                // copy refill errors from stimuli to mutable reference given as parameter
+                // copy refill errors from stimuli to mutable reference given as a parameter
                 refill_errors.error_switch_stuck_high =
                     self.stimuli_refill_errors.error_switch_stuck_high;
                 refill_errors.error_switch_stuck_low =

@@ -23,10 +23,7 @@ pub mod tests {
 
     impl ActuationEvent {
         pub fn new(time: SystemTime, command: InternalCommand) -> ActuationEvent {
-            ActuationEvent {
-                time: time,
-                command: command,
-            }
+            ActuationEvent { time, command }
         }
     }
 
