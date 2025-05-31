@@ -332,9 +332,6 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::{sync::mpsc, thread, time::Duration};
 
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
-    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
-
     // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
     //
     // This private helper function simplifies complex test scenarios for `WaterInjection`.
