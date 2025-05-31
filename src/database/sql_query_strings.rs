@@ -336,6 +336,12 @@ pub const SQL_QUERY_CHECK_HEATINGSTATS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM
 pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM schedule \
         WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive);";
 
+/// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
+pub const SQL_QUERY_READ_TIMEOUT: &str = "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'wait_timeout';";
+
+/// Minimal request to the database to avoid timeouts
+pub const SQL_QUERY_PING: &str = "SELECT 1;";
+
 // Deletes the content of a specific table.
 // This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
 #[cfg(test)]

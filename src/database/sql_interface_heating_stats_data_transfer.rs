@@ -1,6 +1,5 @@
-use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::database::sql_interface::SqlInterface;
-use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
 use log::error;
 
@@ -28,7 +27,7 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     fn transfer_heating_stats(
         &mut self,
         mut heating_stats_entry: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeatingStats,
+        sql_interface_heating: &mut SqlInterfaceHeating,
     ) {
         // two further sections.
         let today = match SqlInterface::get_current_date(&mut sql_interface_heating.conn) {

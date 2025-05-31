@@ -7,20 +7,16 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATINGSTATS_NULL;
-use crate::database::{
-    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-};
-use chrono::*;
-use mysql::prelude::*;
-use mysql::*;
-use std::fmt;
-
-use log::{error, warn};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait
 };
+
+use chrono::*;
+use mysql::prelude::*;
+use mysql::*;
+use std::fmt;
+use log::warn;
 
 const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
 
@@ -59,13 +55,18 @@ impl HeatingStatsEntry {
     ///
     /// # Returns
     /// A new `HeatingStatsEntry` struct with default values for the current date.
-    pub fn new() -> HeatingStatsEntry {
-        let now = Local::now();
-        let year = now.year();
-        let month = now.month();
-        let day = now.day();
-        // Create NaiveDate from components - unwrap is safe in this context
-        let today: NaiveDate = NaiveDate::from_ymd_opt(year, month, day).unwrap();
+    pub fn new(conn: &mut PooledConn) -> HeatingStatsEntry {
+        // Get the current date from the database
+        let today: NaiveDate = SqlInterface::get_current_date(conn).unwrap_or_else(|_| {
+            warn!(target: LOG_TARGET_SQL_INTERFACE_HEATING, "Could not get current date from database.");
+            // fall back: calculation using machine-local time
+            let now = Local::now();
+            let year = now.year();
+            let month = now.month();
+            let day = now.day();
+            // Create NaiveDate from components - unwrap is safe in this context
+            NaiveDate::from_ymd_opt(year, month, day).unwrap()
+        });
 
         Self {
             date: today,
@@ -203,7 +204,7 @@ pub struct SqlInterfaceHeating {
 
     /// Struct with implementation of trait for calculation of the time interval until midnight in seconds
     pub sql_interface_heating_midnight_calculator:
-        Box<dyn SqlInterfaceHeatingMidnightCalculatorTrait + Sync + Send>,
+        Box<dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send>,
 }
 
 impl SqlInterfaceHeating {
@@ -222,9 +223,9 @@ impl SqlInterfaceHeating {
     /// # Returns
     /// A new `SqlInterfaceHeating` struct.
     pub fn new(
-        conn: PooledConn,
+        mut conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
-            dyn SqlInterfaceHeatingMidnightCalculatorTrait + Sync + Send,
+            dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send,
         >,
     ) -> SqlInterfaceHeating {
         if SqlInterface::get_single_integer_from_database(
@@ -427,14 +428,17 @@ impl SqlInterfaceHeating {
         self.sql_interface_heating_midnight_calculator
             .get_duration_until_midnight()
     }
-}
+
+    /// Execute a ping to the database to avoid timeout.
+    pub fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_HEATING);
+    }}
 
 #[cfg(test)]
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
-    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingMidnightCalculator, SqlInterfaceHeatingStats};
-    use crate::database::sql_interface_heating::{HeatingStatsEntry, SqlInterfaceHeating};
+    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -451,7 +455,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let sql_interface_heating_midnight_calculator = Box::new(
-            SqlInterfaceHeatingMidnightCalculator::new(sql_interface.get_connection()),
+            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
         );
         let mut sql_interface_heating = SqlInterfaceHeating::new(
             sql_interface.get_connection(),
