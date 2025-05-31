@@ -463,7 +463,6 @@ impl AtlasScientific {
                                 .tx_atlas_scientific_to_i2c_interface_opt
                                 .as_ref()
                                 .unwrap();
-
                             state_send_receive = self.send_request_to_i2c_interface(
                                 &tx_atlas_scientific_to_i2c_interface,
                             );
