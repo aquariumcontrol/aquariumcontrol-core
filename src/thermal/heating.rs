@@ -852,7 +852,16 @@ impl Heating {
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
-                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+                match stop_time.duration_since(start_time) {
+                    Ok(c) => c.as_millis() as u64,
+                    Err(e) => {
+                        warn!(
+                            target: LOG_TARGET_HEATING,
+                            "Could not calculated execution time: {e:?}."
+                        );
+                        0 // provide default value
+                    }
+                };
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_HEATING_MILLIS {
@@ -862,12 +871,11 @@ impl Heating {
                         execution_duration_millis,
                         CYCLE_TIME_HEATING_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
-                } else {
-                    lock_warn_cycle_time_exceeded = false;
                 }
                 remaining_sleep_time_millis = 0;
             } else {
                 remaining_sleep_time_millis = CYCLE_TIME_HEATING_MILLIS - execution_duration_millis;
+                lock_warn_cycle_time_exceeded = false;
             }
             mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
