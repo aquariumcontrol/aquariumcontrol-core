@@ -96,7 +96,7 @@ use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
 
 #[cfg(target_os = "linux")]
-use crate::dispatch::messaging::Messaging;
+use crate::dispatch::messaging::{Messaging, MessagingChannels};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
@@ -1137,6 +1137,7 @@ fn main() {
         }
     }
 
+
     #[cfg(target_os = "linux")]
     let mut messaging = Messaging::new(config.messaging);
 
@@ -1388,6 +1389,19 @@ fn main() {
         tx_signal_handler_to_watchdog,
         rx_signal_handler_from_watchdog,
         tx_signal_handler_to_ds18b20,
+    };
+    
+    #[cfg(target_os="linux")]
+    let messaging_channels = MessagingChannels {
+        tx_to_signal_handler: tx_messaging_to_signal_handler,
+        rx_from_signal_handler: rx_messaging_from_signal_handler,
+        tx_to_refill: tx_messaging_to_refill,
+        tx_to_ventilation: tx_messaging_to_ventilation,
+        tx_to_heating: tx_messaging_to_heating,
+        tx_to_feed: tx_messaging_to_feed,
+        tx_to_balling: tx_messaging_to_balling,
+        tx_to_monitors: tx_messaging_to_monitors,
+        tx_to_watchdog: tx_messaging_to_watchdog,
     };
 
     scope(|scope| {
@@ -1721,15 +1735,7 @@ fn main() {
             // read/send messages
             #[cfg(target_os = "linux")]
             messaging.execute(
-                tx_messaging_to_signal_handler,
-                rx_messaging_from_signal_handler,
-                tx_messaging_to_refill,
-                tx_messaging_to_ventilation,
-                tx_messaging_to_heating,
-                tx_messaging_to_feed,
-                tx_messaging_to_balling,
-                tx_messaging_to_monitors,
-                tx_messaging_to_watchdog,
+                messaging_channels
             );
 
             // remove PID from the file

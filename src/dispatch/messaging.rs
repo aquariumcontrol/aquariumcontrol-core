@@ -197,6 +197,18 @@ pub struct MessagingConfig {
     timeout_millis: u64,
 }
 
+pub struct MessagingChannels {
+    pub tx_to_signal_handler: Sender<bool>,
+    pub rx_from_signal_handler: Receiver<InternalCommand>,
+    pub tx_to_refill: Sender<InternalCommand>,
+    pub tx_to_ventilation: Sender<InternalCommand>,
+    pub tx_to_heating: Sender<InternalCommand>,
+    pub tx_to_feed: Sender<InternalCommand>,
+    pub tx_to_balling: Sender<InternalCommand>,
+    pub tx_to_monitors: Sender<InternalCommand>,
+    pub tx_to_watchdog: Sender<InternalCommand>,
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Struct provides data structure and implementation for IPC message queue communication.
 /// Thread communication of this component is as follows:
@@ -211,7 +223,6 @@ pub struct MessagingConfig {
 ///     messaging --> monitors[Monitors]
 ///     messaging --> watchdog[Watchdog]
 /// ```
-
 pub struct Messaging {
     config: MessagingConfig,
 
@@ -269,7 +280,7 @@ impl Messaging {
             config,
 
             #[cfg(target_os = "linux")]
-            mq: mq,
+            mq,
             mq_max_msg_len,
         }
     }
@@ -286,15 +297,7 @@ impl Messaging {
     /// and then waits for a `Terminate` command before exiting.
     ///
     /// # Arguments
-    /// * `tx_to_signal_handler` - The sender part of the channel used to acknowledge commands received by the signal handler.
-    /// * `rx_from_signal_handler` - The receiver part of the channel used to receive commands (like `Quit` or `Terminate`) from the signal handler.
-    /// * `tx_to_refill` - Sender channel for commands to the refill control module.
-    /// * `tx_to_ventilation` - Sender channel for commands to the ventilation control module.
-    /// * `tx_to_heating` - Sender channel for commands to the heating control module.
-    /// * `tx_to_feed` - Sender channel for commands to the feed control module.
-    /// * `tx_to_balling` - Sender channel for commands to the Balling dosing control module.
-    /// * `tx_to_monitors` - Sender channel for commands to the monitors module.
-    /// * `tx_to_watchdog` - Sender channel for commands to the watchdog module.
+    /// * `messaging_channels` - struct containing all channels for communication to other threads.
     ///
     /// # Panics
     /// This function will panic if:
@@ -302,15 +305,7 @@ impl Messaging {
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
     pub fn execute(
         &mut self,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        tx_to_refill: Sender<InternalCommand>,
-        tx_to_ventilation: Sender<InternalCommand>,
-        tx_to_heating: Sender<InternalCommand>,
-        tx_to_feed: Sender<InternalCommand>,
-        tx_to_balling: Sender<InternalCommand>,
-        tx_to_monitors: Sender<InternalCommand>,
-        tx_to_watchdog: Sender<InternalCommand>,
+        messaging_channels: MessagingChannels,
     ) {
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
@@ -323,7 +318,7 @@ impl Messaging {
         loop {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
                 Ok((_r1, _r2)) => {
-                    if msgbuf.len() > 0 {
+                    if msgbuf.is_empty() {
                         let mut domain_buf: [u8; 4] = [0; 4];
                         domain_buf[0] = msgbuf[4];
                         domain_buf[1] = msgbuf[5];
@@ -404,13 +399,13 @@ impl Messaging {
                             && (command != InternalCommand::Unknown)
                         {
                             let tx_to_domain = match domain {
-                                MessagingDomain::Refill => &tx_to_refill,
-                                MessagingDomain::Ventilation => &tx_to_ventilation,
-                                MessagingDomain::Feed => &tx_to_feed,
-                                MessagingDomain::Heating => &tx_to_heating,
-                                MessagingDomain::Balling => &tx_to_balling,
-                                MessagingDomain::Monitors => &tx_to_monitors,
-                                MessagingDomain::Watchdog => &tx_to_watchdog,
+                                MessagingDomain::Refill => &messaging_channels.tx_to_refill,
+                                MessagingDomain::Ventilation => &messaging_channels.tx_to_ventilation,
+                                MessagingDomain::Feed => &messaging_channels.tx_to_feed,
+                                MessagingDomain::Heating => &messaging_channels.tx_to_heating,
+                                MessagingDomain::Balling => &messaging_channels.tx_to_balling,
+                                MessagingDomain::Monitors => &messaging_channels.tx_to_monitors,
+                                MessagingDomain::Watchdog => &messaging_channels.tx_to_watchdog,
                                 MessagingDomain::Unknown => unreachable!(),
                             };
 
@@ -453,7 +448,7 @@ impl Messaging {
                 }
             }
             let (quit_command_received, _, _) =
-                self.process_external_request(&rx_from_signal_handler, None);
+                self.process_external_request(&messaging_channels.rx_from_signal_handler, None);
             if quit_command_received {
                 #[cfg(feature = "debug_messaging")]
                 debug!(
@@ -461,7 +456,7 @@ impl Messaging {
                     "received QUIT command from signal handler"
                 );
 
-                match tx_to_signal_handler.send(true) {
+                match messaging_channels.tx_to_signal_handler.send(true) {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         error!(
@@ -480,7 +475,7 @@ impl Messaging {
         let mut lock_error_invalid_command = false;
 
         loop {
-            match rx_from_signal_handler.recv() {
+            match messaging_channels.rx_from_signal_handler.recv() {
                 Ok(command) => match command {
                     InternalCommand::Terminate => {
                         break;
@@ -516,7 +511,7 @@ pub mod tests {
     use std::{sync::mpsc, thread, time::Duration};
 
     use crate::dispatch::messaging::{
-        messaging_commands, messaging_domains, Message, Messaging, LOG_TARGET_MESSAGING,
+        messaging_commands, messaging_domains, Message, Messaging, MessagingChannels, LOG_TARGET_MESSAGING,
     };
     use crate::stubs::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
@@ -589,16 +584,20 @@ pub mod tests {
         thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
+                let messaging_channels = MessagingChannels {
+                    tx_to_signal_handler: tx_messaging_to_signal_handler,
+                    rx_from_signal_handler: rx_messaging_from_signal_handler,
+                    tx_to_refill: tx_messaging_to_refill,
+                    tx_to_ventilation: tx_messaging_to_ventilation,
+                    tx_to_heating: tx_messaging_to_heating,
+                    tx_to_feed: tx_messaging_to_feed,
+                    tx_to_balling: tx_messaging_to_balling,
+                    tx_to_monitors: tx_messaging_to_monitors,
+                    tx_to_watchdog: tx_messaging_to_watchdog,
+                };
+
                 messaging.execute(
-                    tx_messaging_to_signal_handler,
-                    rx_messaging_from_signal_handler,
-                    tx_messaging_to_refill,
-                    tx_messaging_to_ventilation,
-                    tx_messaging_to_heating,
-                    tx_messaging_to_feed,
-                    tx_messaging_to_balling,
-                    tx_messaging_to_monitors,
-                    tx_messaging_to_watchdog,
+                    messaging_channels
                 );
             })
             .unwrap()
