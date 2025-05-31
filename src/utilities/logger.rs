@@ -35,9 +35,10 @@ pub fn setup_logger() {
     // configure logger
     let _ = fern::Dispatch::new()
         .format(|out, message, record| {
+            let local_time = chrono::Local::now(); // Get current local time
             out.finish(format_args!(
                 "[{} {} {}] {}",
-                humantime::format_rfc3339(std::time::SystemTime::now()),
+                local_time.format("%Y-%m-%d %H:%M:%S%.3f %:z"),
                 record.level(),
                 record.target(),
                 message

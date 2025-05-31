@@ -294,6 +294,11 @@ impl SqlInterfaceBalling {
             }
         }
     }
+
+    /// Execute a ping to the database to avoid timeout.
+    pub fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_BALLING)
+    }
 }
 
 #[cfg(test)]

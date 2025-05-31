@@ -104,6 +104,8 @@ pub trait DatabaseInterfaceFeedTrait {
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError>;
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self);
 
     #[cfg(test)]
     fn insert_feed_schedule_entry(
@@ -366,6 +368,11 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         }
         result
     }
+    
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_FEED)
+    }
 
     #[cfg(test)]
     // Inserts a single feed schedule entry into the database.
@@ -514,7 +521,7 @@ impl SqlInterfaceFeed {
             Ok(Some(feedschedule_entries))
         }
     }
-
+    
     #[cfg(test)]
     // Retrieves the single feed schedule entry that is furthest in the future.
     //

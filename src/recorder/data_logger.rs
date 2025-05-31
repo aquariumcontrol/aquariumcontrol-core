@@ -20,7 +20,7 @@ use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -258,6 +258,12 @@ pub struct DataLogger {
 
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature from DS18B20 sensor to disk
     lock_error_output_signal_ambient_temperature_ds18b20: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl DataLogger {
@@ -274,6 +280,7 @@ impl DataLogger {
     /// # Arguments
     /// * `config` - Configuration data for the data logger, defining logging intervals,
     ///   filter coefficients, output file paths, and other operational parameters.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new `DataLogger` struct, ready to collect, filter, and log sensor data.
@@ -283,7 +290,7 @@ impl DataLogger {
     /// - Any of the required output file names in the `config` are empty when `output_to_disk` is `true`.
     /// - It fails to reset the content of any configured output file on disk (e.g., due to permissions issues).
     /// - An `IIRFilter` cannot be initialized (e.g., if a filter coefficient is invalid).
-    pub fn new(config: DataLoggerConfig) -> DataLogger {
+    pub fn new(config: DataLoggerConfig, database_ping_interval: Duration) -> DataLogger {
         let filter_water_temperature = IIRFilter::new_requires_initial(
             &config.filter_coefficient_water_temperature,
             0.0, // initialization value (measured value not available at this time)
@@ -407,6 +414,8 @@ impl DataLogger {
             lock_error_channel_receive_termination: false,
             lock_error_output_signal_water_temperature_ds18b20: false,
             lock_error_output_signal_ambient_temperature_ds18b20: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
@@ -1302,6 +1311,12 @@ impl DataLogger {
                 target: LOG_TARGET_DATA_LOGGER,
                 "finished idling restarting loop"
             );
+            
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                sql_interface_data.ping();
+                self.last_ping_instant = Instant::now();
+            }
 
             start_time = SystemTime::now(); // start time for the next cycle
         }
@@ -1607,7 +1622,7 @@ pub mod tests {
             }
         };
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
-        let mut data_logger = DataLogger::new(config.data_logger);
+        let mut data_logger = DataLogger::new(config.data_logger, Duration::from_millis(1000));
 
         let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(10.0));
         let mutex_atlas_scientific_temperature_clone_for_data_logger =

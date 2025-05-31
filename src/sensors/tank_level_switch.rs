@@ -311,6 +311,8 @@ impl TankLevelSwitch {
         if self.tank_level_switch_invalid {
             // go to safe position if the input signal is invalid
             self.tank_level_switch_position_stabilized = true;
+            // in case the sensor recovers, the counter shall start from zero again
+            self.tank_level_switch_position_low_stabilization_counter = 0;
         } else {
             // consider asymmetric delay for calculation
             self.tank_level_switch_position_stabilized = match self.tank_level_switch_position {
@@ -376,7 +378,6 @@ impl TankLevelSwitch {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) {
-        let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
 
@@ -403,6 +404,7 @@ impl TankLevelSwitch {
             self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
 
             self.calc_tank_level_switch_position_stabilized();
+            
             // Write calculated signals to mutex
             {
                 match mutex_tank_level_switch_signals.lock() {
@@ -420,7 +422,16 @@ impl TankLevelSwitch {
 
             let stop_time = SystemTime::now();
             let execution_duration_millis =
-                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+                match stop_time.duration_since(start_time) {
+                    Ok(c) => c.as_millis() as u64,
+                    Err(e) => {
+                        warn!(
+                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                            "Could not calculated execution time: {e:?}."
+                        );
+                        0 // provide default value
+                    }
+                };
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS {
@@ -430,13 +441,12 @@ impl TankLevelSwitch {
                         execution_duration_millis,
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
-                } else {
-                    lock_warn_cycle_time_exceeded = false;
                 }
                 remaining_sleep_time_millis = 0;
             } else {
                 remaining_sleep_time_millis =
                     CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS - execution_duration_millis;
+                lock_warn_cycle_time_exceeded = false;
             }
             // sleep time does not need to be split up because cycle time is 100 milliseconds only
             let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
@@ -459,6 +469,7 @@ impl TankLevelSwitch {
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
+        let sleep_duration_one_millis = Duration::from_millis(1);
         while !termination_command_received {
             termination_command_received = match rx_from_signal_handler.recv() {
                 Ok(c) => match c {

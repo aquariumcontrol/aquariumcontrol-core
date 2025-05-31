@@ -43,6 +43,8 @@ pub trait DatabaseInterfaceRefillTrait {
         volume: f64,
         error_code: i32,
     ) -> Result<(), SqlInterfaceError>;
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self);
 }
 
 /// Contains the configuration and the implementation of the SQL interface for Refill.
@@ -304,6 +306,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
                 ))
             }
         }
+    }
+
+    /// Execute a ping to the database to avoid timeout.
+    fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_REFILL)
     }
 }
 

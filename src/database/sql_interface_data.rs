@@ -11,6 +11,7 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
+use crate::database::sql_interface::SqlInterface;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 
 /// Contains the configuration and the implementation of the SQL interface for time-based data.
@@ -268,6 +269,11 @@ impl SqlInterfaceData {
             }
         }
     }
+
+    /// Execute a ping to the database to avoid timeout.
+    pub fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_DATA);
+    }
 }
 
 #[cfg(test)]
@@ -326,7 +332,7 @@ pub mod tests {
         AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
         WHERE Timestamp = '#timestamp';";
 
-    // Query for reading complete data for test cases with a operating on an invalid database entry
+    // Query for reading a complete data set for test cases with operating on an invalid database entry
     pub const SQL_QUERY_READ_NULL_DATA_FRAME: &str = "SELECT \
         Temperature, TemperatureFiltered, \
         pH, pHFiltered, \

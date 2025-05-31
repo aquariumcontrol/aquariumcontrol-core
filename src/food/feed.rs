@@ -22,7 +22,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
@@ -113,6 +113,12 @@ pub struct Feed {
 
     /// Inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination_signal: bool,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl Feed {
@@ -128,12 +134,14 @@ impl Feed {
     /// * `sql_interface_feed` - A boxed trait object representing the interface
     ///   to the SQL database for feed-specific operations. This allows for
     ///   dependency injection and mock implementations during testing.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new `Feed` struct, ready for operation within the application loop.
     pub fn new(
         config: FeedConfig,
         sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send>,
+        database_ping_interval: Duration,
     ) -> Feed {
         Self {
             config,
@@ -144,6 +152,8 @@ impl Feed {
             lock_error_get_feedschedule_entry: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_receive_termination_signal: false,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
 
@@ -596,6 +606,13 @@ impl Feed {
             if loop_counter == 1_000_000 {
                 loop_counter = 0;
             }
+
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_feed.ping();
+                self.last_ping_instant = Instant::now();
+            }
+            
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -887,7 +904,7 @@ pub mod tests {
             )
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed, Duration::from_millis(1000));
 
         scope(|scope| {
             let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
@@ -992,7 +1009,7 @@ pub mod tests {
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
         // create the test object
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed, Duration::from_millis(1000));
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
@@ -1139,7 +1156,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let mut feed = Feed::new(config.feed, mock_sql_interface_feed);
+        let mut feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
@@ -1249,7 +1266,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1275,7 +1292,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1303,7 +1320,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1330,7 +1347,7 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed);
+        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1430,7 +1447,7 @@ pub mod tests {
             )
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed, Duration::from_millis(1000));
 
         scope(|scope| {
             let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));
@@ -1559,7 +1576,7 @@ pub mod tests {
             )
             .expect("test_feed_schedule_execution: Could not insert stimuli into database: {e:?}");
 
-        let mut feed = Feed::new(config.feed, sql_interface_feed);
+        let mut feed = Feed::new(config.feed, sql_interface_feed, Duration::from_millis(1000));
 
         scope(|scope| {
             let mutex_device_scheduler_feed = Arc::new(Mutex::new(0));

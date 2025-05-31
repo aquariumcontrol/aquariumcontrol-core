@@ -294,6 +294,11 @@ impl SqlInterfaceSchedule {
             schedule_type.to_string(),
         ))
     }
+
+    /// Execute a ping to the database to avoid timeout.
+    pub(crate) fn ping(&mut self) {
+        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE);
+    }
 }
 
 #[cfg(test)]

@@ -57,5 +57,9 @@ pub mod tests {
         ) -> Result<(), SqlInterfaceError> {
             Err(SqlInterfaceError::MockError)
         }
+
+        fn ping(&mut self) {
+            // do nothing
+        }
     }
 }

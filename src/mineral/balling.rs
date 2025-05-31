@@ -17,7 +17,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
 use crate::mineral::mineral_injection::MineralInjectionTrait;
@@ -141,6 +141,12 @@ pub struct Balling {
 
     /// communication from trait implementation: id of pump to be executed requested externally
     pub pump_id_requested: i32,
+
+    /// recording when the last database ping happened
+    pub last_ping_instant: Instant,
+
+    /// database ping interval
+    pub database_ping_interval: Duration,
 }
 
 impl Balling {
@@ -155,6 +161,7 @@ impl Balling {
     /// * `config` - Configuration data for the Balling dosing control, loaded from a TOML file.
     /// * `sql_interface_balling` - A `SqlInterfaceBalling` instance, providing the
     ///   specific SQL interface for Balling dosing operations. This is moved into the struct.
+    /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
     /// A new `Balling` struct, ready for managing dosing schedules.
@@ -163,7 +170,11 @@ impl Balling {
     /// This function will panic if:
     /// - The `schedule_check_interval` in the `config` is `0`, as this is an invalid value.
     /// - Any error occurs during the initial calculation of pump countdowns (e.g., database connection issues).
-    pub fn new(config: BallingConfig, mut sql_interface_balling: SqlInterfaceBalling) -> Balling {
+    pub fn new(
+        config: BallingConfig,
+        mut sql_interface_balling: SqlInterfaceBalling,
+        database_ping_interval: Duration,
+    ) -> Balling {
         if config.schedule_check_interval == 0 {
             panic!(
                 "{}: schedule check interval is zero - please assign a value > 0",
@@ -197,6 +208,8 @@ impl Balling {
             lock_error_channel_receive_schedule_check: false,
             execute_command_received: false,
             pump_id_requested: 0,
+            last_ping_instant: Instant::now(),
+            database_ping_interval,
         }
     }
     
@@ -839,6 +852,12 @@ impl Balling {
             if loop_counter == 1_000_000 {
                 loop_counter = 0;
             }
+
+            // Check for how long ago the last database ping happened.
+            if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                self.sql_interface_balling.ping();
+                self.last_ping_instant = Instant::now();
+            }
         }
         // Application received the request to terminate, that is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
@@ -942,7 +961,11 @@ pub mod tests {
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // create the test object
-        let _ = Balling::new(config.balling, sql_interface_balling);
+        let _ = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
     }
 
     #[test]
@@ -977,7 +1000,11 @@ pub mod tests {
         );
 
         // create the test object
-        let balling = Balling::new(config.balling, sql_interface_balling);
+        let balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         // check if the countdown calculation was correct
         assert_eq!(balling.countdown_dosing_pump1, 0);
@@ -1064,7 +1091,11 @@ pub mod tests {
         insert_past_dosing_events(&mut sql_interface, &mut sql_interface_balling);
 
         // create the test object
-        let balling = Balling::new(config.balling, sql_interface_balling);
+        let balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         // check if the countdown calculation was correct:
         // the countdown depends on the pump-specific dosing interval and the timing of the last dosing event.
@@ -1224,7 +1255,11 @@ pub mod tests {
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
         // create the test object
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
+        let mut balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -1574,7 +1609,11 @@ pub mod tests {
         );
 
         // create test objects
-        let mut balling = Balling::new(config.balling, sql_interface_balling);
+        let mut balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
 
         let (tx_balling_to_relay_manager, _rx_relay_manager_from_balling) = mpsc::channel();
         let (_tx_relay_manager_to_balling, rx_balling_from_relay_manager) = mpsc::channel();
@@ -1756,7 +1795,11 @@ pub mod tests {
         );
 
         // create test objects
-        let _ = Balling::new(config.balling, sql_interface_balling);
+        let _ = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_millis(100),
+        );
     }
 
     #[test]

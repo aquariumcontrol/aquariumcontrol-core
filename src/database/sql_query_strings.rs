@@ -169,6 +169,12 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
+/// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
+pub const SQL_QUERY_READ_TIMEOUT: &str = "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'wait_timeout';";
+
+/// Minimal request to the database to avoid timeouts
+pub const SQL_QUERY_PING: &str = "SELECT 1;";
+
 /// Checks if the balling set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ballingsetvals \
         WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL);";
