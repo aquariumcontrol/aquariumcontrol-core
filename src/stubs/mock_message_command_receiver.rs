@@ -27,9 +27,11 @@ pub mod tests {
             match rx_message_command.recv() {
                 Ok(command) => match command {
                     InternalCommand::Quit => {
+                        // println!("{}: received quit command", LOG_TARGET_MOCK_MESSAGE_RECEIVER);
                         break;
                     }
                     _ => {
+                        // println!("{}: received command {}", LOG_TARGET_MOCK_MESSAGE_RECEIVER, command);
                         commands_received.push(command);
                     }
                 },

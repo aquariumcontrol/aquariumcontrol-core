@@ -318,7 +318,7 @@ impl Messaging {
         loop {
             match self.mq.recv_timeout(&mut msgbuf, duration_timeout) {
                 Ok((_r1, _r2)) => {
-                    if msgbuf.is_empty() {
+                    if !msgbuf.is_empty() {
                         let mut domain_buf: [u8; 4] = [0; 4];
                         domain_buf[0] = msgbuf[4];
                         domain_buf[1] = msgbuf[5];
