@@ -612,7 +612,6 @@ impl Feed {
                 self.sql_interface_feed.ping();
                 self.last_ping_instant = Instant::now();
             }
-            
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -1156,7 +1155,11 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let mut feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
+        let mut feed = Feed::new(
+            config.feed,
+            mock_sql_interface_feed,
+            Duration::from_millis(1000),
+        );
 
         let (tx_feed_to_relay_manager, _rx_relay_manager_from_feed) = mpsc::channel();
         let (_tx_relay_manager_to_feed, rx_feed_from_relay_manager) = mpsc::channel();
@@ -1266,7 +1269,11 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
+        let feed = Feed::new(
+            config.feed,
+            mock_sql_interface_feed,
+            Duration::from_millis(1000),
+        );
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1292,7 +1299,11 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
+        let feed = Feed::new(
+            config.feed,
+            mock_sql_interface_feed,
+            Duration::from_millis(1000),
+        );
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1320,7 +1331,11 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
+        let feed = Feed::new(
+            config.feed,
+            mock_sql_interface_feed,
+            Duration::from_millis(1000),
+        );
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();
@@ -1347,7 +1362,11 @@ pub mod tests {
             Box::new(MockSqlInterfaceFeed::new());
 
         // create the test object
-        let feed = Feed::new(config.feed, mock_sql_interface_feed, Duration::from_millis(1000));
+        let feed = Feed::new(
+            config.feed,
+            mock_sql_interface_feed,
+            Duration::from_millis(1000),
+        );
 
         // input for the function to be tested
         let feedschedule_entries = create_mock_feedschedule_entries();

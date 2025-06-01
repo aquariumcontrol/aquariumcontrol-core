@@ -72,6 +72,11 @@ pub struct AtlasScientificChannels {
     pub rx_atlas_scientific_from_signal_handler: Receiver<InternalCommand>,
 }
 
+// Type definition to avoid linter warning about too complex type
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+pub type AtlasScientificResult = Result<(f32, f32, f32), I2cError>;
+
+
 /// Contains the communication Atlas Scientific sensors via I2C.
 /// Alternatively, TCP communication is used when configured to run with the simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.
@@ -464,7 +469,7 @@ impl AtlasScientific {
                                 .as_ref()
                                 .unwrap();
                             state_send_receive = self.send_request_to_i2c_interface(
-                                &tx_atlas_scientific_to_i2c_interface,
+                                tx_atlas_scientific_to_i2c_interface,
                             );
                         } else {
                             // read from the channel if the measurement result is available from I2cInterface thread
@@ -474,7 +479,7 @@ impl AtlasScientific {
                                 .unwrap();
 
                             state_send_receive = self.receive_response_from_i2c_interface(
-                                &rx_atlas_scientific_from_i2c_interface,
+                                rx_atlas_scientific_from_i2c_interface,
                             );
 
                             if !state_send_receive {

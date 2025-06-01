@@ -1002,9 +1002,11 @@ impl Refill {
                         break;
                     }
                     spin_sleeper.sleep(sleep_duration_hundred_millis);
-                    
+
                     // Check for how long ago the last database ping happened.
-                    if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
+                    if Instant::now().duration_since(self.last_ping_instant)
+                        > self.database_ping_interval
+                    {
                         self.sql_interface_refill.ping();
                         self.last_ping_instant = Instant::now();
                     }
@@ -1179,7 +1181,11 @@ pub mod tests {
                     Box::new(sql_interface_refill),
                     refill_errors.unwrap(),
                 ),
-                false => Refill::new(refill_config, Box::new(sql_interface_refill), Duration::from_millis(1000)),
+                false => Refill::new(
+                    refill_config,
+                    Box::new(sql_interface_refill),
+                    Duration::from_millis(1000),
+                ),
             },
             sql_interface,
         )
@@ -1239,7 +1245,11 @@ pub mod tests {
                     Box::new(sql_interface_refill),
                     refill_errors.unwrap(),
                 ),
-                false => Refill::new(refill_config, Box::new(sql_interface_refill), Duration::from_millis(1000)),
+                false => Refill::new(
+                    refill_config,
+                    Box::new(sql_interface_refill),
+                    Duration::from_millis(1000),
+                ),
             },
         )
     }

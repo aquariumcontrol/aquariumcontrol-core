@@ -8,15 +8,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use crate::database::{
-    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
-    sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait
+    sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError,
+    sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait, sql_query_strings,
 };
 
 use chrono::*;
+use log::warn;
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-use log::warn;
 
 const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
 
@@ -229,16 +229,28 @@ impl SqlInterfaceHeating {
         >,
     ) -> SqlInterfaceHeating {
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL)
-            .expect("Could not check heating set value table for NULL values.") > 0 {
-            panic!("{}: Heating set value table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_HEATING);
+            &mut conn,
+            sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL,
+        )
+        .expect("Could not check heating set value table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Heating set value table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_HEATING
+            );
         }
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, sql_query_strings::SQL_QUERY_CHECK_HEATINGSTATS_NULL)
-            .expect("Could not check heating statistics table for NULL values.") > 0 {
-            panic!("{}: Heating statistics table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_HEATING);
+            &mut conn,
+            sql_query_strings::SQL_QUERY_CHECK_HEATINGSTATS_NULL,
+        )
+        .expect("Could not check heating statistics table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Heating statistics table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_HEATING
+            );
         }
         SqlInterfaceHeating {
             conn,
@@ -432,7 +444,8 @@ impl SqlInterfaceHeating {
     /// Execute a ping to the database to avoid timeout.
     pub fn ping(&mut self) {
         SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_HEATING);
-    }}
+    }
+}
 
 #[cfg(test)]
 pub mod tests {

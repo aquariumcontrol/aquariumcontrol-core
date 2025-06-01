@@ -106,7 +106,7 @@ pub mod tests {
             (false, dosing_duration_millis)
         }
     }
-    
+
     // Generates a string representation of pump engagement durations.
     //
     // This helper function is used exclusively in test environments to create

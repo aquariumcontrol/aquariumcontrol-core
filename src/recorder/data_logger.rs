@@ -1311,7 +1311,7 @@ impl DataLogger {
                 target: LOG_TARGET_DATA_LOGGER,
                 "finished idling restarting loop"
             );
-            
+
             // Check for how long ago the last database ping happened.
             if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
                 sql_interface_data.ping();

@@ -303,10 +303,7 @@ impl Messaging {
     /// This function will panic if:
     /// - It encounters a fatal error while receiving from the POSIX message queue (other than a timeout).
     /// - It fails to receive the `Terminate` command from the signal handler during shutdown.
-    pub fn execute(
-        &mut self,
-        messaging_channels: MessagingChannels,
-    ) {
+    pub fn execute(&mut self, messaging_channels: MessagingChannels) {
         let duration_timeout = Duration::from_millis(self.config.timeout_millis);
 
         let mut msgbuf = vec![0; self.mq_max_msg_len];
@@ -400,7 +397,9 @@ impl Messaging {
                         {
                             let tx_to_domain = match domain {
                                 MessagingDomain::Refill => &messaging_channels.tx_to_refill,
-                                MessagingDomain::Ventilation => &messaging_channels.tx_to_ventilation,
+                                MessagingDomain::Ventilation => {
+                                    &messaging_channels.tx_to_ventilation
+                                }
                                 MessagingDomain::Feed => &messaging_channels.tx_to_feed,
                                 MessagingDomain::Heating => &messaging_channels.tx_to_heating,
                                 MessagingDomain::Balling => &messaging_channels.tx_to_balling,
@@ -511,7 +510,8 @@ pub mod tests {
     use std::{sync::mpsc, thread, time::Duration};
 
     use crate::dispatch::messaging::{
-        messaging_commands, messaging_domains, Message, Messaging, MessagingChannels, LOG_TARGET_MESSAGING,
+        messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
+        LOG_TARGET_MESSAGING,
     };
     use crate::stubs::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
@@ -596,9 +596,7 @@ pub mod tests {
                     tx_to_watchdog: tx_messaging_to_watchdog,
                 };
 
-                messaging.execute(
-                    messaging_channels
-                );
+                messaging.execute(messaging_channels);
             })
             .unwrap()
     }

@@ -61,7 +61,7 @@ pub struct VentilationConfig {
     /// The strategy when an external request for stopping ventilation control has been received:
     /// true=ventilation will be switched on; false=ventilation will be switched off
     switch_on_when_external_stop: bool,
-    
+
     /// interval in seconds for polling SQL database
     pub set_value_check_interval: u64,
 }
@@ -518,13 +518,13 @@ impl Ventilation {
                         }
                     };
                 }
-                
+
                 // check if set values need to be updated
                 ventilation_set_val_updater.update_set_value(
                     &mut self.config.switch_off_temperature,
-                    &mut self.config.switch_on_temperature
+                    &mut self.config.switch_on_temperature,
                 );
-                
+
                 // schedule check to see if actuation is allowed
                 match ventilation_channels
                     .tx_ventilation_to_schedule_check
@@ -653,17 +653,16 @@ impl Ventilation {
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
             let stop_time = SystemTime::now();
-            let execution_duration_millis =
-                match stop_time.duration_since(start_time) {
-                    Ok(c) => c.as_millis() as u64,
-                    Err(e) => {
-                        warn!(
-                            target: LOG_TARGET_VENTILATION,
-                            "Could not calculated execution time: {e:?}."
-                        );
-                        0 // provide default value
-                    }
-                };
+            let execution_duration_millis = match stop_time.duration_since(start_time) {
+                Ok(c) => c.as_millis() as u64,
+                Err(e) => {
+                    warn!(
+                        target: LOG_TARGET_VENTILATION,
+                        "Could not calculated execution time: {e:?}."
+                    );
+                    0 // provide default value
+                }
+            };
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_VENTILATION_MILLIS {
@@ -946,8 +945,9 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: None,
                 };
 
-                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
-                
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
@@ -1120,8 +1120,9 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
-                
-                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
@@ -1391,8 +1392,9 @@ pub mod tests {
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
                 };
-                
-                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
@@ -1518,12 +1520,13 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: None,
                 };
 
-                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
-                
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
-                    &mut ventilation_set_value_updater,                    
+                    &mut ventilation_set_value_updater,
                     mutex_water_temperature,
                 );
 
@@ -1757,7 +1760,8 @@ pub mod tests {
                     rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
                 };
 
-                let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
+                let mut ventilation_set_value_updater =
+                    MockSqlInterfaceVentilationSetVals::new(false, None, None, None);
 
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
@@ -1792,9 +1796,9 @@ pub mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
-    
+
     // Check if the ventilation is switched on when the temperature is high.
-    // After a limited time period, increase the set values and observe if the heater is switched off. 
+    // After a limited time period, increase the set values and observe if the heater is switched off.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Test case uses test database #52.
     #[test]
@@ -1910,8 +1914,12 @@ pub mod tests {
 
                 // set up the set value updater to actively manipulate the set values
                 let mut ventilation_set_value_updater = MockSqlInterfaceVentilationSetVals::new(
-                    true, Some(30.0), Some(40.0), Some(Duration::from_secs(10)));
-                
+                    true,
+                    Some(30.0),
+                    Some(40.0),
+                    Some(Duration::from_secs(10)),
+                );
+
                 ventilation.execute(
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
@@ -1944,5 +1952,4 @@ pub mod tests {
             .join()
             .expect("Test object thread did not finish.");
     }
-    
 }

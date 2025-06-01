@@ -12,10 +12,12 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
+};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
-use crate::database::sql_query_strings::{SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL};
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 
@@ -368,7 +370,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         }
         result
     }
-    
+
     /// Execute a ping to the database to avoid timeout.
     fn ping(&mut self) {
         SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_FEED)
@@ -441,20 +443,31 @@ impl SqlInterfaceFeed {
     /// A new `SqlInterfaceFeed` struct.
     pub fn new(mut conn: PooledConn) -> SqlInterfaceFeed {
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_FEEDPATTERNS_NULL)
-            .expect("Could not check feed pattern table for NULL values.") > 0 {
-            panic!("{}: Feed pattern table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_FEED);
+            &mut conn,
+            SQL_QUERY_CHECK_FEEDPATTERNS_NULL,
+        )
+        .expect("Could not check feed pattern table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Feed pattern table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_FEED
+            );
         }
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL)
-            .expect("Could not check feed schedule table for NULL values.") > 0 {
-            panic!("{}: Feed schedule table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_FEED);
+            &mut conn,
+            SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
+        )
+        .expect("Could not check feed schedule table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Feed schedule table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_FEED
+            );
         }
 
         SqlInterfaceFeed { conn }
-        
     }
 
     /// Retrieves and post-processes feed schedule entries from the database based on a given SQL query.
@@ -521,7 +534,7 @@ impl SqlInterfaceFeed {
             Ok(Some(feedschedule_entries))
         }
     }
-    
+
     #[cfg(test)]
     // Retrieves the single feed schedule entry that is furthest in the future.
     //

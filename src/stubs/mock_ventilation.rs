@@ -164,7 +164,7 @@ pub mod tests {
                 new_set_value_ventilation_switch_off_temperature,
                 new_set_value_ventilation_switch_on_temperature,
                 delay_duration,
-                start_time: Instant::now()
+                start_time: Instant::now(),
             }
         }
     }
@@ -172,16 +172,25 @@ pub mod tests {
         fn update_set_value(
             &mut self,
             ventilation_switch_off_temperature: &mut f32,
-            ventilation_switch_on_temperature: &mut f32
+            ventilation_switch_on_temperature: &mut f32,
         ) {
-            if self.active &&
-                self.delay_duration.is_some() &&
-                self.new_set_value_ventilation_switch_off_temperature.is_some() &&
-                self.new_set_value_ventilation_switch_on_temperature.is_some() {
+            if self.active
+                && self.delay_duration.is_some()
+                && self
+                    .new_set_value_ventilation_switch_off_temperature
+                    .is_some()
+                && self
+                    .new_set_value_ventilation_switch_on_temperature
+                    .is_some()
+            {
                 // manipulate the test data when enabled and after the delay has passed.
                 if Instant::now().duration_since(self.start_time) > self.delay_duration.unwrap() {
-                    *ventilation_switch_off_temperature = self.new_set_value_ventilation_switch_off_temperature.unwrap();
-                    *ventilation_switch_on_temperature = self.new_set_value_ventilation_switch_on_temperature.unwrap();
+                    *ventilation_switch_off_temperature = self
+                        .new_set_value_ventilation_switch_off_temperature
+                        .unwrap();
+                    *ventilation_switch_on_temperature = self
+                        .new_set_value_ventilation_switch_on_temperature
+                        .unwrap();
                 }
             }
         }

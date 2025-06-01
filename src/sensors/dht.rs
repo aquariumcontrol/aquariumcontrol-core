@@ -33,6 +33,10 @@ cfg_if::cfg_if! {
    }
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+// Type definition to avoid linter warnings about complex return types
+pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
+
 /// Holds the configuration data for interacting with GPIO
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.

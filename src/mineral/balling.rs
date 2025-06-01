@@ -185,7 +185,7 @@ impl Balling {
         Self::check_database_vs_config(&mut sql_interface_balling, &config);
 
         Self::check_valid_dosing_intervals(&config);
-        
+
         let countdown_dosing_pump1 =
             Self::calc_countdown_next_dosing(&config, &mut sql_interface_balling, 1);
         let countdown_dosing_pump2 =
@@ -212,7 +212,7 @@ impl Balling {
             database_ping_interval,
         }
     }
-    
+
     /// Compares the dosing intervals against the check interval.
     ///
     /// The function checks if all dosing intervals are longer than the check interval.
@@ -227,36 +227,28 @@ impl Balling {
             panic!(
                 "{}: Invalid dosing interval for pump #1 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING,
-                config.dosing_interval_pump1,
-                config.schedule_check_interval,
+                LOG_TARGET_BALLING, config.dosing_interval_pump1, config.schedule_check_interval,
             );
         }
         if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #2 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING,
-                config.dosing_interval_pump2,
-                config.schedule_check_interval,
+                LOG_TARGET_BALLING, config.dosing_interval_pump2, config.schedule_check_interval,
             );
         }
         if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #3 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING,
-                config.dosing_interval_pump3,
-                config.schedule_check_interval,
+                LOG_TARGET_BALLING, config.dosing_interval_pump3, config.schedule_check_interval,
             );
         }
         if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #4 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING,
-                config.dosing_interval_pump4,
-                config.schedule_check_interval,
+                LOG_TARGET_BALLING, config.dosing_interval_pump4, config.schedule_check_interval,
             );
         }
     }
@@ -917,6 +909,9 @@ pub mod tests {
     use crate::mineral::balling::{Balling, BallingChannels, LOG_TARGET_BALLING};
     use crate::stubs::mock_mineral_injection::tests::MockMineralInjection;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::utilities::channel_content::AquariumDevice::{
+        PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4,
+    };
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
@@ -926,7 +921,6 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
-    use crate::utilities::channel_content::AquariumDevice::{PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4};
 
     fn read_balling_config() -> ConfigData {
         read_config_file("/config/aquarium_control_test_generic.toml".to_string())
@@ -1814,13 +1808,13 @@ pub mod tests {
         let mut config: ConfigData = read_balling_config_with_database(test_db_number);
 
         config.balling.pump1_active = true;
-        config.balling.dosing_interval_pump1 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.dosing_interval_pump1 = 3600 * 24; // long interval to avoid regular dosing
         config.balling.pump2_active = true;
         config.balling.dosing_interval_pump2 = 3600 * 24; // long interval to avoid regular dosing
         config.balling.pump3_active = true;
-        config.balling.dosing_interval_pump3 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.dosing_interval_pump3 = 3600 * 24; // long interval to avoid regular dosing
         config.balling.pump4_active = true;
-        config.balling.dosing_interval_pump4 = 3600 * 24; // long interval to avoid regular dosing 
+        config.balling.dosing_interval_pump4 = 3600 * 24; // long interval to avoid regular dosing
         config.balling.schedule_check_interval = 100;
 
         println!("Testing with database {}", config.sql_interface.db_name);
@@ -1854,7 +1848,11 @@ pub mod tests {
         let mutex_device_scheduler_environment = mutex_device_scheduler.clone();
 
         // create the test object
-        let mut balling = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
+        let mut balling = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_secs(1000),
+        );
 
         let mut mock_mineral_injection = MockMineralInjection::new();
 
@@ -1881,11 +1879,19 @@ pub mod tests {
                 assert_eq!(execution_count1, 0);
 
                 // send the dosing requests to Balling
-                tx_messaging_to_balling.send(InternalCommand::Execute(2)).unwrap();
-                tx_messaging_to_balling.send(InternalCommand::Execute(4)).unwrap();
-                tx_messaging_to_balling.send(InternalCommand::Execute(3)).unwrap();
-                tx_messaging_to_balling.send(InternalCommand::Execute(1)).unwrap();
-                
+                tx_messaging_to_balling
+                    .send(InternalCommand::Execute(2))
+                    .unwrap();
+                tx_messaging_to_balling
+                    .send(InternalCommand::Execute(4))
+                    .unwrap();
+                tx_messaging_to_balling
+                    .send(InternalCommand::Execute(3))
+                    .unwrap();
+                tx_messaging_to_balling
+                    .send(InternalCommand::Execute(1))
+                    .unwrap();
+
                 let execution_count2: i32;
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
                 // internal scope to for releasing mutex after read
@@ -1929,11 +1935,18 @@ pub mod tests {
                     tx_balling_to_schedule_check_for_test_case_finish.send(InternalCommand::Quit);
 
                 println!("{}", mock_mineral_injection);
-                
+
                 let reference_pump_protocol = vec![
-                    PeristalticPump2, PeristalticPump4, PeristalticPump3, PeristalticPump1];
-                
-                assert_eq!(mock_mineral_injection.pump_protocol, reference_pump_protocol);
+                    PeristalticPump2,
+                    PeristalticPump4,
+                    PeristalticPump3,
+                    PeristalticPump1,
+                ];
+
+                assert_eq!(
+                    mock_mineral_injection.pump_protocol,
+                    reference_pump_protocol
+                );
             });
         });
     }
@@ -1950,7 +1963,7 @@ pub mod tests {
         config.balling.dosing_interval_pump3 = 100;
         config.balling.dosing_interval_pump4 = 100;
         config.balling.schedule_check_interval = 200;
-        
+
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
@@ -1960,6 +1973,10 @@ pub mod tests {
         let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
 
         // create the test object
-        let _ = Balling::new(config.balling, sql_interface_balling, Duration::from_secs(1000));
+        let _ = Balling::new(
+            config.balling,
+            sql_interface_balling,
+            Duration::from_secs(1000),
+        );
     }
 }

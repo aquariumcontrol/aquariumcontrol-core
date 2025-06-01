@@ -1,5 +1,5 @@
-use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
 use log::error;
 

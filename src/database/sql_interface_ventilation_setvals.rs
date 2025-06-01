@@ -1,22 +1,21 @@
-use std::time::{Duration, Instant};
 use log::warn;
 use mysql::PooledConn;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 use mysql::params;
 
-use mysql::prelude::Queryable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL;
 use crate::thermal::ventilation::VentilationConfig;
+use mysql::prelude::Queryable;
 
 const LOG_TARGET_SQL_INTERFACE_VENTILATION_SETVALS: &str = "sql_interface_ventilation_setvals";
 
 /// Contains the ventilation set values which can be set by the user.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct VentilationSetVals {
     /// the temperature at which the ventilation should be switched on 100%
     pub ventilation_switch_on_temperature: f32,
@@ -42,7 +41,7 @@ pub struct SqlInterfaceVentilationSetVals {
     /// Flag to avoid flooding the log with warnings when the ventilation set values could not be read from the database
     lock_warning_ventilation_set_value_read_failure: bool,
 
-    /// recording of time when the database has been polled for the last time 
+    /// recording of time when the database has been polled for the last time
     update_time: Option<Instant>,
 
     /// target update duration
@@ -60,22 +59,25 @@ impl SqlInterfaceVentilationSetVals {
     ///
     /// # Returns
     /// A new `SqlInterfaceVentilationSetVals` struct.
-    pub fn new(
-        mut conn: PooledConn,
-        config: &VentilationConfig
-    ) -> SqlInterfaceVentilationSetVals {
+    pub fn new(mut conn: PooledConn, config: &VentilationConfig) -> SqlInterfaceVentilationSetVals {
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL)
-            .expect("Could not check ventilation set value table for NULL values.") > 0 {
-            panic!("{}: Ventilation set value table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_VENTILATION_SETVALS);
+            &mut conn,
+            SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL,
+        )
+        .expect("Could not check ventilation set value table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Ventilation set value table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_VENTILATION_SETVALS
+            );
         }
 
         SqlInterfaceVentilationSetVals {
             conn,
             lock_warning_ventilation_set_value_read_failure: false,
             update_time: None,
-            update_duration: Duration::from_secs(config.set_value_check_interval)
+            update_duration: Duration::from_secs(config.set_value_check_interval),
         }
     }
 
@@ -112,7 +114,9 @@ impl SqlInterfaceVentilationSetVals {
     /// - More than one `VentilationSetVals` entry is found in the database.
     /// - The `ventilation_switch_on_temperature` is found to be greater than the
     ///   `ventilation_switch_off_temperature`, which is a critical configuration inconsistency.
-    pub fn get_ventilation_set_values(&mut self) -> mysql::Result<Option<VentilationSetVals>, SqlInterfaceError> {
+    pub fn get_ventilation_set_values(
+        &mut self,
+    ) -> mysql::Result<Option<VentilationSetVals>, SqlInterfaceError> {
         let sql_ventilation_setvals_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
             |(ventilationSwitchOffTemp, ventilationSwitchOnTemp)| VentilationSetVals {
@@ -123,7 +127,8 @@ impl SqlInterfaceVentilationSetVals {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::VentilationSetValsReadError(
-                    "Could not get ventilation set values from the database with query:".to_string()
+                    "Could not get ventilation set values from the database with query:"
+                        .to_string()
                         + sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
                 ));
             }
@@ -145,15 +150,19 @@ impl SqlInterfaceVentilationSetVals {
         let ventilation_set_vals = &sql_ventilation_setvals_array[0];
 
         // consistency check
-        if ventilation_set_vals.ventilation_switch_on_temperature < ventilation_set_vals.ventilation_switch_off_temperature {
+        if ventilation_set_vals.ventilation_switch_on_temperature
+            < ventilation_set_vals.ventilation_switch_off_temperature
+        {
             return Err(SqlInterfaceError::VentilationSetValsReadError(
                 "The ventilation switch on temperature is lower than the ventilation switch off temperature.".to_string(),
             ));
         }
 
         Ok(Some(VentilationSetVals {
-            ventilation_switch_off_temperature: ventilation_set_vals.ventilation_switch_off_temperature,
-            ventilation_switch_on_temperature: ventilation_set_vals.ventilation_switch_on_temperature,
+            ventilation_switch_off_temperature: ventilation_set_vals
+                .ventilation_switch_off_temperature,
+            ventilation_switch_on_temperature: ventilation_set_vals
+                .ventilation_switch_on_temperature,
         }))
     }
 
@@ -183,21 +192,23 @@ impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
     fn update_set_value(
         &mut self,
         ventilation_switch_off_temperature: &mut f32,
-        ventilation_switch_on_temperature: &mut f32
+        ventilation_switch_on_temperature: &mut f32,
     ) {
-        if self.update_time.is_some() &&
-            Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration {
+        if self.update_time.is_some()
+            && Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration
+        {
             // do not update the values if the last update was less than the configured update duration ago
             return;
-        }
-        else {
+        } else {
             // update the time before reading the values from the database
             self.update_time = Some(Instant::now());
         }
         match self.get_ventilation_set_values() {
             Ok(Some(ventilation_set_vals)) => {
-                *ventilation_switch_off_temperature = ventilation_set_vals.ventilation_switch_off_temperature;
-                *ventilation_switch_on_temperature = ventilation_set_vals.ventilation_switch_on_temperature;
+                *ventilation_switch_off_temperature =
+                    ventilation_set_vals.ventilation_switch_off_temperature;
+                *ventilation_switch_on_temperature =
+                    ventilation_set_vals.ventilation_switch_on_temperature;
             }
             Ok(None) => {
                 println!("No ventilation set values found in database.");
@@ -219,8 +230,10 @@ impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_ventilation_setvals::{
+        SqlInterfaceVentilationSetVals, VentilationSetVals,
+    };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
-    use crate::database::sql_interface_ventilation_setvals::{VentilationSetVals, SqlInterfaceVentilationSetVals};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -241,8 +254,10 @@ pub mod tests {
         }
 
         // instantiation of the test object
-        let mut sql_interface_ventilation_setvals
-            = SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation);
+        let mut sql_interface_ventilation_setvals = SqlInterfaceVentilationSetVals::new(
+            sql_interface.get_connection(),
+            &config.ventilation,
+        );
 
         // check if reading an empty table returns None
         match sql_interface_ventilation_setvals.get_ventilation_set_values() {
@@ -262,17 +277,25 @@ pub mod tests {
         };
 
         // insert valid values
-        assert_eq!(sql_interface_ventilation_setvals.insert_ventilation_set_values(&valid_ventilation_set_vals), Ok(()));
+        assert_eq!(
+            sql_interface_ventilation_setvals
+                .insert_ventilation_set_values(&valid_ventilation_set_vals),
+            Ok(())
+        );
         println!("* inserting valid ventilation set values as precondition succeeded.");
 
         match sql_interface_ventilation_setvals.get_ventilation_set_values() {
             Ok(c) => {
                 assert_eq!(c.is_some(), true);
                 let ventilation_set_vals = c.unwrap();
-                assert_eq!(ventilation_set_vals.ventilation_switch_off_temperature,
-                           valid_ventilation_set_vals.ventilation_switch_off_temperature);
-                assert_eq!(ventilation_set_vals.ventilation_switch_on_temperature,
-                           valid_ventilation_set_vals.ventilation_switch_on_temperature);
+                assert_eq!(
+                    ventilation_set_vals.ventilation_switch_off_temperature,
+                    valid_ventilation_set_vals.ventilation_switch_off_temperature
+                );
+                assert_eq!(
+                    ventilation_set_vals.ventilation_switch_on_temperature,
+                    valid_ventilation_set_vals.ventilation_switch_on_temperature
+                );
             }
             Err(_) => {
                 panic!("Call to get_ventilation_set_values failed.");
@@ -292,14 +315,22 @@ pub mod tests {
         };
 
         // insert invalid values
-        assert_eq!(sql_interface_ventilation_setvals.insert_ventilation_set_values(&invalid_ventilation_set_vals), Ok(()));
+        assert_eq!(
+            sql_interface_ventilation_setvals
+                .insert_ventilation_set_values(&invalid_ventilation_set_vals),
+            Ok(())
+        );
         println!("* inserting invalid ventilation set values as precondition succeeded.");
 
         // check if reading an invalid value combination returns an error
-        assert_eq!(sql_interface_ventilation_setvals.get_ventilation_set_values(),
-                   Err(SqlInterfaceError::VentilationSetValsReadError(
-                       "The ventilation switch on temperature is lower \
-                       than the ventilation switch off temperature.".to_string())));
+        assert_eq!(
+            sql_interface_ventilation_setvals.get_ventilation_set_values(),
+            Err(SqlInterfaceError::VentilationSetValsReadError(
+                "The ventilation switch on temperature is lower \
+                       than the ventilation switch off temperature."
+                    .to_string()
+            ))
+        );
         println!("* reading  invalid ventilation set values (FAIL) succeeded.");
 
         //***************************************************************************************

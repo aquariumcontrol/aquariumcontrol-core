@@ -10,8 +10,8 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::database::sql_interface::SqlInterface;
+use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 
 /// Contains the configuration and the implementation of the SQL interface for time-based data.

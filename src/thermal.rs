@@ -12,4 +12,3 @@ pub mod heating;
 
 /// Contains functionality to control the ventilation
 pub mod ventilation;
-

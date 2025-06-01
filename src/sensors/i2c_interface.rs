@@ -260,7 +260,7 @@ impl I2cInterface {
 
             spin_sleeper: SpinSleeper::default(),
 
-            config: config,
+            config,
         }
     }
 
@@ -459,10 +459,7 @@ impl I2cInterface {
             }
         }
 
-        let is_ph = match signal {
-            AquariumSignal::pH => true,
-            _ => false,
-        };
+        let is_ph = matches!(signal, AquariumSignal::pH);
 
         match Self::check_response(read_buffer, is_ph) {
             Ok(c) => Ok(c),

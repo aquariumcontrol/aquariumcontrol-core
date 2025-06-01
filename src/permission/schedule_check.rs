@@ -444,7 +444,7 @@ impl ScheduleCheck {
             //***************************************
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-            
+
             loop_counter += 1;
 
             // avoid overflow

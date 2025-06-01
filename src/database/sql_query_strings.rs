@@ -170,7 +170,8 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
 
 /// Checks if the balling set value table contains any NULL values.
-pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ballingsetvals \
+pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str =
+    "SELECT EXISTS(SELECT 1 FROM ballingsetvals \
         WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL);";
 
 /// Checks if the feed patterns table contains any NULL values.
@@ -306,10 +307,12 @@ pub const SQL_QUERY_CHECK_HEATINGSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FR
         WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);";
 
 /// Reads the heating set values from the database.
-pub const SQL_QUERY_READ_HEATING_SETVALS: &str = "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
+pub const SQL_QUERY_READ_HEATING_SETVALS: &str =
+    "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
 
 /// Reads the ventilation set values from the database.
-pub const SQL_QUERY_READ_VENTILATION_SETVALS: &str = "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals;";
+pub const SQL_QUERY_READ_VENTILATION_SETVALS: &str =
+    "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals;";
 
 #[cfg(test)]
 /// Write heating set values to the database.
@@ -322,7 +325,8 @@ pub const SQL_QUERY_WRITE_VENTILATION_SETVALS: &str =
     "INSERT into ventilationsetvals(ventilationSwitchOffTemp, ventilationSwitchOnTemp) values(:ventilation_switch_off_temp, :ventilation_switch_on_temp);";
 
 // Checks if the ventilation set value table contains any NULL values.
-pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
+pub const SQL_QUERY_CHECK_VENTILATIONSETVALS_NULL: &str =
+    "SELECT EXISTS(SELECT 1 FROM ventilationsetvals \
         WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);";
 
 /// Checks if the heating statistics table contains any NULL values.

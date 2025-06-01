@@ -1,22 +1,21 @@
-use std::time::{Duration, Instant};
 use log::warn;
 use mysql::PooledConn;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 use mysql::params;
 
-use mysql::prelude::Queryable;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
 use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL;
 use crate::thermal::heating::HeatingConfig;
+use mysql::prelude::Queryable;
 
 const LOG_TARGET_SQL_INTERFACE_HEATING_SETVALS: &str = "sql_interface_heating_setvals";
 
 /// Contains the heating set values which can be set by the user.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct HeatingSetVals {
     /// the temperature at which the heating should be switched on 100%
     pub heating_switch_on_temperature: f32,
@@ -41,10 +40,10 @@ pub struct SqlInterfaceHeatingSetVals {
 
     /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
     lock_warning_heating_set_value_read_failure: bool,
-    
-    /// recording of time when the database has been polled for the last time 
+
+    /// recording of time when the database has been polled for the last time
     update_time: Option<Instant>,
-    
+
     /// target update duration
     update_duration: Duration,
 }
@@ -60,25 +59,28 @@ impl SqlInterfaceHeatingSetVals {
     ///
     /// # Returns
     /// A new `SqlInterfaceHeatingSetVals` struct.
-    pub fn new(
-        mut conn: PooledConn,
-        config: &HeatingConfig
-    ) -> SqlInterfaceHeatingSetVals {
+    pub fn new(mut conn: PooledConn, config: &HeatingConfig) -> SqlInterfaceHeatingSetVals {
         if SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_HEATINGSETVALS_NULL)
-            .expect("Could not check heating set value table for NULL values.") > 0 {
-            panic!("{}: Heating set value table may be inconsistent - it contains NULL values.",
-                   LOG_TARGET_SQL_INTERFACE_HEATING_SETVALS);
+            &mut conn,
+            SQL_QUERY_CHECK_HEATINGSETVALS_NULL,
+        )
+        .expect("Could not check heating set value table for NULL values.")
+            > 0
+        {
+            panic!(
+                "{}: Heating set value table may be inconsistent - it contains NULL values.",
+                LOG_TARGET_SQL_INTERFACE_HEATING_SETVALS
+            );
         }
 
         SqlInterfaceHeatingSetVals {
             conn,
             lock_warning_heating_set_value_read_failure: false,
             update_time: None,
-            update_duration: Duration::from_secs(config.set_value_check_interval)
+            update_duration: Duration::from_secs(config.set_value_check_interval),
         }
     }
-    
+
     #[allow(non_snake_case)]
     /// Retrieves the heating set point values (switch-on and switch-off temperatures) from the database.
     ///
@@ -112,7 +114,9 @@ impl SqlInterfaceHeatingSetVals {
     /// - More than one `HeatingSetVals` entry is found in the database.
     /// - The `heating_switch_on_temperature` is found to be greater than the
     ///   `heating_switch_off_temperature`, which is a critical configuration inconsistency.
-    pub fn get_heating_set_values(&mut self) -> mysql::Result<Option<HeatingSetVals>, SqlInterfaceError> {
+    pub fn get_heating_set_values(
+        &mut self,
+    ) -> mysql::Result<Option<HeatingSetVals>, SqlInterfaceError> {
         let sql_heating_setvals_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
             |(heatingSwitchOffTemp, heatingSwitchOnTemp)| HeatingSetVals {
@@ -145,7 +149,9 @@ impl SqlInterfaceHeatingSetVals {
         let heating_set_vals = &sql_heating_setvals_array[0];
 
         // consistency check
-        if heating_set_vals.heating_switch_on_temperature > heating_set_vals.heating_switch_off_temperature {
+        if heating_set_vals.heating_switch_on_temperature
+            > heating_set_vals.heating_switch_off_temperature
+        {
             return Err(SqlInterfaceError::HeatingSetValsReadError(
                 "The heating switch on temperature is higher than the heating switch off temperature.".to_string(),
             ));
@@ -163,17 +169,19 @@ impl SqlInterfaceHeatingSetVals {
         heating_set_vals: &HeatingSetVals,
     ) -> mysql::Result<(), SqlInterfaceError> {
         match self.conn.exec_drop::<_, _>(
-            sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS, params!{
-                "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
-                "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
-             },
+            sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
+            params! {
+               "heating_switch_off_temp" => heating_set_vals.heating_switch_off_temperature,
+               "heating_switch_on_temp" => heating_set_vals.heating_switch_on_temperature,
+            },
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertHeatingSetValuesFailure(
-                    "Error when inserting heating set values into database using query: ".to_string() +
-                        sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
+                    "Error when inserting heating set values into database using query: "
+                        .to_string()
+                        + sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
                 ))
             }
         }
@@ -183,14 +191,14 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
     fn update_set_value(
         &mut self,
         heating_switch_off_temperature: &mut f32,
-        heating_switch_on_temperature: &mut f32
+        heating_switch_on_temperature: &mut f32,
     ) {
-        if self.update_time.is_some() &&
-            Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration {
+        if self.update_time.is_some()
+            && Instant::now().duration_since(self.update_time.unwrap()) < self.update_duration
+        {
             // do not update the values if the last update was less than the configured update duration ago
             return;
-        }
-        else {
+        } else {
             // update the time before reading the values from the database
             self.update_time = Some(Instant::now());
         }
@@ -219,8 +227,10 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_heating_setvals::{
+        HeatingSetVals, SqlInterfaceHeatingSetVals,
+    };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
-    use crate::database::sql_interface_heating_setvals::{HeatingSetVals, SqlInterfaceHeatingSetVals};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
     #[test]
@@ -241,9 +251,9 @@ pub mod tests {
         }
 
         // instantiation of the test object
-        let mut sql_interface_heating_setvals 
-            = SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
-        
+        let mut sql_interface_heating_setvals =
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+
         // check if reading an empty table returns None
         match sql_interface_heating_setvals.get_heating_set_values() {
             Ok(c) => {
@@ -262,17 +272,24 @@ pub mod tests {
         };
 
         // insert valid values
-        assert_eq!(sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals), Ok(()));
+        assert_eq!(
+            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+            Ok(())
+        );
         println!("* inserting valid heating set values as precondition succeeded.");
 
         match sql_interface_heating_setvals.get_heating_set_values() {
             Ok(c) => {
                 assert_eq!(c.is_some(), true);
                 let heating_set_vals = c.unwrap();
-                assert_eq!(heating_set_vals.heating_switch_off_temperature,
-                           valid_heating_set_vals.heating_switch_off_temperature);
-                assert_eq!(heating_set_vals.heating_switch_on_temperature,
-                           valid_heating_set_vals.heating_switch_on_temperature);
+                assert_eq!(
+                    heating_set_vals.heating_switch_off_temperature,
+                    valid_heating_set_vals.heating_switch_off_temperature
+                );
+                assert_eq!(
+                    heating_set_vals.heating_switch_on_temperature,
+                    valid_heating_set_vals.heating_switch_on_temperature
+                );
             }
             Err(_) => {
                 panic!("Call to get_heating_set_values failed.");
@@ -292,14 +309,21 @@ pub mod tests {
         };
 
         // insert invalid values
-        assert_eq!(sql_interface_heating_setvals.insert_heating_set_values(&invalid_heating_set_vals), Ok(()));
+        assert_eq!(
+            sql_interface_heating_setvals.insert_heating_set_values(&invalid_heating_set_vals),
+            Ok(())
+        );
         println!("* inserting invalid heating set values as precondition succeeded.");
 
         // check if reading an invalid value combination returns an error
-        assert_eq!(sql_interface_heating_setvals.get_heating_set_values(),
-                   Err(SqlInterfaceError::HeatingSetValsReadError(
-                       "The heating switch on temperature is higher \
-                       than the heating switch off temperature.".to_string())));
+        assert_eq!(
+            sql_interface_heating_setvals.get_heating_set_values(),
+            Err(SqlInterfaceError::HeatingSetValsReadError(
+                "The heating switch on temperature is higher \
+                       than the heating switch off temperature."
+                    .to_string()
+            ))
+        );
         println!("* reading  invalid heating set values (FAIL) succeeded.");
 
         //***************************************************************************************

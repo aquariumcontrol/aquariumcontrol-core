@@ -226,7 +226,7 @@ impl TankLevelSwitch {
         };
 
         TankLevelSwitch {
-            config: config,
+            config,
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
             tank_level_switch_position_stabilized: initial_position_stabilized,
@@ -404,7 +404,7 @@ impl TankLevelSwitch {
             self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
 
             self.calc_tank_level_switch_position_stabilized();
-            
+
             // Write calculated signals to mutex
             {
                 match mutex_tank_level_switch_signals.lock() {
@@ -421,17 +421,16 @@ impl TankLevelSwitch {
             }
 
             let stop_time = SystemTime::now();
-            let execution_duration_millis =
-                match stop_time.duration_since(start_time) {
-                    Ok(c) => c.as_millis() as u64,
-                    Err(e) => {
-                        warn!(
-                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                            "Could not calculated execution time: {e:?}."
-                        );
-                        0 // provide default value
-                    }
-                };
+            let execution_duration_millis = match stop_time.duration_since(start_time) {
+                Ok(c) => c.as_millis() as u64,
+                Err(e) => {
+                    warn!(
+                        target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                        "Could not calculated execution time: {e:?}."
+                    );
+                    0 // provide default value
+                }
+            };
 
             let remaining_sleep_time_millis: u64;
             if execution_duration_millis >= CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS {

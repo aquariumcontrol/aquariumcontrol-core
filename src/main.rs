@@ -66,11 +66,11 @@ use log::{error, info, warn};
 #[cfg(feature = "debug_main")]
 use log::debug;
 
+use nix::unistd;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
-use nix::unistd;
 
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
@@ -87,13 +87,16 @@ use crate::sensors::ambient::{Ambient, AmbientChannels};
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
+use crate::sensors::atlas_scientific::AtlasScientificResult;
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
 use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
-use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
+use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::{Messaging, MessagingChannels};
@@ -103,7 +106,7 @@ use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-use crate::database::sql_interface_heating_setvals::{SqlInterfaceHeatingSetVals};
+use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeating;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
@@ -112,8 +115,6 @@ use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationS
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::sensors::dht::Dht;
 
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
@@ -130,8 +131,8 @@ use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use crate::sensors::dht::DhtError;
-        use crate::sensors::i2c_interface::{I2cError, I2cInterface};
+        use crate::sensors::dht::{Dht, DhtResult, DhtError};
+        use crate::sensors::i2c_interface::I2cInterface;
     }
 }
 
@@ -182,13 +183,13 @@ fn check_is_command(command: &str) -> bool {
         "-h" | "--help" => {
             display_usage();
             true
-        },
+        }
         "-v" | "--version" => {
             // calculate hash of executable
             let version_information = VersionInformation::new();
             println!("{}", version_information);
             true
-        },
+        }
         _ => false, // All other strings do not match
     }
 }
@@ -384,7 +385,7 @@ fn main() {
 
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
-    
+
     // initialize with a default configuration file name
     let mut config_file_name = "/etc/aquarium_control/config/aquarium_control.toml".to_string();
 
@@ -402,15 +403,14 @@ fn main() {
                 if !user_arg_identified {
                     // If the user provided an invalid filename and no valid command, output error message and abort.
                     panic!("{}: {}", LOG_TARGET_MAIN, error_message);
-                }
-                else {
+                } else {
                     // At least one valid user command was provided. Graceful exit.
                     return;
                 }
             }
         }
     }
-    
+
     // calculate hash of executable
     let version_information = VersionInformation::new();
     info!(target: LOG_TARGET_MAIN,
@@ -1084,8 +1084,8 @@ fn main() {
                     Receiver<InternalCommand>,
                 ) = mpsc::channel();
                 let (tx_dht_to_ambient, rx_ambient_from_dht): (
-                    Sender<Result<(f32, f32), DhtError>>,
-                    Receiver<Result<(f32, f32), DhtError>>,
+                    Sender<DhtResult>,
+                    Receiver<DhtResult>,
                 ) = mpsc::channel();
                 let tx_signal_handler_to_dht = tx_ambient_to_dht.clone();
                 let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> =
@@ -1101,13 +1101,13 @@ fn main() {
                     Receiver<InternalCommand>,
                 ) = mpsc::channel();
                 let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-                    Sender<Result<(f32, f32, f32), I2cError>>,
-                    Receiver<Result<(f32, f32, f32), I2cError>>,
+                    Sender<AtlasScientificResult>,
+                    Receiver<AtlasScientificResult>,
                 ) = mpsc::channel();
                 let tx_signal_handler_to_i2c_interface = tx_atlas_scientific_to_i2c_interface.clone();
                 let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
                     Some(tx_atlas_scientific_to_i2c_interface);
-                let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<Result<(f32, f32, f32), I2cError>>> =
+                let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<AtlasScientificResult>> =
                     Some(rx_atlas_scientific_from_i2c_interface);
                 let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
                     Some(tx_signal_handler_to_i2c_interface);
@@ -1136,7 +1136,6 @@ fn main() {
             let tx_signal_handler_to_i2c_interface_opt = None;
         }
     }
-
 
     #[cfg(target_os = "linux")]
     let mut messaging = Messaging::new(config.messaging);
@@ -1173,28 +1172,26 @@ fn main() {
                 // no DHT sensor required
                 dht_opt = None;
             }
-            else {
-                if gpio_handler_opt.is_none() {
+            else if gpio_handler_opt.is_none() {
                     // defensive programming - this case should not occur
                     panic!("{}: Configuration error: GPIO handler not initialized.", LOG_TARGET_MAIN);
-                }
-                else {
-                    let gpio_handler = gpio_handler_opt.unwrap();
-                    let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.unwrap();
-                    let gpio_lib_handle_cloned_for_tank_level_switch = gpio_lib_handle.clone();
-                    let gpio_lib_handle_cloned_for_relay_manager = gpio_lib_handle.clone();
+            }
+            else {
+                let gpio_handler = gpio_handler_opt.unwrap();
+                let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.unwrap();
+                let gpio_lib_handle_cloned_for_tank_level_switch = gpio_lib_handle.clone();
+                let gpio_lib_handle_cloned_for_relay_manager = gpio_lib_handle.clone();
 
-                    tank_level_switch = TankLevelSwitch::new(
-                        config.tank_level_switch,
-                        true,
-                        Some(gpio_lib_handle_cloned_for_tank_level_switch),
-                        gpio_tank_level_switch
-                    );
-                    dht_opt = Some(
-                        Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
-                    );
-                    actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
-                }
+                tank_level_switch = TankLevelSwitch::new(
+                     config.tank_level_switch,
+                     true,
+                     Some(gpio_lib_handle_cloned_for_tank_level_switch),
+                     gpio_tank_level_switch
+                );
+                dht_opt = Some(
+                   Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
+                );
+                actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
             }
         }
         else {
@@ -1390,8 +1387,8 @@ fn main() {
         rx_signal_handler_from_watchdog,
         tx_signal_handler_to_ds18b20,
     };
-    
-    #[cfg(target_os="linux")]
+
+    #[cfg(target_os = "linux")]
     let messaging_channels = MessagingChannels {
         tx_to_signal_handler: tx_messaging_to_signal_handler,
         rx_from_signal_handler: rx_messaging_from_signal_handler,
@@ -1651,20 +1648,20 @@ fn main() {
         let mutex_device_scheduler_heating = Arc::clone(&mutex_device_scheduler);
 
         let mut heating_stats_transfer = HeatingStatsDataTransfer;
-        
+
         let heating_mutexes = HeatingMutexes {
             mutex_water_temperature: mutex_atlas_scientific_temperature_clone_for_heating,
             mutex_ambient_temperature: mutex_ambient_temperature_clone_for_heating,
             mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
         };
-        
+
         scope.spawn(move || {
             heating.execute(
                 mutex_device_scheduler_heating,
                 heating_channels,
                 &mut heating_stats_transfer,
                 &mut heating_set_value_updater,
-                heating_mutexes
+                heating_mutexes,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1734,9 +1731,7 @@ fn main() {
         scope.spawn(move || {
             // read/send messages
             #[cfg(target_os = "linux")]
-            messaging.execute(
-                messaging_channels
-            );
+            messaging.execute(messaging_channels);
 
             // remove PID from the file
             publish_pid.erase_pid();
