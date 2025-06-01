@@ -506,9 +506,9 @@ impl Heating {
     ///   with modules like `RelayManager`, `SignalHandler`, `DataLogger`, `ScheduleCheck`, and `Messaging`.
     /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingStatsDataTransferTrait`,
     ///   responsible for persisting daily heating statistics to the database.
-    /// * `mutex_water_temperature` - The `Arc<Mutex<f32>>` holding the latest measured water temperature.
-    /// * `mutex_ambient_temperature` - The `Arc<Mutex<f32>>` holding the latest measured ambient temperature.
-    /// * `mutex_tank_level_switch_signals` - The `Arc<Mutex<TankLevelSwitchSignals>>` containing the latest
+    /// * `heating_stats_transfer` - A mutable reference to an object implementing `HeatingSetValueUpdaterTrait`,
+    ///   responsible for updating the set values dynamically by communicating with SQL database.
+    /// * `heating_mutexes` - Struct containing the mutexes to access data from different threads.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_heating: Arc<Mutex<i32>>,

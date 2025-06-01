@@ -278,6 +278,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     while !term.load(Ordering::Relaxed) {
         spin_sleeper.sleep(sleep_duration_hundred_milli_sec);
     }
+    #[cfg(not(test))]
     info!(
         target: LOG_TARGET_SIGNAL_HANDLER,
         "received termination signal from operating system",
