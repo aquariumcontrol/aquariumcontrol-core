@@ -424,9 +424,9 @@ impl Ambient {
                 if !self.config.use_simulator {
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
-                        if tx_ambient_to_dht_opt.is_some() && rx_ambient_from_dht_opt.is_some() {
+                        if ambient_channels.tx_ambient_to_dht_opt.is_some() && ambient_channels.rx_ambient_from_dht_opt.is_some() {
                             if !state_send_receive {
-                                let tx_ambient_to_dht = tx_ambient_to_dht_opt.as_ref().unwrap();
+                                let tx_ambient_to_dht = ambient_channels.tx_ambient_to_dht_opt.as_ref().unwrap();
 
                                 state_send_receive = self.send_request_to_dht(tx_ambient_to_dht);
 
@@ -441,7 +441,7 @@ impl Ambient {
                                 }
                             } else {
                                 // read from the channel if a measurement result is available from Dht thread
-                                let rx_ambient_from_dht = rx_ambient_from_dht_opt.as_ref().unwrap();
+                                let rx_ambient_from_dht = ambient_channels.rx_ambient_from_dht_opt.as_ref().unwrap();
 
                                 state_send_receive =
                                     self.receive_response_from_dht(rx_ambient_from_dht);
