@@ -94,17 +94,18 @@ impl TankLevelSwitchSignals {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
-///     tank_level_switch --> refill
+///     tank_level_switch[TankLevelSwitch] -.-> refill[Refill]
 ///     signal_handler[SignalHandler] --> tank_level_switch
 ///     tank_level_switch --> signal_handler
 ///     tank_level_switch --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> tank_level_switch
-///     heating[Heating] --> tank_level_switch
-///     tank_level_switch --> heating
-///     tank_level_switch --> data_logger[DataLogger]
+///     tank_level_switch -.-> heating[Heating]
+///     tank_level_switch -.-> data_logger[DataLogger]
 ///     data_logger --> tank_level_switch
 /// ```
+/// Communication with the simulator (TcpCommunication) and signal handler uses
+/// channels. Refill control, Heating control and the data logger read from a mutex to which
+/// TankLevelSwitch writes to.
 pub struct TankLevelSwitch {
     /// configuration of tank level switch calculation
     config: TankLevelSwitchConfig,
@@ -511,13 +512,14 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use crate::relays::actuate_gpio;
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::GpioHandler;
 
     #[test]
@@ -544,7 +546,6 @@ pub mod tests {
         let mut tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
-            config.gpio_handler.tank_level_switch,
         );
 
         let mutex_tank_level_switch_signals =
