@@ -94,17 +94,18 @@ impl TankLevelSwitchSignals {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
-///     tank_level_switch --> refill
+///     tank_level_switch[TankLevelSwitch] -.-> refill[Refill]
 ///     signal_handler[SignalHandler] --> tank_level_switch
 ///     tank_level_switch --> signal_handler
 ///     tank_level_switch --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> tank_level_switch
-///     heating[Heating] --> tank_level_switch
-///     tank_level_switch --> heating
-///     tank_level_switch --> data_logger[DataLogger]
+///     tank_level_switch -.-> heating[Heating]
+///     tank_level_switch -.-> data_logger[DataLogger]
 ///     data_logger --> tank_level_switch
 /// ```
+/// Communication with the simulator (TcpCommunication) and signal handler uses
+/// channels. Refill control, Heating control and the data logger read from a mutex to which
+/// TankLevelSwitch writes to.
 pub struct TankLevelSwitch {
     /// configuration of tank level switch calculation
     config: TankLevelSwitchConfig,
