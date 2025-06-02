@@ -938,6 +938,37 @@ pub mod tests {
         println!("* [TankLevelSwitch] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
     }
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    fn test_transition_stabilized_true_false(
+        spin_sleeper: &SpinSleeper,
+        sleep_duration_part: Duration,
+        mutex_tank_level_switch_signals: &mut Arc<Mutex<TankLevelSwitchSignals>>,
+    ) {
+        for i in 0..20 {
+            // loop for the first 10 seconds
+            spin_sleeper.sleep(sleep_duration_part);
+            {
+                let tank_level_switch_signals =
+                    mutex_tank_level_switch_signals.lock().unwrap();
+                println!(
+                    "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
+                    i,
+                    tank_level_switch_signals.tank_level_switch_position,
+                    tank_level_switch_signals.tank_level_switch_invalid,
+                    tank_level_switch_signals.tank_level_switch_position_stabilized
+                );
+                if i < 10 {
+                    assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                    assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
+                }
+                else {
+                    assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                    assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
+                }
+            }
+        }
+    }
+    
     #[test]
     #[ignore]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -982,32 +1013,13 @@ pub mod tests {
             .spawn(move || {
                 let sleep_duration_part = Duration::from_millis(500);
                 let spin_sleeper = SpinSleeper::default();
-                for i in 0..20 {
-                    // loop for the first 10 seconds
-                    spin_sleeper.sleep(sleep_duration_part);
-                    {
-                        let tank_level_switch_signals =
-                            mutex_tank_level_switch_signals.lock().unwrap();
-                        println!(
-                            "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
-                            i,
-                            tank_level_switch_signals.tank_level_switch_position,
-                            tank_level_switch_signals.tank_level_switch_invalid,
-                            tank_level_switch_signals.tank_level_switch_position_stabilized
-                        );
-                        if i < 10 {
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
-                        }
-                        else {
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
-                        }
-                    }
-                    
-                    
-                }
 
+                test_transition_stabilized_true_false(
+                    &spin_sleeper,
+                    sleep_duration_part,
+                    &mut mutex_tank_level_switch_signals_clone_for_test_object
+                );
+                    
                 stimuli_pin.set_high();
 
                 for i in 0..20 {
@@ -1030,30 +1042,11 @@ pub mod tests {
 
                 stimuli_pin.set_low();
 
-                for i in 0..20 {
-                    // loop for the third 10 seconds
-                    spin_sleeper.sleep(sleep_duration_part);
-                    {
-                        let tank_level_switch_signals =
-                            mutex_tank_level_switch_signals.lock().unwrap();
-
-                        println!(
-                            "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
-                            i,
-                            tank_level_switch_signals.tank_level_switch_position,
-                            tank_level_switch_signals.tank_level_switch_invalid,
-                            tank_level_switch_signals.tank_level_switch_position_stabilized
-                        );
-                        if i < 10 {
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
-                        }
-                        else {
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
-                        }
-                    }
-                }
+                test_transition_stabilized_true_false(
+                    &spin_sleeper,
+                    sleep_duration_part,
+                    &mut mutex_tank_level_switch_signals_clone_for_test_object
+                );
 
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 rx_signal_handler_from_tank_level_switch.recv().unwrap();
