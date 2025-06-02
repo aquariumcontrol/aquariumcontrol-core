@@ -116,11 +116,9 @@ pub struct RefillChannels {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-/// refill[Refill Control] --> tank_level_switch[Tank Level Switch]
-/// refill --> water_injection[Water Injection]
-/// water_injection --> tank_level_switch
-/// tank_level_switch --> refill
-/// tank_level_switch --> water_injection
+/// refill[Refill control] --> water_injection[Water Injection]
+/// tank_level_switch[Tank Level Switch] -.-> refill
+/// tank_level_switch -.-> water_injection
 /// water_injection --> relay_manager[Relay Manager]
 /// relay_manager --> water_injection
 /// refill --> signal_handler[Signal Handler]

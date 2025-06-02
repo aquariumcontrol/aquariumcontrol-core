@@ -73,8 +73,7 @@ pub trait WaterInjectionTrait {
 ///     relay_manager --> water_injection
 ///     water_injection --> data_logger[Data Logger]
 ///     data_logger --> water_injection
-///     water_injection --> tank_level_switch[Tank Level Switch]
-///     tank_level_switch --> water_injection
+///     tank_level_switch[TankLevelSwitch] -.-> water_injection
 ///     signal_handler[Signal Handler] --> water_injection
 /// ```
 pub struct WaterInjection {

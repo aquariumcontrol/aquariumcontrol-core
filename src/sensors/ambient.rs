@@ -79,12 +79,10 @@ pub struct AmbientChannels<'a> {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ambient[Ambient] --> data_logger[DataLogger]
-///     data_logger --> ambient
+///     ambient[Ambient] -.-> data_logger[DataLogger]
 ///     ambient --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> ambient
-///     heating[Heating] --> ambient
-///     ambient --> heating
+///     ambient -.-> heating[Heating]
 ///     signal_handler[SignalHandler] --> ambient
 ///     ambient --> signal_handler
 /// ```

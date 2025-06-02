@@ -35,8 +35,8 @@ pub struct MonitorsConfig {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     monitors[Monitors] --> controllino[Controllino]
-///     controllino --> monitors
+///     monitors[Monitors] --> relay_manager[Relay Manager]
+///     relay_manager --> monitors
 ///     monitors --> signal_handler[Signal handler]
 ///     signal_handler --> monitors
 ///     messaging[Messaging] --> monitors
@@ -91,9 +91,9 @@ impl Monitors {
     /// # Arguments
     /// * `_mutex_device_scheduler_monitors` - (Ignored) A clone of a mutex for device scheduling.
     ///   This argument is part of a common signature but is not used by this module's logic.
-    /// * `_tx_to_controllino` - (Ignored) The sender channel for communicating with the Controllino device.
+    /// * `_tx_to_relay_manager` - (Ignored) The sender channel for communicating with the relay manager.
     ///   This argument is present for signature consistency but not used by this function.
-    /// * `_rx_from_controllino` - (Ignored) The receiver channel for communication from the Controllino device.
+    /// * `_rx_from_relay_manager` - (Ignored) The receiver channel for communication from the relay manager.
     ///   This argument is present for signature consistency but not used by this function.
     /// * `tx_to_signal_handler` - The sender channel for this module to send acknowledgment
     ///   back to the main signal handler during shutdown.
@@ -104,8 +104,8 @@ impl Monitors {
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        _tx_to_controllino: Sender<InternalCommand>,
-        _rx_from_controllino: Receiver<bool>,
+        _tx_to_relay_manager: Sender<InternalCommand>,
+        _rx_from_relay_manager: Receiver<bool>,
         tx_to_signal_handler: Sender<bool>,
         rx_from_signal_handler: Receiver<InternalCommand>,
         rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
@@ -179,7 +179,7 @@ impl Monitors {
             }
         };
 
-        // This thread has channel connections to underlying threads (Controllino).
+        // This thread has channel connections to underlying threads (relay manager).
         // Those threads have to stop receiving commands from this thread.
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;

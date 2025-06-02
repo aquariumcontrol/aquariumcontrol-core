@@ -88,14 +88,11 @@ pub type AtlasScientificResult = Result<(f32, f32, f32), I2cError>;
 /// graph LR
 ///     atlas_scientific[AtlasScientific] --> tcp_communication[TcpCommunication]
 ///     tcp_communication --> atlas_scientific
-///     heating[Heating] --> atlas_scientific
-///     atlas_scientific --> heating
-///     ventilation[Ventilation] --> atlas_scientific
-///     atlas_scientific --> ventilation
+///     atlas_scientific -.-> heating[Heating]
+///     atlas_scientific -.-> ventilation[Ventilation]
 ///     atlas_scientific --> signal_handler[SignalHandler]
 ///     signal_handler --> atlas_scientific
-///     atlas_scientific --> data_logger[DataLogger]
-///     data_logger --> atlas_scientific
+///     atlas_scientific -.-> data_logger[DataLogger]
 /// ```
 pub struct AtlasScientific {
     // configuration data for AtlasScientific

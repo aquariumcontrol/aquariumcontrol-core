@@ -205,8 +205,7 @@ pub struct VentilationChannels {
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
-///     ventilation[Ventilation Control] --> atlas_scientific[Atlas Scientific]
-///     atlas_scientific --> ventilation
+///     atlas_scientific[Atlas Scientific] --> ventilation
 ///     ventilation --> relay_manager[Relay Manager]
 ///     relay_manager --> ventilation
 ///     ventilation --> signal_handler[Signal Handler]

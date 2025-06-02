@@ -250,10 +250,8 @@ pub struct HeatingMutexes {
 /// Thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     heating --> ambient[Ambient]
-///     ambient --> heating
-///     heating --> tank_level_switch[Tank Level Switch]
-///     tank_level_switch --> heating
+///     ambient[Ambient] -.-> heating
+///     tank_level_switch[Tank Level Switch] -.-> heating
 ///     heating --> relay_manager[Relay Manager]
 ///     relay_manager --> heating
 ///     heating --> signal_handler[Signal Handler]
