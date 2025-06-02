@@ -511,14 +511,15 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use crate::relays::actuate_gpio;
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use crate::GpioHandler;
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::sensors::gpio_handler::GpioHandler;
 
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
@@ -544,7 +545,6 @@ pub mod tests {
         let mut tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
-            config.gpio_handler.tank_level_switch,
         );
 
         let mutex_tank_level_switch_signals =
@@ -942,8 +942,11 @@ pub mod tests {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     // test functionality on real hardware
     pub fn test_tank_level_switch_position_on_hardware() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.gpio_handler.use_simulator = false;
+        config.tank_level_switch.use_simulator = false;
+
         let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
             mpsc::channel();
         let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
@@ -953,8 +956,10 @@ pub mod tests {
         
         let gpio_handler = GpioHandler::new(config.gpio_handler).unwrap();
 
+        let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.clone().unwrap();
+        
         let mut stimuli_pin = actuate_gpio::get_output_pin(
-            &gpio_handler.gpio_lib_handle_opt.clone().unwrap(),
+            &gpio_lib_handle,
             21,
             "Tank level switch stimuli",
         );
@@ -976,41 +981,55 @@ pub mod tests {
             .spawn(move || {
                 let sleep_duration_part = Duration::from_millis(500);
                 let spin_sleeper = SpinSleeper::default();
-                for _ in 0..20 {
+                for i in 0..20 {
                     // loop for the first 10 seconds
                     spin_sleeper.sleep(sleep_duration_part);
                     {
                         let tank_level_switch_signals =
                             mutex_tank_level_switch_signals.lock().unwrap();
                         println!(
-                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
+                            i,
                             tank_level_switch_signals.tank_level_switch_position,
                             tank_level_switch_signals.tank_level_switch_invalid,
                             tank_level_switch_signals.tank_level_switch_position_stabilized
                         );
+                        if i < 10 {
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
+                        }
+                        else {
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
+                        }
                     }
+                    
+                    
                 }
 
                 stimuli_pin.set_high();
 
-                for _ in 0..20 {
+                for i in 0..20 {
                     // loop for the second 10 seconds
                     spin_sleeper.sleep(sleep_duration_part);
                     {
                         let tank_level_switch_signals =
                             mutex_tank_level_switch_signals.lock().unwrap();
                         println!(
-                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
+                            i,
                             tank_level_switch_signals.tank_level_switch_position,
                             tank_level_switch_signals.tank_level_switch_invalid,
                             tank_level_switch_signals.tank_level_switch_position_stabilized
                         );
+                        assert_eq!(tank_level_switch_signals.tank_level_switch_position, true);
+                        assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
                     }
                 }
 
                 stimuli_pin.set_low();
 
-                for _ in 0..20 {
+                for i in 0..20 {
                     // loop for the third 10 seconds
                     spin_sleeper.sleep(sleep_duration_part);
                     {
@@ -1018,17 +1037,27 @@ pub mod tests {
                             mutex_tank_level_switch_signals.lock().unwrap();
 
                         println!(
-                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
+                            i,
                             tank_level_switch_signals.tank_level_switch_position,
                             tank_level_switch_signals.tank_level_switch_invalid,
                             tank_level_switch_signals.tank_level_switch_position_stabilized
                         );
+                        if i < 10 {
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
+                        }
+                        else {
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
+                            assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
+                        }
                     }
                 }
 
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
                 rx_signal_handler_from_tank_level_switch.recv().unwrap();
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+                spin_sleeper.sleep(sleep_duration_part);
             })
             .unwrap();
 
