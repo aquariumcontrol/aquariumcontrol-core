@@ -285,7 +285,7 @@ pub mod tests {
 
         config.gpio_handler.dht22_io = 40;
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler, config.gpio_handler);
+        let _gpio_handler = GpioHandler::new(config.gpio_handler);
     }
 
     mod commissioning_prep {

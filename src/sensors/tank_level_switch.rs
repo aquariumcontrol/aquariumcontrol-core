@@ -511,12 +511,14 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use crate::relays::actuate_gpio;
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+    use crate::GpioHandler;
 
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
@@ -537,9 +539,13 @@ pub mod tests {
             + 1;
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None, config.gpio_handler.tank_level_switch);
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            true,
+            config.gpio_handler.tank_level_switch,
+        );
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, true)));
@@ -642,7 +648,12 @@ pub mod tests {
         let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false, None);
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            false,
+            None,
+            config.gpio_handler.tank_level_switch,
+        );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
         let mutex_tank_level_switch_signals =
@@ -738,7 +749,12 @@ pub mod tests {
         let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
         let duration_test_case_part_2: u64 = 8; // two seconds with level switch in high position
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            true,
+            None,
+            config.gpio_handler.tank_level_switch,
+        );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
         let mutex_tank_level_switch_signals =
@@ -834,7 +850,12 @@ pub mod tests {
         let duration_test_case_part: u64 = 2; // two seconds with the level switch before toggling
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None);
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            true,
+            None,
+            config.gpio_handler.tank_level_switch,
+        );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
         let mutex_tank_level_switch_signals =
@@ -914,5 +935,122 @@ pub mod tests {
             .expect("Test environment thread did not finish.");
 
         println!("* [TankLevelSwitch] checking delayed change true -> false for stabilized tank level position when invalid bit is false succeeded.");
+    }
+
+    #[test]
+    #[ignore]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    // test functionality on real hardware
+    pub fn test_tank_level_switch_position_on_hardware() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
+            mpsc::channel();
+
+        let tank_level_switch_pin = config.gpio_handler.tank_level_switch;
+        
+        let gpio_handler = GpioHandler::new(config.gpio_handler).unwrap();
+
+        let mut stimuli_pin = actuate_gpio::get_output_pin(
+            &gpio_handler.gpio_lib_handle_opt.clone().unwrap(),
+            21,
+            "Tank level switch stimuli",
+        );
+
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            true,
+            Some(gpio_handler.gpio_lib_handle_opt.unwrap()),
+            tank_level_switch_pin,
+        );
+
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+        let mutex_tank_level_switch_signals_clone_for_test_object = mutex_tank_level_switch_signals.clone();
+        
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_part = Duration::from_millis(500);
+                let spin_sleeper = SpinSleeper::default();
+                for _ in 0..20 {
+                    // loop for the first 10 seconds
+                    spin_sleeper.sleep(sleep_duration_part);
+                    {
+                        let tank_level_switch_signals =
+                            mutex_tank_level_switch_signals.lock().unwrap();
+                        println!(
+                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            tank_level_switch_signals.tank_level_switch_position,
+                            tank_level_switch_signals.tank_level_switch_invalid,
+                            tank_level_switch_signals.tank_level_switch_position_stabilized
+                        );
+                    }
+                }
+
+                stimuli_pin.set_high();
+
+                for _ in 0..20 {
+                    // loop for the second 10 seconds
+                    spin_sleeper.sleep(sleep_duration_part);
+                    {
+                        let tank_level_switch_signals =
+                            mutex_tank_level_switch_signals.lock().unwrap();
+                        println!(
+                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            tank_level_switch_signals.tank_level_switch_position,
+                            tank_level_switch_signals.tank_level_switch_invalid,
+                            tank_level_switch_signals.tank_level_switch_position_stabilized
+                        );
+                    }
+                }
+
+                stimuli_pin.set_low();
+
+                for _ in 0..20 {
+                    // loop for the third 10 seconds
+                    spin_sleeper.sleep(sleep_duration_part);
+                    {
+                        let tank_level_switch_signals =
+                            mutex_tank_level_switch_signals.lock().unwrap();
+
+                        println!(
+                            "Tank level switch signals: Position={} Invalid={} Stabilized={}",
+                            tank_level_switch_signals.tank_level_switch_position,
+                            tank_level_switch_signals.tank_level_switch_invalid,
+                            tank_level_switch_signals.tank_level_switch_position_stabilized
+                        );
+                    }
+                }
+
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                tank_level_switch.execute(
+                    &None,
+                    &None,
+                    &tx_tank_level_switch_to_signal_handler,
+                    &rx_tank_level_switch_from_signal_handler,
+                    mutex_tank_level_switch_signals_clone_for_test_object,
+                );
+            })
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
     }
 }

@@ -76,7 +76,6 @@ pub struct AtlasScientificChannels {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub type AtlasScientificResult = Result<(f32, f32, f32), I2cError>;
 
-
 /// Contains the communication Atlas Scientific sensors via I2C.
 /// Alternatively, TCP communication is used when configured to run with the simulator.
 /// The struct holds attributes for the results and for error flags indicating unsuccessful communication.

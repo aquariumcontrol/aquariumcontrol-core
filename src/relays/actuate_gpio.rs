@@ -149,7 +149,7 @@ pub struct ActuateGpio {
 /// This function will panic if it fails to:
 /// - Obtain access to the specified GPIO pin (e.g., if the pin is invalid or already in use).
 /// - Configure the pin as an output.
-fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> OutputPin {
+pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> OutputPin {
     match gpio.get(gpio_number) {
         Ok(c) => c.into_output(),
         Err(e) => {
