@@ -385,12 +385,12 @@ impl Dht {
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
-            #[cfg(not(test))]
-            error!(
-                target: LOG_TARGET_DHT,
-                "checksum error (calculated {}, received {})",
-                checksum_calculated, checksum_received
-            );
+            //#[cfg(not(test))]
+            //error!(
+            //    target: LOG_TARGET_DHT,
+            //    "checksum error (calculated {}, received {})",
+            //    checksum_calculated, checksum_received
+            //);
             return Err(DhtError::ChecksumError);
         }
         Ok(checksum_calculated)
