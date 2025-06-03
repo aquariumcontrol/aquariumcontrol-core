@@ -522,6 +522,9 @@ pub mod tests {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     use crate::sensors::gpio_handler::GpioHandler;
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    use crate::relays::actuate_gpio;
+
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_when_invalid() {
         // test if position stabilized signal is updating when the invalid signal is true
@@ -1003,7 +1006,7 @@ pub mod tests {
             tank_level_switch_pin,
         );
 
-        let mutex_tank_level_switch_signals =
+        let mut mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
         let mutex_tank_level_switch_signals_clone_for_test_object = mutex_tank_level_switch_signals.clone();
         
@@ -1017,7 +1020,7 @@ pub mod tests {
                 test_transition_stabilized_true_false(
                     &spin_sleeper,
                     sleep_duration_part,
-                    &mut mutex_tank_level_switch_signals_clone_for_test_object
+                    &mut mutex_tank_level_switch_signals
                 );
                     
                 stimuli_pin.set_high();
@@ -1045,7 +1048,7 @@ pub mod tests {
                 test_transition_stabilized_true_false(
                     &spin_sleeper,
                     sleep_duration_part,
-                    &mut mutex_tank_level_switch_signals_clone_for_test_object
+                    &mut mutex_tank_level_switch_signals
                 );
 
                 let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
