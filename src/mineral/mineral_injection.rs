@@ -300,7 +300,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_mineral_injection.send(InternalCommand::Quit);
             });
 
-            // thread for rest of test environment
+            // thread for the rest of test environment
             scope.spawn(move || {
                 // allow switching on peristaltic pump
                 test_mineral_injection_receive_actuation_command_send_confirmation(

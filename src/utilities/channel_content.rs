@@ -118,6 +118,7 @@ pub enum AquariumSignal {
     /// heating control status
     HeatingControlStatus,
 
+    #[allow(unused)]
     /// ventilation control status
     VentilationControlStatus,
 

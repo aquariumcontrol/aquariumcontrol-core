@@ -15,69 +15,21 @@ pub mod tests {
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use crate::utilities::channel_content::{InternalCommand};
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::mpsc::{Receiver, TryRecvError};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     pub fn mock_ventilation(
-        tx_ventilation_to_data_logger: &Sender<bool>,
-        rx_ventilation_from_data_logger: &Receiver<InternalCommand>,
         rx_ventilation_from_signal_handler: &Receiver<InternalCommand>,
         rx_ventilation_from_test_environment_opt: Option<&Receiver<TestCommand>>,
-        initial_stimuli: bool,
+        mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
-        let mut stimuli = initial_stimuli;
 
         loop {
-            match rx_ventilation_from_data_logger.try_recv() {
-                Ok(data_logger_request) => {
-                    match data_logger_request {
-                        InternalCommand::RequestSignal(data_logger_signal_request) => {
-                            match data_logger_signal_request {
-                                AquariumSignal::VentilationControlStatus => {
-                                    match tx_ventilation_to_data_logger.send(stimuli) {
-                                        Ok(_) => { /* do nothing */ }
-                                        Err(e) => {
-                                            panic!(
-                                                "{}: Could not send signal request to test object: {e:?}",
-                                                LOG_TARGET_MOCK_VENTILATION
-                                            );
-                                        }
-                                    };
-                                }
-                                _ => {
-                                    panic!(
-                                        "{}: Received invalid signal request for {} from data logger",
-                                        LOG_TARGET_MOCK_VENTILATION,
-                                        data_logger_signal_request
-                                    );
-                                }
-                            };
-                        }
-                        _ => {
-                            panic!(
-                                "{}: Received invalid command {} from data logger.",
-                                LOG_TARGET_MOCK_VENTILATION, data_logger_request
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    match e {
-                        TryRecvError::Empty => { /* empty buffer - no action required */ }
-                        TryRecvError::Disconnected => {
-                            panic!(
-                                "{}: Error in trying to receive command from data logger: {e:?}",
-                                LOG_TARGET_MOCK_VENTILATION
-                            );
-                        }
-                    }
-                }
-            };
-
             if mock_common_receive_from_signal_handler(
                 rx_ventilation_from_signal_handler,
                 LOG_TARGET_MOCK_VENTILATION,
@@ -94,7 +46,19 @@ pub mod tests {
                                 TestCommand::UpdateSignal(d) => {
                                     let test_signal = d.clone();
                                     match d {
-                                        MockSignal::VentilationControlStatus(c) => stimuli = c,
+                                        MockSignal::VentilationControlStatus(c) => {
+                                            // Write signal to mutex
+                                            {
+                                                match mutex_ventilation_status.lock() {
+                                                    Ok(mut d) => {
+                                                        *d = c
+                                                    }
+                                                    Err(_) => {
+                                                        // Do nothing
+                                                    }
+                                                }
+                                            }
+                                        },
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
