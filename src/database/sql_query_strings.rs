@@ -338,7 +338,7 @@ pub const SQL_QUERY_CHECK_HEATINGSTATS_NULL: &str = "SELECT EXISTS(SELECT 1 FROM
 
 /// Checks if the schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = "SELECT EXISTS(SELECT 1 FROM schedule \
-        WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive);";
+        WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive IS NULL);";
 
 /// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
 pub const SQL_QUERY_READ_TIMEOUT: &str = "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'wait_timeout';";
