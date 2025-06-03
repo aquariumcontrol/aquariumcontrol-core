@@ -29,6 +29,7 @@ cfg_if::cfg_if! {
 cfg_if::cfg_if! {
    if #[cfg(all(not(test), not(all(target_os = "linux", feature = "target_hw"))))] {
         use log::error;
+        #[cfg(feature = "debug_dht")]
         const LOG_TARGET_DHT: &str = "dht";
    }
 }
@@ -109,13 +110,13 @@ pub mod dht22_constants {
     #[allow(unused)]
     pub const DHT22_TEMPERATURE_STOP_IDX: usize = 16;
 
-    // minimum and maximum value for temperature10 signal range check
+    // minimum and maximum value for temperature10 range checks
     #[allow(unused)]
     pub const DHT22_MINVAL_TEMP10: u32 = 0;
     #[allow(unused)]
     pub const DHT22_MAXVAL_TEMP10: u32 = 500;
 
-    // minimum and maximum value for temperature10 signal range check
+    // minimum and maximum value for temperature10 range checks
     #[allow(unused)]
     pub const DHT22_MINVAL_HUM10: u32 = 0;
     #[allow(unused)]
@@ -131,7 +132,7 @@ pub mod dht22_constants {
     #[allow(unused)]
     pub const DHT22_BIT_TIMING_LIMIT: u64 = 50;
 
-    // maximum number of allowed retries to get a valid data set
+    // maximum number of allowed retries to get valid data
     #[allow(unused)]
     pub const DHT22_MAX_RETRIES: u64 = 5;
 }
@@ -167,7 +168,7 @@ pub enum DhtError {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     WrongNumberOfValidTicks,
 
-    /// the error occurred during calculation of checksum
+    /// the error occurred during the calculation of the checksum
     ChecksumCalculationError,
 
     /// calculated checksum does not match the received value
@@ -389,8 +390,7 @@ impl Dht {
             //error!(
             //    target: LOG_TARGET_DHT,
             //    "checksum error (calculated {}, received {})",
-            //    checksum_calculated, checksum_received
-            //);
+            //    checksum_calculated, checksum_received);
             return Err(DhtError::ChecksumError);
         }
         Ok(checksum_calculated)
@@ -535,7 +535,7 @@ impl Dht {
                 thread::sleep(Duration::from_millis(
                     self.config.sensor_startup_duration_millis,
                 ));
-            // give sensor some time to wake up
+            // give the sensor some time to wake up
             } else {
                 thread::sleep(Duration::from_millis(
                     self.config.sensor_pause_duration_millis,
@@ -675,7 +675,7 @@ impl Dht {
         let mut retry_counter = 0;
 
         let mut result_tuple: (f32, f32) = (0.0, 0.0);
-        let mut dht_error = DhtError::Timeout; // Avoid compiler error. Value will be overwritten in the error case.
+        let mut dht_error = DhtError::Timeout; // Avoid compiler error. The value will be overwritten in the error case.
 
         while !measurement_successful {
             match self.read(
@@ -842,7 +842,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if the implementation correctly processes the bit information into a byte array
+    // Test case checks if the implementation correctly processes the bit information into an array.
     // The test case does not require any communication with SQL database.
     pub fn test_dht_calc_byte_array() {
         let stimuli: [bool; 40] = [

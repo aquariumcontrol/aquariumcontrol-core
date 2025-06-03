@@ -16,14 +16,14 @@ use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{
-    ActuatorState, AquariumDevice, AquariumSignal, InternalCommand,
+    ActuatorState, AquariumDevice, InternalCommand,
 };
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -53,12 +53,12 @@ pub struct HeatingConfig {
     /// Control will only be active when the flag is set to true.
     active: bool,
 
-    /// Temperature at which the heater is switched on for 100% of the time.
+    /// The temperature at which the heater is switched on for 100% of the time.
     /// This temperature must be lower than switch_off_temperature.
     /// It is overwritten with valid database values once obtained.
     switch_on_temperature: f32,
 
-    /// Temperature at which the heater is switched off for 100% of the time.
+    /// The temperature at which the heater is switched off for 100% of the time.
     /// This temperature must be higher than switch_on_temperature.
     /// It is overwritten with valid database values once obtained.
     switch_off_temperature: f32,
@@ -91,7 +91,7 @@ pub struct HeatingConfig {
     /// true=heating will be switched on; false=heating will be switched off
     switch_on_when_external_stop: bool,
 
-    /// interval in seconds for polling SQL database
+    /// interval in seconds for polling the database
     pub set_value_check_interval: u64,
 }
 
@@ -117,7 +117,7 @@ fn switch_on_heater(
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
-        // reduce probability of wrong warning
+        // reduce the probability of wrong warning
         *mutex_blocked_during_actuation |=
             check_if_mutex_is_blocked(mutex_device_scheduler_heating);
 
@@ -170,7 +170,7 @@ fn switch_off_heater(
     mutex_blocked_during_actuation: &mut bool,
 ) {
     {
-        // reduce probability of wrong warning
+        // reduce the probability of wrong warning
         *mutex_blocked_during_actuation |=
             check_if_mutex_is_blocked(mutex_device_scheduler_heating);
 
@@ -214,12 +214,6 @@ pub struct HeatingChannels {
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_heating_from_signal_handler: Receiver<InternalCommand>,
 
-    /// Sender part of the channel for communication to the data logger
-    pub tx_heating_to_data_logger: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the data logger
-    pub rx_heating_from_data_logger: Receiver<InternalCommand>,
-
     /// Sender part of the channel for communication to the schedule checker
     pub tx_heating_to_schedule_check: Sender<InternalCommand>,
 
@@ -243,6 +237,9 @@ pub struct HeatingMutexes {
 
     /// Mutex for the tank level switch signals
     pub(crate) mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+
+    /// Mutex for the heater status
+    pub(crate) mutex_heating_status: Arc<Mutex<bool>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -280,18 +277,6 @@ pub struct Heating {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
     lock_warn_inapplicable_command: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
-    lock_error_channel_receive_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via the channel
-    lock_warn_inapplicable_command_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received the request for invalid signal from data logger
-    lock_error_invalid_signal_request_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger
-    lock_error_send_to_data_logger: bool,
 
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
@@ -333,10 +318,6 @@ impl Heating {
             lock_error_channel_receive_schedule_check: false,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_send_to_data_logger: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
         }
@@ -390,93 +371,6 @@ impl Heating {
                 );
                 24 * 3600 // default value for time in seconds until midnight
             })
-    }
-
-    /// Checks if the data logger sent a `RequestSignal` command and responds with the current heater status.
-    ///
-    /// This private helper function handles incoming requests from the `DataLogger` module.
-    /// If a `RequestSignal` for `AquariumSignal::HeatingControlStatus` is received,
-    /// it sends the current boolean state of the heater (`true` if ON, `false` if OFF)
-    /// back to the data logger. Inapplicable commands are logged as warnings.
-    ///
-    /// # Arguments
-    /// * `heater_state` - A reference to the current `ActuatorState` of the heater.
-    /// * `tx_heating_to_data_logger` - The sender channel for sending the boolean status to the data logger.
-    /// * `rx_heating_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
-    fn communicate_with_data_logger(
-        &mut self,
-        heater_state: &ActuatorState,
-        tx_heating_to_data_logger: &Sender<bool>,
-        rx_heating_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_heating_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        match d {
-                            AquariumSignal::HeatingControlStatus => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                let response_to_data_logger =
-                                    matches!(heater_state, ActuatorState::On);
-
-                                match tx_heating_to_data_logger.send(response_to_data_logger) {
-                                    Ok(_) => {
-                                        self.lock_error_send_to_data_logger = false;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_send_to_data_logger {
-                                            error!(
-                                                target: LOG_TARGET_HEATING,
-                                                "channel communication to data logger failed ({e:?})"
-                                            );
-                                            self.lock_error_send_to_data_logger = true;
-                                        }
-                                    }
-                                };
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_HEATING,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_HEATING,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            error!(
-                                target: LOG_TARGET_HEATING,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
     }
 
     /// Executes the **main control loop for the heating module**.
@@ -862,11 +756,21 @@ impl Heating {
                 }
             }
 
-            self.communicate_with_data_logger(
-                &heater_state,
-                &heating_channels.tx_heating_to_data_logger,
-                &heating_channels.rx_heating_from_data_logger,
-            );
+            // Write signal to mutex
+            {
+                match heating_mutexes.mutex_heating_status.lock() {
+                    Ok(mut c) => {
+                        *c = match heater_state {
+                            ActuatorState::On => true,
+                            ActuatorState::Off => false,
+                            _ => false,
+                        }
+                    }
+                    Err(_) => {
+                        // Do nothing
+                    }
+                }
+            }
 
             loop_counter += 1;
 
@@ -934,8 +838,8 @@ impl Heating {
             );
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match heating_channels.tx_heating_to_signal_handler.send(true) {
             Ok(()) => {
                 #[cfg(test)]
@@ -1009,7 +913,6 @@ pub mod tests {
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
@@ -1045,7 +948,7 @@ pub mod tests {
     }
 
     impl HeatingStatsDataTransferTrait for HeatingStatsMockDataTransfer {
-        // Transfers the provided daily heating statistics entry to the SQL database.
+        // Transfers provides daily heating statistics entry to the SQL database.
         //
         // This implementation updates the `date` of the `heating_stats_entry` to the
         // current database date (ensuring consistency) and then attempts to insert
@@ -1116,7 +1019,7 @@ pub mod tests {
     // This helper function is designed exclusively for testing the `Heating` module. It sets up
     // a controlled environment by:
     // 1.  Loading a generic test configuration and overriding specific settings (e.g., `stop_on_refill_error_delay`).
-    // 2.  Optionally applying a custom `SawToothProfileConfig` for precise control over heating patterns.
+    // 2.  Optionally, applying a custom `SawToothProfileConfig` for precise control over heating patterns.
     // 3.  Connecting to and **truncating a dedicated test database** to ensure a clean state for heating statistics.
     // 4.  Injecting a **`SqlInterfaceHeatingMockMidnightCalculator`** to return a predefined `seconds_to_midnight`,
     //     allowing deterministic testing of daily statistic transfers without real-time dependency.
@@ -1127,7 +1030,7 @@ pub mod tests {
     // * `test_db_number` - A unique `u32` identifier (e.g., `7`, `8`, `9`) used to select a specific
     //   test database (`aquarium_test_XX`) from the configuration.
     // * `saw_tooth_profile_config_opt` - An `Option<SawToothProfileConfig>`. If `Some`, this custom
-    //   sawtooth profile configuration will override the one loaded from the TOML file for the `Heating` module.
+    //   sawtooth profile configuration overrides the one loaded from the TOML file for the `Heating` module.
     //
     // # Returns
     // A tuple `(ConfigData, Heating)`:
@@ -1213,16 +1116,12 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, _rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
 
@@ -1265,18 +1164,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1330,8 +1217,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -1346,6 +1231,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -1374,9 +1260,6 @@ pub mod tests {
         join_handle_mock_tank_level_switch
             .join()
             .expect("Mock tank level switch did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1401,16 +1284,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1434,18 +1313,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1502,8 +1369,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -1518,6 +1383,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -1541,9 +1407,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1557,7 +1420,7 @@ pub mod tests {
 
     #[test]
     // Check if the heater is switched on and off during two cycles of the saw tooth profile.
-    // Duration of the heater switched on shall equal the duration of the heater switched off (1% tolerance).
+    // The duration of the heater being switched on shall equal the duration of the heater switched off (1% tolerance).
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     // Test case uses test database #13.
     pub fn test_heating_with_measured_temperature_50_percent() {
@@ -1571,16 +1434,12 @@ pub mod tests {
         );
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1604,18 +1463,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1796,8 +1643,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -1807,6 +1652,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -1830,9 +1676,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1847,7 +1690,7 @@ pub mod tests {
     #[test]
     // Test case checks if the Quit command is correctly processed
     // - application shall switch off the heater before exiting
-    // Test case uses test database #14.
+    // The test case uses test database #14.
     pub fn test_heating_with_pending_quit_terminate_command() {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -1856,16 +1699,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3, 14, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let start_time = SystemTime::now();
 
@@ -1891,18 +1730,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1958,8 +1785,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None
@@ -1968,7 +1793,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals
+                    mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -1999,9 +1825,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -2024,16 +1847,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3, 15, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2074,18 +1893,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2131,8 +1938,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None
@@ -2141,7 +1946,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals
+                    mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -2272,9 +2078,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -2287,7 +2090,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if waiting for midnight and statistical calculations are computed correctly
+    // Test case checks if waiting for midnight and statistical calculations are computed correctly.
     // Test case uses test database #16.
     pub fn test_heating_wait_for_midnight_calc_stats_heater_off() {
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -2297,16 +2100,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3, 16, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // get initial data for calculation of reference value
         let initial_heating_stats_entry = heating
@@ -2347,18 +2146,6 @@ pub mod tests {
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2404,8 +2191,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None
@@ -2414,7 +2199,8 @@ pub mod tests {
                 let heating_mutexes = HeatingMutexes {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
-                    mutex_tank_level_switch_signals
+                    mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -2545,9 +2331,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -2570,16 +2353,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2603,18 +2382,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2671,8 +2438,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -2682,6 +2447,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -2704,9 +2470,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -2729,16 +2492,12 @@ pub mod tests {
             prepare_heating_tests_mock_midnight_calculator(3, 18, None);
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2762,18 +2521,6 @@ pub mod tests {
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2835,8 +2582,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -2846,6 +2591,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -2869,9 +2615,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -2893,8 +2636,6 @@ pub mod tests {
         let (_, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
 
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
@@ -2902,8 +2643,6 @@ pub mod tests {
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
         let (tx_messaging_to_heating, rx_heating_from_messaging) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
         let mutex_device_scheduler_test_environment = mutex_device_scheduler_heating.clone();
@@ -2930,18 +2669,6 @@ pub mod tests {
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -3077,8 +2804,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: Some(rx_heating_from_messaging),
@@ -3088,6 +2813,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -3111,9 +2837,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -3140,16 +2863,12 @@ pub mod tests {
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
         let (tx_tank_level_switch_to_heating, _rx_heating_from_tank_level_switch) = mpsc::channel();
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_heating_to_signal_handler, rx_signal_handler_from_heating) = mpsc::channel();
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
         let (_tx_test_environment_to_tank_level_switch, rx_tank_level_switch_from_test_environment) =
             mpsc::channel();
 
@@ -3192,18 +2911,6 @@ pub mod tests {
 
         // Mutex for ambient temperature normally coming from Ambient
         let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_heating,
-                    &rx_data_logger_from_heating,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -3267,8 +2974,6 @@ pub mod tests {
                     rx_heating_from_relay_manager,
                     tx_heating_to_signal_handler,
                     rx_heating_from_signal_handler,
-                    tx_heating_to_data_logger,
-                    rx_heating_from_data_logger,
                     tx_heating_to_schedule_check,
                     rx_heating_from_schedule_check,
                     rx_heating_from_messaging_opt: None,
@@ -3289,6 +2994,7 @@ pub mod tests {
                     mutex_water_temperature,
                     mutex_ambient_temperature,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
 
                 heating.execute(
@@ -3317,9 +3023,6 @@ pub mod tests {
         join_handle_mock_tank_level_switch
             .join()
             .expect("Mock tank level switch did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");

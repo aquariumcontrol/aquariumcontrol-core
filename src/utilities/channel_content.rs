@@ -114,6 +114,7 @@ pub enum AquariumSignal {
     /// stabilized position of tank level switch
     TankLevelSwitchPositionStabilized,
 
+    #[allow(unused)]
     /// heating control status
     HeatingControlStatus,
 
@@ -281,12 +282,12 @@ impl fmt::Display for InternalCommand {
 /// Enum is used for representing the relay states.
 #[derive(PartialEq)]
 pub enum ActuatorState {
-    /// Actuator is on
+    /// The actuator is on.
     On,
 
-    /// Actuator is off
+    /// The actuator is off.
     Off,
 
-    /// Application has not yet sent a command to the actuator
+    /// The application has not yet sent a command to the actuator.
     Undefined,
 }
