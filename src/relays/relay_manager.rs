@@ -555,6 +555,7 @@ impl RelayManager {
             // *** send heartbeat every minute ***
             if Instant::now().duration_since(last_heartbeat_time).as_secs() >= 60 {
                 actuator.heartbeat();
+                last_heartbeat_time = Instant::now();
             }
         }
 
