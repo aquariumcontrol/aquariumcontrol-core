@@ -81,6 +81,12 @@ impl RelayActuationTrait for ActuateSimulator {
         }
     }
 
+    /// Heartbeat is not used by this trait implementation.
+    fn get_heartbeat_interval_seconds(&self) -> u64 {
+        0
+    }
+
+    /// Heartbeat is not used by this trait implementation. 
     fn heartbeat(&mut self) {
         // do nothing
     }

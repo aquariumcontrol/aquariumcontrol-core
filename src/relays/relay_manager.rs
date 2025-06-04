@@ -25,6 +25,11 @@ const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError>;
+    /// Getter-function for the heartbeat interval in seconds.
+    ///
+    /// # Returns
+    /// - the heartbeat interval in seconds as u64
+    fn get_heartbeat_interval_seconds(&self) -> u64;
     fn heartbeat(&mut self);
 }
 
@@ -552,10 +557,12 @@ impl RelayManager {
             }
             // **********************************
 
-            // *** send heartbeat every minute ***
-            if Instant::now().duration_since(last_heartbeat_time).as_secs() >= 60 {
-                actuator.heartbeat();
-                last_heartbeat_time = Instant::now();
+            // *** send heartbeat ***
+            let heartbeat_interval = actuator.get_heartbeat_interval_seconds();
+            if heartbeat_interval > 0 &&
+                Instant::now().duration_since(last_heartbeat_time).as_secs() >= heartbeat_interval {
+                    actuator.heartbeat();
+                    last_heartbeat_time = Instant::now();
             }
         }
 
@@ -609,6 +616,10 @@ pub mod tests {
         fn actuate(&mut self, _internal_command: InternalCommand) -> Result<(), RelayError> {
             self.execution_counter += 1;
             Ok(())
+        }
+
+        fn get_heartbeat_interval_seconds(&self) -> u64 {
+            0
         }
 
         fn heartbeat(&mut self) {
