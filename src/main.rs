@@ -1663,7 +1663,7 @@ fn main() {
                 ventilation_channels,
                 &mut ventilation_set_value_updater,
                 mutex_atlas_scientific_temperature_clone_for_ventilation,
-                mutex_ventilation_status
+                mutex_ventilation_status,
             );
 
             #[cfg(feature = "debug_main")]

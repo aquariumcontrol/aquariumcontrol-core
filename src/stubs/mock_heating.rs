@@ -97,15 +97,13 @@ pub mod tests {
                                             // Write signal to mutex
                                             {
                                                 match mutex_heating_status.lock() {
-                                                    Ok(mut d) => {
-                                                        *d = c
-                                                    }
+                                                    Ok(mut d) => *d = c,
                                                     Err(_) => {
                                                         // Do nothing
                                                     }
                                                 }
                                             }
-                                        },
+                                        }
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",

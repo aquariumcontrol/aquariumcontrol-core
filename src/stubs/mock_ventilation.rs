@@ -15,7 +15,7 @@ pub mod tests {
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::test_command::tests::TestCommand;
-    use crate::utilities::channel_content::{InternalCommand};
+    use crate::utilities::channel_content::InternalCommand;
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
@@ -50,15 +50,13 @@ pub mod tests {
                                             // Write signal to mutex
                                             {
                                                 match mutex_ventilation_status.lock() {
-                                                    Ok(mut d) => {
-                                                        *d = c
-                                                    }
+                                                    Ok(mut d) => *d = c,
                                                     Err(_) => {
                                                         // Do nothing
                                                     }
                                                 }
                                             }
-                                        },
+                                        }
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",

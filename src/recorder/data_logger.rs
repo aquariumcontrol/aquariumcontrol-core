@@ -157,7 +157,7 @@ pub struct DataLoggerMutexes {
 
     /// Mutex for heater status
     pub mutex_heating_status: Arc<Mutex<bool>>,
-    
+
     /// Mutex for ventilation status
     pub mutex_ventilation_status: Arc<Mutex<bool>>,
 }
@@ -1118,7 +1118,7 @@ impl DataLogger {
         loop {
             // update signals via channel communication
             let mut refill_status = (refill_in_progress, refill_channel_disconnected);
-            
+
             self.update_signals(
                 &data_logger_channels,
                 &mut refill_status,
@@ -1257,7 +1257,7 @@ impl DataLogger {
                         &data_logger_mutexes,
                     );
                     (refill_in_progress, refill_channel_disconnected) = refill_status;
-                    
+
                     // update signals by accessing mutex for DS18B20 sensor signals
                     self.update_ds18b20_signals(
                         data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
@@ -1642,7 +1642,7 @@ pub mod tests {
         let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
         let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
-        
+
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1814,7 +1814,7 @@ pub mod tests {
                     mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
-                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger
+                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
                 };
 
                 data_logger.execute(

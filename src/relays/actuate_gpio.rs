@@ -346,4 +346,8 @@ impl RelayActuationTrait for ActuateGpio {
             }
         }
     }
+
+    fn heartbeat(&mut self) {
+        // do nothing
+    }
 }

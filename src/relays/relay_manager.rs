@@ -17,6 +17,7 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Instant;
 
 const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 
@@ -24,6 +25,7 @@ const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError>;
+    fn heartbeat(&mut self);
 }
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
@@ -120,7 +122,7 @@ pub struct RelayManagerChannels {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Contains the configuration and the implementation of the relay manager
+/// Contains the configuration and the implementation of the relay manager.
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
@@ -245,6 +247,8 @@ impl RelayManager {
         relay_manager_channels: RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
+        let mut last_heartbeat_time = Instant::now();
+
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &relay_manager_channels.rx_relay_manager_from_signal_handler,
@@ -547,6 +551,11 @@ impl RelayManager {
                 }
             }
             // **********************************
+
+            // *** send heartbeat every minute ***
+            if Instant::now().duration_since(last_heartbeat_time).as_secs() >= 60 {
+                actuator.heartbeat();
+            }
         }
 
         #[cfg(feature = "debug_relay_manager")]
@@ -555,8 +564,8 @@ impl RelayManager {
             "exited loop, sending back confirmation to signal handler"
         );
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // Application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match &relay_manager_channels
             .tx_relay_manager_to_signal_handler
             .send(true)
@@ -599,6 +608,10 @@ pub mod tests {
         fn actuate(&mut self, _internal_command: InternalCommand) -> Result<(), RelayError> {
             self.execution_counter += 1;
             Ok(())
+        }
+
+        fn heartbeat(&mut self) {
+            // do nothing
         }
     }
 

@@ -13,9 +13,7 @@ use log::{error, warn};
 use log::info;
 
 use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
-use crate::utilities::channel_content::{
-    ActuatorState, AquariumDevice, InternalCommand,
-};
+use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
@@ -354,7 +352,7 @@ impl Ventilation {
         ventilation_channels: VentilationChannels,
         ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
         mutex_water_temperature: Arc<Mutex<f32>>,
-        mutex_ventilation_status: Arc<Mutex<bool>>
+        mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -685,7 +683,7 @@ pub mod tests {
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
-    
+
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
@@ -946,7 +944,7 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-        
+
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // thread for mock relay manager - includes assertions
@@ -1038,8 +1036,8 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel(); 
-        
+            mpsc::channel();
+
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())

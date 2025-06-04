@@ -228,6 +228,12 @@ fn create_command_message(
     }
 }
 
+fn create_heartbeat_message() -> ControllinoMessage {
+    let message_content =
+        ControllinoMessageContent::new(controllino_constants::COMMAND_HEARTBEAT, 0, 0);
+    ControllinoMessage::new(message_content)
+}
+
 /// Creates a Controllino-specific message from a high-level internal command.
 ///
 /// This private helper function translates a generic `InternalCommand` (like `SwitchOn`, `SwitchOff`, or `Pulse`)
@@ -492,6 +498,31 @@ impl RelayActuationTrait for ActuateControllino {
                     internal_command
                 );
                 Err(RelayError::IrrelevantCommand(internal_command))
+            }
+        }
+    }
+
+    fn heartbeat(&mut self) {
+        // create a message to be sent to Controllino
+        let message = create_heartbeat_message();
+
+        // write a message to Controllino
+        match self.serial_port.write(&message.data) {
+            Ok(amount_byte_written) => {
+                if amount_byte_written != message.data.len() {
+                    warn!(
+                        "{}: Writing heartbeat message to Controllino device failed. Amount of bytes written: {}. Expected: {}",
+                        LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                        amount_byte_written,
+                        message.data.len()
+                    );
+                }
+            }
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "sending heartbeat command to Controllino failed ({e:?})"
+                );
             }
         }
     }

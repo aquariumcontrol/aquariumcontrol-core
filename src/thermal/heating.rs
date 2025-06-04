@@ -15,9 +15,7 @@ use log::info;
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-use crate::utilities::channel_content::{
-    ActuatorState, AquariumDevice, InternalCommand,
-};
+use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};

@@ -80,6 +80,10 @@ impl RelayActuationTrait for ActuateSimulator {
             }
         }
     }
+
+    fn heartbeat(&mut self) {
+        // do nothing
+    }
 }
 
 impl ActuateSimulator {
