@@ -508,9 +508,9 @@ impl RelayActuationTrait for ActuateControllino {
     /// Getter-function for the heartbeat interval in seconds.
     ///
     /// # Returns
-    /// - the heartbeat interval in seconds as u64
-    fn get_heartbeat_interval_seconds(&self) -> u64 {
-        self.config.heartbeat_interval_seconds
+    /// - the heartbeat interval in seconds as u64 wrapped in Option
+    fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+        Some(self.config.heartbeat_interval_seconds)
     }
     
     /// Executes the heartbeat: Sending a signal to the actuator
