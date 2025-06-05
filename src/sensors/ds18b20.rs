@@ -178,8 +178,7 @@ impl Ds18b20 {
             retries -= 1;
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(io::Error::other(
             "Failed to read temperature after multiple retries.",
         ))
     }

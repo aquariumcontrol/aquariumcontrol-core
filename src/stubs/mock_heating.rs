@@ -18,20 +18,18 @@ pub mod tests {
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     pub fn mock_heating(
         tx_heating_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
         rx_heating_from_tank_level_switch_opt: Option<&Receiver<bool>>,
         rx_heating_from_signal_handler: &Receiver<InternalCommand>,
-        tx_heating_to_data_logger_opt: Option<&Sender<bool>>,
-        rx_heating_from_data_logger_opt: Option<&Receiver<InternalCommand>>,
         rx_heating_from_test_environment_opt: Option<&Receiver<TestCommand>>,
-        initial_stimuli: bool,
+        mutex_heating_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration = Duration::from_millis(10);
         let spin_sleeper = SpinSleeper::default();
-        let mut stimuli = initial_stimuli;
 
         loop {
             match tx_heating_to_tank_level_switch_opt {
@@ -86,67 +84,6 @@ pub mod tests {
                 break;
             }
 
-            // communicate with data logger
-            match rx_heating_from_data_logger_opt {
-                Some(rx_heating_from_data_logger) => {
-                    match rx_heating_from_data_logger.try_recv() {
-                        Ok(data_logger_request) => {
-                            match data_logger_request {
-                                InternalCommand::RequestSignal(data_logger_signal_request) => {
-                                    match data_logger_signal_request {
-                                        AquariumSignal::HeatingControlStatus => {
-                                            match tx_heating_to_data_logger_opt {
-                                                Some(tx_heating_to_data_logger) => {
-                                                    match tx_heating_to_data_logger.send(stimuli) {
-                                                        Ok(_) => { /* do nothing */ }
-                                                        Err(e) => {
-                                                            panic!(
-                                                                "{}: Could not send signal request to data logger ({e:?})",
-                                                                LOG_TARGET_MOCK_HEATING
-                                                            );
-                                                        }
-                                                    };
-                                                }
-                                                None => {
-                                                    panic!(
-                                                        "{}: invoked without Sender for channel communication to data logger",
-                                                        LOG_TARGET_MOCK_HEATING
-                                                    );
-                                                }
-                                            };
-                                        }
-                                        _ => {
-                                            panic!(
-                                                "{}: Invalid signal {} requested from data logger",
-                                                LOG_TARGET_MOCK_HEATING, data_logger_signal_request
-                                            );
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    panic!(
-                                        "{}: Received invalid command {} from data logger",
-                                        LOG_TARGET_MOCK_HEATING, data_logger_request
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!(
-                                        "{}: Error in trying to receive command from data logger: {e:?}",
-                                        LOG_TARGET_MOCK_HEATING
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-                None => { /* do nothing */ }
-            }
-
             match rx_heating_from_test_environment_opt {
                 Some(rx_heating_from_test_environment) => {
                     match rx_heating_from_test_environment.try_recv() {
@@ -156,7 +93,17 @@ pub mod tests {
                                 TestCommand::UpdateSignal(d) => {
                                     let test_signal = d.clone();
                                     match d {
-                                        MockSignal::HeatingControlStatus(c) => stimuli = c,
+                                        MockSignal::HeatingControlStatus(c) => {
+                                            // Write signal to mutex
+                                            {
+                                                match mutex_heating_status.lock() {
+                                                    Ok(mut d) => *d = c,
+                                                    Err(_) => {
+                                                        // Do nothing
+                                                    }
+                                                }
+                                            }
+                                        }
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",

@@ -346,4 +346,14 @@ impl RelayActuationTrait for ActuateGpio {
             }
         }
     }
+
+    /// Heartbeat is not used by this trait implementation.
+    fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+        None
+    }
+
+    /// Heartbeat is not used by this trait implementation.
+    fn heartbeat(&mut self) {
+        // do nothing
+    }
 }

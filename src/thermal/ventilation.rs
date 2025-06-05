@@ -13,15 +13,13 @@ use log::{error, warn};
 use log::info;
 
 use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
-use crate::utilities::channel_content::{
-    ActuatorState, AquariumDevice, AquariumSignal, InternalCommand,
-};
+use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -62,7 +60,7 @@ pub struct VentilationConfig {
     /// true=ventilation will be switched on; false=ventilation will be switched off
     switch_on_when_external_stop: bool,
 
-    /// interval in seconds for polling SQL database
+    /// interval in seconds for polling the database
     pub set_value_check_interval: u64,
 }
 
@@ -87,7 +85,7 @@ fn switch_on_ventilation(
     rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
-    // reduce probability of wrong warning
+    // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |=
         check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
 
@@ -139,7 +137,7 @@ fn switch_off_ventilation(
     rx_ventilation_from_relay_manager: &Receiver<bool>,
     mutex_blocked_during_actuation: &mut bool,
 ) {
-    // reduce probability of wrong warning
+    // reduce the probability of wrong warning
     *mutex_blocked_during_actuation |=
         check_if_mutex_is_blocked(mutex_device_scheduler_ventilation);
 
@@ -184,12 +182,6 @@ pub struct VentilationChannels {
     /// Receiver part of the channel for communication from the signal handler                
     pub rx_ventilation_from_signal_handler: Receiver<InternalCommand>,
 
-    /// Sender part of the channel for communication to the data logger
-    pub tx_ventilation_to_data_logger: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the data logger
-    pub rx_ventilation_from_data_logger: Receiver<InternalCommand>,
-
     /// Sender part of the channel for communication to the schedule checker
     pub tx_ventilation_to_schedule_check: Sender<InternalCommand>,
 
@@ -230,18 +222,6 @@ pub struct Ventilation {
 
     /// inhibition flag to avoid flooding the log file with repeated messages to receive request via the channel from schedule check
     lock_error_channel_receive_schedule_check: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
-    lock_error_channel_receive_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via the channel
-    lock_warn_inapplicable_command_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received a request for invalid signal from the data logger
-    lock_error_invalid_signal_request_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send response to data logger
-    lock_error_send_to_data_logger: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -268,10 +248,6 @@ impl Ventilation {
             lock_warn_inapplicable_command: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_send_to_data_logger: false,
         }
     }
 
@@ -299,93 +275,6 @@ impl Ventilation {
         } else {
             0.0 // default value when target values are not properly set up.
         }
-    }
-
-    /// Checks if the data logger sent a `RequestSignal` command and responds with the current ventilation status.
-    ///
-    /// This private helper function handles incoming requests from the `DataLogger` module.
-    /// If a `RequestSignal` for `AquariumSignal::VentilationControlStatus` is received,
-    /// it sends the current boolean state of the ventilation (`true` if ON, `false` if OFF)
-    /// back to the data logger. Inapplicable commands are logged as warnings.
-    ///
-    /// # Arguments
-    /// * `ventilation_state` - A reference to the current `ActuatorState` of the ventilation device.
-    /// * `tx_ventilation_to_data_logger` - The sender channel for sending the boolean status to the data logger.
-    /// * `rx_ventilation_from_data_logger` - The receiver channel for getting `InternalCommand` requests from the data logger.
-    fn communicate_with_data_logger(
-        &mut self,
-        ventilation_state: &ActuatorState,
-        tx_ventilation_to_data_logger: &Sender<bool>,
-        rx_ventilation_from_data_logger: &Receiver<InternalCommand>,
-    ) {
-        match rx_ventilation_from_data_logger.try_recv() {
-            Ok(c) => {
-                self.lock_error_channel_receive_data_logger = false;
-                match c {
-                    InternalCommand::RequestSignal(d) => {
-                        self.lock_warn_inapplicable_command_data_logger = false;
-                        match d {
-                            AquariumSignal::VentilationControlStatus => {
-                                self.lock_error_invalid_signal_request_data_logger = false;
-                                let response_to_data_logger =
-                                    matches!(ventilation_state, ActuatorState::On);
-
-                                match tx_ventilation_to_data_logger.send(response_to_data_logger) {
-                                    Ok(_) => {
-                                        self.lock_error_send_to_data_logger = false;
-                                    }
-                                    Err(e) => {
-                                        if !self.lock_error_send_to_data_logger {
-                                            error!(
-                                                target: LOG_TARGET_VENTILATION,
-                                                "channel communication to data logger failed ({e:?})"
-                                            );
-                                            self.lock_error_send_to_data_logger = true;
-                                        }
-                                    }
-                                };
-                            }
-                            _ => {
-                                if !self.lock_error_invalid_signal_request_data_logger {
-                                    error!(
-                                        target: LOG_TARGET_VENTILATION,
-                                        "internal error: received request for invalid signal {} from data logger",
-                                        d
-                                    );
-                                    self.lock_error_invalid_signal_request_data_logger = true;
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command_data_logger {
-                            warn!(
-                                target: LOG_TARGET_VENTILATION,
-                                "ignoring inapplicable command from data logger thread."
-                            );
-                            self.lock_warn_inapplicable_command_data_logger = true;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_data_logger = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_data_logger {
-                            error!(
-                                target: LOG_TARGET_VENTILATION,
-                                "receiving command from data logger thread failed ({e:?})"
-                            );
-                            self.lock_error_channel_receive_data_logger = true;
-                        }
-                    }
-                }
-            }
-        };
     }
 
     /// Conditionally switches the ventilation device ON or OFF based on a boolean condition.
@@ -456,12 +345,14 @@ impl Ventilation {
     ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
     /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` from which the latest water temperature
     ///   reading will be retrieved.
+    /// * `mutex_ventilation_status` - An `Arc<Mutex<bool>>` for communicating the ventilation status to the data logger.
     pub fn execute(
         &mut self,
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: VentilationChannels,
         ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
         mutex_water_temperature: Arc<Mutex<f32>>,
+        mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -643,11 +534,21 @@ impl Ventilation {
                 }
             }
 
-            self.communicate_with_data_logger(
-                &ventilation_state,
-                &ventilation_channels.tx_ventilation_to_data_logger,
-                &ventilation_channels.rx_ventilation_from_data_logger,
-            );
+            // Write signal to mutex
+            {
+                match mutex_ventilation_status.lock() {
+                    Ok(mut c) => {
+                        *c = match ventilation_state {
+                            ActuatorState::On => true,
+                            ActuatorState::Off => false,
+                            _ => false,
+                        }
+                    }
+                    Err(_) => {
+                        // Do nothing
+                    }
+                }
+            }
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
@@ -708,7 +609,7 @@ impl Ventilation {
             }
         }
 
-        // The application received a request to terminate, that is why the loop was left.
+        // The application received a request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match ventilation_channels
             .tx_ventilation_to_signal_handler
@@ -783,7 +684,6 @@ pub mod tests {
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
 
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
@@ -851,8 +751,6 @@ pub mod tests {
         let mut ventilation = prepare_ventilation_tests();
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -862,8 +760,6 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         // thread for mock schedule check
@@ -881,18 +777,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -937,8 +821,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
@@ -952,6 +834,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -966,9 +849,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1038,8 +918,6 @@ pub mod tests {
         let mut ventilation = prepare_ventilation_tests();
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1049,8 +927,6 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         // thread for mock schedule check
@@ -1068,18 +944,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1113,8 +977,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
@@ -1128,6 +990,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1142,9 +1005,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1167,8 +1027,6 @@ pub mod tests {
         let mut ventilation = prepare_ventilation_tests();
 
         // Channels for the test object. The test environment only uses one of the channels.
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1178,8 +1036,6 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         // thread for mock schedule check
@@ -1197,18 +1053,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(25.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1385,8 +1229,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
@@ -1400,6 +1242,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1414,9 +1257,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1437,8 +1277,6 @@ pub mod tests {
         let mut ventilation = prepare_ventilation_tests();
 
         // Channels for the test object. The test environment only uses one of the channels.
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1448,8 +1286,6 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         // thread for mock schedule check
@@ -1467,18 +1303,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1512,8 +1336,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
@@ -1527,6 +1349,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1547,9 +1370,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1571,8 +1391,6 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let mut ventilation = Ventilation::new(config.ventilation);
 
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_ventilation_to_signal_handler, rx_signal_handler_from_ventilation) =
@@ -1583,8 +1401,6 @@ pub mod tests {
             mpsc::channel();
         let (tx_messaging_to_ventilation, rx_ventilation_from_messaging) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
@@ -1605,18 +1421,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1752,8 +1556,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: Some(rx_ventilation_from_messaging),
@@ -1767,6 +1569,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1782,9 +1585,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");
@@ -1808,8 +1608,6 @@ pub mod tests {
         let mut ventilation = prepare_ventilation_tests();
 
         // Channels for the test object. The test environment only uses one of the channels
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
         let (tx_relay_manager_to_ventilation, rx_ventilation_from_relay_manager) = mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
@@ -1819,8 +1617,6 @@ pub mod tests {
         let (tx_schedule_check_to_ventilation, rx_ventilation_from_schedule_check) =
             mpsc::channel();
         let (tx_ventilation_to_schedule_check, rx_schedule_check_from_ventilation) =
-            mpsc::channel();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         // thread for mock schedule check
@@ -1838,18 +1634,6 @@ pub mod tests {
 
         // Mutex for water temperature normally coming from Atlas Scientific
         let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_ventilation,
-                    &rx_data_logger_from_ventilation,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1904,8 +1688,6 @@ pub mod tests {
                     rx_ventilation_from_relay_manager,
                     tx_ventilation_to_signal_handler,
                     rx_ventilation_from_signal_handler,
-                    tx_ventilation_to_data_logger,
-                    rx_ventilation_from_data_logger,
                     tx_ventilation_to_schedule_check,
                     rx_ventilation_from_schedule_check,
                     rx_ventilation_from_messaging_opt: None,
@@ -1924,6 +1706,7 @@ pub mod tests {
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
                     mutex_water_temperature,
+                    Arc::new(Mutex::new(false)),
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1938,9 +1721,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_mock_relay_manager
             .join()
             .expect("Mock relay manager thread did not finish.");

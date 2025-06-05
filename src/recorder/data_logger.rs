@@ -119,18 +119,6 @@ pub struct DataLoggerChannels<'a> {
     /// Receiver part of the channel for communication from Refill
     pub rx_from_refill: &'a Receiver<bool>,
 
-    /// Sender part of the channel for communication to Heating
-    pub tx_to_heating: &'a Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from Heating
-    pub rx_from_heating: &'a Receiver<bool>,
-
-    /// Sender part of the channel for communication to Ventilation
-    pub tx_to_ventilation: &'a Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from Ventilation
-    pub rx_from_ventilation: &'a Receiver<bool>,
-
     /// Sender part of the channel for communication to the signal handler
     pub tx_to_signal_handler: &'a Sender<bool>,
 
@@ -166,6 +154,12 @@ pub struct DataLoggerMutexes {
 
     /// Mutex for tank level switch signals
     pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+
+    /// Mutex for heater status
+    pub mutex_heating_status: Arc<Mutex<bool>>,
+
+    /// Mutex for ventilation status
+    pub mutex_ventilation_status: Arc<Mutex<bool>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -178,7 +172,6 @@ pub struct DataLoggerMutexes {
 ///     ambient[Ambient] -.-> data_logger
 ///     tank_level_switch[TankLevelSwitch] --> data_logger
 ///     refill[Refill control] --> data_logger
-///     heating[Heating control] --> data_logger
 ///     ventilation[Ventilation control] --> data_logger
 ///     data_logger --> signal_handler[Signal handler]
 ///     signal_handler[Signal handler] --> data_logger
@@ -559,12 +552,12 @@ impl DataLogger {
         }
     }
 
-    /// Retrieves the ON/OFF status of a control module (Refill, Ventilation, or Heating) and writes it to a file.
+    /// Retrieves the ON/OFF status of a control module (Refill, Ventilation) and writes it to a file.
     ///
     /// This private helper function attempts to get boolean signal information from a
     /// control module by sending a `RequestSignal` command through its channel. If a response
     /// is received, it updates the local `signal` boolean and then calls `output_state`
-    /// to write this status (as "ON" or "OFF") to the configured file on disk.
+    /// to write this status (as "ON" or "OFF") to the configured file on the disk.
     ///
     /// It also tracks channel disconnections to prevent continuous error logging if a module
     /// is no longer reachable.
@@ -581,18 +574,18 @@ impl DataLogger {
     ///
     /// # Returns
     /// `true` if an error occurred during the channel communication or file output; `false` otherwise.
-    fn update_on_off_signal(
+    fn update_on_off_signal_via_channel(
         &mut self,
         signal: &mut bool,
-        refill_channel_disconnected: &mut bool,
+        channel_disconnected: &mut bool,
         signal_name: AquariumSignal,
         tx_to_on_off_thread: &Sender<InternalCommand>,
         rx_from_on_off_thread: &Receiver<bool>,
         mut lock_error_output_state: bool,
     ) -> bool {
-        if !*refill_channel_disconnected {
+        if !*channel_disconnected {
             #[cfg(feature = "debug_data_logger")]
-            let start_time_refill = SystemTime::now();
+            let start_time_output_on_off = SystemTime::now();
 
             match tx_to_on_off_thread.send(InternalCommand::RequestSignal(signal_name.clone())) {
                 Ok(_) => {
@@ -606,9 +599,6 @@ impl DataLogger {
                                 }
                                 AquariumSignal::VentilationControlStatus => {
                                     &self.config.output_file_name_ventilation_is_on
-                                }
-                                AquariumSignal::HeatingControlStatus => {
-                                    &self.config.output_file_name_heating_is_on
                                 }
                                 _ => {
                                     // invalid signal parameter
@@ -629,7 +619,7 @@ impl DataLogger {
                                 "receiving value for {} failed ({e:?})",
                                 signal
                             );
-                            *refill_channel_disconnected = true;
+                            *channel_disconnected = true;
                         }
                     }
                 }
@@ -639,7 +629,7 @@ impl DataLogger {
                         "channel communication for {} failed ({e:?})",
                         signal
                     );
-                    *refill_channel_disconnected = true;
+                    *channel_disconnected = true;
                 }
             }
             #[cfg(feature = "debug_data_logger")]
@@ -724,16 +714,15 @@ impl DataLogger {
         &mut self,
         data_logger_channels: &DataLoggerChannels,
         refill_status: &mut (bool, bool), // (in_progress, channel_disconnected)
-        heater_status: &mut (bool, bool), // (is_on, channel_disconnected)
-        ventilation_status: &mut (bool, bool), // (is_on, channel_disconnected)
+        heater_status: &mut bool,
+        ventilation_status: &mut bool,
+        data_logger_mutexes: &DataLoggerMutexes,
     ) {
         // Extract the individual parameters from the tuples
         let (mut refill_in_progress, mut refill_channel_disconnected) = *refill_status;
-        let (mut heater_is_on, mut heating_channel_disconnected) = *heater_status;
-        let (mut ventilation_is_on, mut ventilation_channel_disconnected) = *ventilation_status;
 
         //*** communication with refill thread ***
-        self.lock_error_output_state_refill_in_progress = self.update_on_off_signal(
+        self.lock_error_output_state_refill_in_progress = self.update_on_off_signal_via_channel(
             &mut refill_in_progress,
             &mut refill_channel_disconnected,
             AquariumSignal::RefillPumpStatus,
@@ -743,27 +732,47 @@ impl DataLogger {
         );
         *refill_status = (refill_in_progress, refill_channel_disconnected);
 
-        //*** communication with heating thread ***
-        self.lock_error_output_state_heating_is_on = self.update_on_off_signal(
-            &mut heater_is_on,
-            &mut heating_channel_disconnected,
-            AquariumSignal::HeatingControlStatus,
-            data_logger_channels.tx_to_heating,
-            data_logger_channels.rx_from_heating,
-            self.lock_error_output_state_heating_is_on,
-        );
-        *heater_status = (heater_is_on, heating_channel_disconnected);
+        {
+            // internal scope to limit lifetime of mutex lock
+            *heater_status = match data_logger_mutexes.mutex_heating_status.lock() {
+                Ok(c) => {
+                    self.lock_error_output_state_heating_is_on = self.output_state(
+                        *c,
+                        "ON",
+                        "OFF",
+                        &self.config.output_file_name_heating_is_on,
+                        self.lock_error_output_state_heating_is_on,
+                    );
+                    *c
+                }
+                Err(_) => {
+                    self.lock_error_output_state_heating_is_on = true;
+                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for heating status");
+                    false
+                }
+            };
+        }
 
-        //*** communication with ventilation thread ***
-        self.lock_error_output_state_ventilation_is_on = self.update_on_off_signal(
-            &mut ventilation_is_on,
-            &mut ventilation_channel_disconnected,
-            AquariumSignal::VentilationControlStatus,
-            data_logger_channels.tx_to_ventilation,
-            data_logger_channels.rx_from_ventilation,
-            self.lock_error_output_state_ventilation_is_on,
-        );
-        *ventilation_status = (ventilation_is_on, ventilation_channel_disconnected);
+        {
+            // internal scope to limit lifetime of mutex lock
+            *ventilation_status = match data_logger_mutexes.mutex_ventilation_status.lock() {
+                Ok(c) => {
+                    self.lock_error_output_state_ventilation_is_on = self.output_state(
+                        *c,
+                        "ON",
+                        "OFF",
+                        &self.config.output_file_name_ventilation_is_on,
+                        self.lock_error_output_state_ventilation_is_on,
+                    );
+                    *c
+                }
+                Err(_) => {
+                    self.lock_error_output_state_ventilation_is_on = true;
+                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for ventilation status");
+                    false
+                }
+            };
+        }
     }
 
     /// Retrieves current sensor readings from Atlas Scientific devices via shared mutexes and outputs them to files.
@@ -1100,8 +1109,6 @@ impl DataLogger {
         let mut ventilation_is_on: bool = false;
         let mut quit_command_received = false;
         let mut refill_channel_disconnected = false;
-        let mut heating_channel_disconnected = false;
-        let mut ventilation_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
@@ -1111,17 +1118,15 @@ impl DataLogger {
         loop {
             // update signals via channel communication
             let mut refill_status = (refill_in_progress, refill_channel_disconnected);
-            let mut heater_status = (heater_is_on, heating_channel_disconnected);
-            let mut ventilation_status = (ventilation_is_on, ventilation_channel_disconnected);
+
             self.update_signals(
                 &data_logger_channels,
                 &mut refill_status,
-                &mut heater_status,
-                &mut ventilation_status,
+                &mut heater_is_on,
+                &mut ventilation_is_on,
+                &data_logger_mutexes,
             );
             (refill_in_progress, refill_channel_disconnected) = refill_status;
-            (heater_is_on, heating_channel_disconnected) = heater_status;
-            (ventilation_is_on, ventilation_channel_disconnected) = ventilation_status;
 
             // update signals by accessing mutex for DS18B20 sensor signals
             self.update_ds18b20_signals(
@@ -1211,7 +1216,7 @@ impl DataLogger {
                 remaining_sleep_time_millis = 0;
                 cycle_time_exceeded = true;
             } else {
-                // underflow cannot happen because the else statement requires that first operand is higher than the second
+                // underflow cannot happen because the else statement requires that the first operand is higher than the second
                 remaining_sleep_time_millis =
                     self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
                 cycle_time_exceeded = false;
@@ -1244,18 +1249,14 @@ impl DataLogger {
                 if i % 1000 == 0 {
                     // update signals via channel communication
                     let mut refill_status = (refill_in_progress, refill_channel_disconnected);
-                    let mut heater_status = (heater_is_on, heating_channel_disconnected);
-                    let mut ventilation_status =
-                        (ventilation_is_on, ventilation_channel_disconnected);
                     self.update_signals(
                         &data_logger_channels,
                         &mut refill_status,
-                        &mut heater_status,
-                        &mut ventilation_status,
+                        &mut heater_is_on,
+                        &mut ventilation_is_on,
+                        &data_logger_mutexes,
                     );
                     (refill_in_progress, refill_channel_disconnected) = refill_status;
-                    (heater_is_on, heating_channel_disconnected) = heater_status;
-                    (ventilation_is_on, ventilation_channel_disconnected) = ventilation_status;
 
                     // update signals by accessing mutex for DS18B20 sensor signals
                     self.update_ds18b20_signals(
@@ -1318,8 +1319,8 @@ impl DataLogger {
             start_time = SystemTime::now(); // start time for the next cycle
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // Application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match data_logger_channels.tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
@@ -1575,16 +1576,12 @@ pub mod tests {
     #[test]
     // test case checks if DataLogger correctly processes all information:
     // - storage in SQL database using mock implementation
-    // - writing output to filesystem
+    // - writing output to the filesystem
     // Test case uses test database #45.
     pub fn test_data_log() {
         // channels for communication with the test environment
         let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
         let (tx_data_logger_to_refill, rx_refill_from_data_logger) = mpsc::channel();
-        let (tx_heating_to_data_logger, rx_data_logger_from_heating) = mpsc::channel();
-        let (tx_data_logger_to_heating, rx_heating_from_data_logger) = mpsc::channel();
-        let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation) = mpsc::channel();
-        let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger) = mpsc::channel();
         let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
@@ -1641,6 +1638,11 @@ pub mod tests {
             mutex_ds18b20_ambient_temperature.clone();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
+        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
+
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1761,10 +1763,8 @@ pub mod tests {
                     None,
                     None,
                     &rx_heating_from_signal_handler,
-                    Some(&tx_heating_to_data_logger),
-                    Some(&rx_heating_from_data_logger),
                     Some(&rx_heating_from_test_environment),
-                    false, // initial heating control status
+                    mutex_heating_status, // initial heating control status
                 );
             })
             .unwrap();
@@ -1774,11 +1774,9 @@ pub mod tests {
             .name("mock_ventilation".to_string())
             .spawn(move || {
                 mock_ventilation(
-                    &tx_ventilation_to_data_logger,
-                    &rx_ventilation_from_data_logger,
                     &rx_ventilation_from_signal_handler,
                     Some(&rx_ventilation_from_test_environment),
-                    false, // initial ventilation control status
+                    mutex_ventilation_status, // initial ventilation control status
                 );
             })
             .unwrap();
@@ -1791,17 +1789,13 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         spin_sleeper.sleep(sleep_duration_100_millis);
 
-        // thread for test object and asserts
+        // thread for the test object and asserts
         let join_handle_test_object = thread::Builder::new()
             .name("test_object".to_string())
             .spawn(move || {
                 let data_logger_channels = DataLoggerChannels {
                     tx_to_refill: &tx_data_logger_to_refill,
                     rx_from_refill: &rx_data_logger_from_refill,
-                    tx_to_heating: &tx_data_logger_to_heating,
-                    rx_from_heating: &rx_data_logger_from_heating,
-                    tx_to_ventilation: &tx_data_logger_to_ventilation,
-                    rx_from_ventilation: &rx_data_logger_from_ventilation,
                     tx_to_signal_handler: &tx_data_logger_to_signal_handler,
                     rx_from_signal_handler: &rx_data_logger_from_signal_handler,
                 };
@@ -1819,6 +1813,8 @@ pub mod tests {
                     mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
                     mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
                     mutex_tank_level_switch_signals,
+                    mutex_heating_status: mutex_heating_status_clone_for_data_logger,
+                    mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
                 };
 
                 data_logger.execute(

@@ -214,6 +214,12 @@ impl SqlInterfaceHeating {
     /// database connection and a dedicated calculator for time-until-midnight
     /// functionality, which allows for dependency injection for testing.
     ///
+    /// The function also checks if there are any NULL values in the table.
+    /// This is a critical inconsistency and shall abort the startup of the application.
+    /// This function is called before creating any threads.
+    /// If NULL values are detected, the function will panic leading to a stop of the overall
+    /// application.
+    /// 
     /// # Arguments
     /// * `conn` - An active database connection pool object for general heating-related operations.
     /// * `sql_interface_heating_midnight_calculator` - A boxed trait object that provides
@@ -258,10 +264,36 @@ impl SqlInterfaceHeating {
         }
     }
 
-    /// Retrieves a single heating stats entry from the database.
-    /// It provides wrapped into Result type either
-    /// - struct of type HeatingStatsEntry in case of success
-    /// - or a value from enum SqlInterfaceError
+    /// Retrieves a single `HeatingStatsEntry` for the current date from the database.
+    ///
+    /// This function executes an SQL query (`SQL_QUERY_READ_HEATING_STATS`) to fetch
+    /// heating statistical data that corresponds to the **database's current date**
+    /// (`CURRENT_DATE()`). It's designed to retrieve exactly one record for "today."
+    ///
+    /// The process involves:
+    /// 1.  **Query Execution**: Attempts to read data from the `heatingstats` table.
+    /// 2.  **Result Validation**:
+    ///     * If the query returns **no entries**, it indicates that no statistics
+    ///       have been recorded for the current database date yet, and an
+    ///       `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse` error is returned.
+    ///     * If the query returns **more than one entry**, it signifies a data
+    ///       inconsistency in the database (as only one daily entry is expected),
+    ///       and an `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse` error is returned.
+    /// 3.  **Data Conversion**: The retrieved string-based `date` field is parsed
+    ///     into a `chrono::NaiveDate` object.
+    /// 4.  **Struct Construction**: Finally, a `HeatingStatsEntry` struct is constructed
+    ///     with the retrieved and parsed data.
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(HeatingStatsEntry)`: If a single, valid heating statistics entry for the
+    ///   current date is successfully retrieved and parsed from the database.
+    /// - `Err(SqlInterfaceError)`: If any error occurs during the process, including
+    ///   - `SqlInterfaceError::SingleHeatingStatsRequestFailure`: The database query itself fails.
+    ///   - `SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse`: The query
+    ///     returns zero or more than one record.
+    ///   - `SqlInterfaceError::TimestampConversionFailure`: The date string retrieved
+    ///     from the database cannot be correctly parsed into a `NaiveDate`.
     pub fn get_single_heating_stats_from_database(
         &mut self,
     ) -> Result<HeatingStatsEntry, SqlInterfaceError> {
@@ -345,21 +377,39 @@ impl SqlInterfaceHeating {
         Ok(single_heating_stats_entry)
     }
 
-    /// Retrieves a single heating statistics entry from the database for the day that just passed
-    /// or for the current day in case the control application is terminated.
+    /// Inserts new heating statistical data into the database or updates an existing entry for a specific date.
     ///
-    /// This function queries the database for heating statistics data, expecting to find
-    /// exactly one record. It then post-processes the raw string-based date into a `NaiveDate`
-    /// and constructs a `HeatingStatsEntry` struct.
+    /// This function attempts to write a `HeatingStatsEntry` into the `heatingstats` table.
+    /// It's designed to manage daily statistics, where only one unique entry per date is expected.
+    ///
+    /// The underlying SQL query utilizes an `INSERT ... ON DUPLICATE KEY UPDATE` clause:
+    /// - If no record exists in the `heatingstats` table for the `date` specified in `heating_stats_entry`,
+    ///   a new row containing all provided statistical data is inserted.
+    /// - There is a `PRIMARY KEY` constraint for the `Date` column in the `heatingstats` table. 
+    /// - If a record *already exists* for `heating_stats_entry.date`, the existing row's
+    ///   `Energy`, `AmbientTempAverage`, `AmbientTempCounter`, `WaterTempAverage`, `WaterTempCounter`,
+    ///   and `HeatingControlRuntime` columns are updated with the new values from `heating_stats_entry`.
+    ///
+    /// **Important Note on Query Construction: **
+    /// The query is constructed in two parts:
+    /// 1.  The `INSERT` clause uses **parameterized queries** (e.g., `:date`, `:energy`), which is the
+    ///     recommended and secure way to prevent SQL injection.
+    /// 2.  The `ON DUPLICATE KEY UPDATE` clause, however, is built by **directly embedding string
+    ///     representations** of the data (e.g., `Energy=#Energy`).
+    ///
+    /// # Arguments
+    ///
+    /// * `heating_stats_entry` - A reference to the `HeatingStatsEntry` struct containing all the
+    ///   statistical data (date, energy, temperatures, runtime) to be inserted or updated.
+    ///   The `date` field is crucial as it identifies the unique daily record.
     ///
     /// # Returns
-    /// A `Result` which is:
-    /// - `Ok(HeatingStatsEntry)`: The successfully retrieved and parsed heating statistics entry.
-    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestFailure)`: If the database query fails.
-    /// - `Err(SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse)`: If the query
-    ///   returns zero records or more than one record (indicating a data inconsistency).
-    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the date string
-    ///   retrieved from the database cannot be parsed into a valid `NaiveDate`.
+    ///
+    /// - `Ok(())`: If the data was successfully inserted as a new record or if an existing
+    ///   record was successfully updated.
+    /// - `Err(SqlInterfaceError::InsertHeatingStatsEntryFailure)`: If any error occurs during
+    ///   the database operation.    
+    ///
     pub fn insert_heating_stats_entry(
         &mut self,
         heating_stats_entry: &HeatingStatsEntry,

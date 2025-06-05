@@ -17,6 +17,7 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Instant;
 
 const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 
@@ -24,6 +25,10 @@ const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError>;
+    
+    fn get_heartbeat_interval_seconds(&self) -> Option<u64>;
+    
+    fn heartbeat(&mut self);
 }
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
@@ -120,7 +125,7 @@ pub struct RelayManagerChannels {
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Contains the configuration and the implementation of the relay manager
+/// Contains the configuration and the implementation of the relay manager.
 /// Thread communication of this component is as follows:
 /// ```mermaid
 /// graph LR
@@ -245,6 +250,8 @@ impl RelayManager {
         relay_manager_channels: RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
+        let mut last_heartbeat_time = Instant::now();
+
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &relay_manager_channels.rx_relay_manager_from_signal_handler,
@@ -547,6 +554,17 @@ impl RelayManager {
                 }
             }
             // **********************************
+
+            // *** send heartbeat ***
+            let heartbeat_interval = actuator.get_heartbeat_interval_seconds();
+            if let Some(interval_secs) = heartbeat_interval {
+                // This block is only executed if heartbeat_interval is Some(value),
+                // and 'value' is bound to 'interval_secs'.
+                if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
+                    actuator.heartbeat();
+                    last_heartbeat_time = Instant::now();
+                }
+            }
         }
 
         #[cfg(feature = "debug_relay_manager")]
@@ -555,8 +573,8 @@ impl RelayManager {
             "exited loop, sending back confirmation to signal handler"
         );
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // Application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match &relay_manager_channels
             .tx_relay_manager_to_signal_handler
             .send(true)
@@ -581,7 +599,8 @@ impl RelayManager {
 pub mod tests {
     use std::sync::mpsc;
     use std::thread::scope;
-
+    use std::time::Duration;
+    use spin_sleep::SpinSleeper;
     use crate::relays::relay_manager::{
         RelayActuationTrait, RelayError, RelayManager, RelayManagerChannels,
     };
@@ -592,6 +611,9 @@ pub mod tests {
     pub struct ActuateVoid {
         // execution counter for testing purposes
         execution_counter: u32,
+        
+        // heartbeat counter for testing purposes
+        heartbeat_counter: u32,
     }
 
     impl RelayActuationTrait for ActuateVoid {
@@ -599,6 +621,14 @@ pub mod tests {
         fn actuate(&mut self, _internal_command: InternalCommand) -> Result<(), RelayError> {
             self.execution_counter += 1;
             Ok(())
+        }
+
+        fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+            Some(1)
+        }
+
+        fn heartbeat(&mut self) {
+            self.heartbeat_counter += 1;
         }
     }
 
@@ -615,6 +645,9 @@ pub mod tests {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
 
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration = Duration::from_secs(2);
+        
         let mut relay_manager = RelayManager::new(config.relay_manager);
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
@@ -851,6 +884,9 @@ pub mod tests {
                         panic!("test_relay_manager_channel_communication: error when receiving answer for Feed thread: {e:?}");
                     }
                 }
+
+                spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
+                
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 rx_signal_handler_from_relay_manager.recv().unwrap();
             });
@@ -859,6 +895,7 @@ pub mod tests {
             scope.spawn(move || {
                 let mut mock_actuator = ActuateVoid {
                     execution_counter: 0,
+                    heartbeat_counter: 0,
                 };
 
                 let relay_manager_channels = RelayManagerChannels {
@@ -878,8 +915,9 @@ pub mod tests {
 
                 relay_manager.execute(relay_manager_channels, &mut mock_actuator);
 
-                // Test object thread has ended. Assertion checks the number of calls to the actuator.
-                assert_eq!(mock_actuator.get_execution_count(), 24);
+                // Test object thread has ended. 
+                assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
+                assert_eq!(mock_actuator.heartbeat_counter, 2); // Assertion checks the number of heartbeats.
             });
         });
     }

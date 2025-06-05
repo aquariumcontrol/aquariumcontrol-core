@@ -34,7 +34,7 @@ pub struct TankLevelSwitchConfig {
     /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
-    /// number of seconds which need to indicate a low level before the refill control assumes that the water level is low
+    /// the number of seconds which need to indicate a low level before the refill control assumes that the water level is low
     tank_level_switch_position_low_stabilization_count: u32,
 }
 
@@ -427,7 +427,7 @@ impl TankLevelSwitch {
                 Err(e) => {
                     warn!(
                         target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                        "Could not calculated execution time: {e:?}."
+                        "Could not calculate execution time: {e:?}."
                     );
                     0 // provide default value
                 }
@@ -544,12 +544,14 @@ pub mod tests {
             + 1;
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true, None, config.gpio_handler.tank_level_switch);
-        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
         let mut tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
             true,
+            None,
+            config.gpio_handler.tank_level_switch,
         );
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, true)));
@@ -951,8 +953,7 @@ pub mod tests {
             // loop for the first 10 seconds
             spin_sleeper.sleep(sleep_duration_part);
             {
-                let tank_level_switch_signals =
-                    mutex_tank_level_switch_signals.lock().unwrap();
+                let tank_level_switch_signals = mutex_tank_level_switch_signals.lock().unwrap();
                 println!(
                     "Tank level switch signals at iteration {}: Position={} Invalid={} Stabilized={}",
                     i,
@@ -962,16 +963,21 @@ pub mod tests {
                 );
                 if i < 10 {
                     assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                    assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, true);
-                }
-                else {
+                    assert_eq!(
+                        tank_level_switch_signals.tank_level_switch_position_stabilized,
+                        true
+                    );
+                } else {
                     assert_eq!(tank_level_switch_signals.tank_level_switch_position, false);
-                    assert_eq!(tank_level_switch_signals.tank_level_switch_position_stabilized, false);
+                    assert_eq!(
+                        tank_level_switch_signals.tank_level_switch_position_stabilized,
+                        false
+                    );
                 }
             }
         }
     }
-    
+
     #[test]
     #[ignore]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -988,16 +994,13 @@ pub mod tests {
             mpsc::channel();
 
         let tank_level_switch_pin = config.gpio_handler.tank_level_switch;
-        
+
         let gpio_handler = GpioHandler::new(config.gpio_handler).unwrap();
 
         let gpio_lib_handle = gpio_handler.gpio_lib_handle_opt.clone().unwrap();
-        
-        let mut stimuli_pin = actuate_gpio::get_output_pin(
-            &gpio_lib_handle,
-            21,
-            "Tank level switch stimuli",
-        );
+
+        let mut stimuli_pin =
+            actuate_gpio::get_output_pin(&gpio_lib_handle, 21, "Tank level switch stimuli");
 
         let mut tank_level_switch = TankLevelSwitch::new(
             config.tank_level_switch,
@@ -1008,8 +1011,9 @@ pub mod tests {
 
         let mut mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
-        let mutex_tank_level_switch_signals_clone_for_test_object = mutex_tank_level_switch_signals.clone();
-        
+        let mutex_tank_level_switch_signals_clone_for_test_object =
+            mutex_tank_level_switch_signals.clone();
+
         // thread for controlling duration of test run
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1022,7 +1026,7 @@ pub mod tests {
                     sleep_duration_part,
                     &mut mutex_tank_level_switch_signals
                 );
-                    
+
                 stimuli_pin.set_high();
 
                 for i in 0..20 {

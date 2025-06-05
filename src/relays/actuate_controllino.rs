@@ -24,7 +24,7 @@ const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
 /// Contains constants for communication with Controllino
 #[allow(unused)]
 pub mod controllino_constants {
-    /// the size of ControllinoMessage is deliberately set here because checksums are added to content of struct
+    /// the size of ControllinoMessage is deliberately set here because checksums are added to the content of struct
     pub const MESSAGE_SIZE: usize = 8;
 
     /// command for setting a single relay
@@ -156,6 +156,9 @@ pub struct ActuateControllinoConfig {
 
     /// Relay id of peristaltic pump #4
     pub peristaltic_pump4_id: u8,
+    
+    /// Heartbeat interval
+    pub heartbeat_interval_seconds: u64,
 }
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
@@ -196,11 +199,11 @@ fn create_command_message(
             };
             let (relay_command_char, relay_id, duration_millis) = match relay_command {
                 InternalCommand::SetRelay(relay_id) => {
-                    // relay id is set inside this crate, so cast is safe
+                    // relay id is set inside this crate, so the cast is safe
                     (controllino_constants::COMMAND_SET_RELAY, relay_id as u8, 0)
                 }
                 InternalCommand::UnsetRelay(relay_id) => {
-                    // relay id is set inside this crate, so cast is safe
+                    // relay id is set inside this crate, so the cast is safe
                     (
                         controllino_constants::COMMAND_UNSET_RELAY,
                         relay_id as u8,
@@ -208,7 +211,7 @@ fn create_command_message(
                     )
                 }
                 InternalCommand::PulseRelay(relay_id, duration_millis) => {
-                    // relay id is set inside this crate, so cast is safe
+                    // relay id is set inside this crate, so the cast is safe
                     (
                         controllino_constants::COMMAND_PULSE_RELAY,
                         relay_id as u8,
@@ -226,6 +229,12 @@ fn create_command_message(
         }
         _ => Err(RelayError::IrrelevantCommand(internal_command)),
     }
+}
+
+fn create_heartbeat_message() -> ControllinoMessage {
+    let message_content =
+        ControllinoMessageContent::new(controllino_constants::COMMAND_HEARTBEAT, 0, 0);
+    ControllinoMessage::new(message_content)
 }
 
 /// Creates a Controllino-specific message from a high-level internal command.
@@ -495,6 +504,40 @@ impl RelayActuationTrait for ActuateControllino {
             }
         }
     }
+
+    /// Getter-function for the heartbeat interval in seconds.
+    ///
+    /// # Returns
+    /// - the heartbeat interval in seconds as u64 wrapped in Option
+    fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
+        Some(self.config.heartbeat_interval_seconds)
+    }
+    
+    /// Executes the heartbeat: Sending a signal to the actuator
+    fn heartbeat(&mut self) {
+        // create a message to be sent to Controllino
+        let message = create_heartbeat_message();
+
+        // write a message to Controllino
+        match self.serial_port.write(&message.data) {
+            Ok(amount_byte_written) => {
+                if amount_byte_written != message.data.len() {
+                    warn!(
+                        "{}: Writing heartbeat message to Controllino device failed. Amount of bytes written: {}. Expected: {}",
+                        LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                        amount_byte_written,
+                        message.data.len()
+                    );
+                }
+            }
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    "sending heartbeat command to Controllino failed ({e:?})"
+                );
+            }
+        }
+    }
 }
 
 /// Opens and initializes a serial port connection to the Controllino device.
@@ -587,7 +630,7 @@ impl ActuateControllino {
     /// This function performs two critical checks:
     /// 1. Ensures that all configured relay IDs fall within the permissible range
     ///    defined by `CONTROLLINO_MIN_RELAY_ID` and `CONTROLLINO_MAX_RELAY_ID`.
-    /// 2. Confirms that all assigned relay IDs are unique, preventing conflicts
+    /// 2. It confirms that all assigned relay IDs are unique, preventing conflicts
     ///    where multiple devices might be configured to the same physical relay.
     ///
     /// Errors (out-of-range or duplicate IDs) are logged to the console/main log,
@@ -664,7 +707,7 @@ impl ActuateControllino {
     pub fn new(config: ActuateControllinoConfig) -> ActuateControllino {
         let spin_sleeper = SpinSleeper::default();
 
-        // check validity of configuration
+        // check the validity of configuration
         if !Self::check_valid_relay_id_config(&config) {
             panic!(
                 "{}: Relay ID configuration is invalid.",

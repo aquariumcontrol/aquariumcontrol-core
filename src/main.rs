@@ -383,7 +383,7 @@ fn main() {
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
-    // setup logging to write to log output file and stdout
+    // setup logging to write to the log output file and stdout
     setup_logger();
 
     // get command line parameters from OS
@@ -657,26 +657,6 @@ fn main() {
     ) = mpsc::channel();
     let (tx_refill_to_data_logger, rx_data_logger_from_refill): (Sender<bool>, Receiver<bool>) =
         mpsc::channel();
-    // *****************************
-
-    // *** heating <=> data_logger ***
-    let (tx_data_logger_to_heating, rx_heating_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_heating_to_data_logger, rx_data_logger_from_heating): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *****************************
-
-    // *** ventilation <=> data_logger ***
-    let (tx_data_logger_to_ventilation, rx_ventilation_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_ventilation_to_data_logger, rx_data_logger_from_ventilation): (
-        Sender<bool>,
-        Receiver<bool>,
-    ) = mpsc::channel();
     // *****************************
 
     // *** refill <=> relay_manager ***
@@ -1304,8 +1284,6 @@ fn main() {
         rx_ventilation_from_relay_manager,
         tx_ventilation_to_signal_handler,
         rx_ventilation_from_signal_handler,
-        tx_ventilation_to_data_logger,
-        rx_ventilation_from_data_logger,
         tx_ventilation_to_schedule_check,
         rx_ventilation_from_schedule_check,
         rx_ventilation_from_messaging_opt,
@@ -1324,8 +1302,6 @@ fn main() {
         rx_heating_from_relay_manager,
         tx_heating_to_signal_handler,
         rx_heating_from_signal_handler,
-        tx_heating_to_data_logger,
-        rx_heating_from_data_logger,
         tx_heating_to_schedule_check,
         rx_heating_from_schedule_check,
         rx_heating_from_messaging_opt,
@@ -1452,6 +1428,17 @@ fn main() {
         let mutex_tank_level_switch_signals_clone_for_refill =
             mutex_tank_level_switch_signals.clone();
 
+        // Mutex for refill
+        // let mutex_refill_status = Arc::new(Mutex::new(false));
+
+        // Mutex for heating
+        let mutex_heating_status = Arc::new(Mutex::new(false));
+        let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
+
+        // Mutex for ventilation
+        let mutex_ventilation_status = Arc::new(Mutex::new(false));
+        let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
+
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_communication = match TcpCommunication::new(&config.tcp_connection) {
@@ -1532,7 +1519,7 @@ fn main() {
             scope.spawn(move || {
                 dht.execute(
                     tx_dht_to_ambient,
-                    rx_dht_from_ambient, // channel is shared with the signal handler
+                    rx_dht_from_ambient, // the channel is shared with the signal handler
                 );
 
                 #[cfg(feature = "debug_main")]
@@ -1585,10 +1572,6 @@ fn main() {
             let data_logger_channels = DataLoggerChannels {
                 tx_to_refill: &tx_data_logger_to_refill,
                 rx_from_refill: &rx_data_logger_from_refill,
-                tx_to_heating: &tx_data_logger_to_heating,
-                rx_from_heating: &rx_data_logger_from_heating,
-                tx_to_ventilation: &tx_data_logger_to_ventilation,
-                rx_from_ventilation: &rx_data_logger_from_ventilation,
                 tx_to_signal_handler: &tx_data_logger_to_signal_handler,
                 rx_from_signal_handler: &rx_data_logger_from_signal_handler,
             };
@@ -1607,6 +1590,8 @@ fn main() {
                 mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
                 mutex_tank_level_switch_signals:
                     mutex_tank_level_switch_signals_clone_for_data_logger,
+                mutex_heating_status: mutex_heating_status_clone_for_data_logger,
+                mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
             };
 
             data_logger.execute(
@@ -1657,6 +1642,7 @@ fn main() {
             mutex_water_temperature: mutex_atlas_scientific_temperature_clone_for_heating,
             mutex_ambient_temperature: mutex_ambient_temperature_clone_for_heating,
             mutex_tank_level_switch_signals: mutex_tank_level_switch_signals_clone_for_heating,
+            mutex_heating_status,
         };
 
         scope.spawn(move || {
@@ -1681,6 +1667,7 @@ fn main() {
                 ventilation_channels,
                 &mut ventilation_set_value_updater,
                 mutex_atlas_scientific_temperature_clone_for_ventilation,
+                mutex_ventilation_status,
             );
 
             #[cfg(feature = "debug_main")]
