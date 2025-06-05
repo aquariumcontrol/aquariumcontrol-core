@@ -66,7 +66,9 @@ use log::{error, info, warn};
 #[cfg(feature = "debug_main")]
 use log::debug;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
+
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
@@ -258,6 +260,7 @@ fn check_argument_for_valid_config_file_name(
 /// # Panics
 /// This function may panic if the underlying system call `geteuid` fails,
 /// which is highly unlikely in normal operation.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn is_running_as_root() -> bool {
     let euid = unistd::geteuid();
     euid.is_root()
@@ -418,7 +421,8 @@ fn main() {
         version_information
     );
 
-    // check if the user has root privileges
+    // check if the user has root privileges - disabled when developing on Windows platform
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     if !is_running_as_root() {
         panic!("{}: This application must be run as root.", LOG_TARGET_MAIN);
     }

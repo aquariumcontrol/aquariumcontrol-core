@@ -14,19 +14,15 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-cfg_if::cfg_if! {
-    if #[cfg(any(target_os = "linux", target_os = "macos"))] {
-        use std::thread::sleep;
-        use std::io;
-        use std::fs;
-        use std::path::PathBuf;
+use std::thread::sleep;
+use std::io;
+use std::fs;
+use std::path::PathBuf;
 
-        const LOG_TARGET_DS18B20: &str = "ds18b20";
+const LOG_TARGET_DS18B20: &str = "ds18b20";
 
-        #[cfg(feature = "debug_ds18b20")]
-        use log::debug;
-    }
-}
+#[cfg(feature = "debug_ds18b20")]
+use log::debug;
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use log::error;
@@ -294,15 +290,15 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
-    use std::env;
-
     cfg_if::cfg_if! {
         if #[cfg(any(target_os = "linux", target_os = "macos"))] {
-            use crate::sensors::ds18b20::Ds18b20;
-            use crate::utilities::config::read_config_file;
+            use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
+            use std::env;
         }
     }
+    
+    use crate::utilities::config::read_config_file;
+    use crate::sensors::ds18b20::Ds18b20;
 
     #[test]
     #[ignore]
