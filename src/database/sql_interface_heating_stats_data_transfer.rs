@@ -1,4 +1,3 @@
-use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
 use log::error;
@@ -12,11 +11,10 @@ const LOG_TARGET_HEATING_STATS_DATA_TRANSFER: &str = "HeatingStatsDataTransfer";
 pub struct HeatingStatsDataTransfer;
 
 impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
-    /// Transfers the provided daily heating statistics entry to the SQL database.
+    /// The function transfers the provided daily heating statistics entry to the SQL database.
     ///
-    /// This implementation updates the `date` of the `heating_stats_entry` to the
-    /// **current database date** (ensuring consistency) and then attempts to insert
-    /// or update this record in the database. Errors during database operations are logged,
+    /// This implementation attempts to insert or update the heating stats record in the database.
+    /// Errors during database operations are logged,
     /// but the function proceeds without panicking to avoid disrupting the main application flow.
     ///
     /// # Arguments
@@ -26,23 +24,9 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     ///   used for database interaction.
     fn transfer_heating_stats(
         &mut self,
-        mut heating_stats_entry: HeatingStatsEntry,
+        heating_stats_entry: HeatingStatsEntry,
         sql_interface_heating: &mut SqlInterfaceHeating,
     ) {
-        // two further sections.
-        let today = match SqlInterface::get_current_date(&mut sql_interface_heating.conn) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_HEATING_STATS_DATA_TRANSFER,
-                    "could not get current date from SQL database ({e:?}) - not inserting heating stats into database"
-                );
-                return;
-            }
-        };
-
-        heating_stats_entry.date = today;
-
         match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
             Ok(_) => {}
             Err(e) => {
