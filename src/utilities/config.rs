@@ -16,6 +16,7 @@ use std::fs;
 #[cfg(test)]
 use std::env;
 
+use crate::food::feed::FeedConfig;
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
 use crate::relays::actuate_controllino::ActuateControllinoConfig;
@@ -23,7 +24,6 @@ use crate::relays::relay_manager::RelayManagerConfig;
 use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
 use crate::sensors::dht::DhtConfig;
-use crate::food::feed::FeedConfig;
 use crate::sensors::gpio_handler::GpioHandlerConfig;
 use crate::thermal::heating::HeatingConfig;
 

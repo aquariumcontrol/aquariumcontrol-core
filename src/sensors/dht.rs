@@ -10,7 +10,7 @@ use crate::utilities::channel_content::InternalCommand;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{TryRecvError, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -225,14 +225,19 @@ impl Dht {
     ///
     /// # Returns
     /// A new **`Dht` struct**, ready to read temperature and humidity.
-    pub fn new(config: DhtConfig, gpio_opt: Option<Gpio>, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
+    pub fn new(
+        config: DhtConfig,
+        gpio_opt: Option<Gpio>,
+        gpio_dht22_io: u8,
+        gpio_dht22_vcc: u8,
+    ) -> Dht {
         Dht {
             config,
             gpio_opt,
             gpio_dht22_io,
             gpio_dht22_vcc,
             instant_last_measurement: Instant::now(),
-            lock_error_mutex: false
+            lock_error_mutex: false,
         }
     }
 
@@ -498,11 +503,10 @@ impl Dht {
         let gpio: &mut Gpio;
         if self.gpio_opt.is_some() {
             gpio = self.gpio_opt.as_mut().unwrap();
-        }
-        else {
+        } else {
             return Err(DhtError::IncorrectPlatform);
         }
-        
+
         // get pin for providing supply voltage to DHT sensor
         let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {
             Ok(c) => c.into_output(),
@@ -695,7 +699,7 @@ impl Dht {
         let mut measurement_successful = false;
         let mut retry_counter = 0;
 
-        let mut result_tuple: (f32, f32) = (0.0, 0.0);
+        let mut result_tuple: (f32, f32) = (0.1, 0.1);
         let mut dht_error = DhtError::Timeout; // Avoid compiler error. The value will be overwritten in the error case.
 
         while !measurement_successful {
@@ -772,7 +776,7 @@ impl Dht {
         let sleep_duration_100_millis = Duration::from_millis(100);
 
         loop {
-            match rx_from_signal_handler.recv() {
+            match rx_from_signal_handler.try_recv() {
                 Ok(c) => {
                     lock_error_receive = false;
                     match c {
@@ -796,12 +800,17 @@ impl Dht {
                     };
                 }
                 Err(e) => {
-                    if !lock_error_receive {
-                        error!(
-                            target: LOG_TARGET_DHT,
-                            "Error in trying to receive command from signal handler: {e:?}"
-                        );
-                        lock_error_receive = true;
+                    match e {
+                        TryRecvError::Empty => { /* do nothing */ }
+                        TryRecvError::Disconnected => {
+                            if !lock_error_receive {
+                                error!(
+                                    target: LOG_TARGET_DHT,
+                                    "Error in trying to receive command from signal handler: {e:?}"
+                                );
+                                lock_error_receive = true;
+                            }
+                        }
                     }
                 }
             };
@@ -816,17 +825,19 @@ impl Dht {
             {
                 let result = self.get_data();
 
-                // internal scope to limit lifetime of mutex lock
-                match mutex_dht.lock() {
-                    Ok(mut c) => {
-                        *c = result;
-                        self.lock_error_mutex = false;
-                    }
-                    Err(_) => {
-                        self.lock_error_mutex = true;
-                        error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
-                    }
-                };
+                {
+                    // internal scope to limit lifetime of mutex lock
+                    match mutex_dht.lock() {
+                        Ok(mut c) => {
+                            *c = result;
+                            self.lock_error_mutex = false;
+                        }
+                        Err(_) => {
+                            self.lock_error_mutex = true;
+                            error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                        }
+                    };
+                }
 
                 self.instant_last_measurement = current_instant;
             }

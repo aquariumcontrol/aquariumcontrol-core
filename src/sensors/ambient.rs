@@ -349,10 +349,10 @@ impl Ambient {
 pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
+    use std::sync::mpsc::TryRecvError;
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
-    use std::sync::mpsc::TryRecvError;
 
     use crate::sensors::ambient::{Ambient, AmbientChannels};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
