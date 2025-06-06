@@ -632,7 +632,8 @@ impl DataLogger {
                     *refill_status_live = refill_status.refill_in_progress_live;
                     *refill_status_for_database = refill_status.refill_in_progress_for_database;
                     if refill_reset_for_database {
-                        refill_status.refill_in_progress_for_database = refill_status.refill_in_progress_live;
+                        refill_status.refill_in_progress_for_database =
+                            refill_status.refill_in_progress_live;
                     }
                 }
                 Err(_) => {
@@ -1600,8 +1601,9 @@ pub mod tests {
                 }
 
                 {
-                    let mut refill_status =
-                        mutex_refill_status_clone_for_test_environment.lock().unwrap();
+                    let mut refill_status = mutex_refill_status_clone_for_test_environment
+                        .lock()
+                        .unwrap();
                     refill_status.refill_in_progress_for_database = true;
                 }
 
@@ -1721,9 +1723,10 @@ pub mod tests {
 
                 // Assert if data logger has set the refill-in-progress bit to false.
                 {
-                    let refill_status =
-                        mutex_refill_status.lock().unwrap();
-                    println!("Checking if data logger has set the refill-in-progress bit to false...");
+                    let refill_status = mutex_refill_status.lock().unwrap();
+                    println!(
+                        "Checking if data logger has set the refill-in-progress bit to false..."
+                    );
                     assert_eq!(refill_status.refill_in_progress_for_database, false);
                 }
 
@@ -1889,24 +1892,24 @@ pub mod tests {
                 );
 
                 assert_output_file_contents(
-                    &config2.data_logger,                       // data_logger_config,
-                    29.0,                  // target_water_temperature
-                    28.6,            // target_water_temperature_filtered
-                    7.0,                          // target_water_ph
-                    7.04,                   // target_water_ph_filtered
-                    50_000.0,              // target_water_conductivity
-                    46876.0,         // target_water_conductivity_filtered
-                    0.0,        // target_water_conductivity_compensated
-                    false,                   // target_refill_in_progress
-                    true,             // target_tank_level_switch_position
-                    false,             // target_tank_level_switch_invalid
-                    true,     // target_tank_level_switch_position_stabilized
-                    true,             // target_surface_ventilation_status
-                    35.0,                // target_ambient_temperature
-                    66.0,                   // target_ambient_humidity
-                    true,                      // target_heater_status
-                    15.5,           // target DS18B20 water temperature
-                    16.5,         // target DS18B20 ambient temperature
+                    &config2.data_logger, // data_logger_config,
+                    29.0,                 // target_water_temperature
+                    28.6,                 // target_water_temperature_filtered
+                    7.0,                  // target_water_ph
+                    7.04,                 // target_water_ph_filtered
+                    50_000.0,             // target_water_conductivity
+                    46876.0,              // target_water_conductivity_filtered
+                    0.0,                  // target_water_conductivity_compensated
+                    false,                // target_refill_in_progress
+                    true,                 // target_tank_level_switch_position
+                    false,                // target_tank_level_switch_invalid
+                    true,                 // target_tank_level_switch_position_stabilized
+                    true,                 // target_surface_ventilation_status
+                    35.0,                 // target_ambient_temperature
+                    66.0,                 // target_ambient_humidity
+                    true,                 // target_heater_status
+                    15.5,                 // target DS18B20 water temperature
+                    16.5,                 // target DS18B20 ambient temperature
                 );
             })
             .unwrap();

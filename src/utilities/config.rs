@@ -40,6 +40,7 @@ use crate::dispatch::messaging::MessagingConfig;
 
 use crate::database::sql_interface::SqlInterfaceConfig;
 use crate::permission::schedule_check::ScheduleCheckConfig;
+use crate::sensors::dht::DhtConfig;
 use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
@@ -72,7 +73,6 @@ pub struct ConfigData {
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,
 
-    #[cfg(feature = "target_hw")]
     /// configuration of the DHT driver
     pub dht: DhtConfig,
 
@@ -196,7 +196,7 @@ pub fn read_config_file(filename: String) -> ConfigData {
 // # Panics
 // This function will panic in the following scenarios:
 // - If the `CARGO_MANIFEST_DIR` environment variable is not set.
-// - If the specified file cannot be read (e.g., file not found, permissions issues).
+// - If the specified file cannot be read (e.g., the file is not found, permissions issues).
 // - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
 pub fn read_config_file(filename: String) -> ConfigData {
     let filename_test = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {

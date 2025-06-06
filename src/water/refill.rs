@@ -213,7 +213,7 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from the signal handler via the channel
     lock_error_channel_receive_termination_command: bool,
-    
+
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 

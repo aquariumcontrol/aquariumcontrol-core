@@ -6,18 +6,22 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use crate::utilities::channel_content::InternalCommand;
+use log::error;
 use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+const LOG_TARGET_DHT: &str = "dht";
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use log::error;
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread::{self, sleep};
         use std::time::Duration;
         use std::sync::mpsc::{Sender, Receiver};
-
-        const LOG_TARGET_DHT: &str = "dht";
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
@@ -26,16 +30,7 @@ cfg_if::cfg_if! {
     }
 }
 
-cfg_if::cfg_if! {
-   if #[cfg(all(not(test), not(all(target_os = "linux", feature = "target_hw"))))] {
-        use log::error;
-        #[cfg(feature = "debug_dht")]
-        const LOG_TARGET_DHT: &str = "dht";
-   }
-}
-
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-// Type definition to avoid linter warnings about complex return types
+/// Type definition to avoid linter warnings about complex return types
 pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
 
 /// Holds the configuration data for interacting with GPIO
@@ -59,17 +54,20 @@ pub struct DhtConfig {
     #[allow(unused)]
     timeout_duration_micros: u64,
 
-    // duration in milliseconds the sensor is switched off before requesting transmission
+    /// duration in milliseconds the sensor is switched off before requesting transmission
     #[allow(unused)]
     sensor_reset_duration_millis: u64,
 
-    // duration in milliseconds the sensor is given to initialize
+    /// duration in milliseconds the sensor is given to initialize
     #[allow(unused)]
     sensor_startup_duration_millis: u64,
 
-    // duration in milliseconds the sensor is given to pause between transmissions
+    /// duration in milliseconds the sensor is given to pause between transmissions
     #[allow(unused)]
     sensor_pause_duration_millis: u64,
+
+    /// duration in milliseconds between two measurements
+    measurement_interval_millis: u64,
 }
 
 /// Contains constants for communication with the DHT22 sensor.
@@ -183,6 +181,9 @@ pub enum DhtError {
 
     /// humidity value is out of range
     HumidityOutOfRange,
+
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    IncorrectPlatform,
 }
 
 pub struct Dht {
@@ -201,11 +202,17 @@ pub struct Dht {
     /// numeric GPIO pin for providing power to the DHT22 sensor
     #[allow(unused)]
     gpio_dht22_vcc: u8,
+
+    /// time instance of the last recording
+    instant_last_measurement: Instant,
+
+    /// flag to avoid flooding the log file in case mutex cannot be locked
+    lock_error_mutex: bool,
 }
 
 impl Dht {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on a Linux system.
+    /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on the target platform.
     ///
     /// This constructor initializes the DHT sensor module, configuring it with the provided
     /// settings and gaining access to the necessary GPIO pins for communication and power supply
@@ -226,6 +233,26 @@ impl Dht {
             gpio,
             gpio_dht22_io,
             gpio_dht22_vcc,
+            instant_last_measurement: Instant::now(),
+        }
+    }
+
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    /// Creates a new instance of a stub-version of **`Dht`** instance on non-target platforms.
+    ///
+    /// # Arguments
+    /// * `config` - **Configuration data** for the DHT sensor, including timing parameters for communication.
+    /// # Returns
+    /// A new **`Dht` struct**, which will not be able to record any actual data, but allow for a build.
+    /// * `gpio_dht22_io` - The **GPIO pin** used for data input/output with the DHT22 sensor.
+    /// * `gpio_dht22_vcc` - The **GPIO pin** used to control the power supply (VCC) to the DHT22 sensor.
+    pub fn new(config: DhtConfig, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
+        Dht {
+            config,
+            gpio_dht22_io,
+            gpio_dht22_vcc,
+            instant_last_measurement: Instant::now(),
+            lock_error_mutex: false,
         }
     }
 
@@ -484,7 +511,7 @@ impl Dht {
     /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum.
     /// - `Err(DhtError::TemperatureOutOfRange)`: If the measured temperature is outside the sensor's specified range.
     /// - `Err(DhtError::HumidityOutOfRange)`: If the measured humidity is outside the sensor's specified range.
-    pub fn read(&self, reset_sensor: bool) -> Result<(f32, f32), DhtError> {
+    pub fn read(&self, reset_sensor: bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
         // get pin for providing supply voltage to DHT sensor
@@ -656,7 +683,12 @@ impl Dht {
         Self::calc_signals(byte_vals)
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    /// Stub function to allow build on a non-target platform
+    pub fn read(&self, _reset_sensor: bool) -> DhtResult {
+        Err(DhtError::IncorrectPlatform)
+    }
+
     /// Initiates the reading process from the DHT22 sensor, including retry logic and post-processing of data.
     ///
     /// This function attempts to read temperature and humidity data from the DHT22 sensor.
@@ -669,7 +701,7 @@ impl Dht {
     /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
     /// - `Err(DhtError)`: An error indicating various failure modes, including sensor communication issues,
     ///   checksum errors, timeouts after all retries, or out-of-range sensor values.
-    pub fn get_data(&self) -> Result<(f32, f32), DhtError> {
+    pub fn get_data(&self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;
@@ -725,7 +757,6 @@ impl Dht {
         }
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Executes the main loop for the DHT sensor thread, receiving requests and sending measurement responses.
     ///
     /// This function runs indefinitely, acting as a dedicated service for reading ambient
@@ -743,56 +774,19 @@ impl Dht {
     ///   (e.g., `RequestSignal`, `Quit`) from the `Ambient` module or the `SignalHandler`.
     pub fn execute(
         &mut self,
-        tx_to_ambient: Sender<Result<(f32, f32), DhtError>>,
-        rx_from_ambient_or_signal_handler: Receiver<InternalCommand>,
+        mutex_dht: Arc<Mutex<DhtResult>>,
+        rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
         let mut lock_error_invalid_command: bool = false;
-        let mut lock_error_invalid_signal: bool = false;
         let mut lock_error_receive: bool = false;
-        let mut lock_error_send: bool = false;
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_100_millis = Duration::from_millis(100);
 
         loop {
-            match rx_from_ambient_or_signal_handler.recv() {
+            match rx_from_signal_handler.recv() {
                 Ok(c) => {
                     lock_error_receive = false;
                     match c {
-                        InternalCommand::RequestSignal(signal_request) => {
-                            lock_error_invalid_command = false;
-                            // Ambient requests either temperature or humidity
-                            match signal_request {
-                                AquariumSignal::AmbientHumidity
-                                | AquariumSignal::AmbientTemperature => {
-                                    let measurement = self.get_data();
-                                    match tx_to_ambient.send(measurement) {
-                                        Ok(()) => {
-                                            #[cfg(feature = "debug_dht")]
-                                            debug!(
-                                                target: LOG_TARGET_DHT,
-                                                "sent data to Ambient via channel"
-                                            );
-                                        }
-                                        Err(e) => {
-                                            if !lock_error_send {
-                                                error!(
-                                                    target: LOG_TARGET_DHT,
-                                                    "Error occurred when sending data to Ambient ({e:?})"
-                                                );
-                                                lock_error_send = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    if !lock_error_invalid_signal {
-                                        error!(
-                                            target: LOG_TARGET_DHT,
-                                            "Received request for invalid signal."
-                                        );
-                                        lock_error_invalid_signal = true;
-                                    }
-                                }
-                            }
-                        }
                         InternalCommand::Quit => {
                             #[cfg(feature = "debug_dht")]
                             debug!(
@@ -816,12 +810,37 @@ impl Dht {
                     if !lock_error_receive {
                         error!(
                             target: LOG_TARGET_DHT,
-                            "Error in trying to receive command from Ambient or Signal handler: {e:?}"
+                            "Error in trying to receive command from signal handler: {e:?}"
                         );
                         lock_error_receive = true;
                     }
                 }
             };
+            spin_sleeper.sleep(sleep_duration_100_millis);
+
+            // Check if a sufficient amount of time has passed since the last measurement.
+            let current_instant = Instant::now();
+            if current_instant
+                .duration_since(self.instant_last_measurement)
+                .as_millis()
+                > self.config.measurement_interval_millis.into()
+            {
+                let result = self.get_data();
+
+                // internal scope to limit lifetime of mutex lock
+                match mutex_dht.lock() {
+                    Ok(mut c) => {
+                        *c = result;
+                        self.lock_error_mutex = false;
+                    }
+                    Err(_) => {
+                        self.lock_error_mutex = true;
+                        error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                    }
+                };
+
+                self.instant_last_measurement = current_instant;
+            }
         }
     }
 }

@@ -20,12 +20,11 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
 
-use std::time::Duration;
-
-use crate::sensors::dht::DhtError;
+use crate::sensors::dht::DhtResult;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use std::time::Duration;
 
 const LOG_TARGET_AMBIENT: &str = "ambient";
 
@@ -57,12 +56,6 @@ pub struct AmbientChannels<'a> {
 
     /// Receiver part of the channel for communication via TCP wrapped as optional
     pub rx_ambient_from_tcp_opt: &'a Option<Receiver<f32>>,
-
-    /// Sender part of the channel for communication to Dht
-    pub tx_ambient_to_dht_opt: Option<Sender<InternalCommand>>,
-
-    /// Receiver part of the channel for communication from Dht
-    pub rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>>,
 
     /// Sender part of the channel for communication to the signal handler
     pub tx_ambient_to_signal_handler: Sender<bool>,
@@ -113,6 +106,9 @@ pub struct Ambient {
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from Dht sensor
     lock_error_dht: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to acquire lock on mutex
+    lock_error_dht_mutex: bool,
 }
 
 impl ProcessExternalRequestTrait for Ambient {}
@@ -151,6 +147,8 @@ impl Ambient {
 
             #[cfg(all(target_os = "linux", feature = "target_hw"))]
             lock_error_dht: false,
+
+            lock_error_dht_mutex: false,
         }
     }
 
@@ -201,14 +199,14 @@ impl Ambient {
     /// to the DHT sensor thread.
     ///
     /// It updates an internal lock flag (`lock_error_channel_send_dht`) to prevent
-    /// repeated error logging if the channel send operation fails.
+    /// repeated error logging if the send-operation via the channel fails.
     ///
     /// # Arguments
     /// * `tx_ambient_to_dht` - A reference to the sender part of the channel, used to
     ///   send commands to the DHT sensor thread.
     ///
     /// # Returns
-    /// `true` if the request was successfully sent; `false` if the channel send operation failed.
+    /// `true` if the request was successfully sent; `false` if the send-operation via the channel failed.
     fn send_request_to_dht(&mut self, tx_ambient_to_dht: &Sender<InternalCommand>) -> bool {
         match tx_ambient_to_dht.send(InternalCommand::RequestSignal(
             AquariumSignal::AmbientTemperature,
@@ -335,17 +333,20 @@ impl Ambient {
     ///   temperature reading will be written, ensuring thread-safe access for other modules.
     /// * `mutex_ambient_humidity` - An `Arc<Mutex<f32>>` into which the latest ambient
     ///   humidity reading will be written, ensuring thread-safe access for other modules.
+    /// * `mutex_dht` - An `Arc<Mutex<DhtResult>>` into which the latest recording
+    ///   from Dht sensor is written. Ambient only reads it.
     ///
     /// # Panics
     /// This function will panic if:
     /// - It's configured to use the simulator but essential TCP communication channels are missing.
     /// - It's configured to use the simulator but DHT channels are unexpectedly present.
-    /// - During hardware mode, a fatal error occurs while trying to receive a response from the DHT thread (e.g., channel disconnected permanently).
+    /// - During hardware mode, a fatal error occurs while trying to receive a response from the DHT thread (e.g., the channel disconnected permanently).
     pub fn execute(
         &mut self,
         ambient_channels: AmbientChannels,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
         mutex_ambient_humidity: Arc<Mutex<f32>>,
+        mutex_dht: Arc<Mutex<DhtResult>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let sleep_duration_one_millis = Duration::from_millis(1);
@@ -375,24 +376,6 @@ impl Ambient {
             );
         }
 
-        if (self.config.use_simulator)
-            && ((ambient_channels.tx_ambient_to_dht_opt.is_some())
-                | (ambient_channels.rx_ambient_from_dht_opt.is_some()))
-        {
-            panic!(
-                "{}: configured to run with simulator, but channels to Dht thread provided",
-                LOG_TARGET_AMBIENT
-            );
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        if ambient_channels.tx_ambient_to_dht_opt.is_some()
-            || ambient_channels.rx_ambient_from_dht_opt.is_some()
-        {
-            warn!(target: LOG_TARGET_AMBIENT,
-                "Sender/Receiver to Dht are not 'None'");
-        }
-
         loop {
             let (
                 quit_command_received, // the request to end the application has been received
@@ -419,63 +402,35 @@ impl Ambient {
             if measurement_countdown > 0 {
                 measurement_countdown = measurement_countdown.saturating_sub(1);
             } else {
-                if !self.config.use_simulator {
-                    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-                    {
-                        if ambient_channels.tx_ambient_to_dht_opt.is_some()
-                            && ambient_channels.rx_ambient_from_dht_opt.is_some()
-                        {
-                            if !state_send_receive {
-                                let tx_ambient_to_dht =
-                                    ambient_channels.tx_ambient_to_dht_opt.as_ref().unwrap();
-
-                                state_send_receive = self.send_request_to_dht(tx_ambient_to_dht);
-
-                                #[cfg(feature = "debug_ambient")]
-                                {
-                                    if state_send_receive {
-                                        debug!(
-                                            target: LOG_TARGET_AMBIENT,
-                                            "switching to receiving mode"
-                                        );
-                                    }
-                                }
-                            } else {
-                                // read from the channel if a measurement result is available from Dht thread
-                                let rx_ambient_from_dht =
-                                    ambient_channels.rx_ambient_from_dht_opt.as_ref().unwrap();
-
-                                state_send_receive =
-                                    self.receive_response_from_dht(rx_ambient_from_dht);
-
-                                if !state_send_receive {
-                                    // data could be received successfully
-                                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
-                                    receive_counter = 0;
-                                } else {
-                                    receive_counter = receive_counter.saturating_add(1);
-                                }
-
-                                #[cfg(feature = "debug_ambient")]
-                                {
-                                    if (receive_counter % 10 == 0) && state_send_receive {
-                                        debug!(
-                                            target: LOG_TARGET_AMBIENT,
-                                            "tried to receive from Dht (counter={})",
-                                            receive_counter
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
+                if self.config.use_simulator {
                     self.communicate_with_simulator(
                         ambient_channels.tx_ambient_to_tcp_opt,
                         ambient_channels.rx_ambient_from_tcp_opt,
                     );
-                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                } else {
+                    {
+                        match mutex_dht.lock() {
+                            Ok(dht_result) => {
+                                match *dht_result {
+                                    Ok(tuple) => {
+                                        self.ambient_temperature = tuple.0;
+                                        self.ambient_humidity = tuple.1;
+                                    }
+                                    Err(_) => {
+                                        // keep the values from previous measurement
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if !self.lock_error_dht_mutex {
+                                    self.lock_error_dht_mutex = true;
+                                    error!(target: LOG_TARGET_AMBIENT, "error when trying to lock mutex: {}", e);
+                                }
+                            }
+                        }
+                    }
                 }
+                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
 
                 // write the measurement result to Mutex
                 {
@@ -591,6 +546,8 @@ pub mod tests {
 
         let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
         let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
+        let dht_result = Ok((1.0, 2.0));
+        let mutex_dht = Arc::new(Mutex::new(dht_result));
 
         scope(|scope| {
             scope.spawn(move || {
@@ -653,8 +610,6 @@ pub mod tests {
                 let ambient_channels = AmbientChannels {
                     tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
                     rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
-                    tx_ambient_to_dht_opt: None,
-                    rx_ambient_from_dht_opt: None,
                     tx_ambient_to_signal_handler,
                     rx_ambient_from_signal_handler,
                 };
@@ -664,6 +619,7 @@ pub mod tests {
                     ambient_channels,
                     mutex_ambient_temperature,
                     mutex_ambient_humidity,
+                    mutex_dht,
                 );
 
                 // signal end of test case execution to mock TCP communication thread

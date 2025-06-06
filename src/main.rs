@@ -117,7 +117,7 @@ use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationS
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
-
+use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::Ds18b20;
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::{TcpCommunication, TcpCommunicationChannels};
@@ -1047,64 +1047,42 @@ fn main() {
             false => None,
         };
 
-    // communication channels between Ambient and Dht
+    let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
+        Sender<InternalCommand>,
+        Receiver<InternalCommand>,
+    ) = mpsc::channel();
+
     // platform-specific channels for Linux wrapped in Option
     cfg_if::cfg_if! {
         if #[cfg(target_os = "linux")] {
             cfg_if::cfg_if! {
-            if #[cfg(feature = "target_hw")] {
-                // ambient <=> dht
-                let (tx_ambient_to_dht, rx_dht_from_ambient): (
-                    Sender<InternalCommand>,
-                    Receiver<InternalCommand>,
-                ) = mpsc::channel();
-                let (tx_dht_to_ambient, rx_ambient_from_dht): (
-                    Sender<DhtResult>,
-                    Receiver<DhtResult>,
-                ) = mpsc::channel();
-                let tx_signal_handler_to_dht = tx_ambient_to_dht.clone();
-                let tx_ambient_to_dht_opt: Option<Sender<InternalCommand>> =
-                    Some(tx_ambient_to_dht);
-                let rx_ambient_from_dht_opt: Option<Receiver<Result<(f32, f32), DhtError>>> =
-                    Some(rx_ambient_from_dht);
-                let tx_signal_handler_to_dht_opt: Option<Sender<InternalCommand>> =
-                    Some(tx_signal_handler_to_dht);
-
-                // Atlas Scientific <=> i2c_interface
-                let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
-                    Sender<InternalCommand>,
-                    Receiver<InternalCommand>,
-                ) = mpsc::channel();
-                let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
-                    Sender<AtlasScientificResult>,
-                    Receiver<AtlasScientificResult>,
-                ) = mpsc::channel();
-                let tx_signal_handler_to_i2c_interface = tx_atlas_scientific_to_i2c_interface.clone();
-                let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-                    Some(tx_atlas_scientific_to_i2c_interface);
-                let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<AtlasScientificResult>> =
-                    Some(rx_atlas_scientific_from_i2c_interface);
-                let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-                    Some(tx_signal_handler_to_i2c_interface);
-            }
-            else {
-                // ambient <=> dht and signal handler => dht
-                let tx_ambient_to_dht_opt = None;
-                let rx_ambient_from_dht_opt = None;
-                let tx_signal_handler_to_dht_opt = None;
-                // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
-                let tx_atlas_scientific_to_i2c_interface_opt = None;
-                let rx_atlas_scientific_from_i2c_interface_opt = None;
-                let tx_signal_handler_to_i2c_interface_opt = None;
-            }
+                if #[cfg(feature = "target_hw")] {
+                    // Atlas Scientific <=> i2c_interface
+                    let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
+                        Sender<InternalCommand>,
+                        Receiver<InternalCommand>,
+                    ) = mpsc::channel();
+                    let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
+                        Sender<AtlasScientificResult>,
+                        Receiver<AtlasScientificResult>,
+                    ) = mpsc::channel();
+                    let tx_signal_handler_to_i2c_interface = tx_atlas_scientific_to_i2c_interface.clone();
+                    let tx_atlas_scientific_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                        Some(tx_atlas_scientific_to_i2c_interface);
+                    let rx_atlas_scientific_from_i2c_interface_opt: Option<Receiver<AtlasScientificResult>> =
+                        Some(rx_atlas_scientific_from_i2c_interface);
+                    let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
+                        Some(tx_signal_handler_to_i2c_interface);
+                }
+                else {
+                    // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
+                    let tx_atlas_scientific_to_i2c_interface_opt = None;
+                    let rx_atlas_scientific_from_i2c_interface_opt = None;
+                    let tx_signal_handler_to_i2c_interface_opt = None;
+                }
             }
         }
         else {
-            // ambient <=> dht and signal handler => dht
-            let tx_ambient_to_dht_opt = None;
-            let rx_ambient_from_dht_opt = None;
-            let tx_signal_handler_to_dht_opt = None;
-
             // Atlas Scientific <=> i2c_interface and signal handler => i2c_interface
             let tx_atlas_scientific_to_i2c_interface_opt = None;
             let rx_atlas_scientific_from_i2c_interface_opt = None;
@@ -1123,14 +1101,15 @@ fn main() {
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
 
+    let mut dht: Dht;
+    let gpio_dht22_io = config.gpio_handler.dht22_io;
+    let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
+
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             let mut actuate_gpio_opt: Option<ActuateGpio> = None;
-            let dht_opt: Option<Dht>;
 
             // clone information from config before giving config to GpioHandler
-            let gpio_dht22_io = config.gpio_handler.dht22_io;
-            let gpio_dht22_vcc = config.gpio_handler.dht22_vcc;
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
             let actuate_gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
             let use_simulator = config.gpio_handler.use_simulator;
@@ -1144,8 +1123,8 @@ fn main() {
                     None,
                     gpio_tank_level_switch
                 );
-                // no DHT sensor required
-                dht_opt = None;
+                // Actual DHT sensor reading is not required in this case. Use a stub version.
+                dht = Dht::new(config.dht, gpio_dht22_io, gpio_dht22_vcc);
             }
             else if gpio_handler_opt.is_none() {
                     // defensive programming - this case should not occur
@@ -1163,9 +1142,7 @@ fn main() {
                      Some(gpio_lib_handle_cloned_for_tank_level_switch),
                      gpio_tank_level_switch
                 );
-                dht_opt = Some(
-                   Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc)
-                );
+                dht = Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc);
                 actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
             }
         }
@@ -1174,6 +1151,9 @@ fn main() {
                 config.tank_level_switch,
                 true,
             );
+
+            // Actual DHT sensor reading is not required in this case. Use a stub version.
+            dht = Dht::new(config.dht, gpio_dht22_io, gpio_dht22_vcc);
         }
     }
 
@@ -1350,7 +1330,7 @@ fn main() {
         rx_signal_handler_from_schedule_check,
         tx_signal_handler_to_tcp_opt,
         rx_signal_handler_from_tcp_opt,
-        tx_signal_handler_to_dht_opt,
+        tx_signal_handler_to_dht,
         tx_signal_handler_to_i2c_interface_opt,
         tx_signal_handler_to_watchdog,
         rx_signal_handler_from_watchdog,
@@ -1417,9 +1397,6 @@ fn main() {
         let mutex_tank_level_switch_signals_clone_for_refill =
             mutex_tank_level_switch_signals.clone();
 
-        // Mutex for refill
-        // let mutex_refill_status = Arc::new(Mutex::new(false));
-
         // Mutex for heating
         let mutex_heating_status = Arc::new(Mutex::new(false));
         let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
@@ -1435,6 +1412,10 @@ fn main() {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
         let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();
+
+        // Mutex for Dht
+        let mutex_dht: Arc<Mutex<DhtResult>> = Arc::new(Mutex::new(Ok((0.0, 0.0))));
+        let mutex_dht_clone_for_ambient = mutex_dht.clone();
 
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
@@ -1511,17 +1492,6 @@ fn main() {
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface);
-            let mut dht = dht_opt.expect("unwrapping of Dht failed");
-
-            scope.spawn(move || {
-                dht.execute(
-                    tx_dht_to_ambient,
-                    rx_dht_from_ambient, // the channel is shared with the signal handler
-                );
-
-                #[cfg(feature = "debug_main")]
-                debug!(target: LOG_TARGET_MAIN, "Dht terminated.");
-            });
 
             scope.spawn(move || {
                 i2c_interface.execute(
@@ -1535,11 +1505,16 @@ fn main() {
         }
 
         scope.spawn(move || {
+            dht.execute(mutex_dht, rx_dht_from_signal_handler);
+
+            #[cfg(feature = "debug_main")]
+            debug!(target: LOG_TARGET_MAIN, "Dht terminated.");
+        });
+
+        scope.spawn(move || {
             let ambient_channels = AmbientChannels {
                 tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
                 rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
-                tx_ambient_to_dht_opt,
-                rx_ambient_from_dht_opt,
                 tx_ambient_to_signal_handler,
                 rx_ambient_from_signal_handler,
             };
@@ -1548,6 +1523,7 @@ fn main() {
                 ambient_channels,
                 mutex_ambient_temperature,
                 mutex_ambient_humidity,
+                mutex_dht_clone_for_ambient,
             );
 
             #[cfg(feature = "debug_main")]

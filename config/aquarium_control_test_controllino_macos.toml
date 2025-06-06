@@ -31,7 +31,7 @@ db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium"
 db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
-db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. Use a value of 0 to deactivate the check.
+db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. use a value of 0 to deactivate the check.
 db_ping_interval = 3600                                 # database-ping interval in seconds
 
 [tcp_connection]
@@ -93,7 +93,7 @@ heater_power = 200                                      # The electrical power c
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=heating will be switched on; false=heating will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
-set_value_check_interval = 300                          # interval in seconds for polling SQL database
+set_value_check_interval = 300                          # interval in seconds for polling the database
 
 [feed]
 active = true
@@ -106,11 +106,11 @@ active = true
 use_simulator = false                                   # if true, then do not use real HW
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
-switch_on_when_terminating = true           		# behavior when terminating the application
+switch_on_when_terminating = true           		    # behavior when terminating the application
 saw_tooth_profile_config = { phase1_length = 60, phase2_length = 10, phase3_length = 60, phase4_length = 10}
 switch_on_when_out_of_schedule = false                  # strategy when schedule check does not allow operation: true=ventilation will be switched on; false=ventilation will be switched off
 switch_on_when_external_stop = false                    # strategy when external request for stop has been received
-set_value_check_interval = 300                          # interval in seconds for polling SQL database
+set_value_check_interval = 300                          # interval in seconds for polling the database
 
 [balling]
 active = true
@@ -166,6 +166,7 @@ sensor_init_pin_down_duration_micros = 2000             # duration to keep pin d
 sensor_init_pin_up_duration_micros = 30			        # duration to keep pin up during start signal in microseconds 
 sensor_init_input_duration_micros = 0			        # duration for sensor to respond after sending start signal in microseconds
 timeout_duration_micros = 10000				            # maximum permissible duration for the sensor to respond in microseconds
+measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
 
 [i2c_interface]
 address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
@@ -184,7 +185,7 @@ max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value 
 min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 
 [schedule_check]
-schedule_check_interval = 300                           # interval in seconds for polling SQL database
+schedule_check_interval = 300                           # interval in seconds for polling the database
 strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in the database
 
 [messaging]
@@ -198,7 +199,7 @@ pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishin
 active = true
 watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
-heartbeat_duration_millis = 1000                         # duration between two hearbeats in milliseconds
+heartbeat_duration_millis = 1000                        # duration between two hearbeats in milliseconds
 watchdog_deactivation = "V"                             # deactivation code for the system's watchdog functionality
 
 [ds18b20]
