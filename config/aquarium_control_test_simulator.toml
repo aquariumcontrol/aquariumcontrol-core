@@ -154,7 +154,7 @@ sensor_init_input_duration_micros = 0			        # duration for sensor to respond
 timeout_duration_micros = 10000				            # maximum permissible duration for the sensor to respond in microseconds
 measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
 
-[ambient]
+[sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails

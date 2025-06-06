@@ -85,8 +85,8 @@ use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
-use crate::sensors::ambient::{Ambient, AmbientChannels};
 use crate::sensors::atlas_scientific::{AtlasScientific, AtlasScientificChannels};
+use crate::sensors::sensor_manager::{SensorManager, SensorManagerChannels};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::atlas_scientific::AtlasScientificResult;
@@ -287,14 +287,11 @@ fn is_running_as_root() -> bool {
 /// Global thread communication is as follows:
 /// ```mermaid
 /// graph LR
-///     refill[Refill] --> tank_level_switch[TankLevelSwitch]
-///     tank_level_switch --> refill
+///     tank_level_switch -.-> refill[Refill]
 ///     refill --> relay_manager[Controllino]
 ///     relay_manager --> refill
-///     ambient[Ambient] --> data_logger[DataLogger]
-///     data_logger --> ambient
-///     refill --> data_logger
-///     data_logger --> refill
+///     sensor_manager[SensorManager] -.-> data_logger[DataLogger]
+///     refill -.-> data_logger
 ///     signal_handler[SignalHandler] --> refill
 ///     refill --> signal_handler
 ///     signal_handler --> tank_level_switch
@@ -312,8 +309,8 @@ fn is_running_as_root() -> bool {
 ///     ventilation[Ventilation] --> signal_handler
 ///     signal_handler --> ventilation
 ///     relay_manager --> tcp_communication
-///     ambient --> tcp_communication
-///     tcp_communication --> ambient
+///     sensor_manager --> tcp_communication
+///     tcp_communication --> sensor_manager
 ///     atlas_scientific --> tcp_communication
 ///     tcp_communication --> atlas_scientific
 ///     tank_level_switch --> tcp_communication
@@ -322,27 +319,19 @@ fn is_running_as_root() -> bool {
 ///     relay_manager --> balling
 ///     feed --> relay_manager
 ///     relay_manager --> feed
-///     atlas_scientific --> data_logger
-///     data_logger --> atlas_scientific
-///     heating --> data_logger
-///     data_logger --> heating
-///     heating --> atlas_scientific[AtlasScientific]
-///     atlas_scientific --> heating
+///     atlas_scientific -.-> data_logger
+///     heating -.-> data_logger
+///     atlas_scientific -.-> heating
 ///     heating --> relay_manager
 ///     relay_manager --> heating
-///     heating --> tank_level_switch
-///     tank_level_switch --> heating
-///     heating --> ambient
-///     ambient --> heating
-///     tank_level_switch --> data_logger
-///     data_logger --> tank_level_switch
-///     ventilation --> data_logger
-///     data_logger --> ventilation
+///     tank_level_switch -.-> heating
+///     ambient -.-> heating
+///     tank_level_switch -.-> data_logger
+///     ventilation -.-> data_logger
 ///     signal_handler --> data_logger
 ///     data_logger --> signal_handler
 ///     ventilation --> relay_manager
-///     ventilation --> atlas_scientific
-///     atlas_scientific --> ventilation
+///     atlas_scientific -.-> ventilation
 ///     relay_manager --> ventilation
 ///     monitors[Monitors] --> relay_manager
 ///     relay_manager --> monitors
@@ -361,15 +350,14 @@ fn is_running_as_root() -> bool {
 ///     signal_handler --> schedule_check
 ///     schedule_check --> signal_handler
 ///     signal_handler --> messaging[Messaging]
-///     signal_handler --> ambient
+///     signal_handler --> sensor_manager
 ///     signal_handler --> watchdog
-///     ambient --> signal_handler
+///     sensor_manager --> signal_handler
 ///     signal_handler --> atlas_scientific
 ///     atlas_scientific --> signal_handler
 ///     atlas_scientific --> i2c_interface[I2C interface]
 ///     i2c_interface --> atlas_scientific
-///     ambient --> dht[Dht]
-///     dht --> ambient
+///     dht -.-> ambient
 ///     messaging --> refill
 ///     messaging --> ventilation
 ///     messaging --> heating
@@ -553,7 +541,7 @@ fn main() {
     // check if any of the components requires use of the simulator
     let use_simulator = config.gpio_handler.use_simulator
         | config.relay_manager.use_simulator
-        | config.ambient.use_simulator
+        | config.sensor_manager.use_simulator
         | config.atlas_scientific.use_simulator
         | config.tank_level_switch.use_simulator;
 
@@ -885,12 +873,12 @@ fn main() {
     ) = mpsc::channel();
     // **************************************
 
-    // *** signal handler <=> ambient ***
-    let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
+    // *** signal handler <=> sensor_manager ***
+    let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient): (
+    let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager): (
         Sender<bool>,
         Receiver<bool>,
     ) = mpsc::channel();
@@ -921,13 +909,15 @@ fn main() {
     ) = mpsc::channel();
     // ****************************
 
-    // *** ambient <=> tcp ***
-    let (tx_ambient_to_tcp, rx_tcp_communication_from_ambient): (
+    // *** sensor_manager <=> tcp ***
+    let (tx_sensor_manager_to_tcp, rx_tcp_communication_from_sensor_manager): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
-    let (tx_tcp_communication_to_ambient, rx_ambient_from_tcp): (Sender<f32>, Receiver<f32>) =
-        mpsc::channel();
+    let (tx_tcp_communication_to_sensor_manager, rx_sensor_manager_from_tcp): (
+        Sender<f32>,
+        Receiver<f32>,
+    ) = mpsc::channel();
     // **********************
 
     // *** atlas_scientific <=> tcp ***
@@ -999,26 +989,26 @@ fn main() {
             false => None,
         };
 
-    let tx_ambient_to_tcp_opt: Option<Sender<InternalCommand>> = match config.ambient.use_simulator
-    {
-        true => Some(tx_ambient_to_tcp),
-        false => None,
-    };
-
-    let rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>> =
-        match config.ambient.use_simulator {
-            true => Some(rx_tcp_communication_from_ambient),
+    let tx_sensor_manager_to_tcp_opt: Option<Sender<InternalCommand>> =
+        match config.sensor_manager.use_simulator {
+            true => Some(tx_sensor_manager_to_tcp),
             false => None,
         };
 
-    let tx_tcp_communication_to_ambient_opt: Option<Sender<f32>> =
-        match config.ambient.use_simulator {
-            true => Some(tx_tcp_communication_to_ambient),
+    let rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>> =
+        match config.sensor_manager.use_simulator {
+            true => Some(rx_tcp_communication_from_sensor_manager),
             false => None,
         };
 
-    let rx_ambient_from_tcp_opt: Option<Receiver<f32>> = match config.ambient.use_simulator {
-        true => Some(rx_ambient_from_tcp),
+    let tx_tcp_communication_to_sensor_manager_opt: Option<Sender<f32>> =
+        match config.sensor_manager.use_simulator {
+            true => Some(tx_tcp_communication_to_sensor_manager),
+            false => None,
+        };
+
+    let rx_ambient_from_tcp_opt: Option<Receiver<f32>> = match config.sensor_manager.use_simulator {
+        true => Some(rx_sensor_manager_from_tcp),
         false => None,
     };
 
@@ -1163,9 +1153,10 @@ fn main() {
         config.atlas_scientific.replacement_value_conductivity;
     let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
-    let initial_value_ambient_temperature = config.ambient.replacement_value_ambient_temperature;
-    let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
-    let mut ambient = Ambient::new(config.ambient);
+    let initial_value_ambient_temperature =
+        config.sensor_manager.replacement_value_ambient_temperature;
+    let initial_value_ambient_humidity = config.sensor_manager.replacement_value_ambient_humidity;
+    let mut sensor_manager = SensorManager::new(config.sensor_manager);
 
     let mut relay_manager = RelayManager::new(config.relay_manager.clone());
     let mut schedule_check = ScheduleCheck::new(
@@ -1277,8 +1268,8 @@ fn main() {
 
     let tcp_communication_channels = TcpCommunicationChannels {
         rx_tcp_communication_from_relay_manager_opt,
-        rx_tcp_communication_from_ambient_opt,
-        tx_tcp_communication_to_ambient_opt,
+        rx_tcp_communication_from_sensor_manager_opt,
+        tx_tcp_communication_to_sensor_manager_opt,
         rx_tcp_communication_from_atlas_scientific_opt,
         tx_tcp_communication_to_atlas_scientific_opt,
         rx_tcp_communication_from_tank_level_switch_opt,
@@ -1313,8 +1304,8 @@ fn main() {
         rx_signal_handler_from_relay_manager,
         tx_signal_handler_to_atlas_scientific,
         rx_signal_handler_from_atlas_scientific,
-        tx_signal_handler_to_ambient,
-        rx_signal_handler_from_ambient,
+        tx_signal_handler_to_sensor_manager,
+        rx_signal_handler_from_sensor_manager,
         tx_signal_handler_to_data_logger,
         rx_signal_handler_from_data_logger,
         tx_signal_handler_to_balling,
@@ -1511,15 +1502,15 @@ fn main() {
         });
 
         scope.spawn(move || {
-            let ambient_channels = AmbientChannels {
-                tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
-                rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
-                tx_ambient_to_signal_handler,
-                rx_ambient_from_signal_handler,
+            let sensor_manager_channels = SensorManagerChannels {
+                tx_sensor_manager_to_tcp_opt: &tx_sensor_manager_to_tcp_opt,
+                rx_sensor_manager_from_tcp_opt: &rx_ambient_from_tcp_opt,
+                tx_sensor_manager_to_signal_handler,
+                rx_sensor_manager_from_signal_handler,
             };
 
-            ambient.execute(
-                ambient_channels,
+            sensor_manager.execute(
+                sensor_manager_channels,
                 mutex_ambient_temperature,
                 mutex_ambient_humidity,
                 mutex_dht_clone_for_ambient,

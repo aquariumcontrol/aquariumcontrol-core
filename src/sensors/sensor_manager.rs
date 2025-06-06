@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{error, warn};
 use std::sync::{Arc, Mutex};
 
-#[cfg(feature = "debug_ambient")]
+#[cfg(feature = "debug_sensor_manager")]
 use log::debug;
 
 use serde_derive::Deserialize;
@@ -24,7 +24,7 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::Duration;
 
-const LOG_TARGET_AMBIENT: &str = "ambient";
+const LOG_TARGET_SENSOR_MANAGER: &str = "ambient";
 
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 60;
@@ -33,7 +33,7 @@ const MEASUREMENT_INTERVAL_SECS: i32 = 60;
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
-pub struct AmbientConfig {
+pub struct SensorManagerConfig {
     /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
@@ -44,18 +44,18 @@ pub struct AmbientConfig {
     pub replacement_value_ambient_humidity: f32,
 }
 
-pub struct AmbientChannels<'a> {
+pub struct SensorManagerChannels<'a> {
     /// Sender part of the channel for communication via TCP wrapped as optional
-    pub tx_ambient_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
+    pub tx_sensor_manager_to_tcp_opt: &'a Option<Sender<InternalCommand>>,
 
     /// Receiver part of the channel for communication via TCP wrapped as optional
-    pub rx_ambient_from_tcp_opt: &'a Option<Receiver<f32>>,
+    pub rx_sensor_manager_from_tcp_opt: &'a Option<Receiver<f32>>,
 
     /// Sender part of the channel for communication to the signal handler
-    pub tx_ambient_to_signal_handler: Sender<bool>,
+    pub tx_sensor_manager_to_signal_handler: Sender<bool>,
 
     /// Receiver part of the channel for communication from the signal handler                
-    pub rx_ambient_from_signal_handler: Receiver<InternalCommand>,
+    pub rx_sensor_manager_from_signal_handler: Receiver<InternalCommand>,
 }
 
 /// Contains the communication with DHT ambient temperature and humidity sensor.
@@ -73,9 +73,9 @@ pub struct AmbientChannels<'a> {
 ///     signal_handler[SignalHandler] --> ambient
 ///     ambient --> signal_handler
 /// ```
-pub struct Ambient {
+pub struct SensorManager {
     // configuration data for Ambient
-    config: AmbientConfig,
+    config: SensorManagerConfig,
 
     /// ambient temperature in °C
     ambient_temperature: f32,
@@ -93,12 +93,12 @@ pub struct Ambient {
     lock_error_dht_mutex: bool,
 }
 
-impl ProcessExternalRequestTrait for Ambient {}
+impl ProcessExternalRequestTrait for SensorManager {}
 
-impl GetResponseFromSimulatorTrait for Ambient {}
+impl GetResponseFromSimulatorTrait for SensorManager {}
 
-impl Ambient {
-    /// Creates a new `Ambient` control instance.
+impl SensorManager {
+    /// Creates a new `SensorManager` control instance.
     ///
     /// This constructor initializes the ambient temperature and humidity measurement module.
     /// It sets the initial temperature and humidity values to configured replacement values
@@ -106,15 +106,15 @@ impl Ambient {
     /// log flooding from recurring errors or warnings during operation.
     ///
     /// # Arguments
-    /// * `config` - Configuration data for the Ambient module, specifying behavior like
-    ///   the use of a simulator versus hardware, and replacement values for sensor readings.
+    /// * `config` - Configuration data for the SensorManager module, specifying the data source for
+    /// certain sensor signals, and replacement values for sensor readings.
     ///
     /// # Returns
     /// A new `Ambient` struct, ready to collect and provide ambient sensor data.
-    pub fn new(config: AmbientConfig) -> Ambient {
+    pub fn new(config: SensorManagerConfig) -> SensorManager {
         let replacement_value_ambient_temperature = config.replacement_value_ambient_temperature;
         let replacement_value_ambient_humidity = config.replacement_value_ambient_humidity;
-        Ambient {
+        SensorManager {
             config,
             ambient_temperature: replacement_value_ambient_temperature,
             ambient_humidity: replacement_value_ambient_humidity,
@@ -143,21 +143,21 @@ impl Ambient {
     /// perform checks beforehand to ensure these channels are `Some` when running in simulator mode.
     fn communicate_with_simulator(
         &mut self,
-        tx_ambient_to_tcp_opt: &Option<Sender<InternalCommand>>,
-        rx_ambient_from_tcp_opt: &Option<Receiver<f32>>,
+        tx_sensor_manager_to_tcp_opt: &Option<Sender<InternalCommand>>,
+        rx_sensor_manager_from_tcp_opt: &Option<Receiver<f32>>,
     ) {
         // unwrap is safe because tested beforehand
-        let tx_ambient_to_simulator = tx_ambient_to_tcp_opt.as_ref().unwrap();
-        let rx_ambient_from_simulator = rx_ambient_from_tcp_opt.as_ref().unwrap();
+        let tx_sensor_manager_to_simulator = tx_sensor_manager_to_tcp_opt.as_ref().unwrap();
+        let rx_sensor_manager_from_simulator = rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
-            tx_ambient_to_simulator,
-            rx_ambient_from_simulator,
+            tx_sensor_manager_to_simulator,
+            rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
         );
         self.ambient_humidity = Self::get_response_from_simulator(
-            tx_ambient_to_simulator,
-            rx_ambient_from_simulator,
+            tx_sensor_manager_to_simulator,
+            rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
         );
     }
@@ -192,7 +192,7 @@ impl Ambient {
     /// - During hardware mode, a fatal error occurs while trying to receive a response from the DHT thread (e.g., the channel disconnected permanently).
     pub fn execute(
         &mut self,
-        ambient_channels: AmbientChannels,
+        sensor_manager_channels: SensorManagerChannels,
         mutex_ambient_temperature: Arc<Mutex<f32>>,
         mutex_ambient_humidity: Arc<Mutex<f32>>,
         mutex_dht: Arc<Mutex<DhtResult>>,
@@ -209,12 +209,16 @@ impl Ambient {
         let mut measurement_countdown: i32 = 0;
 
         if (self.config.use_simulator)
-            && (ambient_channels.tx_ambient_to_tcp_opt.is_none()
-                | ambient_channels.rx_ambient_from_tcp_opt.is_none())
+            && (sensor_manager_channels
+                .tx_sensor_manager_to_tcp_opt
+                .is_none()
+                | sensor_manager_channels
+                    .rx_sensor_manager_from_tcp_opt
+                    .is_none())
         {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
-                LOG_TARGET_AMBIENT
+                LOG_TARGET_SENSOR_MANAGER
             );
         }
 
@@ -223,8 +227,10 @@ impl Ambient {
                 quit_command_received, // the request to end the application has been received
                 _,
                 _,
-            ) = self
-                .process_external_request(&ambient_channels.rx_ambient_from_signal_handler, None);
+            ) = self.process_external_request(
+                &sensor_manager_channels.rx_sensor_manager_from_signal_handler,
+                None,
+            );
 
             if quit_command_received {
                 // quit command has been received
@@ -236,8 +242,8 @@ impl Ambient {
             } else {
                 if self.config.use_simulator {
                     self.communicate_with_simulator(
-                        ambient_channels.tx_ambient_to_tcp_opt,
-                        ambient_channels.rx_ambient_from_tcp_opt,
+                        sensor_manager_channels.tx_sensor_manager_to_tcp_opt,
+                        sensor_manager_channels.rx_sensor_manager_from_tcp_opt,
                     );
                 } else {
                     {
@@ -256,7 +262,7 @@ impl Ambient {
                             Err(e) => {
                                 if !self.lock_error_dht_mutex {
                                     self.lock_error_dht_mutex = true;
-                                    error!(target: LOG_TARGET_AMBIENT, "error when trying to lock mutex: {}", e);
+                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock mutex: {}", e);
                                 }
                             }
                         }
@@ -281,7 +287,7 @@ impl Ambient {
                 }
             }
 
-            #[cfg(feature = "debug_ambient")]
+            #[cfg(feature = "debug_sensor_manager")]
             {
                 if measurement_countdown % 100 == 0 {
                     debug!(
@@ -295,11 +301,14 @@ impl Ambient {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
-        match ambient_channels.tx_ambient_to_signal_handler.send(true) {
+        match sensor_manager_channels
+            .tx_sensor_manager_to_signal_handler
+            .send(true)
+        {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_AMBIENT,
+                    target: LOG_TARGET_SENSOR_MANAGER,
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -310,36 +319,38 @@ impl Ambient {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            termination_command_received =
-                match ambient_channels.rx_ambient_from_signal_handler.recv() {
-                    Ok(c) => match c {
-                        InternalCommand::Terminate => {
-                            self.lock_warn_inapplicable_command_signal_handler = false;
-                            true
-                        }
-                        _ => {
-                            if !self.lock_warn_inapplicable_command_signal_handler {
-                                warn!(
-                                    target: LOG_TARGET_AMBIENT,
-                                    "ignoring inapplicable command from signal handler ({})",
-                                    c
-                                );
-                                self.lock_warn_inapplicable_command_signal_handler = true;
-                            }
-                            false
-                        }
-                    },
-                    Err(e) => {
-                        if !self.lock_error_channel_receive_termination {
-                            error!(
-                                target: LOG_TARGET_AMBIENT,
-                                "receiving termination signal from signal handler failed ({e:?})"
+            termination_command_received = match sensor_manager_channels
+                .rx_sensor_manager_from_signal_handler
+                .recv()
+            {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => {
+                        self.lock_warn_inapplicable_command_signal_handler = false;
+                        true
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command_signal_handler {
+                            warn!(
+                                target: LOG_TARGET_SENSOR_MANAGER,
+                                "ignoring inapplicable command from signal handler ({})",
+                                c
                             );
-                            self.lock_error_channel_receive_termination = true;
+                            self.lock_warn_inapplicable_command_signal_handler = true;
                         }
                         false
                     }
-                };
+                },
+                Err(e) => {
+                    if !self.lock_error_channel_receive_termination {
+                        error!(
+                            target: LOG_TARGET_SENSOR_MANAGER,
+                            "receiving termination signal from signal handler failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination = true;
+                    }
+                    false
+                }
+            };
             spin_sleeper.sleep(sleep_duration_one_millis);
         }
     }
@@ -354,7 +365,7 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::sensors::ambient::{Ambient, AmbientChannels};
+    use crate::sensors::sensor_manager::{SensorManager, SensorManagerChannels};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -362,23 +373,27 @@ pub mod tests {
     // Test case verifies if the test object is processing the interfaces correctly.
     pub fn ambient_interfaces() {
         // channels for communication with the test environment
-        let (tx_tcp_to_ambient, rx_ambient_from_tcp) = mpsc::channel();
-        let (tx_ambient_to_tcp, rx_tcp_from_ambient) = mpsc::channel();
-        let tx_ambient_to_tcp_opt = Some(tx_ambient_to_tcp.clone());
-        let rx_ambient_from_tcp_opt = Some(rx_ambient_from_tcp);
-        let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler) = mpsc::channel();
-        let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient) = mpsc::channel();
+        let (tx_tcp_to_sensor_manager, rx_sensor_manager_from_tcp) = mpsc::channel();
+        let (tx_sensor_manager_to_tcp, rx_tcp_from_sensor_manager) = mpsc::channel();
+        let tx_sensor_manager_to_tcp_opt = Some(tx_sensor_manager_to_tcp.clone());
+        let rx_sensor_manager_from_tcp_opt = Some(rx_sensor_manager_from_tcp);
+        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
+            mpsc::channel();
+        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
+            mpsc::channel();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
 
         let initial_value_ambient_temperature =
-            config.ambient.replacement_value_ambient_temperature;
-        let initial_value_ambient_humidity = config.ambient.replacement_value_ambient_humidity;
-        let mut ambient = Ambient::new(config.ambient);
+            config.sensor_manager.replacement_value_ambient_temperature;
+        let initial_value_ambient_humidity =
+            config.sensor_manager.replacement_value_ambient_humidity;
+        let mut ambient = SensorManager::new(config.sensor_manager);
 
-        let mutex_ambient_temperature = Arc::new(Mutex::new(initial_value_ambient_temperature));
-        let mutex_ambient_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
+        let mutex_sensor_manager_temperature =
+            Arc::new(Mutex::new(initial_value_ambient_temperature));
+        let mutex_sensor_manager_humidity = Arc::new(Mutex::new(initial_value_ambient_humidity));
         let dht_result = Ok((1.0, 2.0));
         let mutex_dht = Arc::new(Mutex::new(dht_result));
 
@@ -388,9 +403,9 @@ pub mod tests {
                 let sleep_duration_8_seconds = Duration::from_millis(8000);
                 let spin_sleeper = SpinSleeper::default();
                 spin_sleeper.sleep(sleep_duration_8_seconds);
-                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Quit);
-                rx_signal_handler_from_ambient.recv().unwrap();
-                let _ = tx_signal_handler_to_ambient.send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Quit);
+                rx_signal_handler_from_sensor_manager.recv().unwrap();
+                let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
             });
 
             scope.spawn(move || {
@@ -398,7 +413,7 @@ pub mod tests {
                 let sleep_duration_one_millisecond = Duration::from_millis(1);
                 let spin_sleeper = SpinSleeper::default();
                 loop {
-                    match rx_tcp_from_ambient.try_recv() {
+                    match rx_tcp_from_sensor_manager.try_recv() {
                         Ok(c) => {
                             let response_value = match c {
                                 InternalCommand::RequestSignal(d) => {
@@ -417,7 +432,7 @@ pub mod tests {
                                     panic!("Mock TCP communication: Received invalid command.");
                                 },
                             };
-                            match tx_tcp_to_ambient.send(response_value) {
+                            match tx_tcp_to_sensor_manager.send(response_value) {
                                 Ok(()) => {}
                                 Err(e) => {
                                     panic!(
@@ -440,23 +455,23 @@ pub mod tests {
             });
 
             scope.spawn(move || {
-                let ambient_channels = AmbientChannels {
-                    tx_ambient_to_tcp_opt: &tx_ambient_to_tcp_opt,
-                    rx_ambient_from_tcp_opt: &rx_ambient_from_tcp_opt,
-                    tx_ambient_to_signal_handler,
-                    rx_ambient_from_signal_handler,
+                let ambient_channels = SensorManagerChannels {
+                    tx_sensor_manager_to_tcp_opt: &tx_sensor_manager_to_tcp_opt,
+                    rx_sensor_manager_from_tcp_opt: &rx_sensor_manager_from_tcp_opt,
+                    tx_sensor_manager_to_signal_handler,
+                    rx_sensor_manager_from_signal_handler,
                 };
 
                 // test object
                 ambient.execute(
                     ambient_channels,
-                    mutex_ambient_temperature,
-                    mutex_ambient_humidity,
+                    mutex_sensor_manager_temperature,
+                    mutex_sensor_manager_humidity,
                     mutex_dht,
                 );
 
                 // signal end of test case execution to mock TCP communication thread
-                let _ = tx_ambient_to_tcp.send(InternalCommand::Quit);
+                let _ = tx_sensor_manager_to_tcp.send(InternalCommand::Quit);
             });
         });
     }

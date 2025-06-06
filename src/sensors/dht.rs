@@ -10,7 +10,7 @@ use crate::utilities::channel_content::InternalCommand;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{TryRecvError, Receiver};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -242,7 +242,7 @@ pub struct Dht {
     lock_error_mutex: bool,
 
     /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
-    lock_error_max_retries: bool
+    lock_error_max_retries: bool,
 }
 
 impl Dht {
@@ -857,7 +857,7 @@ impl Dht {
             };
             spin_sleeper.sleep(sleep_duration_100_millis);
 
-            // Check if data acquisition is enabled.  
+            // Check if data acquisition is enabled.
             if self.config.active {
                 // Check if a sufficient amount of time has passed since the last measurement.
                 let current_instant = Instant::now();

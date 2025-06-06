@@ -49,10 +49,10 @@ pub struct TcpCommunicationChannels {
     pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
 
     /// Receiver part of the channel for communication from the relay manager wrapped in Option type
-    pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
+    pub rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>>,
 
     /// Sender part of the channel for communication to Ambient wrapped in Option type
-    pub tx_tcp_communication_to_ambient_opt: Option<Sender<f32>>,
+    pub tx_tcp_communication_to_sensor_manager_opt: Option<Sender<f32>>,
 
     /// Receiver part of the channel for communication from AtlasScientific wrapped in Option type  
     pub rx_tcp_communication_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
@@ -456,10 +456,10 @@ impl TcpCommunication {
 
             // *** communication with Ambient ***
             if let Some(ref rx_tcp_communication_from_ambient) =
-                tcp_communication_channels.rx_tcp_communication_from_ambient_opt
+                tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
             {
                 if let Some(ref tx_tcp_communication_to_ambient) =
-                    tcp_communication_channels.tx_tcp_communication_to_ambient_opt
+                    tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
                 {
                     self.receive_and_answer(
                         rx_tcp_communication_from_ambient,

@@ -128,7 +128,7 @@ pump_switch_delay_millis = 500                          # waiting period between
 [monitors]
 active = true
 
-[ambient]
+[sensor_manager]
 use_simulator = false                                   # if true, then do not use real HW
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
