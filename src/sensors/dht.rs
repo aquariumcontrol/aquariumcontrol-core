@@ -207,6 +207,9 @@ pub struct Dht {
 
     /// flag to avoid flooding the log file in case mutex cannot be locked
     lock_error_mutex: bool,
+    
+    /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
+    lock_error_max_retries: bool
 }
 
 impl Dht {
@@ -238,6 +241,7 @@ impl Dht {
             gpio_dht22_vcc,
             instant_last_measurement: Instant::now(),
             lock_error_mutex: false,
+            lock_error_max_retries: false,
         }
     }
 
@@ -708,7 +712,8 @@ impl Dht {
             ) {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
-
+                    self.lock_error_max_retries = false;
+                    
                     #[cfg(feature = "debug_dht")]
                     debug!(
                         target: LOG_TARGET_DHT,
@@ -724,11 +729,14 @@ impl Dht {
                         retry_counter += 1;
                         if retry_counter > dht22_constants::DHT22_MAX_RETRIES {
                             #[cfg(not(test))]
-                            error!(
-                                target: LOG_TARGET_DHT,
-                                "failed to read from DHT sensor (after {} retries, {e:?}",
-                                retry_counter,
-                            );
+                            if !self.lock_error_max_retries {
+                                self.lock_error_max_retries = true;
+                                error!(
+                                    target: LOG_TARGET_DHT,
+                                    "failed to read from DHT sensor (after {} retries, {e:?})",
+                                    retry_counter,
+                                );
+                            }
                             dht_error = e;
                             break;
                         }
@@ -833,8 +841,10 @@ impl Dht {
                             self.lock_error_mutex = false;
                         }
                         Err(_) => {
-                            self.lock_error_mutex = true;
-                            error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                            if !self.lock_error_mutex {
+                                self.lock_error_mutex = true;
+                                error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                            }
                         }
                     };
                 }
