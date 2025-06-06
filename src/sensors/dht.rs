@@ -185,6 +185,36 @@ pub enum DhtError {
     IncorrectPlatform,
 }
 
+/// Represents a Digital Humidity and Temperature (DHT) sensor module, typically a DHT22,
+/// responsible for reading ambient temperature and humidity.
+///
+/// This struct encapsulates the configuration, GPIO interface details, and internal state
+/// required to communicate with a DHT sensor. It handles the low-level GPIO signaling
+/// to read data, apply retries, and perform post-processing (checksum validation,
+/// signal calculation) before providing the final temperature and humidity values.
+///
+/// The communication with the DHT sensor is highly timing-sensitive and involves
+/// precise GPIO manipulation, including setting pin states, managing delays, and
+/// capturing pulse durations via interrupts.
+///
+/// **Thread Communication: **
+/// This module is designed to run in its own dedicated thread, periodically reading sensor data
+/// and making the latest measurements available via a shared `Arc<Mutex<DhtResult>>`.
+/// Other modules (like `Ambient` or `DataLogger`) can then read from this mutex to get the
+/// current temperature and humidity. It also responds to `Quit` commands for graceful shutdown.
+///
+/// **Platform-Specific Behavior: **
+/// The core sensor reading logic (`read` function) is conditionally compiled:
+/// - On Linux with the `target_hw` feature enabled, it directly uses `rppal::gpio` for hardware interaction.
+/// - On other platforms or when `target_hw` is disabled, it uses a stub implementation (`Err(DhtError::IncorrectPlatform)`)
+///   to allow compilation and testing without physical hardware.
+///
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     dht[Dht] -.-> Ambient[Ambient]
+///     signal_handler[SignalHandler] --> dht
+/// ```
 pub struct Dht {
     #[allow(unused)]
     /// configuration for communication with DHT sensor
@@ -207,7 +237,7 @@ pub struct Dht {
 
     /// flag to avoid flooding the log file in case mutex cannot be locked
     lock_error_mutex: bool,
-    
+
     /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
     lock_error_max_retries: bool
 }
@@ -713,7 +743,7 @@ impl Dht {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
                     self.lock_error_max_retries = false;
-                    
+
                     #[cfg(feature = "debug_dht")]
                     debug!(
                         target: LOG_TARGET_DHT,
