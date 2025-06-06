@@ -30,6 +30,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::water::refill::RefillStatus;
 
 const LOG_TARGET_DATA_LOGGER: &str = "data_logger";
 const MILLIS_PER_SEC: u64 = 1000;
@@ -113,12 +114,6 @@ pub struct DataLoggerConfig {
 /// It's a way to bundle together all the necessary mpsc (Multi-Producer, Single-Consumer) channel
 /// endpoints that the data logger needs to interact with other parts of your application.
 pub struct DataLoggerChannels<'a> {
-    /// Sender part of the channel for communication to Refill
-    pub tx_to_refill: &'a Sender<InternalCommand>,
-
-    /// Receiver part of the channel for communication from Refill
-    pub rx_from_refill: &'a Receiver<bool>,
-
     /// Sender part of the channel for communication to the signal handler
     pub tx_to_signal_handler: &'a Sender<bool>,
 
@@ -160,6 +155,9 @@ pub struct DataLoggerMutexes {
 
     /// Mutex for ventilation status
     pub mutex_ventilation_status: Arc<Mutex<bool>>,
+
+    /// Mutex for refill status
+    pub mutex_refill_status: Arc<Mutex<RefillStatus>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -171,7 +169,7 @@ pub struct DataLoggerMutexes {
 ///     atlas_scientific[AtlasScientific] -.-> data_logger
 ///     ambient[Ambient] -.-> data_logger
 ///     tank_level_switch[TankLevelSwitch] --> data_logger
-///     refill[Refill control] --> data_logger
+///     refill[Refill control] -.-> data_logger
 ///     ventilation[Ventilation control] --> data_logger
 ///     data_logger --> signal_handler[Signal handler]
 ///     signal_handler[Signal handler] --> data_logger
@@ -552,104 +550,6 @@ impl DataLogger {
         }
     }
 
-    /// Retrieves the ON/OFF status of a control module (Refill, Ventilation) and writes it to a file.
-    ///
-    /// This private helper function attempts to get boolean signal information from a
-    /// control module by sending a `RequestSignal` command through its channel. If a response
-    /// is received, it updates the local `signal` boolean and then calls `output_state`
-    /// to write this status (as "ON" or "OFF") to the configured file on the disk.
-    ///
-    /// It also tracks channel disconnections to prevent continuous error logging if a module
-    /// is no longer reachable.
-    ///
-    /// # Arguments
-    /// * `signal` - A mutable reference to a `bool` where the retrieved ON/OFF status will be stored.
-    /// * `refill_channel_disconnected` - A mutable reference to a `bool` flag indicating if the channel
-    ///   to the specific module is disconnected. This flag will be updated if a disconnection is detected.
-    /// * `signal_name` - An `AquariumSignal` enum variant (`RefillPumpStatus`, `VentilationControlStatus`, or `HeatingControlStatus`)
-    ///   specifying which signal is being requested.
-    /// * `tx_to_on_off_thread` - The sender channel to send the `RequestSignal` command to the target module.
-    /// * `rx_from_on_off_thread` - The receiver channel to get the boolean ON/OFF information from the target module.
-    /// * `lock_error_output_state` - A boolean flag used to inhibit repeated error logging if file output fails.
-    ///
-    /// # Returns
-    /// `true` if an error occurred during the channel communication or file output; `false` otherwise.
-    fn update_on_off_signal_via_channel(
-        &mut self,
-        signal: &mut bool,
-        channel_disconnected: &mut bool,
-        signal_name: AquariumSignal,
-        tx_to_on_off_thread: &Sender<InternalCommand>,
-        rx_from_on_off_thread: &Receiver<bool>,
-        mut lock_error_output_state: bool,
-    ) -> bool {
-        if !*channel_disconnected {
-            #[cfg(feature = "debug_data_logger")]
-            let start_time_output_on_off = SystemTime::now();
-
-            match tx_to_on_off_thread.send(InternalCommand::RequestSignal(signal_name.clone())) {
-                Ok(_) => {
-                    // now listen for a response
-                    match rx_from_on_off_thread.recv() {
-                        Ok(c) => {
-                            *signal = c;
-                            let output_file_name = match signal_name {
-                                AquariumSignal::RefillPumpStatus => {
-                                    &self.config.output_file_name_refill_in_progress
-                                }
-                                AquariumSignal::VentilationControlStatus => {
-                                    &self.config.output_file_name_ventilation_is_on
-                                }
-                                _ => {
-                                    // invalid signal parameter
-                                    return true;
-                                }
-                            };
-                            lock_error_output_state = self.output_state(
-                                c,
-                                "ON",
-                                "OFF",
-                                output_file_name,
-                                lock_error_output_state,
-                            );
-                        }
-                        Err(e) => {
-                            error!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "receiving value for {} failed ({e:?})",
-                                signal
-                            );
-                            *channel_disconnected = true;
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        target: LOG_TARGET_DATA_LOGGER,
-                        "channel communication for {} failed ({e:?})",
-                        signal
-                    );
-                    *channel_disconnected = true;
-                }
-            }
-            #[cfg(feature = "debug_data_logger")]
-            {
-                let stop_time_refill = SystemTime::now();
-                let execution_duration_refill_millis = stop_time_refill
-                    .duration_since(start_time_refill)
-                    .unwrap()
-                    .as_millis() as u64;
-                debug!(
-                    target: LOG_TARGET_DATA_LOGGER,
-                    "communication for {} took {} ms.",
-                    signal_name,
-                    execution_duration_refill_millis
-                );
-            }
-        }
-        lock_error_output_state
-    }
-
     /// Retrieves current ambient temperature and humidity readings from shared mutexes and outputs them to files.
     ///
     /// This private helper function accesses `Arc<Mutex<f32>>` protected data for ambient temperature
@@ -706,31 +606,41 @@ impl DataLogger {
     /// status to prevent repeated errors.
     ///
     /// # Arguments
-    /// * `data_logger_channels` - A reference to the container of channels for communication with other threads.
-    /// * `refill_status` - A mutable tuple `(in_progress: bool, channel_disconnected: bool)` for the refill module's status.
-    /// * `heater_status` - A mutable tuple `(is_on: bool, channel_disconnected: bool)` for the heating module's status.
-    /// * `ventilation_status` - A mutable tuple `(is_on: bool, channel_disconnected: bool)` for the ventilation module's status.
+    /// * `refill_status` - A mutable reference for indicating if the refill is in progress.
+    /// * `heater_status` - A mutable reference for indicating the heater state.
+    /// * `ventilation_status` - A mutable reference for indicating the ventilation state.
     fn update_signals(
         &mut self,
-        data_logger_channels: &DataLoggerChannels,
-        refill_status: &mut (bool, bool), // (in_progress, channel_disconnected)
+        refill_status_live: &mut bool,
+        refill_status_for_database: &mut bool,
+        refill_reset_for_database: bool,
         heater_status: &mut bool,
         ventilation_status: &mut bool,
         data_logger_mutexes: &DataLoggerMutexes,
     ) {
-        // Extract the individual parameters from the tuples
-        let (mut refill_in_progress, mut refill_channel_disconnected) = *refill_status;
-
-        //*** communication with refill thread ***
-        self.lock_error_output_state_refill_in_progress = self.update_on_off_signal_via_channel(
-            &mut refill_in_progress,
-            &mut refill_channel_disconnected,
-            AquariumSignal::RefillPumpStatus,
-            data_logger_channels.tx_to_refill,
-            data_logger_channels.rx_from_refill,
-            self.lock_error_output_state_refill_in_progress,
-        );
-        *refill_status = (refill_in_progress, refill_channel_disconnected);
+        {
+            // internal scope to limit lifetime of mutex lock
+            match data_logger_mutexes.mutex_refill_status.lock() {
+                Ok(mut refill_status) => {
+                    self.lock_error_output_state_refill_in_progress = self.output_state(
+                        refill_status.refill_in_progress_live, // use the live signal
+                        "ON",
+                        "OFF",
+                        &self.config.output_file_name_refill_in_progress,
+                        self.lock_error_output_state_refill_in_progress,
+                    );
+                    *refill_status_live = refill_status.refill_in_progress_live;
+                    *refill_status_for_database = refill_status.refill_in_progress_for_database;
+                    if refill_reset_for_database {
+                        refill_status.refill_in_progress_for_database = refill_status.refill_in_progress_live;
+                    }
+                }
+                Err(_) => {
+                    self.lock_error_output_state_refill_in_progress = true;
+                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for refill status");
+                }
+            };
+        }
 
         {
             // internal scope to limit lifetime of mutex lock
@@ -1104,11 +1014,11 @@ impl DataLogger {
         let mut tank_level_switch_invalid: Option<bool> = Some(false);
         let mut tank_level_switch_position: Option<bool> = Some(true);
         let mut tank_level_switch_position_stabilized: Option<bool> = Some(true);
-        let mut refill_in_progress: bool = false;
         let mut heater_is_on: bool = false;
         let mut ventilation_is_on: bool = false;
+        let mut refill_in_progress_live: bool = false;
+        let mut refill_in_progress_for_database: bool = false;
         let mut quit_command_received = false;
-        let mut refill_channel_disconnected = false;
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
@@ -1116,17 +1026,14 @@ impl DataLogger {
         let mut ambient_temperature_ds18b20: Option<f32> = Some(0.0);
 
         loop {
-            // update signals via channel communication
-            let mut refill_status = (refill_in_progress, refill_channel_disconnected);
-
             self.update_signals(
-                &data_logger_channels,
-                &mut refill_status,
+                &mut refill_in_progress_live,
+                &mut refill_in_progress_for_database,
+                true,
                 &mut heater_is_on,
                 &mut ventilation_is_on,
                 &data_logger_mutexes,
             );
-            (refill_in_progress, refill_channel_disconnected) = refill_status;
 
             // update signals by accessing mutex for DS18B20 sensor signals
             self.update_ds18b20_signals(
@@ -1183,7 +1090,7 @@ impl DataLogger {
                 conductivity,
                 conductivity_filtered,
                 conductivity_compensated: None,
-                refill_in_progress: Some(refill_in_progress),
+                refill_in_progress: Some(refill_in_progress_for_database),
                 tank_level_switch_position,
                 tank_level_switch_position_stabilized,
                 tank_level_switch_invalid,
@@ -1247,16 +1154,14 @@ impl DataLogger {
 
                 // once per second, retrieve signals and write them to the RAM disk
                 if i % 1000 == 0 {
-                    // update signals via channel communication
-                    let mut refill_status = (refill_in_progress, refill_channel_disconnected);
                     self.update_signals(
-                        &data_logger_channels,
-                        &mut refill_status,
+                        &mut refill_in_progress_live,
+                        &mut refill_in_progress_for_database,
+                        false,
                         &mut heater_is_on,
                         &mut ventilation_is_on,
                         &data_logger_mutexes,
                     );
-                    (refill_in_progress, refill_channel_disconnected) = refill_status;
 
                     // update signals by accessing mutex for DS18B20 sensor signals
                     self.update_ds18b20_signals(
@@ -1380,12 +1285,12 @@ pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
-    use crate::stubs::mock_refill::tests::mock_refill;
     use crate::stubs::mock_signal::tests::MockSignal;
     use crate::stubs::mock_ventilation::tests::mock_ventilation;
     use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use crate::water::refill::RefillStatus;
     use spin_sleep::SpinSleeper;
     use std::sync::{Arc, Mutex};
     use std::{fs, sync::mpsc, thread, time::Duration};
@@ -1580,20 +1485,16 @@ pub mod tests {
     // Test case uses test database #45.
     pub fn test_data_log() {
         // channels for communication with the test environment
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) = mpsc::channel();
         let (tx_data_logger_to_signal_handler, rx_signal_handler_from_data_logger) =
             mpsc::channel();
         let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
         let (tx_signal_handler_to_ventilation, rx_ventilation_from_signal_handler) =
             mpsc::channel();
-        let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) = mpsc::channel();
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler) = mpsc::channel();
         let (tx_test_environment_to_ventilation, rx_ventilation_from_test_environment) =
             mpsc::channel();
         let (tx_test_environment_to_heating, rx_heating_from_test_environment) = mpsc::channel();
-        let (tx_test_environment_to_refill, rx_refill_from_test_environment) = mpsc::channel();
 
         let mut mock_data_injection = MockDataInjection::new();
 
@@ -1642,6 +1543,13 @@ pub mod tests {
         let mutex_heating_status_clone_for_data_logger = mutex_heating_status.clone();
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
         let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
+        let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();
+        let mutex_refill_status_clone_for_test_environment = mutex_refill_status.clone();
 
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
@@ -1674,10 +1582,6 @@ pub mod tests {
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
-                let _ = tx_test_environment_to_refill.send(TestCommand::UpdateSignal(
-                    MockSignal::RefillPumpStatus(true),
-                ));
-
                 {
                     let mut conductivity = mutex_atlas_scientific_conductivity.lock().unwrap();
                     *conductivity = 50000.0;
@@ -1693,6 +1597,12 @@ pub mod tests {
                 {
                     let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
                     *ambient_temperature = 35.0;
+                }
+
+                {
+                    let mut refill_status =
+                        mutex_refill_status_clone_for_test_environment.lock().unwrap();
+                    refill_status.refill_in_progress_for_database = true;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1732,26 +1642,9 @@ pub mod tests {
                 // signal end of test case execution to mock threads
                 let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_ventilation.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
 
                 spin_sleeper.sleep(sleep_duration_1_second);
                 let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Terminate);
-            })
-            .unwrap();
-
-        // thread for mock refill control
-        let join_handle_mock_refill = thread::Builder::new()
-            .name("mock_refill".to_string())
-            .spawn(move || {
-                mock_refill(
-                    None,
-                    None,
-                    &rx_refill_from_signal_handler,
-                    Some(&tx_refill_to_data_logger),
-                    Some(&rx_refill_from_data_logger),
-                    Some(&rx_refill_from_test_environment),
-                    false, // initial refill pump status
-                );
             })
             .unwrap();
 
@@ -1794,8 +1687,6 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let data_logger_channels = DataLoggerChannels {
-                    tx_to_refill: &tx_data_logger_to_refill,
-                    rx_from_refill: &rx_data_logger_from_refill,
                     tx_to_signal_handler: &tx_data_logger_to_signal_handler,
                     rx_from_signal_handler: &rx_data_logger_from_signal_handler,
                 };
@@ -1815,6 +1706,7 @@ pub mod tests {
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                     mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
+                    mutex_refill_status: mutex_refill_status_clone_for_data_logger,
                 };
 
                 data_logger.execute(
@@ -1827,6 +1719,14 @@ pub mod tests {
                 println!("Printing recorded data:");
                 mock_data_injection.output();
 
+                // Assert if data logger has set the refill-in-progress bit to false.
+                {
+                    let refill_status =
+                        mutex_refill_status.lock().unwrap();
+                    println!("Checking if data logger has set the refill-in-progress bit to false...");
+                    assert_eq!(refill_status.refill_in_progress_for_database, false);
+                }
+
                 // Dataframe #6
                 let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #6");
@@ -1838,7 +1738,7 @@ pub mod tests {
                     Some(50_000.0),  // target_water_conductivity
                     Some(46875.656), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
-                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
                     Some(true),      // target_tank_level_switch_position_stabilized
                     Some(false),     // target_tank_level_switch_invalid
@@ -1861,7 +1761,7 @@ pub mod tests {
                     Some(50_000.0),  // target_water_conductivity
                     Some(43751.313), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
-                    Some(true),      // target_refill_in_progress
+                    Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
                     Some(true),      // target_tank_level_switch_position_stabilized
                     Some(false),     // target_tank_level_switch_invalid
@@ -1907,7 +1807,7 @@ pub mod tests {
                     Some(50_000.0), // target_water_conductivity
                     Some(25005.25), // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
-                    Some(true),     // target_refill_in_progress
+                    Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
                     Some(true),     // target_tank_level_switch_position_stabilized
                     Some(false),    // target_tank_level_switch_invalid
@@ -1989,24 +1889,24 @@ pub mod tests {
                 );
 
                 assert_output_file_contents(
-                    &config2.data_logger, // data_logger_config,
-                    29.0,                 // target_water_temperature
-                    28.6,                 // target_water_temperature_filtered
-                    7.0,                  // target_water_ph
-                    7.04,                 // target_water_ph_filtered
-                    50_000.0,             // target_water_conductivity
-                    46876.0,              // target_water_conductivity_filtered
-                    0.0,                  // target_water_conductivity_compensated
-                    true,                 // target_refill_in_progress
-                    true,                 // target_tank_level_switch_position
-                    false,                // target_tank_level_switch_invalid
-                    true,                 // target_tank_level_switch_position_stabilized
-                    true,                 // target_surface_ventilation_status
-                    35.0,                 // target_ambient_temperature
-                    66.0,                 // target_ambient_humidity
-                    true,                 // target_heater_status
-                    15.5,                 // target DS18B20 water temperature
-                    16.5,                 // target DS18B20 ambient temperature
+                    &config2.data_logger,                       // data_logger_config,
+                    29.0,                  // target_water_temperature
+                    28.6,            // target_water_temperature_filtered
+                    7.0,                          // target_water_ph
+                    7.04,                   // target_water_ph_filtered
+                    50_000.0,              // target_water_conductivity
+                    46876.0,         // target_water_conductivity_filtered
+                    0.0,        // target_water_conductivity_compensated
+                    false,                   // target_refill_in_progress
+                    true,             // target_tank_level_switch_position
+                    false,             // target_tank_level_switch_invalid
+                    true,     // target_tank_level_switch_position_stabilized
+                    true,             // target_surface_ventilation_status
+                    35.0,                // target_ambient_temperature
+                    66.0,                   // target_ambient_humidity
+                    true,                      // target_heater_status
+                    15.5,           // target DS18B20 water temperature
+                    16.5,         // target DS18B20 ambient temperature
                 );
             })
             .unwrap();
@@ -2017,9 +1917,6 @@ pub mod tests {
         join_handle_mock_heating
             .join()
             .expect("Mock heating thread did not finish.");
-        join_handle_mock_refill
-            .join()
-            .expect("Mock refill thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");

@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
-use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -28,7 +27,7 @@ pub struct WaterInjectionChannels<'a> {
     /// Collects the communication channels required by the `WaterInjection` module.
     ///
     /// This struct bundles all necessary `mpsc` channel endpoints that `WaterInjection`
-    /// uses to interact with `RelayManager`, `DataLogger`, and the `SignalHandler`.
+    /// uses to interact with `RelayManager` and the `SignalHandler`.
     ///
     /// # Lifetime Parameters
     /// * `'a` - Indicates that this struct holds borrowed references (`&'a Sender`, `&'a Receiver`)
@@ -38,17 +37,11 @@ pub struct WaterInjectionChannels<'a> {
     /// * `tx_water_injection_to_relay_manager`: Reference to the sender part of the channel for sending commands to the relay manager.
     /// * `rx_water_injection_from_relay_manager`: Reference to the receiver part of the channel for receiving acknowledgments from the relay manager.
     /// * `rx_water_injection_from_signal_handler`: Reference to the receiver part of the channel for receiving commands (e.g., `Quit`) from the signal handler.
-    /// * `tx_water_injection_to_data_logger`: Reference to the sender part of the channel for sending status updates (e.g., pump ON/OFF) to the data logger.
-    /// * `rx_water_injection_from_data_logger`: Reference to the receiver part of the channel for receiving requests (e.g., `RequestSignal`) from the data logger.
     pub tx_water_injection_to_relay_manager: &'a Sender<InternalCommand>,
 
     pub rx_water_injection_from_relay_manager: &'a Receiver<bool>,
 
     pub rx_water_injection_from_signal_handler: &'a Receiver<InternalCommand>,
-
-    pub tx_water_injection_to_data_logger: &'a Sender<bool>,
-
-    pub rx_water_injection_from_data_logger: &'a Receiver<InternalCommand>,
 }
 
 /// Trait for the execution of the refill once control has detected that the water level is low.
@@ -83,10 +76,6 @@ pub struct WaterInjection {
     spin_sleeper: SpinSleeper,
     sleep_duration_hundred_milli_sec: Duration,
     sleep_interval_seconds: f64,
-    pub lock_error_channel_receive_data_logger: bool,
-    pub lock_warn_inapplicable_command_data_logger: bool,
-    pub lock_error_invalid_signal_request_data_logger: bool,
-    pub lock_error_send_to_data_logger: bool,
 }
 
 impl WaterInjection {
@@ -116,10 +105,6 @@ impl WaterInjection {
             spin_sleeper: SpinSleeper::default(),
             sleep_duration_hundred_milli_sec: Duration::from_millis(sleep_interval_millis),
             sleep_interval_seconds,
-            lock_error_channel_receive_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_send_to_data_logger: false,
         }
     }
 }
@@ -197,12 +182,6 @@ impl WaterInjectionTrait for WaterInjection {
         let mut tank_level_switch_invalid = false;
 
         loop {
-            self.communicate_with_data_logger(
-                water_injection_channels.tx_water_injection_to_data_logger,
-                water_injection_channels.rx_water_injection_from_data_logger,
-                true,
-            );
-
             self.spin_sleeper
                 .sleep(self.sleep_duration_hundred_milli_sec);
             refill_time_seconds += self.sleep_interval_seconds;
@@ -279,20 +258,6 @@ impl WaterInjectionTrait for WaterInjection {
             }
         }
 
-        // inform data logger that refill is finished
-        match water_injection_channels
-            .tx_water_injection_to_data_logger
-            .send(false)
-        {
-            Ok(_) => { /* no listening to response */ }
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_WATER_INJECTION,
-                    "channel communication to data logger when finishing refill failed ({e:?})"
-                );
-            }
-        }
-
         // write the result to the database
         match sql_interface_refill.insert_refill_event(
             Local::now().naive_local(),
@@ -317,7 +282,6 @@ impl WaterInjectionTrait for WaterInjection {
 #[cfg(test)]
 pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
@@ -334,19 +298,17 @@ pub mod tests {
     // Creates a thread to run `WaterInjection::inject_water` and assert its outcome.
     //
     // This private helper function simplifies complex test scenarios for `WaterInjection`.
-    // It spawns a new thread that:
-    // 1. Initializes a `WaterInjection` instance using the provided `Refill`'s configuration.
-    // 2. Sets up the `WaterInjectionChannels` by borrowing the necessary `mpsc` channels from the test environment.
-    // 3. Calls `water_injection.inject_water()` with all its required parameters.
-    // 4. Asserts that the `inject_water` function's return value (`result`) matches `target_result`.
-    // 5. Asserts that the `refill_errors.has_error()` status matches `target_refill_has_errors` after the operation.
+    // It spawns a new thread.
+    // 1. It initializes a `WaterInjection` instance using the provided `Refill`'s configuration.
+    // 2. It sets up the `WaterInjectionChannels` by borrowing the necessary `mpsc` channels from the test environment.
+    // 3. It calls `water_injection.inject_water()` with all its required parameters.
+    // 4. It asserts that the `inject_water` function's return value (`result`) matches `target_result`.
+    // 5. It asserts that the `refill_errors.has_error()` status matches `target_refill_has_errors` after the operation.
     //
     // # Arguments
     // * `tx_water_injection_to_relay_manager` - Sender channel for `WaterInjection` to communicate with the mock `RelayManager`.
     // * `rx_water_injection_from_relay_manager` - Receiver channel for `WaterInjection` to receive acknowledgments from the mock `RelayManager`.
     // * `rx_water_injection_from_signal_handler` - Receiver channel for `WaterInjection` to receive commands from the mock `SignalHandler`.
-    // * `tx_water_injection_to_data_logger` - Sender channel for `WaterInjection` to communicate with the mock `DataLogger`.
-    // * `rx_water_injection_from_data_logger` - Receiver channel for `WaterInjection` to receive commands from the mock `DataLogger`.
     // * `refill` - The `Refill` struct (moved into this thread) whose `refill_errors` and `sql_interface_refill` will be used and modified by `inject_water`.
     // * `mutex_tank_level_switch_signals` - The `Arc<Mutex<TankLevelSwitchSignals>>` providing shared access to mock tank level switch signals.
     // * `target_result` - The expected boolean return value of the `inject_water` call (`true` if `Quit` was received, `false` otherwise).
@@ -356,13 +318,11 @@ pub mod tests {
     // A `thread::JoinHandle<()>` which can be used by the main test thread to wait for this spawned thread's completion.
     //
     // # Panics
-    // This function will panic if the new thread cannot be spawned, or if any of the `assert_eq!` calls inside the spawned thread fail.
+    // This function will panic if the new thread cannot be spawned, or if any of the `assert_eq!` calls inside the spawned thread fails.
     fn create_assert_test_object(
         tx_water_injection_to_relay_manager: Sender<InternalCommand>,
         rx_water_injection_from_relay_manager: Receiver<bool>,
         rx_water_injection_from_signal_handler: Receiver<InternalCommand>,
-        tx_water_injection_to_data_logger: Sender<bool>,
-        rx_water_injection_from_data_logger: Receiver<InternalCommand>,
         mut refill: Refill,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
         target_result: bool,
@@ -374,8 +334,6 @@ pub mod tests {
                 let mut water_injection = WaterInjection::new(&refill.config);
 
                 let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
-                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
                     tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
                     rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
                     rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
@@ -401,10 +359,6 @@ pub mod tests {
 
         let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(39));
 
-        let (tx_water_injection_to_data_logger, _rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (_tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
@@ -472,8 +426,6 @@ pub mod tests {
             tx_water_injection_to_relay_manager,
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
-            tx_water_injection_to_data_logger,
-            rx_water_injection_from_data_logger,
             refill,
             mutex_tank_level_switch_signals,
             false,
@@ -536,35 +488,17 @@ pub mod tests {
 
         let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(40));
 
-        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_water_injection,
-                    &rx_data_logger_from_water_injection,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
@@ -581,7 +515,6 @@ pub mod tests {
                 let _ = tx_signal_handler_to_water_injection.send(InternalCommand::Quit);
                 spin_sleeper.sleep(sleep_duration_two_seconds);
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
 
@@ -593,8 +526,6 @@ pub mod tests {
             tx_water_injection_to_relay_manager,
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
-            tx_water_injection_to_data_logger,
-            rx_water_injection_from_data_logger,
             refill,
             mutex_tank_level_switch_signals,
             true,
@@ -610,9 +541,6 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
     }
 
     // Creates a thread that simulates a test environment for `WaterInjection` scenarios.
@@ -641,7 +569,6 @@ pub mod tests {
     fn create_test_environment(
         tx_signal_handler_to_water_injection: Sender<InternalCommand>,
         tx_signal_handler_to_relay_manager: Sender<InternalCommand>,
-        tx_signal_handler_to_data_logger: Sender<InternalCommand>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -658,7 +585,6 @@ pub mod tests {
 
                 // request termination to mock threads
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap()
     }
@@ -675,35 +601,17 @@ pub mod tests {
 
         let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(41));
 
-        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, true)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_water_injection,
-                    &rx_data_logger_from_water_injection,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = create_mock_relay_manager(
@@ -715,7 +623,6 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             tx_signal_handler_to_water_injection,
             tx_signal_handler_to_relay_manager,
-            tx_signal_handler_to_data_logger,
         );
 
         // make sure all mock threads are running when instantiating the test object
@@ -726,8 +633,6 @@ pub mod tests {
             tx_water_injection_to_relay_manager,
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
-            tx_water_injection_to_data_logger,
-            rx_water_injection_from_data_logger,
             refill,
             mutex_tank_level_switch_signals,
             false,
@@ -743,9 +648,6 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
@@ -758,17 +660,11 @@ pub mod tests {
 
         let (_, refill, _) = prepare_refill_tests(None, 2, 60, Some(42));
 
-        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
-            mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel();
 
         let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
@@ -777,18 +673,6 @@ pub mod tests {
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_clone_for_test_environment =
             mutex_tank_level_switch_signals.clone();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_water_injection,
-                    &rx_data_logger_from_water_injection,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -850,7 +734,6 @@ pub mod tests {
 
                 // request termination to mock threads
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
 
@@ -862,8 +745,6 @@ pub mod tests {
             tx_water_injection_to_relay_manager,
             rx_water_injection_from_relay_manager,
             rx_water_injection_from_signal_handler,
-            tx_water_injection_to_data_logger,
-            rx_water_injection_from_data_logger,
             refill,
             mutex_tank_level_switch_signals,
             false,
@@ -879,9 +760,6 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
@@ -894,35 +772,17 @@ pub mod tests {
         let (_, mut refill, _) = prepare_refill_tests(None, 2, 60, Some(43));
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (_tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_water_injection,
-                    &rx_data_logger_from_water_injection,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -966,7 +826,6 @@ pub mod tests {
 
                 // request termination to mock threads
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
-                let _ = tx_signal_handler_to_data_logger.send(InternalCommand::Quit);
             })
             .unwrap();
 
@@ -978,8 +837,6 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
-                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
                     tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
                     rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
                     rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
@@ -1005,9 +862,6 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
     }
 
     #[test]
@@ -1021,35 +875,17 @@ pub mod tests {
         let (_, mut refill, _) = prepare_refill_tests(None, 10, 60, Some(44));
         let mut water_injection = WaterInjection::new(&refill.config);
 
-        let (tx_water_injection_to_data_logger, rx_data_logger_from_water_injection) =
-            mpsc::channel();
-        let (tx_data_logger_to_water_injection, rx_water_injection_from_data_logger) =
-            mpsc::channel();
         let (tx_water_injection_to_relay_manager, rx_relay_manager_from_water_injection) =
             mpsc::channel();
         let (tx_relay_manager_to_water_injection, rx_water_injection_from_relay_manager) =
             mpsc::channel();
         let (tx_signal_handler_to_water_injection, rx_water_injection_from_signal_handler) =
             mpsc::channel();
-        let (tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
-            mpsc::channel();
 
         let tx_signal_handler_to_relay_manager = tx_water_injection_to_relay_manager.clone();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_water_injection,
-                    &rx_data_logger_from_water_injection,
-                    &rx_data_logger_from_signal_handler,
-                );
-            })
-            .unwrap();
 
         // thread for Mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1085,7 +921,6 @@ pub mod tests {
         let join_handle_test_environment = create_test_environment(
             tx_signal_handler_to_water_injection,
             tx_signal_handler_to_relay_manager,
-            tx_signal_handler_to_data_logger,
         );
 
         // make sure all mock threads are running when instantiating the test object
@@ -1096,8 +931,6 @@ pub mod tests {
             .name("test_object".to_string())
             .spawn(move || {
                 let water_injection_channels = WaterInjectionChannels {
-                    tx_water_injection_to_data_logger: &tx_water_injection_to_data_logger,
-                    rx_water_injection_from_data_logger: &rx_water_injection_from_data_logger,
                     tx_water_injection_to_relay_manager: &tx_water_injection_to_relay_manager,
                     rx_water_injection_from_relay_manager: &rx_water_injection_from_relay_manager,
                     rx_water_injection_from_signal_handler: &rx_water_injection_from_signal_handler,
@@ -1123,8 +956,5 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
     }
 }

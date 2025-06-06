@@ -122,6 +122,7 @@ pub enum AquariumSignal {
     /// ventilation control status
     VentilationControlStatus,
 
+    #[allow(unused)]
     /// refill pump status
     RefillPumpStatus,
 

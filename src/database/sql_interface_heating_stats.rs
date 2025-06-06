@@ -219,7 +219,7 @@ impl SqlInterfaceHeating {
     /// This function is called before creating any threads.
     /// If NULL values are detected, the function will panic leading to a stop of the overall
     /// application.
-    /// 
+    ///
     /// # Arguments
     /// * `conn` - An active database connection pool object for general heating-related operations.
     /// * `sql_interface_heating_midnight_calculator` - A boxed trait object that provides
@@ -385,7 +385,7 @@ impl SqlInterfaceHeating {
     /// The underlying SQL query utilizes an `INSERT ... ON DUPLICATE KEY UPDATE` clause:
     /// - If no record exists in the `heatingstats` table for the `date` specified in `heating_stats_entry`,
     ///   a new row containing all provided statistical data is inserted.
-    /// - There is a `PRIMARY KEY` constraint for the `Date` column in the `heatingstats` table. 
+    /// - There is a `PRIMARY KEY` constraint for the `Date` column in the `heatingstats` table.
     /// - If a record *already exists* for `heating_stats_entry.date`, the existing row's
     ///   `Energy`, `AmbientTempAverage`, `AmbientTempCounter`, `WaterTempAverage`, `WaterTempCounter`,
     ///   and `HeatingControlRuntime` columns are updated with the new values from `heating_stats_entry`.

@@ -156,7 +156,7 @@ pub struct ActuateControllinoConfig {
 
     /// Relay id of peristaltic pump #4
     pub peristaltic_pump4_id: u8,
-    
+
     /// Heartbeat interval
     pub heartbeat_interval_seconds: u64,
 }
@@ -512,7 +512,7 @@ impl RelayActuationTrait for ActuateControllino {
     fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
         Some(self.config.heartbeat_interval_seconds)
     }
-    
+
     /// Executes the heartbeat: Sending a signal to the actuator
     fn heartbeat(&mut self) {
         // create a message to be sent to Controllino

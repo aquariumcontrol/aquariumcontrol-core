@@ -14,10 +14,10 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use std::thread::sleep;
-use std::io;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
+use std::thread::sleep;
 
 const LOG_TARGET_DS18B20: &str = "ds18b20";
 
@@ -295,9 +295,9 @@ pub mod tests {
             use std::env;
         }
     }
-    
-    use crate::utilities::config::read_config_file;
+
     use crate::sensors::ds18b20::Ds18b20;
+    use crate::utilities::config::read_config_file;
 
     #[test]
     #[ignore]

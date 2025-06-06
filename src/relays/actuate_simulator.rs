@@ -86,7 +86,7 @@ impl RelayActuationTrait for ActuateSimulator {
         None
     }
 
-    /// Heartbeat is not used by this trait implementation. 
+    /// Heartbeat is not used by this trait implementation.
     fn heartbeat(&mut self) {
         // do nothing
     }

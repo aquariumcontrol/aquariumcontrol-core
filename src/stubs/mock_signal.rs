@@ -53,6 +53,7 @@ pub mod tests {
         VentilationControlStatus(bool),
 
         /// refill pump status
+        #[allow(unused)]
         RefillPumpStatus(bool),
 
         /// schedule allows operation

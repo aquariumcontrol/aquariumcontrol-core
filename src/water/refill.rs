@@ -21,7 +21,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
-use crate::recorder::data_logger_communication::DataLoggerCommunicationTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -43,20 +42,20 @@ pub struct RefillConfig {
     /// interval for the main control in seconds    
     pub check_interval: u64,
 
-    /// maximum number of permitted refill operations within last 24h
-    /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
+    /// the maximum number of permitted refill operations within the last 24h
+    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
     max_refill_count_24h: u64,
 
-    /// maximum permitted refill volume within last 24h
-    /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
+    /// maximum permitted refill volume within the last 24h
+    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
     max_refill_volume_24h: f64,
 
-    /// maximum number of permitted refill operations within the last hour
-    /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
+    /// the maximum number of permitted refill operations within the last hour
+    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
     max_refill_count_hour: u64,
 
     /// maximum permitted refill volume within the last hour
-    /// - If this number is exceeded, then the refill control will not further refill even if water level sensor signal value is low.
+    /// - If this number is exceeded, then the refill control will not further refill even if the water level sensor signal value is low.
     max_refill_volume_hour: f64,
 
     /// minimum time which has to pass after a refill operation before a further refill operation is started
@@ -101,14 +100,19 @@ pub struct RefillChannels {
     /// Receiver part of the channel for communication from the schedule checker
     pub rx_refill_from_schedule_check: Receiver<bool>,
 
-    /// Sender part of the channel for communication to the data logger
-    pub tx_refill_to_data_logger: Sender<bool>,
-
-    /// Receiver part of the channel for communication from the data logger
-    pub rx_refill_from_data_logger: Receiver<InternalCommand>,
-
     /// Receiver part of the channel for communication from the messaging
     pub rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>,
+}
+
+/// Struct contains the status of the refill control for communication to the data logger.
+pub struct RefillStatus {
+    /// Status bit of refill control: It follows the actuation of the refill pump.
+    pub refill_in_progress_live: bool,
+
+    /// Status bit of refill control for data logger:
+    /// - It is set with the start when the refill pump is actuated.
+    /// - It is unset by the data logger to make sure the data logger has captured the refill.
+    pub refill_in_progress_for_database: bool,
 }
 
 /// Contains the configuration and the implementation for the refill control.
@@ -126,14 +130,13 @@ pub struct RefillChannels {
 /// signal_handler --> water_injection
 /// refill --> schedule_check[Schedule Check]
 /// schedule_check --> refill
-/// refill --> data_logger[Data Logger]
-/// data_logger --> refill
+/// refill -.-> data_logger[Data Logger]
 /// messaging[Messaging] --> refill
 /// ```
 /// Communication channel to and from the relay manager is forwarded to implementation of WaterInjectionTrait.
 /// Communication channel to and from data logger is forwarded to implementation of WaterInjectionTrait.
 /// Signal handler is communicating both directly with refill as well with implementation of WaterInjectionTrait.
-/// Tank level switch calculation is communicating both directly with refill as well with implementation of WaterInjectionTrait.
+/// Tank level switch calculation communicates both directly with refill control and with implementation of WaterInjectionTrait.
 ///
 /// Architecture of the component is as follows:
 /// ```mermaid
@@ -210,19 +213,7 @@ pub struct Refill {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from the signal handler via the channel
     lock_error_channel_receive_termination_command: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive command from data logger
-    pub lock_error_channel_receive_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from data logger via the channel
-    pub lock_warn_inapplicable_command_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received a request for invalid signal from the data logger
-    pub lock_error_invalid_signal_request_data_logger: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send the response to the data logger
-    pub lock_error_send_to_data_logger: bool,
-
+    
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
@@ -235,7 +226,7 @@ impl Refill {
     ///
     /// This constructor initializes the freshwater refill control module with its specified
     /// configuration and a dedicated SQL database interface. It sets up various internal
-    /// error flags to their default (inactive) state and initializes many "lock" flags
+    /// error flags to the default (inactive) state and initializes many "lock" flags
     /// to `false`. These lock flags are crucial during operation to prevent log files from
     /// being flooded with repetitive error or warning messages.
     ///
@@ -280,10 +271,6 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_send_to_data_logger: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
         }
@@ -333,18 +320,13 @@ impl Refill {
             lock_error_channel_receive_schedule_check: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
-            lock_error_channel_receive_data_logger: false,
-            lock_warn_inapplicable_command_data_logger: false,
-            lock_error_invalid_signal_request_data_logger: false,
-            lock_error_send_to_data_logger: false,
             last_ping_instant: Instant::now(),
             database_ping_interval: Duration::from_secs(1000),
         }
     }
 
     /// Retrieves comprehensive historic refill data from the SQL database and updates the provided container.
-    ///
-    /// This private helper function queries the `sql_interface_refill` for various statistics
+    /// This helper function queries the `sql_interface_refill` for various statistics
     /// crucial for refill control:
     /// - Duration since the last refill operation.
     /// - Total volume and count of refills in the last 24 hours.
@@ -744,6 +726,7 @@ impl Refill {
         refill_channels: RefillChannels,
         water_injection: &mut impl WaterInjectionTrait,
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
+        mutex_refill_status: Arc<Mutex<RefillStatus>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
@@ -786,12 +769,6 @@ impl Refill {
                         break;
                     }
                 }
-
-                self.communicate_with_data_logger(
-                    &refill_channels.tx_refill_to_data_logger,
-                    &refill_channels.rx_refill_from_data_logger,
-                    false,
-                );
 
                 (
                     quit_command_received,
@@ -888,13 +865,22 @@ impl Refill {
                                     .tx_refill_to_relay_manager,
                                 rx_water_injection_from_relay_manager: &refill_channels
                                     .rx_refill_from_relay_manager,
-                                tx_water_injection_to_data_logger: &refill_channels
-                                    .tx_refill_to_data_logger,
-                                rx_water_injection_from_data_logger: &refill_channels
-                                    .rx_refill_from_data_logger,
                                 rx_water_injection_from_signal_handler: &refill_channels
                                     .rx_refill_from_signal_handler,
                             };
+
+                            {
+                                // internal scope to limit lifetime of mutex lock
+                                match mutex_refill_status.lock() {
+                                    Ok(mut refill_status) => {
+                                        refill_status.refill_in_progress_live = true;
+                                        refill_status.refill_in_progress_for_database = true;
+                                    }
+                                    Err(_) => {
+                                        error!(target: LOG_TARGET_REFILL, "error locking mutex for refill status");
+                                    }
+                                };
+                            }
 
                             quit_command_received = water_injection.inject_water(
                                 water_injection_channels,
@@ -903,6 +889,18 @@ impl Refill {
                                 &mutex_tank_level_switch_signals_clone_for_refill,
                             );
                             *mutex_data = mutex_data.saturating_add(1);
+
+                            {
+                                // internal scope to limit lifetime of mutex lock
+                                match mutex_refill_status.lock() {
+                                    Ok(mut refill_status) => {
+                                        refill_status.refill_in_progress_live = false;
+                                    }
+                                    Err(_) => {
+                                        error!(target: LOG_TARGET_REFILL, "error locking mutex for refill status");
+                                    }
+                                };
+                            }
 
                             #[cfg(feature = "debug_refill")]
                             debug!(
@@ -977,12 +975,6 @@ impl Refill {
                         }
                     }
 
-                    self.communicate_with_data_logger(
-                        &refill_channels.tx_refill_to_data_logger,
-                        &refill_channels.rx_refill_from_data_logger,
-                        false,
-                    );
-
                     (
                         quit_command_received,
                         start_command_received,
@@ -1020,8 +1012,8 @@ impl Refill {
                 .saturating_add(self.config.check_interval);
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received the request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         #[cfg(test)]
         println!(
             "{}: sending Quit confirmation to signal handler.",
@@ -1040,11 +1032,6 @@ impl Refill {
         // The shutdown sequence is handled by the signal_handler module.
         let mut termination_command_received = false;
         while !termination_command_received {
-            self.communicate_with_data_logger(
-                &refill_channels.tx_refill_to_data_logger,
-                &refill_channels.rx_refill_from_data_logger,
-                false,
-            );
             termination_command_received = match refill_channels
                 .rx_refill_from_signal_handler
                 .recv()
@@ -1101,9 +1088,8 @@ pub mod tests {
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-    use crate::water::refill::{Refill, RefillChannels, RefillErrors};
+    use crate::water::refill::{Refill, RefillChannels, RefillErrors, RefillStatus};
 
-    use crate::stubs::mock_data_logger::tests::mock_data_logger;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
 
     use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
@@ -1292,15 +1278,10 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(20));
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -1313,6 +1294,11 @@ pub mod tests {
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_for_refill = mutex_tank_level_switch_signals.clone();
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1344,18 +1330,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -1416,8 +1390,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -1426,6 +1398,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals_for_refill,
+                    mutex_refill_status,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1437,9 +1410,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1456,15 +1426,10 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
 
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(47));
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -1489,6 +1454,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -1510,18 +1480,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -1579,8 +1537,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -1589,6 +1545,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1600,9 +1557,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1621,14 +1575,9 @@ pub mod tests {
 
         let (config, mut refill, mut sql_interface) = prepare_refill_tests(None, 2, 60, Some(21));
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _) = mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -1650,6 +1599,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -1671,18 +1625,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -1744,8 +1686,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -1754,6 +1694,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1765,9 +1706,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1789,15 +1727,10 @@ pub mod tests {
         // set the error
         refill.refill_errors.error_switch_stuck_low = true;
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -1808,6 +1741,11 @@ pub mod tests {
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1843,18 +1781,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -1938,8 +1864,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
                 };
 
@@ -1948,6 +1872,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // check if there was no water injection
@@ -1962,9 +1887,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -1985,15 +1907,10 @@ pub mod tests {
         // set the error
         refill.refill_errors.error_sql_update_failed = true;
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -2015,6 +1932,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -2036,18 +1958,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -2102,8 +2012,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -2112,6 +2020,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // check if there was no water injection
@@ -2128,9 +2037,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2160,15 +2066,10 @@ pub mod tests {
         let sleep_duration_50_millis = Duration::from_millis(50);
         let spin_sleeper = SpinSleeper::default();
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -2192,6 +2093,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -2213,18 +2119,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -2276,8 +2170,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
                 };
 
@@ -2286,6 +2178,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -2304,9 +2197,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2324,15 +2214,10 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 1, 1, Some(25));
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -2354,6 +2239,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -2375,18 +2265,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     false,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -2440,8 +2318,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -2450,6 +2326,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // check if there was no water injection
@@ -2466,9 +2343,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2487,15 +2361,10 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let (_, mut refill, mut sql_interface) = prepare_refill_tests(None, 10, 60, Some(26));
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -2520,6 +2389,11 @@ pub mod tests {
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_clone_for_test_environment =
             mutex_tank_level_switch_signals.clone();
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -2541,18 +2415,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -2647,8 +2509,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
                 };
 
@@ -2657,6 +2517,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // check if there was only one water injection
@@ -2673,9 +2534,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
@@ -2696,15 +2554,10 @@ pub mod tests {
         // this test case does not use the SQL database, so no conflict arises
         // when concurrently executing other test cases on the same DB.
 
-        let (tx_refill_to_data_logger, rx_data_logger_from_refill) = mpsc::channel::<bool>();
-        let (tx_data_logger_to_refill, rx_refill_from_data_logger) =
-            mpsc::channel::<InternalCommand>();
         let (tx_refill_to_relay_manager, _rx_relay_manager_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (_tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel::<bool>();
         let (tx_signal_handler_to_refill, rx_refill_from_signal_handler) =
-            mpsc::channel::<InternalCommand>();
-        let (_tx_signal_handler_to_data_logger, rx_data_logger_from_signal_handler) =
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
@@ -2718,6 +2571,11 @@ pub mod tests {
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
@@ -2739,18 +2597,6 @@ pub mod tests {
                     &rx_schedule_check_from_refill,
                     None,
                     true,
-                );
-            })
-            .unwrap();
-
-        // thread for mock Datalogger
-        let join_handle_mock_data_logger = thread::Builder::new()
-            .name("mock_data_logger".to_string())
-            .spawn(move || {
-                mock_data_logger(
-                    &tx_data_logger_to_refill,
-                    &rx_data_logger_from_refill,
-                    &rx_data_logger_from_signal_handler,
                 );
             })
             .unwrap();
@@ -2805,8 +2651,6 @@ pub mod tests {
                     rx_refill_from_signal_handler,
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
-                    tx_refill_to_data_logger,
-                    rx_refill_from_data_logger,
                     rx_refill_from_messaging_opt: None,
                 };
 
@@ -2815,6 +2659,7 @@ pub mod tests {
                     refill_channels,
                     &mut mock_water_injection,
                     mutex_tank_level_switch_signals,
+                    mutex_refill_status,
                 );
 
                 // check if there was no water injection
@@ -2831,9 +2676,6 @@ pub mod tests {
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
-        join_handle_mock_data_logger
-            .join()
-            .expect("Mock Data Logger thread did not finish.");
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");

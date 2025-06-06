@@ -25,9 +25,9 @@ const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
     fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError>;
-    
+
     fn get_heartbeat_interval_seconds(&self) -> Option<u64>;
-    
+
     fn heartbeat(&mut self);
 }
 
@@ -597,21 +597,21 @@ impl RelayManager {
 
 #[cfg(test)]
 pub mod tests {
-    use std::sync::mpsc;
-    use std::thread::scope;
-    use std::time::Duration;
-    use spin_sleep::SpinSleeper;
     use crate::relays::relay_manager::{
         RelayActuationTrait, RelayError, RelayManager, RelayManagerChannels,
     };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc;
+    use std::thread::scope;
+    use std::time::Duration;
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
         // execution counter for testing purposes
         execution_counter: u32,
-        
+
         // heartbeat counter for testing purposes
         heartbeat_counter: u32,
     }
@@ -647,7 +647,7 @@ pub mod tests {
 
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_secs(2);
-        
+
         let mut relay_manager = RelayManager::new(config.relay_manager);
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
@@ -886,7 +886,7 @@ pub mod tests {
                 }
 
                 spin_sleeper.sleep(sleep_duration); // wait for two seconds to test the heartbeat
-                
+
                 let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
                 rx_signal_handler_from_relay_manager.recv().unwrap();
             });
@@ -915,7 +915,7 @@ pub mod tests {
 
                 relay_manager.execute(relay_manager_channels, &mut mock_actuator);
 
-                // Test object thread has ended. 
+                // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
                 assert_eq!(mock_actuator.heartbeat_counter, 2); // Assertion checks the number of heartbeats.
             });

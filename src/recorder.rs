@@ -13,8 +13,5 @@ pub mod data_logger;
 /// Contains the trait implementation for the execution of the data write operation
 pub mod data_injection;
 
-/// Contains the functionality used by other threads for communication with data logger thread
-pub mod data_logger_communication;
-
 /// Contains data definition for the data to be written
 pub mod recorder_data_frame;

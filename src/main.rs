@@ -128,7 +128,7 @@ use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::Monitors;
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
-use crate::water::refill::{Refill, RefillChannels};
+use crate::water::refill::{Refill, RefillChannels, RefillStatus};
 use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
@@ -421,7 +421,7 @@ fn main() {
         version_information
     );
 
-    // check if the user has root privileges - disabled when developing on Windows platform
+    // check if the user has root privileges - disabled when developing on the Windows platform
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     if !is_running_as_root() {
         panic!("{}: This application must be run as root.", LOG_TARGET_MAIN);
@@ -649,15 +649,6 @@ fn main() {
             rx_watchdog_from_messaging_opt = None;
         }
     }
-
-    // *** refill <=> data_logger ***
-    let (tx_data_logger_to_refill, rx_refill_from_data_logger): (
-        Sender<InternalCommand>,
-        Receiver<InternalCommand>,
-    ) = mpsc::channel();
-    let (tx_refill_to_data_logger, rx_data_logger_from_refill): (Sender<bool>, Receiver<bool>) =
-        mpsc::channel();
-    // *****************************
 
     // *** refill <=> relay_manager ***
     let (tx_refill_to_relay_manager, rx_relay_manager_from_refill): (
@@ -1264,8 +1255,6 @@ fn main() {
         rx_refill_from_signal_handler,
         tx_refill_to_schedule_check,
         rx_refill_from_schedule_check,
-        tx_refill_to_data_logger,
-        rx_refill_from_data_logger,
         rx_refill_from_messaging_opt,
     };
 
@@ -1439,6 +1428,14 @@ fn main() {
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
         let mutex_ventilation_status_clone_for_data_logger = mutex_ventilation_status.clone();
 
+        // Mutex for refill
+        let refill_status = RefillStatus {
+            refill_in_progress_live: false,
+            refill_in_progress_for_database: false,
+        };
+        let mutex_refill_status = Arc::new(Mutex::new(refill_status));
+        let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();
+
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
             let mut tcp_communication = match TcpCommunication::new(&config.tcp_connection) {
@@ -1570,8 +1567,6 @@ fn main() {
 
         scope.spawn(move || {
             let data_logger_channels = DataLoggerChannels {
-                tx_to_refill: &tx_data_logger_to_refill,
-                rx_from_refill: &rx_data_logger_from_refill,
                 tx_to_signal_handler: &tx_data_logger_to_signal_handler,
                 rx_from_signal_handler: &rx_data_logger_from_signal_handler,
             };
@@ -1592,6 +1587,7 @@ fn main() {
                     mutex_tank_level_switch_signals_clone_for_data_logger,
                 mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                 mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,
+                mutex_refill_status: mutex_refill_status_clone_for_data_logger,
             };
 
             data_logger.execute(
@@ -1627,6 +1623,7 @@ fn main() {
                 refill_channels,
                 &mut water_injection,
                 mutex_tank_level_switch_signals_clone_for_refill,
+                mutex_refill_status,
             );
 
             #[cfg(feature = "debug_main")]
