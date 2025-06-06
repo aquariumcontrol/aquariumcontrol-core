@@ -20,6 +20,10 @@ cfg_if::cfg_if! {
 
 const LOG_TARGET_GPIO_HANDLER: &str = "gpio_handler";
 
+// create stub version of type to allow build on non-target platforms
+#[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+pub type Gpio = u64;
+
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.

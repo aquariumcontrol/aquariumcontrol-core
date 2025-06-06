@@ -22,10 +22,7 @@ use crate::relays::actuate_controllino::ActuateControllinoConfig;
 use crate::relays::relay_manager::RelayManagerConfig;
 use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
-
-#[cfg(feature = "target_hw")]
 use crate::sensors::dht::DhtConfig;
-
 use crate::food::feed::FeedConfig;
 use crate::sensors::gpio_handler::GpioHandlerConfig;
 use crate::thermal::heating::HeatingConfig;
@@ -40,7 +37,6 @@ use crate::dispatch::messaging::MessagingConfig;
 
 use crate::database::sql_interface::SqlInterfaceConfig;
 use crate::permission::schedule_check::ScheduleCheckConfig;
-use crate::sensors::dht::DhtConfig;
 use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;

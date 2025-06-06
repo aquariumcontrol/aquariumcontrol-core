@@ -133,7 +133,6 @@ use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
-        use crate::sensors::dht::{Dht, DhtResult, DhtError};
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
@@ -1124,7 +1123,7 @@ fn main() {
                     gpio_tank_level_switch
                 );
                 // Actual DHT sensor reading is not required in this case. Use a stub version.
-                dht = Dht::new(config.dht, gpio_dht22_io, gpio_dht22_vcc);
+                dht = Dht::new(config.dht, None, gpio_dht22_io, gpio_dht22_vcc);
             }
             else if gpio_handler_opt.is_none() {
                     // defensive programming - this case should not occur
@@ -1142,7 +1141,7 @@ fn main() {
                      Some(gpio_lib_handle_cloned_for_tank_level_switch),
                      gpio_tank_level_switch
                 );
-                dht = Dht::new(config.dht, gpio_lib_handle.clone(), gpio_dht22_io, gpio_dht22_vcc);
+                dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
                 actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
             }
         }
@@ -1153,7 +1152,7 @@ fn main() {
             );
 
             // Actual DHT sensor reading is not required in this case. Use a stub version.
-            dht = Dht::new(config.dht, gpio_dht22_io, gpio_dht22_vcc);
+            dht = Dht::new(config.dht, None, gpio_dht22_io, gpio_dht22_vcc);
         }
     }
 

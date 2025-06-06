@@ -20,13 +20,12 @@ cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};
         use std::thread::{self, sleep};
-        use std::time::Duration;
-        use std::sync::mpsc::{Sender, Receiver};
 
         #[cfg(feature = "debug_dht")]
         use log::debug;
-
-        use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    }
+    else {
+        use crate::sensors::gpio_handler::Gpio;
     }
 }
 
@@ -182,7 +181,7 @@ pub enum DhtError {
     /// humidity value is out of range
     HumidityOutOfRange,
 
-    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
+    /// reported from low-level reading when called without gpio lib handle available
     IncorrectPlatform,
 }
 
@@ -191,9 +190,9 @@ pub struct Dht {
     /// configuration for communication with DHT sensor
     config: DhtConfig,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// GPIO interface
-    gpio: Gpio,
+    #[allow(unused)]
+    gpio_opt: Option<Gpio>,
 
     #[allow(unused)]
     /// numeric GPIO pin for communication with DHT22 sensor
@@ -211,7 +210,6 @@ pub struct Dht {
 }
 
 impl Dht {
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Creates a new **`Dht`** instance for interacting with a DHT22 sensor on the target platform.
     ///
     /// This constructor initializes the DHT sensor module, configuring it with the provided
@@ -221,38 +219,20 @@ impl Dht {
     ///
     /// # Arguments
     /// * `config` - **Configuration data** for the DHT sensor, including timing parameters for communication.
-    /// * `gpio` - A **`Gpio` instance** from `rppal`, providing the interface to the system's GPIO pins.
+    /// * `gpio_opt` - A **`Gpio` instance** from `rppal`, providing the interface to the system's GPIO pins, wrapped in Option.
     /// * `gpio_dht22_io` - The **GPIO pin** used for data input/output with the DHT22 sensor.
     /// * `gpio_dht22_vcc` - The **GPIO pin** used to control the power supply (VCC) to the DHT22 sensor.
     ///
     /// # Returns
     /// A new **`Dht` struct**, ready to read temperature and humidity.
-    pub fn new(config: DhtConfig, gpio: Gpio, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
+    pub fn new(config: DhtConfig, gpio_opt: Option<Gpio>, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
         Dht {
             config,
-            gpio,
+            gpio_opt,
             gpio_dht22_io,
             gpio_dht22_vcc,
             instant_last_measurement: Instant::now(),
-        }
-    }
-
-    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-    /// Creates a new instance of a stub-version of **`Dht`** instance on non-target platforms.
-    ///
-    /// # Arguments
-    /// * `config` - **Configuration data** for the DHT sensor, including timing parameters for communication.
-    /// # Returns
-    /// A new **`Dht` struct**, which will not be able to record any actual data, but allow for a build.
-    /// * `gpio_dht22_io` - The **GPIO pin** used for data input/output with the DHT22 sensor.
-    /// * `gpio_dht22_vcc` - The **GPIO pin** used to control the power supply (VCC) to the DHT22 sensor.
-    pub fn new(config: DhtConfig, gpio_dht22_io: u8, gpio_dht22_vcc: u8) -> Dht {
-        Dht {
-            config,
-            gpio_dht22_io,
-            gpio_dht22_vcc,
-            instant_last_measurement: Instant::now(),
-            lock_error_mutex: false,
+            lock_error_mutex: false
         }
     }
 
@@ -511,11 +491,20 @@ impl Dht {
     /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum.
     /// - `Err(DhtError::TemperatureOutOfRange)`: If the measured temperature is outside the sensor's specified range.
     /// - `Err(DhtError::HumidityOutOfRange)`: If the measured humidity is outside the sensor's specified range.
-    pub fn read(&self, reset_sensor: bool) -> DhtResult {
+    /// - `Err(DhtError::IncorrectPlatform)`: If called with no gpio lib handle available.
+    pub fn read(&mut self, reset_sensor: bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
+        let gpio: &mut Gpio;
+        if self.gpio_opt.is_some() {
+            gpio = self.gpio_opt.as_mut().unwrap();
+        }
+        else {
+            return Err(DhtError::IncorrectPlatform);
+        }
+        
         // get pin for providing supply voltage to DHT sensor
-        let mut dht_vcc_pin = match self.gpio.get(self.gpio_dht22_vcc) {
+        let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {
             Ok(c) => c.into_output(),
             #[cfg(not(test))]
             Err(e) => {
@@ -535,7 +524,7 @@ impl Dht {
         // scope to force the drop of the output pin
         {
             // get pin for triggering DHT sensor
-            let mut data_pin = match self.gpio.get(self.gpio_dht22_io) {
+            let mut data_pin = match gpio.get(self.gpio_dht22_io) {
                 Ok(c) => c.into_output(),
                 #[cfg(not(test))]
                 Err(e) => {
@@ -582,7 +571,7 @@ impl Dht {
         }
 
         // get pin for reading from DHT sensor
-        let mut data_pin = match self.gpio.get(self.gpio_dht22_io) {
+        let mut data_pin = match gpio.get(self.gpio_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
                 error!(
@@ -701,7 +690,7 @@ impl Dht {
     /// - `Ok((f32, f32))`: A tuple containing the measured temperature in °C and humidity in %, if the reading is successful and valid.
     /// - `Err(DhtError)`: An error indicating various failure modes, including sensor communication issues,
     ///   checksum errors, timeouts after all retries, or out-of-range sensor values.
-    pub fn get_data(&self) -> DhtResult {
+    pub fn get_data(&mut self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut measurement_successful = false;
         let mut retry_counter = 0;

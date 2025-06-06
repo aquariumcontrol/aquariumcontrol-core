@@ -16,8 +16,6 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
 
 use crate::sensors::dht::DhtResult;
@@ -30,10 +28,6 @@ const LOG_TARGET_AMBIENT: &str = "ambient";
 
 // time interval for repeating measurement
 const MEASUREMENT_INTERVAL_SECS: i32 = 60;
-
-// max loops for receiving when the quit command has been received
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-const RECEIVE_COUNTER_MAX: u32 = 10;
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
@@ -95,18 +89,6 @@ pub struct Ambient {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel from the signal handler thread
     lock_warn_inapplicable_command_signal_handler: bool,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send request to Dht thread via the channel
-    lock_error_channel_send_dht: bool,
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from Dht thread via the channel
-    lock_error_channel_receive_dht: bool,
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from Dht sensor
-    lock_error_dht: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to acquire lock on mutex
     lock_error_dht_mutex: bool,
 }
@@ -138,16 +120,6 @@ impl Ambient {
             ambient_humidity: replacement_value_ambient_humidity,
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
-
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
-            lock_error_channel_send_dht: false,
-
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
-            lock_error_channel_receive_dht: false,
-
-            #[cfg(all(target_os = "linux", feature = "target_hw"))]
-            lock_error_dht: false,
-
             lock_error_dht_mutex: false,
         }
     }
@@ -190,129 +162,6 @@ impl Ambient {
         );
     }
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Sends a request to the DHT sensor thread to perform a new ambient temperature and humidity measurement.
-    ///
-    /// This private helper function is used when the `Ambient` module is configured
-    /// to interact with physical hardware. It sends an `InternalCommand::RequestSignal`
-    /// for `AquariumSignal::AmbientTemperature` (implying both temp and humidity will be read)
-    /// to the DHT sensor thread.
-    ///
-    /// It updates an internal lock flag (`lock_error_channel_send_dht`) to prevent
-    /// repeated error logging if the send-operation via the channel fails.
-    ///
-    /// # Arguments
-    /// * `tx_ambient_to_dht` - A reference to the sender part of the channel, used to
-    ///   send commands to the DHT sensor thread.
-    ///
-    /// # Returns
-    /// `true` if the request was successfully sent; `false` if the send-operation via the channel failed.
-    fn send_request_to_dht(&mut self, tx_ambient_to_dht: &Sender<InternalCommand>) -> bool {
-        match tx_ambient_to_dht.send(InternalCommand::RequestSignal(
-            AquariumSignal::AmbientTemperature,
-        )) {
-            Ok(()) => {
-                self.lock_error_channel_send_dht = false;
-
-                #[cfg(feature = "debug_ambient")]
-                debug!(
-                    target: LOG_TARGET_AMBIENT,
-                    "sent request to Dht"
-                );
-
-                true
-            }
-            Err(e) => {
-                if !self.lock_error_channel_send_dht {
-                    error!(
-                        target: LOG_TARGET_AMBIENT,
-                        "sending request to Dht thread failed. ({e:?})"
-                    );
-                    self.lock_error_channel_send_dht = true;
-                }
-                false
-            }
-        }
-    }
-
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    /// Receives and processes measurement responses from the DHT sensor thread.
-    ///
-    /// This private helper function is used when the `Ambient` module is configured
-    /// for hardware interaction. It attempts to receive a `Result` without blocking
-    /// containing ambient temperature and humidity data from the DHT thread.
-    ///
-    /// If successful, it updates the module's internal `ambient_temperature` and
-    /// `ambient_humidity` fields. It manages various lock flags (`lock_error_dht`,
-    /// `lock_error_channel_receive_dht`) to prevent log flooding from sensor
-    /// reading errors or channel disconnections.
-    ///
-    /// # Arguments
-    /// * `rx_ambient_from_dht` - A reference to the receiver part of the channel, used to
-    ///   get measurement results from the DHT sensor thread.
-    ///
-    /// # Returns
-    /// `true` if a response was expected but not yet received (meaning `receive_response_from_dht`
-    /// should be called again soon, e.g., on the next loop iteration); `false` if a response
-    /// was successfully received and processed, or if a non-empty error occurred.
-    fn receive_response_from_dht(
-        &mut self,
-        rx_ambient_from_dht: &Receiver<Result<(f32, f32), DhtError>>,
-    ) -> bool {
-        #[cfg(feature = "debug_ambient")]
-        debug!(
-            target: LOG_TARGET_AMBIENT,
-            "checking if response from dht is available",
-        );
-
-        match rx_ambient_from_dht.try_recv() {
-            Ok(response) => match response {
-                Ok((ambient_temperature, ambient_humidity)) => {
-                    #[cfg(feature = "debug_ambient")]
-                    debug!(
-                        target: LOG_TARGET_AMBIENT,
-                        "received response from dht: temperature={}, humidity={}",
-                        ambient_temperature,
-                        ambient_humidity
-                    );
-
-                    self.ambient_temperature = ambient_temperature;
-                    self.ambient_humidity = ambient_humidity;
-                    self.lock_error_dht = false;
-                    false // allow for the next request to be sent
-                }
-                Err(e) => {
-                    if !self.lock_error_dht {
-                        error!(
-                            target: LOG_TARGET_AMBIENT,
-                            "error when reading from DHT sensor ({e:?})"
-                        );
-                        self.lock_error_dht = true;
-                    }
-                    false // allow for the next request to be sent
-                }
-            },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_dht = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_dht {
-                            error!(
-                                target: LOG_TARGET_AMBIENT,
-                                "error occurred when trying to receive response from Dht ({e:?})"
-                            );
-                            self.lock_error_channel_receive_dht = true;
-                        }
-                    }
-                }
-                true // repeat receiving
-            }
-        }
-    }
-
     /// Executes the main control loop for the ambient temperature and humidity sensor module.
     ///
     /// This function runs continuously, managing the periodic measurement and provision of
@@ -352,13 +201,6 @@ impl Ambient {
         let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();
 
-        cfg_if::cfg_if! {
-            if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-                let mut state_send_receive: bool = false;
-                let mut receive_counter: u32 = 0;
-            }
-        }
-
         // initialize signals with replacement values
         self.ambient_temperature = self.config.replacement_value_ambient_temperature;
         self.ambient_humidity = self.config.replacement_value_ambient_humidity;
@@ -384,19 +226,9 @@ impl Ambient {
             ) = self
                 .process_external_request(&ambient_channels.rx_ambient_from_signal_handler, None);
 
-            cfg_if::cfg_if! {
-                if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-                    if quit_command_received && (!state_send_receive || receive_counter > RECEIVE_COUNTER_MAX) {
-                        // quit command has been received, and there is no pending measurement
-                        // no further waiting for Dht is required
-                        break;
-                    }
-                }
-                else {
-                    if quit_command_received {
-                        break;
-                    }
-                }
+            if quit_command_received {
+                // quit command has been received
+                break;
             }
 
             if measurement_countdown > 0 {
@@ -516,10 +348,11 @@ impl Ambient {
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
-    use std::sync::mpsc::{self, TryRecvError};
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
+    use std::sync::mpsc::TryRecvError;
 
     use crate::sensors::ambient::{Ambient, AmbientChannels};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
