@@ -128,12 +128,13 @@ switch_on_when_external_stop = false                    # strategy when external
 set_value_check_interval = 300                          # interval in seconds for polling the database
 
 [ambient]
-use_simulator = false                                    # if true, then do not use real HW
+use_simulator = false                                   # if true, then do not use real HW
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
 
 [atlas_scientific]
-use_simulator = false                                    # if true, then do not use real HW
+active = true                                           # allows deactivation of data acquisition
+use_simulator = false                                   # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
@@ -158,6 +159,7 @@ peristaltic_pump3 = 14                                  # GPIO of the peristalti
 peristaltic_pump4 = 15                                  # GPIO of the peristaltic pump #4
 
 [dht]
+active = true                                           # allows deactivation of data acquisition
 sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
 sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
 sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds

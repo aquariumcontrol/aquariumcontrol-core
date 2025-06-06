@@ -37,6 +37,9 @@ const RECEIVE_COUNTER_MAX: u32 = 10;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct AtlasScientificConfig {
+    /// allows deactivation of the data acquisition
+    pub active: bool,
+    
     /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
@@ -447,73 +450,76 @@ impl AtlasScientific {
                 }
             }
 
-            if measurement_countdown > 0 {
-                measurement_countdown = measurement_countdown.saturating_sub(1);
-            } else if !self.config.use_simulator {
-                #[cfg(all(target_os = "linux", feature = "target_hw"))]
-                {
-                    if atlas_scientific_channels
-                        .tx_atlas_scientific_to_i2c_interface_opt
-                        .is_some()
-                        && atlas_scientific_channels
+            // Check if data acquisition is enabled.
+            if self.config.active {
+                if measurement_countdown > 0 {
+                    measurement_countdown = measurement_countdown.saturating_sub(1);
+                } else if !self.config.use_simulator {
+                    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+                    {
+                        if atlas_scientific_channels
+                            .tx_atlas_scientific_to_i2c_interface_opt
+                            .is_some()
+                            && atlas_scientific_channels
                             .rx_atlas_scientific_from_i2c_interface_opt
                             .is_some()
-                    {
-                        if !state_send_receive {
-                            let tx_atlas_scientific_to_i2c_interface = atlas_scientific_channels
-                                .tx_atlas_scientific_to_i2c_interface_opt
-                                .as_ref()
-                                .unwrap();
-                            state_send_receive = self.send_request_to_i2c_interface(
-                                tx_atlas_scientific_to_i2c_interface,
-                            );
-                        } else {
-                            // read from the channel if the measurement result is available from I2cInterface thread
-                            let rx_atlas_scientific_from_i2c_interface = atlas_scientific_channels
-                                .rx_atlas_scientific_from_i2c_interface_opt
-                                .as_ref()
-                                .unwrap();
-
-                            state_send_receive = self.receive_response_from_i2c_interface(
-                                rx_atlas_scientific_from_i2c_interface,
-                            );
-
+                        {
                             if !state_send_receive {
-                                // data could be received successfully
-                                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
-                                receive_counter = 0;
-                                {
-                                    let mut mutex_water_temperature =
-                                        mutex_atlas_scientific_water_temperature.lock().unwrap();
-                                    let mut mutex_ph = mutex_atlas_scientific_ph.lock().unwrap();
-                                    let mut mutex_atlas_scientific =
-                                        mutex_atlas_scientific_conductivity.lock().unwrap();
-                                    *mutex_water_temperature = self.water_temperature;
-                                    *mutex_ph = self.pH;
-                                    *mutex_atlas_scientific = self.conductivity;
-                                }
+                                let tx_atlas_scientific_to_i2c_interface = atlas_scientific_channels
+                                    .tx_atlas_scientific_to_i2c_interface_opt
+                                    .as_ref()
+                                    .unwrap();
+                                state_send_receive = self.send_request_to_i2c_interface(
+                                    tx_atlas_scientific_to_i2c_interface,
+                                );
                             } else {
-                                receive_counter = receive_counter.saturating_add(1);
+                                // read from the channel if the measurement result is available from I2cInterface thread
+                                let rx_atlas_scientific_from_i2c_interface = atlas_scientific_channels
+                                    .rx_atlas_scientific_from_i2c_interface_opt
+                                    .as_ref()
+                                    .unwrap();
+
+                                state_send_receive = self.receive_response_from_i2c_interface(
+                                    rx_atlas_scientific_from_i2c_interface,
+                                );
+
+                                if !state_send_receive {
+                                    // data could be received successfully
+                                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
+                                    receive_counter = 0;
+                                    {
+                                        let mut mutex_water_temperature =
+                                            mutex_atlas_scientific_water_temperature.lock().unwrap();
+                                        let mut mutex_ph = mutex_atlas_scientific_ph.lock().unwrap();
+                                        let mut mutex_atlas_scientific =
+                                            mutex_atlas_scientific_conductivity.lock().unwrap();
+                                        *mutex_water_temperature = self.water_temperature;
+                                        *mutex_ph = self.pH;
+                                        *mutex_atlas_scientific = self.conductivity;
+                                    }
+                                } else {
+                                    receive_counter = receive_counter.saturating_add(1);
+                                }
                             }
                         }
                     }
+                } else {
+                    self.communicate_with_simulator(
+                        &atlas_scientific_channels.tx_atlas_scientific_to_tcp_opt,
+                        &atlas_scientific_channels.rx_atlas_scientific_from_tcp_opt,
+                    );
+                    {
+                        let mut mutex_water_temperature =
+                            mutex_atlas_scientific_water_temperature.lock().unwrap();
+                        let mut mutex_ph = mutex_atlas_scientific_ph.lock().unwrap();
+                        let mut mutex_atlas_scientific =
+                            mutex_atlas_scientific_conductivity.lock().unwrap();
+                        *mutex_water_temperature = self.water_temperature;
+                        *mutex_ph = self.pH;
+                        *mutex_atlas_scientific = self.conductivity;
+                    }
+                    measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
                 }
-            } else {
-                self.communicate_with_simulator(
-                    &atlas_scientific_channels.tx_atlas_scientific_to_tcp_opt,
-                    &atlas_scientific_channels.rx_atlas_scientific_from_tcp_opt,
-                );
-                {
-                    let mut mutex_water_temperature =
-                        mutex_atlas_scientific_water_temperature.lock().unwrap();
-                    let mut mutex_ph = mutex_atlas_scientific_ph.lock().unwrap();
-                    let mut mutex_atlas_scientific =
-                        mutex_atlas_scientific_conductivity.lock().unwrap();
-                    *mutex_water_temperature = self.water_temperature;
-                    *mutex_ph = self.pH;
-                    *mutex_atlas_scientific = self.conductivity;
-                }
-                measurement_countdown = MEASUREMENT_INTERVAL_SECS * 10;
             }
 
             spin_sleeper.sleep(sleep_duration_ten_millis);

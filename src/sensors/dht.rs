@@ -37,6 +37,9 @@ pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
+    /// allows deactivation of the data acquisition
+    pub active: bool,
+
     /// duration to keep pin down during start signal in microseconds
     #[allow(unused)]
     sensor_init_pin_down_duration_micros: u64,
@@ -854,32 +857,35 @@ impl Dht {
             };
             spin_sleeper.sleep(sleep_duration_100_millis);
 
-            // Check if a sufficient amount of time has passed since the last measurement.
-            let current_instant = Instant::now();
-            if current_instant
-                .duration_since(self.instant_last_measurement)
-                .as_millis()
-                > self.config.measurement_interval_millis.into()
-            {
-                let result = self.get_data();
-
+            // Check if data acquisition is enabled.  
+            if self.config.active {
+                // Check if a sufficient amount of time has passed since the last measurement.
+                let current_instant = Instant::now();
+                if current_instant
+                    .duration_since(self.instant_last_measurement)
+                    .as_millis()
+                    > self.config.measurement_interval_millis.into()
                 {
-                    // internal scope to limit lifetime of mutex lock
-                    match mutex_dht.lock() {
-                        Ok(mut c) => {
-                            *c = result;
-                            self.lock_error_mutex = false;
-                        }
-                        Err(_) => {
-                            if !self.lock_error_mutex {
-                                self.lock_error_mutex = true;
-                                error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
-                            }
-                        }
-                    };
-                }
+                    let result = self.get_data();
 
-                self.instant_last_measurement = current_instant;
+                    {
+                        // internal scope to limit lifetime of mutex lock
+                        match mutex_dht.lock() {
+                            Ok(mut c) => {
+                                *c = result;
+                                self.lock_error_mutex = false;
+                            }
+                            Err(_) => {
+                                if !self.lock_error_mutex {
+                                    self.lock_error_mutex = true;
+                                    error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                                }
+                            }
+                        };
+                    }
+
+                    self.instant_last_measurement = current_instant;
+                }
             }
         }
     }

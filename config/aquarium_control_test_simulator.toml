@@ -144,6 +144,7 @@ max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value 
 min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 
 [dht]
+active = true                                           # allows deactivation of data acquisition
 sensor_reset_duration_millis = 500                      # duration to interrupt power supply to sensor in milliseconds
 sensor_startup_duration_millis = 1000                   # duration to wait for sensor after reset in milliseconds
 sensor_pause_duration_millis = 500                      # duration to wait between measurements in milliseconds
@@ -159,6 +160,7 @@ replacement_value_ambient_temperature = 24.0            # replacement value for 
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
 
 [atlas_scientific]
+active = true                                           # allows deactivation of data acquisition
 use_simulator = true                                    # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
