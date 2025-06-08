@@ -126,7 +126,7 @@ pub enum AquariumSignal {
     /// refill pump status
     RefillPumpStatus,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw", test))]
+    #[cfg(test)]
     MockInvalidSignal,
 }
 
@@ -151,8 +151,18 @@ impl AquariumSignal {
             AquariumSignal::AmbientTemperature => format!("{:.1}", signal),
             AquariumSignal::AmbientHumidity => format!("{:.1}", signal),
             #[cfg(all(target_os = "linux", feature = "target_hw", test))]
-            AquariumSignal::MockInvalidSignal => "MockInvalid".to_string(),
+            MockInvalidSignal => "MockInvalid".to_string(),
             _ => signal.to_string(),
+        }
+    }
+
+    /// Defines the sequence of measurement used by AtlasScientific
+    pub fn get_next_atlas_scientific_signal(&self) -> AquariumSignal {
+        match self {
+            AquariumSignal::WaterTemperature => AquariumSignal::pH,
+            AquariumSignal::pH => AquariumSignal::Conductivity,
+            AquariumSignal::Conductivity => AquariumSignal::WaterTemperature,
+            _ => AquariumSignal::WaterTemperature, // default value
         }
     }
 }
@@ -184,7 +194,7 @@ impl fmt::Display for AquariumSignal {
             AquariumSignal::VentilationControlStatus => write!(f, "VentilationControlStatus"),
             AquariumSignal::RefillPumpStatus => write!(f, "RefillPumpStatus"),
 
-            #[cfg(all(target_os = "linux", test, feature = "target_hw"))]
+            #[cfg(test)]
             AquariumSignal::MockInvalidSignal => write!(f, "MockInvalidSignal"),
         }
     }

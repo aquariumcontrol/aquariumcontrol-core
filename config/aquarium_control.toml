@@ -131,13 +131,27 @@ set_value_check_interval = 300                          # interval in seconds fo
 use_simulator = false                                   # if true, then do not use real HW
 replacement_value_ambient_temperature = 24.0            # replacement value for ambient temperature in case reading from DHT22 fails
 replacement_value_ambient_humidity = 60.0               # replacement value for ambient humidity in case reading from DHT22 fails
-
-[atlas_scientific]
-active = true                                           # allows deactivation of data acquisition
-use_simulator = false                                   # if true, then do not use real HW
 replacement_value_water_temperature = 25.0              # replacement value for water temperature in case reading from I2C fails
 replacement_value_ph = 8.0                              # replacement value for pH in case reading from I2C fails
 replacement_value_conductivity = 50000                  # replacement value for conductivity in case reading from I2C fails
+source_water_temperature = "atlas_scientific"           # valid values are "ds18b20" or "atlas_scientific"
+source_ambient_temperature = "dht"                      # valid values are "dht" or "ds18b20"
+
+[atlas_scientific]
+active = true                                           # allows deactivation of data acquisition
+address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
+address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
+address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
+sleep_time_millis_ph = 900                              # sleep time in milliseconds before after writing before reading from the pH sensor unit
+sleep_time_millis_conductivity = 900                    # sleep time in milliseconds before after writing before reading from the conductivity sensor unit
+sleep_time_millis_temperature = 600                     # sleep time in milliseconds before after writing before reading from the temperature sensor unit
+max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
+max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
+min_val_atlas_scientific_temperature = 10.0             # minimum allowed value for temperature used to assess if the temperature sensor reading is valid,
+max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
+measurement_interval_millis = 5000                      # measurement interval in milliseconds
 
 [gpio_handler]
 use_simulator = false                                   # if true, then do not use real HW
@@ -170,20 +184,8 @@ timeout_duration_micros = 10000				            # maximum permissible duration fo
 measurement_interval_millis = 2000                      # interval in milliseconds between two measurements
 
 [i2c_interface]
-address_atlas_scientific_ph = 99                        # I2C address for Atlas Scientific sensor unit for reading ph
-address_atlas_scientific_conductivity = 100             # I2C address for Atlas Scientific sensor unit for reading conductivity
-address_atlas_scientific_temperature = 102              # I2C address for Atlas Scientific sensor unit for reading temperature
 timeout_transaction = 100                               # timeout for transactions in milliseconds
 max_read_attempts = 10                                  # maximum number of read attempts
-sleep_time_atlas_scientific_ph = 900                    # sleep time in milliseconds before after writing before reading from the pH sensor unit
-sleep_time_atlas_scientific_conductivity = 900          # sleep time in milliseconds before after writing before reading from the conductivity sensor unit
-sleep_time_atlas_scientific_temperature = 600           # sleep time in milliseconds before after writing before reading from the temperature sensor unit
-max_val_atlas_scientific_ph = 12.0                      # maximum allowed value for pH used to assess if the temperature sensor reading is valid
-min_val_atlas_scientific_ph = 4.0                       # minimum allowed value for pH used to assess if the temperature sensor reading is valid
-max_val_atlas_scientific_temperature = 40.0             # maximum allowed value for temperature used to assess if the temperature sensor reading is valid
-min_val_atlas_scientific_temperature = 10.0             # minimum allowed value for temperature used to assess if the temperature sensor reading is valid,
-max_val_atlas_scientific_conductivity = 1000000.0       # maximum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
-min_val_atlas_scientific_conductivity = -1.0            # minimum allowed value for conducitivity used to assess if the conductivity sensor reading is valid
 
 [schedule_check]
 schedule_check_interval = 300                           # interval in seconds for polling the database

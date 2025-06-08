@@ -13,6 +13,7 @@ use log::{error, warn};
 use log::info;
 
 use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
+use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -343,7 +344,7 @@ impl Ventilation {
     ///   device actuation, preventing parallel operations, and tracking actuation counts.
     /// * `ventilation_channels` - A `VentilationChannels` struct containing all `mpsc`
     ///   channels for communication with other threads (e.g., relay manager, data logger, schedule checker, signal handler).
-    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` from which the latest water temperature
+    /// * `mutex_sensor_manager_channels` - An `Arc<Mutex<SensorManagerSignals>>` from which the latest water temperature
     ///   reading will be retrieved.
     /// * `mutex_ventilation_status` - An `Arc<Mutex<bool>>` for communicating the ventilation status to the data logger.
     pub fn execute(
@@ -351,7 +352,7 @@ impl Ventilation {
         mutex_device_scheduler_ventilation: Arc<Mutex<i32>>,
         ventilation_channels: VentilationChannels,
         ventilation_set_val_updater: &mut impl VentilationSetValueUpdaterTrait,
-        mutex_water_temperature: Arc<Mutex<f32>>,
+        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
@@ -397,14 +398,13 @@ impl Ventilation {
             if self.config.active {
                 // read water temperature from mutex
                 {
-                    measured_water_temperature = match mutex_water_temperature.lock() {
+                    match mutex_sensor_manager_signals.lock() {
                         Ok(c) => {
                             measurement_error_water_temperature = false;
-                            *c
+                            measured_water_temperature = c.water_temperature;
                         }
                         Err(_) => {
                             measurement_error_water_temperature = true;
-                            measured_water_temperature
                         }
                     };
                 }
@@ -671,6 +671,11 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::sensors::sensor_manager::SensorManagerSignals;
+    use crate::thermal::ventilation::{Ventilation, VentilationChannels, LOG_TARGET_VENTILATION};
+    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::utilities::common::tests::update_min_max_actuation_duration;
+    use crate::utilities::config::{read_config_file, ConfigData};
     use all_asserts::{assert_ge, assert_le};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
@@ -678,11 +683,6 @@ pub mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-
-    use crate::thermal::ventilation::{Ventilation, VentilationChannels, LOG_TARGET_VENTILATION};
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
-    use crate::utilities::common::tests::update_min_max_actuation_duration;
-    use crate::utilities::config::{read_config_file, ConfigData};
 
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
@@ -696,11 +696,13 @@ pub mod tests {
     //
     // # Returns
     // A freshly initialized `Ventilation` struct, ready for testing.
-    fn prepare_ventilation_tests() -> Ventilation {
+    fn prepare_ventilation_tests() -> (ConfigData, Ventilation) {
         // prepare struct Ventilation for subsequent tests
+        let config_for_ventilation: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
-        Ventilation::new(config.ventilation)
+        (config, Ventilation::new(config_for_ventilation.ventilation))
     }
 
     // Creates a thread that simulates a test environment, managing test duration and sending shutdown signals.
@@ -748,7 +750,10 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests();
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -775,8 +780,10 @@ pub mod tests {
             })
             .unwrap();
 
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -833,7 +840,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 
@@ -915,7 +922,10 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests();
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -942,8 +952,10 @@ pub mod tests {
             })
             .unwrap();
 
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -989,7 +1001,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 
@@ -1024,7 +1036,10 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests();
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 25.0;
 
         // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -1051,8 +1066,10 @@ pub mod tests {
             })
             .unwrap();
 
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(25.0));
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1241,7 +1258,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 
@@ -1274,7 +1291,10 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests();
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
 
         // Channels for the test object. The test environment only uses one of the channels.
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -1301,8 +1321,10 @@ pub mod tests {
             })
             .unwrap();
 
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1348,7 +1370,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 
@@ -1387,8 +1409,17 @@ pub mod tests {
     // resumes operation.
     #[test]
     pub fn test_messaging_stops_starts_ventilation() {
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        // replacement value is used for initialization of mutex
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+
+        // Mutex for water temperature normally coming from Atlas Scientific
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+
         let mut ventilation = Ventilation::new(config.ventilation);
 
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -1418,9 +1449,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
 
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
@@ -1568,7 +1596,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 
@@ -1605,7 +1633,10 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let mut ventilation = prepare_ventilation_tests();
+        let (mut config, mut ventilation) = prepare_ventilation_tests();
+
+        // replacement value is used for initializing mutex
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
@@ -1632,8 +1663,10 @@ pub mod tests {
             })
             .unwrap();
 
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
+        // Mutex needed for water temperature
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
 
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
@@ -1705,7 +1738,7 @@ pub mod tests {
                     mutex_device_scheduler_ventilation.clone(),
                     ventilation_channels,
                     &mut ventilation_set_value_updater,
-                    mutex_water_temperature,
+                    mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
 

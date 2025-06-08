@@ -172,8 +172,8 @@ pub struct SignalHandlerChannels {
     /// sender part of the channel for communication to Dht wrapped in Option
     pub tx_signal_handler_to_dht: Sender<InternalCommand>,
 
-    /// sender part of the channel for communication to I2C interface wrapped in Option
-    pub tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
+    /// sender part of the channel for communication to I2C interface
+    pub tx_signal_handler_to_i2c_interface: Sender<InternalCommand>,
 
     /// sender part of the channel for communication to watchdog
     pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
@@ -389,9 +389,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     // phase 4: shut down low-level controls
     send_command(
         InternalCommand::Quit,
-        signal_handler_channels
-            .tx_signal_handler_to_i2c_interface_opt
-            .as_ref(),
+        Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
         None,
         "i2c_interface",
     );
@@ -737,9 +735,6 @@ pub mod tests {
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
-        let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-            Some(tx_signal_handler_to_i2c_interface);
-
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
@@ -784,7 +779,7 @@ pub mod tests {
                     tx_signal_handler_to_tcp_opt,
                     rx_signal_handler_from_tcp_opt,
                     tx_signal_handler_to_dht,
-                    tx_signal_handler_to_i2c_interface_opt,
+                    tx_signal_handler_to_i2c_interface,
                     tx_signal_handler_to_watchdog,
                     rx_signal_handler_from_watchdog,
                     tx_signal_handler_to_ds18b20,
