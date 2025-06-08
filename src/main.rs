@@ -1005,7 +1005,7 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
 
-    let (tx_signal_handler_to_i2c_interface, _rx_i2c_interface_from_signal_handler): (
+    let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
@@ -1416,6 +1416,7 @@ fn main() {
                 i2c_interface.execute(
                     tx_i2c_interface_to_atlas_scientific,
                     rx_i2c_interface_from_atlas_scientific,
+                    rx_i2c_interface_from_signal_handler
                 );
 
                 #[cfg(feature = "debug_main")]

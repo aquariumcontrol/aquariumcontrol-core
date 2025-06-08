@@ -537,12 +537,11 @@ impl Dht {
     pub fn read(&mut self, reset_sensor: bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
-        let gpio: &mut Gpio;
-        if self.gpio_opt.is_some() {
-            gpio = self.gpio_opt.as_mut().unwrap();
+        let gpio: &mut Gpio = if self.gpio_opt.is_some() {
+            self.gpio_opt.as_mut().unwrap()
         } else {
             return Err(DhtError::IncorrectPlatform);
-        }
+        };
 
         // get pin for providing supply voltage to DHT sensor
         let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {

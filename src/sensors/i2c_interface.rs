@@ -13,14 +13,16 @@ use std::str;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use log::{error, warn};
-        use std::sync::mpsc::{Sender, Receiver};
+        use log::error;
+        use std::sync::mpsc::{Sender, Receiver, TryRecvError};
         use rppal::i2c::I2c; // required for communication with AtlasScientific sensors
 
         #[cfg(feature = "debug_i2c_interface")]
         use log::debug;
 
+        use std::time::Duration;
         use crate::utilities::channel_content::InternalCommand;
+        use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     }
 }
 
@@ -102,6 +104,7 @@ pub struct I2cResponse {
     pub read_buf: Vec<u8>,
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[allow(unused)]
     /// length of a message as informed by i2c::read
     pub length: usize,
 }
@@ -214,7 +217,7 @@ impl I2cInterface {
                     "could not set {} as address of device ({e:?})",
                     i2c_request.i2c_address
                 );
-                return Err(I2cError::SetAddressError(i2c_address));
+                return Err(I2cError::SetAddressError(i2c_request.i2c_address));
             }
         }
 
@@ -290,17 +293,17 @@ impl I2cInterface {
     ///   (e.g., `RequestSignal`, `Quit`) from the `AtlasScientific` module or the `SignalHandler`.
     pub fn execute(
         &mut self,
-        tx_to_atlas_scientific: Sender<Result<I2cResponse, I2cError>>,
+        tx_to_atlas_scientific: Sender<I2cResult>,
         rx_from_atlas_scientific: Receiver<I2cRequest>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        let lock_error_receive_atlas_scientific = false;
-        let lock_error_send_atlas_scientific = false;
+        let mut lock_error_receive_atlas_scientific = false;
+        let mut lock_error_send_atlas_scientific = false;
         let sleep_time = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
         loop {
-            process_external_request(rx_from_signal_handler);
+            self.process_external_request(&rx_from_signal_handler, None);
 
             match rx_from_atlas_scientific.try_recv() {
                 Ok(request) => {
