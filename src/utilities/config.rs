@@ -21,10 +21,10 @@ use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
 use crate::relays::actuate_controllino::ActuateControllinoConfig;
 use crate::relays::relay_manager::RelayManagerConfig;
-use crate::sensors::ambient::AmbientConfig;
 use crate::sensors::atlas_scientific::AtlasScientificConfig;
 use crate::sensors::dht::DhtConfig;
 use crate::sensors::gpio_handler::GpioHandlerConfig;
+use crate::sensors::sensor_manager::SensorManagerConfig;
 use crate::thermal::heating::HeatingConfig;
 
 #[cfg(feature = "target_hw")]
@@ -64,7 +64,7 @@ pub struct ConfigData {
     pub atlas_scientific: AtlasScientificConfig,
 
     /// configuration for Ambient
-    pub ambient: AmbientConfig,
+    pub sensor_manager: SensorManagerConfig,
 
     /// configuration GPIO handler
     pub gpio_handler: GpioHandlerConfig,

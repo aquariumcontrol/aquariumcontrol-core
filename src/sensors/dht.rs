@@ -10,7 +10,7 @@ use crate::utilities::channel_content::InternalCommand;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{TryRecvError, Receiver};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -37,6 +37,9 @@ pub type DhtResult = Result<(f32, f32), DhtError>; // Temperature and Humidity
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Debug)]
 pub struct DhtConfig {
+    /// allows deactivation of the data acquisition
+    pub active: bool,
+
     /// duration to keep pin down during start signal in microseconds
     #[allow(unused)]
     sensor_init_pin_down_duration_micros: u64,
@@ -185,6 +188,36 @@ pub enum DhtError {
     IncorrectPlatform,
 }
 
+/// Represents a Digital Humidity and Temperature (DHT) sensor module, typically a DHT22,
+/// responsible for reading ambient temperature and humidity.
+///
+/// This struct encapsulates the configuration, GPIO interface details, and internal state
+/// required to communicate with a DHT sensor. It handles the low-level GPIO signaling
+/// to read data, apply retries, and perform post-processing (checksum validation,
+/// signal calculation) before providing the final temperature and humidity values.
+///
+/// The communication with the DHT sensor is highly timing-sensitive and involves
+/// precise GPIO manipulation, including setting pin states, managing delays, and
+/// capturing pulse durations via interrupts.
+///
+/// **Thread Communication: **
+/// This module is designed to run in its own dedicated thread, periodically reading sensor data
+/// and making the latest measurements available via a shared `Arc<Mutex<DhtResult>>`.
+/// Other modules (like `Ambient` or `DataLogger`) can then read from this mutex to get the
+/// current temperature and humidity. It also responds to `Quit` commands for graceful shutdown.
+///
+/// **Platform-Specific Behavior: **
+/// The core sensor reading logic (`read` function) is conditionally compiled:
+/// - On Linux with the `target_hw` feature enabled, it directly uses `rppal::gpio` for hardware interaction.
+/// - On other platforms or when `target_hw` is disabled, it uses a stub implementation (`Err(DhtError::IncorrectPlatform)`)
+///   to allow compilation and testing without physical hardware.
+///
+/// Thread communication of this component is as follows:
+/// ```mermaid
+/// graph LR
+///     dht[Dht] -.-> Ambient[Ambient]
+///     signal_handler[SignalHandler] --> dht
+/// ```
 pub struct Dht {
     #[allow(unused)]
     /// configuration for communication with DHT sensor
@@ -207,9 +240,9 @@ pub struct Dht {
 
     /// flag to avoid flooding the log file in case mutex cannot be locked
     lock_error_mutex: bool,
-    
+
     /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
-    lock_error_max_retries: bool
+    lock_error_max_retries: bool,
 }
 
 impl Dht {
@@ -504,12 +537,11 @@ impl Dht {
     pub fn read(&mut self, reset_sensor: bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
-        let gpio: &mut Gpio;
-        if self.gpio_opt.is_some() {
-            gpio = self.gpio_opt.as_mut().unwrap();
+        let gpio: &mut Gpio = if self.gpio_opt.is_some() {
+            self.gpio_opt.as_mut().unwrap()
         } else {
             return Err(DhtError::IncorrectPlatform);
-        }
+        };
 
         // get pin for providing supply voltage to DHT sensor
         let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {
@@ -713,7 +745,7 @@ impl Dht {
                 Ok((temperature, humidity)) => {
                     measurement_successful = true;
                     self.lock_error_max_retries = false;
-                    
+
                     #[cfg(feature = "debug_dht")]
                     debug!(
                         target: LOG_TARGET_DHT,
@@ -824,32 +856,35 @@ impl Dht {
             };
             spin_sleeper.sleep(sleep_duration_100_millis);
 
-            // Check if a sufficient amount of time has passed since the last measurement.
-            let current_instant = Instant::now();
-            if current_instant
-                .duration_since(self.instant_last_measurement)
-                .as_millis()
-                > self.config.measurement_interval_millis.into()
-            {
-                let result = self.get_data();
-
+            // Check if data acquisition is enabled.
+            if self.config.active {
+                // Check if a sufficient amount of time has passed since the last measurement.
+                let current_instant = Instant::now();
+                if current_instant
+                    .duration_since(self.instant_last_measurement)
+                    .as_millis()
+                    > self.config.measurement_interval_millis.into()
                 {
-                    // internal scope to limit lifetime of mutex lock
-                    match mutex_dht.lock() {
-                        Ok(mut c) => {
-                            *c = result;
-                            self.lock_error_mutex = false;
-                        }
-                        Err(_) => {
-                            if !self.lock_error_mutex {
-                                self.lock_error_mutex = true;
-                                error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
-                            }
-                        }
-                    };
-                }
+                    let result = self.get_data();
 
-                self.instant_last_measurement = current_instant;
+                    {
+                        // internal scope to limit lifetime of mutex lock
+                        match mutex_dht.lock() {
+                            Ok(mut c) => {
+                                *c = result;
+                                self.lock_error_mutex = false;
+                            }
+                            Err(_) => {
+                                if !self.lock_error_mutex {
+                                    self.lock_error_mutex = true;
+                                    error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                                }
+                            }
+                        };
+                    }
+
+                    self.instant_last_measurement = current_instant;
+                }
             }
         }
     }

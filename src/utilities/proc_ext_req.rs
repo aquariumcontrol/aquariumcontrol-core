@@ -24,6 +24,7 @@ use crate::dispatch::messaging::Messaging;
 
 use crate::mineral::{balling::Balling, mineral_injection::MineralInjection};
 use crate::permission::schedule_check::ScheduleCheck;
+use crate::sensors::i2c_interface::I2cInterface;
 use crate::simulator::tcp_communication::TcpCommunication;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
@@ -376,6 +377,34 @@ impl ProcessExternalRequestTrait for WaterInjection {
     /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
     ///   for commands originating from the signal handler.
     /// * `_` - This parameter is ignored, as the `WaterInjection` module does not process
+    ///   messages from a messaging channel.
+    ///
+    /// # Returns
+    /// A tuple `(bool, bool, bool)` indicating the status of commands received:
+    /// - The first `bool` is `true` if a `Quit` command was received; otherwise `false`.
+    /// - The second `bool` is always `false` (no "Start" commands processed).
+    /// - The third `bool` is always `false` (no "Stop" commands processed).
+    fn process_external_request(
+        &mut self,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+        _: Option<&Receiver<InternalCommand>>,
+    ) -> (bool, bool, bool) {
+        process_external_request_without_messaging(rx_from_signal_handler)
+    }
+}
+
+impl ProcessExternalRequestTrait for I2cInterface {
+    /// Checks for and processes new commands relevant to the I2cInterface module from external channels.
+    ///
+    /// This is the specialized implementation of `ProcessExternalRequestTrait` for `I2cInterface`.
+    /// It delegates directly to `process_external_request_without_messaging`, indicating
+    /// that the `I2cInterface` module only processes commands from the signal handler
+    /// and ignores any input from a messaging channel.
+    ///
+    /// # Arguments
+    /// * `rx_from_signal_handler` - A reference to the receiver end of the channel
+    ///   for commands originating from the signal handler.
+    /// * `_` - This parameter is ignored, as the `I2cInterface` module does not process
     ///   messages from a messaging channel.
     ///
     /// # Returns

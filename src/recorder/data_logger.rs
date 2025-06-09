@@ -26,6 +26,7 @@ use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
+use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
@@ -132,20 +133,8 @@ pub struct DataLoggerMutexes {
     /// Mutex for ambient temperature from DS18B20 sensor
     pub mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
 
-    /// Mutex for temperature from Atlas Scientific
-    pub mutex_atlas_scientific_temperature: Arc<Mutex<f32>>,
-
-    /// Mutex for pH from Atlas Scientific
-    pub mutex_atlas_scientific_ph: Arc<Mutex<f32>>,
-
-    /// Mutex for conductivity DS18B20 sensor
-    pub mutex_atlas_scientific_conductivity: Arc<Mutex<f32>>,
-
-    /// Mutex for ambient temperature
-    pub mutex_ambient_temperature: Arc<Mutex<f32>>,
-
-    /// Mutex for ambient humidity
-    pub mutex_ambient_humidity: Arc<Mutex<f32>>,
+    /// Mutex for sensor manager signals
+    pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 
     /// Mutex for tank level switch signals
     pub mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
@@ -252,6 +241,7 @@ pub struct DataLogger {
 
     /// database ping interval
     pub database_ping_interval: Duration,
+    lock_error_mutex_signal_manager: bool,
 }
 
 impl DataLogger {
@@ -404,6 +394,7 @@ impl DataLogger {
             lock_error_output_signal_ambient_temperature_ds18b20: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
+            lock_error_mutex_signal_manager: false,
         }
     }
 
@@ -564,36 +555,33 @@ impl DataLogger {
     /// * `humidity` - A mutable reference to an `Option<f32>` where the retrieved ambient humidity will be stored.
     fn update_ambient_signals(
         &mut self,
-        mutex_ambient_temperature: Arc<Mutex<f32>>,
-        mutex_humidity: Arc<Mutex<f32>>,
+        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         ambient_temperature: &mut Option<f32>,
         humidity: &mut Option<f32>,
     ) {
         {
             // internal scope to limit lifetime of mutex lock
-            *ambient_temperature = match mutex_ambient_temperature.lock() {
+            match mutex_sensor_manager_signals.lock() {
                 Ok(c) => {
                     self.lock_error_output_signal_ambient_temperature = self.output_signal(
-                        *c,
+                        c.ambient_temperature,
                         AquariumSignal::AmbientTemperature,
                         &self.config.output_file_name_ambient_temperature,
                         self.lock_error_output_signal_ambient_temperature,
                     );
-                    Some(*c)
-                }
-                Err(_) => None,
-            };
-            *humidity = match mutex_humidity.lock() {
-                Ok(c) => {
+                    *ambient_temperature = Some(c.ambient_temperature);
                     self.lock_error_output_signal_humidity = self.output_signal(
-                        *c,
+                        c.ambient_humidity,
                         AquariumSignal::AmbientHumidity,
                         &self.config.output_file_name_humidity,
                         self.lock_error_output_signal_humidity,
                     );
-                    Some(*c)
+                    *humidity = Some(c.ambient_humidity);
                 }
-                Err(_) => None,
+                Err(_) => {
+                    *ambient_temperature = None;
+                    *humidity = None;
+                }
             };
         }
     }
@@ -701,53 +689,55 @@ impl DataLogger {
     /// * `temperature` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
     /// * `ph` - A mutable reference to an `Option<f32>` where the retrieved pH value will be stored.
     /// * `conductivity` - A mutable reference to an `Option<f32>` where the retrieved conductivity value will be stored.
-    fn update_atlas_scientific_signals(
+    fn update_sensor_manager_signals(
         &mut self,
-        mutex_temperature: Arc<Mutex<f32>>,
-        mutex_ph: Arc<Mutex<f32>>,
-        mutex_conductivity: Arc<Mutex<f32>>,
-        temperature: &mut Option<f32>,
-        ph: &mut Option<f32>,
-        conductivity: &mut Option<f32>,
+        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
+        temperature_opt: &mut Option<f32>,
+        ph_opt: &mut Option<f32>,
+        conductivity_opt: &mut Option<f32>,
     ) {
+        let temperature: f32;
+        let ph: f32;
+        let conductivity: f32;
         {
             // internal scope to limit lifetime of mutex lock
-            *temperature = match mutex_temperature.lock() {
+            match mutex_sensor_manager_signals.lock() {
                 Ok(c) => {
-                    self.lock_error_output_signal_water_temperature = self.output_signal(
-                        *c,
-                        AquariumSignal::WaterTemperature,
-                        &self.config.output_file_name_water_temperature,
-                        self.lock_error_output_signal_water_temperature,
-                    );
-                    Some(*c)
+                    self.lock_error_mutex_signal_manager = false;
+                    temperature = c.water_temperature;
+                    ph = c.ph;
+                    conductivity = c.conductivity;
                 }
-                Err(_) => None,
-            };
-            *ph = match mutex_ph.lock() {
-                Ok(c) => {
-                    self.lock_error_output_signal_pH = self.output_signal(
-                        *c,
-                        AquariumSignal::pH,
-                        &self.config.output_file_name_pH,
-                        self.lock_error_output_signal_pH,
-                    );
-                    Some(*c)
+                Err(_) => {
+                    if !self.lock_error_mutex_signal_manager {
+                        self.lock_error_mutex_signal_manager = true;
+                        error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for sensor manager");
+                    }
+                    return;
                 }
-                Err(_) => None,
             };
-            *conductivity = match mutex_conductivity.lock() {
-                Ok(c) => {
-                    self.lock_error_output_signal_conductivity = self.output_signal(
-                        *c,
-                        AquariumSignal::Conductivity,
-                        &self.config.output_file_name_conductivity,
-                        self.lock_error_output_signal_conductivity,
-                    );
-                    Some(*c)
-                }
-                Err(_) => None,
-            };
+            self.lock_error_output_signal_water_temperature = self.output_signal(
+                temperature,
+                AquariumSignal::WaterTemperature,
+                &self.config.output_file_name_water_temperature,
+                self.lock_error_output_signal_water_temperature,
+            );
+            self.lock_error_output_signal_pH = self.output_signal(
+                ph,
+                AquariumSignal::pH,
+                &self.config.output_file_name_pH,
+                self.lock_error_output_signal_pH,
+            );
+            self.lock_error_output_signal_conductivity = self.output_signal(
+                conductivity,
+                AquariumSignal::Conductivity,
+                &self.config.output_file_name_conductivity,
+                self.lock_error_output_signal_conductivity,
+            );
+
+            *temperature_opt = Some(temperature);
+            *ph_opt = Some(ph);
+            *conductivity_opt = Some(conductivity);
         }
     }
 
@@ -1047,14 +1037,8 @@ impl DataLogger {
             );
 
             // update signals by accessing mutex for Atlas Scientific signals
-            self.update_atlas_scientific_signals(
-                data_logger_mutexes
-                    .mutex_atlas_scientific_temperature
-                    .clone(),
-                data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
-                data_logger_mutexes
-                    .mutex_atlas_scientific_conductivity
-                    .clone(),
+            self.update_sensor_manager_signals(
+                data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                 &mut water_temperature,
                 &mut ph,
                 &mut conductivity,
@@ -1062,8 +1046,7 @@ impl DataLogger {
 
             // update signals by accessing mutex for ambient signal
             self.update_ambient_signals(
-                data_logger_mutexes.mutex_ambient_temperature.clone(),
-                data_logger_mutexes.mutex_ambient_humidity.clone(),
+                data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                 &mut ambient_temperature,
                 &mut ambient_humidity,
             );
@@ -1175,14 +1158,8 @@ impl DataLogger {
                     );
 
                     // update signals by accessing mutex for Atlas Scientific signals
-                    self.update_atlas_scientific_signals(
-                        data_logger_mutexes
-                            .mutex_atlas_scientific_temperature
-                            .clone(),
-                        data_logger_mutexes.mutex_atlas_scientific_ph.clone(),
-                        data_logger_mutexes
-                            .mutex_atlas_scientific_conductivity
-                            .clone(),
+                    self.update_sensor_manager_signals(
+                        data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                         &mut water_temperature,
                         &mut ph,
                         &mut conductivity,
@@ -1190,8 +1167,7 @@ impl DataLogger {
 
                     // update signals by accessing mutex for ambient signal
                     self.update_ambient_signals(
-                        data_logger_mutexes.mutex_ambient_temperature.clone(),
-                        data_logger_mutexes.mutex_ambient_humidity.clone(),
+                        data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                         &mut ambient_temperature,
                         &mut ambient_humidity,
                     );
@@ -1283,6 +1259,7 @@ pub mod tests {
     use crate::recorder::data_logger::{
         DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes,
     };
+    use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_data_injection::tests::MockDataInjection;
     use crate::stubs::mock_heating::tests::mock_heating;
@@ -1520,18 +1497,11 @@ pub mod tests {
         let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
         let mut data_logger = DataLogger::new(config.data_logger, Duration::from_millis(1000));
 
-        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(10.0));
-        let mutex_atlas_scientific_temperature_clone_for_data_logger =
-            mutex_atlas_scientific_temperature.clone();
-        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(11.0));
-        let mutex_atlas_scientific_ph_clone_for_data_logger = mutex_atlas_scientific_ph.clone();
-        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(12.0));
-        let mutex_atlas_scientific_conductivity_clone_for_data_logger =
-            mutex_atlas_scientific_conductivity.clone();
-        let mutex_ambient_temperature = Arc::new(Mutex::new(13.0));
-        let mutex_ambient_temperature_clone_for_data_logger = mutex_ambient_temperature.clone();
-        let mutex_ambient_humidity = Arc::new(Mutex::new(14.0));
-        let mutex_ambient_humidity_clone_for_data_logger = mutex_ambient_humidity.clone();
+        // replacement values are used to initialize the mutex content
+        config.sensor_manager.replacement_value_water_temperature = 10.0;
+        config.sensor_manager.replacement_value_ph = 11.0;
+        config.sensor_manager.replacement_value_conductivity = 12.0;
+
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(15.0));
         let mutex_ds18b20_water_temperature_clone_for_data_logger =
             mutex_ds18b20_water_temperature.clone();
@@ -1551,7 +1521,13 @@ pub mod tests {
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
         let mutex_refill_status_clone_for_data_logger = mutex_refill_status.clone();
         let mutex_refill_status_clone_for_test_environment = mutex_refill_status.clone();
-
+        config.sensor_manager.replacement_value_ambient_temperature = 13.0;
+        config.sensor_manager.replacement_value_ambient_humidity = 14.0;
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+        let mutex_sensor_manager_signals_clone_for_data_logger =
+            mutex_sensor_manager_signals.clone();
         // thread for test environment and mock signal handler
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
@@ -1566,8 +1542,8 @@ pub mod tests {
                     MockSignal::VentilationControlStatus(true),
                 ));
                 {
-                    let mut water_temperature = mutex_atlas_scientific_temperature.lock().unwrap();
-                    *water_temperature = 29.0;
+                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
+                    sensor_manager_signals.water_temperature = 29.0;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1577,15 +1553,15 @@ pub mod tests {
                 ));
 
                 {
-                    let mut ph = mutex_atlas_scientific_ph.lock().unwrap();
-                    *ph = 7.0;
+                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
+                    sensor_manager_signals.ph = 7.0;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
 
                 {
-                    let mut conductivity = mutex_atlas_scientific_conductivity.lock().unwrap();
-                    *conductivity = 50000.0;
+                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
+                    sensor_manager_signals.conductivity = 50000.0;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1595,9 +1571,10 @@ pub mod tests {
                         mutex_tank_level_switch_signals.lock().unwrap();
                     tank_level_switch_signals.tank_level_switch_invalid = true;
                 }
+
                 {
-                    let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
-                    *ambient_temperature = 35.0;
+                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
+                    sensor_manager_signals.ambient_temperature = 35.0;
                 }
 
                 {
@@ -1615,8 +1592,8 @@ pub mod tests {
                     tank_level_switch_signals.tank_level_switch_position = true;
                 }
                 {
-                    let mut ambient_humidity = mutex_ambient_humidity.lock().unwrap();
-                    *ambient_humidity = 66.0;
+                    let mut sensor_manager_signals = mutex_sensor_manager_signals.lock().unwrap();
+                    sensor_manager_signals.ambient_humidity = 66.0;
                 }
 
                 spin_sleeper.sleep(sleep_duration_1_second);
@@ -1698,13 +1675,8 @@ pub mod tests {
                         mutex_ds18b20_water_temperature_clone_for_data_logger,
                     mutex_ambient_temperature_dsb18b20:
                         mutex_ds18b20_ambient_temperature_clone_for_data_logger,
-                    mutex_atlas_scientific_temperature:
-                        mutex_atlas_scientific_temperature_clone_for_data_logger,
-                    mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_data_logger,
-                    mutex_atlas_scientific_conductivity:
-                        mutex_atlas_scientific_conductivity_clone_for_data_logger,
-                    mutex_ambient_temperature: mutex_ambient_temperature_clone_for_data_logger,
-                    mutex_ambient_humidity: mutex_ambient_humidity_clone_for_data_logger,
+                    mutex_sensor_manager_signals:
+                        mutex_sensor_manager_signals_clone_for_data_logger,
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: mutex_heating_status_clone_for_data_logger,
                     mutex_ventilation_status: mutex_ventilation_status_clone_for_data_logger,

@@ -121,11 +121,11 @@ pub struct SignalHandlerChannels {
     /// receiver part of the channel for communication from Atlas Scientific
     pub rx_signal_handler_from_atlas_scientific: Receiver<bool>,
 
-    /// sender part of the channel for communication to Ambient
-    pub tx_signal_handler_to_ambient: Sender<InternalCommand>,
+    /// sender part of the channel for communication to the sensor manager
+    pub tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
 
-    /// receiver part of the channel for communication from Ambient
-    pub rx_signal_handler_from_ambient: Receiver<bool>,
+    /// receiver part of the channel for communication from the sensor manager
+    pub rx_signal_handler_from_sensor_manager: Receiver<bool>,
 
     /// sender part of the channel for communication to data logger
     pub tx_signal_handler_to_data_logger: Sender<InternalCommand>,
@@ -172,8 +172,8 @@ pub struct SignalHandlerChannels {
     /// sender part of the channel for communication to Dht wrapped in Option
     pub tx_signal_handler_to_dht: Sender<InternalCommand>,
 
-    /// sender part of the channel for communication to I2C interface wrapped in Option
-    pub tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>>,
+    /// sender part of the channel for communication to I2C interface
+    pub tx_signal_handler_to_i2c_interface: Sender<InternalCommand>,
 
     /// sender part of the channel for communication to watchdog
     pub tx_signal_handler_to_watchdog: Sender<InternalCommand>,
@@ -370,8 +370,8 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     send_command(
         InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_ambient),
-        Some(&signal_handler_channels.rx_signal_handler_from_ambient),
+        Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
+        Some(&signal_handler_channels.rx_signal_handler_from_sensor_manager),
         "ambient",
     );
     send_command(
@@ -389,9 +389,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     // phase 4: shut down low-level controls
     send_command(
         InternalCommand::Quit,
-        signal_handler_channels
-            .tx_signal_handler_to_i2c_interface_opt
-            .as_ref(),
+        Some(&signal_handler_channels.tx_signal_handler_to_i2c_interface),
         None,
         "i2c_interface",
     );
@@ -494,7 +492,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     send_command(
         InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_ambient),
+        Some(&signal_handler_channels.tx_signal_handler_to_sensor_manager),
         None,
         "ambient",
     );
@@ -684,11 +682,11 @@ pub mod tests {
         // **************************************
 
         // *** signal handler <=> ambient ***
-        let (tx_signal_handler_to_ambient, rx_ambient_from_signal_handler): (
+        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
         ) = mpsc::channel();
-        let (tx_ambient_to_signal_handler, rx_signal_handler_from_ambient): (
+        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager): (
             Sender<bool>,
             Receiver<bool>,
         ) = mpsc::channel();
@@ -737,9 +735,6 @@ pub mod tests {
             Receiver<InternalCommand>,
         ) = mpsc::channel();
 
-        let tx_signal_handler_to_i2c_interface_opt: Option<Sender<InternalCommand>> =
-            Some(tx_signal_handler_to_i2c_interface);
-
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler): (
             Sender<InternalCommand>,
             Receiver<InternalCommand>,
@@ -768,8 +763,7 @@ pub mod tests {
                     rx_signal_handler_from_relay_manager,
                     tx_signal_handler_to_atlas_scientific,
                     rx_signal_handler_from_atlas_scientific,
-                    tx_signal_handler_to_ambient,
-                    rx_signal_handler_from_ambient,
+                    tx_signal_handler_to_sensor_manager,
                     tx_signal_handler_to_data_logger,
                     rx_signal_handler_from_data_logger,
                     tx_signal_handler_to_balling,
@@ -785,10 +779,11 @@ pub mod tests {
                     tx_signal_handler_to_tcp_opt,
                     rx_signal_handler_from_tcp_opt,
                     tx_signal_handler_to_dht,
-                    tx_signal_handler_to_i2c_interface_opt,
+                    tx_signal_handler_to_i2c_interface,
                     tx_signal_handler_to_watchdog,
                     rx_signal_handler_from_watchdog,
                     tx_signal_handler_to_ds18b20,
+                    rx_signal_handler_from_sensor_manager,
                 };
 
                 handle_signals(term_clone, signal_handler_channels);
@@ -864,10 +859,10 @@ pub mod tests {
         );
         _ = tx_atlas_scientific_to_signal_handler.send(true);
         assert_eq!(
-            rx_ambient_from_signal_handler.recv().unwrap(),
+            rx_sensor_manager_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
-        _ = tx_ambient_to_signal_handler.send(true);
+        _ = tx_sensor_manager_to_signal_handler.send(true);
 
         assert_eq!(
             rx_schedule_check_from_signal_handler.recv().unwrap(),
@@ -954,7 +949,7 @@ pub mod tests {
         // no response to termination request
 
         assert_eq!(
-            rx_ambient_from_signal_handler.recv().unwrap(),
+            rx_sensor_manager_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request

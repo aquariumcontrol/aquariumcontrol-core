@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 /// Contains the functionality for triggering regular DHT sensor communication and caching of data
-pub mod ambient;
+pub mod sensor_manager;
 
 /// Contains the functionality for triggering regular Atlas Scientific sensor communication and caching of data
 pub mod atlas_scientific;

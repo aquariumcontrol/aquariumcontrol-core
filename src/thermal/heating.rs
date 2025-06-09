@@ -14,6 +14,7 @@ use log::info;
 
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::common::check_if_mutex_is_blocked;
@@ -227,11 +228,8 @@ pub struct HeatingChannels {
 /// These mutexes provide thread-safe access to various sensor readings and
 /// device states that are used by the heating control.
 pub struct HeatingMutexes {
-    /// Mutex for the water temperature
-    pub(crate) mutex_water_temperature: Arc<Mutex<f32>>,
-
-    /// Mutex for the ambient temperature
-    pub(crate) mutex_ambient_temperature: Arc<Mutex<f32>>,
+    /// Mutex for signals from sensor manager
+    pub(crate) mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 
     /// Mutex for the tank level switch signals
     pub(crate) mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
@@ -411,9 +409,8 @@ impl Heating {
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
         let mut measured_water_temperature = 0.0;
-        let mut measurement_error_water_temperature: bool;
+        let mut measurement_error: bool;
         let mut measured_ambient_temperature = 0.0;
-        let mut measurement_error_ambient_temperature: bool;
         let mut measured_tank_level_switch_position = true;
         let mut measured_tank_level_switch_invalid = false;
         let mut loop_counter = 0;
@@ -475,34 +472,18 @@ impl Heating {
             }
 
             if self.config.active {
-                // read water temperature from mutex
+                // read signals from sensor manager
                 {
-                    measured_water_temperature =
-                        match heating_mutexes.mutex_water_temperature.lock() {
-                            Ok(c) => {
-                                measurement_error_water_temperature = false;
-                                *c
-                            }
-                            Err(_) => {
-                                measurement_error_water_temperature = true;
-                                measured_water_temperature // use previous value
-                            }
-                        };
-                }
-
-                // read ambient temperature from mutex
-                {
-                    measured_ambient_temperature =
-                        match heating_mutexes.mutex_ambient_temperature.lock() {
-                            Ok(c) => {
-                                measurement_error_ambient_temperature = false;
-                                *c
-                            }
-                            Err(_) => {
-                                measurement_error_ambient_temperature = true;
-                                measured_ambient_temperature // use previous value
-                            }
+                    match heating_mutexes.mutex_sensor_manager_signals.lock() {
+                        Ok(c) => {
+                            measured_water_temperature = c.water_temperature;
+                            measured_ambient_temperature = c.ambient_temperature;
+                            measurement_error = false;
                         }
+                        Err(_) => {
+                            measurement_error = true;
+                        }
+                    };
                 }
 
                 // read tank level switch position and invalid bit from mutex
@@ -597,7 +578,7 @@ impl Heating {
                             // temperature is inside (dynamic) control window
                             if (self.calc_normalized_control_deviation(measured_water_temperature)
                                 < saw_tooth_profile.level_normalized)
-                                && !measurement_error_water_temperature
+                                && !measurement_error
                             {
                                 // switch on the heater if not already on
                                 if heater_state != ActuatorState::On {
@@ -716,15 +697,14 @@ impl Heating {
                     match heating_stats_opt {
                         Some(ref mut heating_stats) => {
                             // wrap temperatures depending on the status bits
-                            let water_temperature_opt = match measurement_error_water_temperature {
+                            let water_temperature_opt = match measurement_error {
                                 true => None,
                                 false => Some(measured_water_temperature as f64),
                             };
-                            let ambient_temperature_opt =
-                                match measurement_error_ambient_temperature {
-                                    true => None,
-                                    false => Some(measured_ambient_temperature as f64),
-                                };
+                            let ambient_temperature_opt = match measurement_error {
+                                true => None,
+                                false => Some(measured_ambient_temperature as f64),
+                            };
                             // update the heating statistics with recently acquired data
                             if heater_state == ActuatorState::On {
                                 energy_increment = (self.config.heater_power / 3600.0) as f64;
@@ -910,6 +890,7 @@ pub mod tests {
     use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
@@ -1108,8 +1089,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 11, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
@@ -1156,12 +1141,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1226,8 +1205,9 @@ pub mod tests {
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -1278,8 +1258,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 12, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -1305,12 +1289,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1378,8 +1356,9 @@ pub mod tests {
                     MockSqlInterfaceHeatingSetVals::new(false, None, None, None);
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -1425,11 +1404,16 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) = prepare_heating_tests_mock_midnight_calculator(
-            3600,
-            13,
-            Some(SawToothProfileConfig::new(6, 1, 6, 1)),
-        );
+        let (mut config, mut heating, sql_interface) =
+            prepare_heating_tests_mock_midnight_calculator(
+                3600,
+                13,
+                Some(SawToothProfileConfig::new(6, 1, 6, 1)),
+            );
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 25.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -1455,12 +1439,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(25.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1647,8 +1625,9 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -1693,8 +1672,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3, 14, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 25.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -1722,12 +1705,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(25.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1789,8 +1766,7 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -1841,8 +1817,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3, 15, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -1885,12 +1865,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -1942,8 +1916,7 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -2094,8 +2067,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3, 16, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -2134,12 +2111,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2195,8 +2166,7 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(&config.sensor_manager))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -2347,8 +2317,12 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 17, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -2374,12 +2348,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2442,8 +2410,9 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -2486,8 +2455,11 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3, 18, None);
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
@@ -2509,12 +2481,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2586,8 +2552,9 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -2631,8 +2598,12 @@ pub mod tests {
     // resumes operation.
     // Test case uses test database #19.
     pub fn test_messaging_stops_starts_heating() {
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 19, None);
+
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 20.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
         let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
@@ -2657,12 +2628,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(20.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -2808,8 +2773,9 @@ pub mod tests {
                 };
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };
@@ -2855,8 +2821,11 @@ pub mod tests {
         let sleep_duration_100_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
 
-        let (_, mut heating, sql_interface) =
+        let (mut config, mut heating, sql_interface) =
             prepare_heating_tests_mock_midnight_calculator(3600, 50, None);
+        // replacement values are used to initialize the mutexes
+        config.sensor_manager.replacement_value_water_temperature = 30.0;
+        config.sensor_manager.replacement_value_ambient_temperature = 24.0;
 
         // Channels for the test object. The test environment only uses one of the channels
         let (tx_heating_to_tank_level_switch, rx_tank_level_switch_from_heating) = mpsc::channel();
@@ -2903,12 +2872,6 @@ pub mod tests {
                 );
             })
             .unwrap();
-
-        // Mutex for water temperature normally coming from Atlas Scientific
-        let mutex_water_temperature = Arc::new(Mutex::new(30.0));
-
-        // Mutex for ambient temperature normally coming from Ambient
-        let mutex_ambient_temperature = Arc::new(Mutex::new(24.0));
 
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
 
@@ -2989,8 +2952,9 @@ pub mod tests {
                 );
 
                 let heating_mutexes = HeatingMutexes {
-                    mutex_water_temperature,
-                    mutex_ambient_temperature,
+                    mutex_sensor_manager_signals: Arc::new(Mutex::new(SensorManagerSignals::new(
+                        &config.sensor_manager,
+                    ))),
                     mutex_tank_level_switch_signals,
                     mutex_heating_status: Arc::new(Mutex::new(false)),
                 };

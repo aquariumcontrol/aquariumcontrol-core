@@ -48,17 +48,11 @@ pub struct TcpCommunicationChannels {
     /// Receiver part of the channel for communication from the relay manager wrapped in Option type
     pub rx_tcp_communication_from_relay_manager_opt: Option<Receiver<InternalCommand>>,
 
-    /// Receiver part of the channel for communication from the relay manager wrapped in Option type
-    pub rx_tcp_communication_from_ambient_opt: Option<Receiver<InternalCommand>>,
+    /// Receiver part of the channel for communication from the sensor manager wrapped in Option type
+    pub rx_tcp_communication_from_sensor_manager_opt: Option<Receiver<InternalCommand>>,
 
-    /// Sender part of the channel for communication to Ambient wrapped in Option type
-    pub tx_tcp_communication_to_ambient_opt: Option<Sender<f32>>,
-
-    /// Receiver part of the channel for communication from AtlasScientific wrapped in Option type  
-    pub rx_tcp_communication_from_atlas_scientific_opt: Option<Receiver<InternalCommand>>,
-
-    /// Sender part of the channel for communication to AtlasScientific wrapped in Option type
-    pub tx_tcp_communication_to_atlas_scientific_opt: Option<Sender<f32>>,
+    /// Sender part of the channel for communication to sensor manager wrapped in Option type
+    pub tx_tcp_communication_to_sensor_manager_opt: Option<Sender<f32>>,
 
     /// Receiver part of the channel for communication from tank level switch wrapped in Option type
     pub rx_tcp_communication_from_tank_level_switch_opt: Option<Receiver<InternalCommand>>,
@@ -79,10 +73,8 @@ pub struct TcpCommunicationChannels {
 /// ```mermaid
 /// graph LR
 ///     relay_manager[Relay Manager] --> tcp_communication[TCP Communication]
-///     ambient[Ambient] --> tcp_communication
-///     tcp_communication --> ambient
-///     atlas_scientific[Atlas Scientific] --> tcp_communication
-///     tcp_communication --> atlas_scientific
+///     sensor_manager[Sensor Manager] --> tcp_communication
+///     tcp_communication --> sensor_manager
 ///     tank_level_switch[Tank Level Switch] --> tcp_communication
 ///     tcp_communication --> tank_level_switch
 ///     tcp_communication --> signal_handler[Signal Handler]
@@ -373,7 +365,7 @@ impl TcpCommunication {
 
     /// Receives a `RequestSignal` command without blocking from a channel and sends back the corresponding sensor value via TCP.
     ///
-    /// This private helper function is used to service requests from various modules (e.g., Ambient, Atlas Scientific)
+    /// This private helper function is used to service requests from various modules
     /// that are configured to run in simulator mode. It checks the provided receiver channel (`rx`) for an
     /// `InternalCommand::RequestSignal`. If such a request is found, it uses `self.get_signal()`
     /// to fetch the simulated sensor value and sends it back through the provided sender channel (`tx`).
@@ -456,28 +448,14 @@ impl TcpCommunication {
 
             // *** communication with Ambient ***
             if let Some(ref rx_tcp_communication_from_ambient) =
-                tcp_communication_channels.rx_tcp_communication_from_ambient_opt
+                tcp_communication_channels.rx_tcp_communication_from_sensor_manager_opt
             {
                 if let Some(ref tx_tcp_communication_to_ambient) =
-                    tcp_communication_channels.tx_tcp_communication_to_ambient_opt
+                    tcp_communication_channels.tx_tcp_communication_to_sensor_manager_opt
                 {
                     self.receive_and_answer(
                         rx_tcp_communication_from_ambient,
                         tx_tcp_communication_to_ambient,
-                    );
-                }
-            }
-
-            // *** communication with Atlas Scientific ***
-            if let Some(ref rx_tcp_communication_from_atlas_scientific) =
-                tcp_communication_channels.rx_tcp_communication_from_atlas_scientific_opt
-            {
-                if let Some(ref tx_tcp_communication_to_atlas_scientific) =
-                    tcp_communication_channels.tx_tcp_communication_to_atlas_scientific_opt
-                {
-                    self.receive_and_answer(
-                        rx_tcp_communication_from_atlas_scientific,
-                        tx_tcp_communication_to_atlas_scientific,
                     );
                 }
             }
@@ -525,8 +503,8 @@ impl TcpCommunication {
             spin_sleeper.sleep(sleep_duration_ten_milli_sec);
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match tcp_communication_channels
             .tx_tcp_communication_to_signal_handler
             .send(true)
