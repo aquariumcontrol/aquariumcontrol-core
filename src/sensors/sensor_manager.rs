@@ -18,7 +18,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::sensors::atlas_scientific::{AtlasScientificResult};
+use crate::sensors::atlas_scientific::AtlasScientificResult;
 use crate::sensors::dht::DhtResult;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
