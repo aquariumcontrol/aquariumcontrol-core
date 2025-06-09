@@ -1005,18 +1005,19 @@ fn main() {
         Receiver<InternalCommand>,
     ) = mpsc::channel();
 
+    #[allow(unused)] // channel used in conditionally compiled code
     let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
         Sender<InternalCommand>,
         Receiver<InternalCommand>,
     ) = mpsc::channel();
 
     // Atlas Scientific <=> i2c_interface
-    #[allow(unused)] // channel used in conditionally-compiled code
+    #[allow(unused)] // channel used in conditionally compiled code
     let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
         Sender<I2cRequest>,
         Receiver<I2cRequest>,
     ) = mpsc::channel();
-    #[allow(unused)] // channel used in conditionally-compiled code
+    #[allow(unused)] // channel used in conditionally compiled code
     let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
         Sender<I2cResult>,
         Receiver<I2cResult>,
