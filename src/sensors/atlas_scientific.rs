@@ -462,33 +462,27 @@ impl AtlasScientific {
                     };
 
                     match signal {
-                        AquariumSignal::WaterTemperature => {
-                            match mutex_water_temperature.lock() {
-                                Ok(mut water_temperature) => *water_temperature = result,
-                                Err(_) => {
-                                    error!("Could not lock mutex_conductivity.");
-                                    return false;
-                                }
+                        AquariumSignal::WaterTemperature => match mutex_water_temperature.lock() {
+                            Ok(mut water_temperature) => *water_temperature = result,
+                            Err(_) => {
+                                error!("Could not lock mutex_conductivity.");
+                                return false;
                             }
-                        }
-                        AquariumSignal::pH => {
-                            match mutex_ph.lock() {
-                                Ok(mut ph) => *ph = result,
-                                Err(_) => {
-                                    error!("Could not lock mutex_ph.");
-                                    return false;
-                                }
+                        },
+                        AquariumSignal::pH => match mutex_ph.lock() {
+                            Ok(mut ph) => *ph = result,
+                            Err(_) => {
+                                error!("Could not lock mutex_ph.");
+                                return false;
                             }
-                        }
-                        AquariumSignal::Conductivity => {
-                            match mutex_conductivity.lock() {
-                                Ok(mut conductivity) => *conductivity = result,
-                                Err(_) => {
-                                    error!("Could not lock mutex_conductivity.");
-                                    return false;
-                                }
+                        },
+                        AquariumSignal::Conductivity => match mutex_conductivity.lock() {
+                            Ok(mut conductivity) => *conductivity = result,
+                            Err(_) => {
+                                error!("Could not lock mutex_conductivity.");
+                                return false;
                             }
-                        }
+                        },
                         _ => { /* do nothing */ }
                     }
 
@@ -671,10 +665,10 @@ pub mod tests {
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificError,
     };
-    use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse};
+    use crate::sensors::i2c_interface::{I2cError, I2cInterface, I2cRequest, I2cResponse};
     use crate::utilities::channel_content::AquariumSignal;
     use crate::utilities::config::{read_config_file, ConfigData};
-    use assert_float_eq::assert_float_absolute_eq;
+    use assert_float_eq::*;
     use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
 
@@ -867,13 +861,13 @@ pub mod tests {
         let send_buf = vec![atlas_scientific_constants::COMMAND_READ];
         let request_ph = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_ph,
-            send_buf,
+            send_buf.clone(),
             config.atlas_scientific.sleep_time_millis_ph,
             atlas_scientific_constants::MESSAGE_SIZE,
         );
         let request_temperature = I2cRequest::new(
             config.atlas_scientific.address_atlas_scientific_temperature,
-            send_buf,
+            send_buf.clone(),
             config.atlas_scientific.sleep_time_millis_temperature,
             atlas_scientific_constants::MESSAGE_SIZE,
         );
@@ -900,5 +894,24 @@ pub mod tests {
             "Atlas Scientific response for conductivity: {:?}",
             response_conductivity
         );
+
+        let ph = AtlasScientific::check_response(
+            response_ph.unwrap().read_buf.try_into().unwrap(),
+            true,
+        )
+        .unwrap();
+        println!("pH={}", ph);
+        let temperature = AtlasScientific::check_response(
+            response_temperature.unwrap().read_buf.try_into().unwrap(),
+            true,
+        )
+        .unwrap();
+        println!("temperature={}", temperature);
+        let conductivity = AtlasScientific::check_response(
+            response_conductivity.unwrap().read_buf.try_into().unwrap(),
+            true,
+        )
+        .unwrap();
+        println!("conductivity={}", conductivity);
     }
 }

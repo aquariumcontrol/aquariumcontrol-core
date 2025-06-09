@@ -99,6 +99,7 @@ impl I2cRequest {
     }
 }
 
+#[derive(Debug)]
 pub struct I2cResponse {
     /// sequence received from the bus participant
     pub read_buf: Vec<u8>,

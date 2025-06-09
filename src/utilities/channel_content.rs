@@ -151,7 +151,7 @@ impl AquariumSignal {
             AquariumSignal::AmbientTemperature => format!("{:.1}", signal),
             AquariumSignal::AmbientHumidity => format!("{:.1}", signal),
             #[cfg(all(target_os = "linux", feature = "target_hw", test))]
-            MockInvalidSignal => "MockInvalid".to_string(),
+            AquariumSignal::MockInvalidSignal => "MockInvalid".to_string(),
             _ => signal.to_string(),
         }
     }

@@ -518,9 +518,9 @@ impl RelayActuationTrait for ActuateControllino {
         // create a message to be sent to Controllino
         let message = create_heartbeat_message();
 
-        
-        self.spin_sleeper.sleep(self.controllino_processing_duration);
-        
+        self.spin_sleeper
+            .sleep(self.controllino_processing_duration);
+
         // write a message to Controllino
         match self.serial_port.write(&message.data) {
             Ok(amount_byte_written) => {
@@ -541,7 +541,8 @@ impl RelayActuationTrait for ActuateControllino {
             }
         }
 
-        self.spin_sleeper.sleep(self.controllino_processing_duration);
+        self.spin_sleeper
+            .sleep(self.controllino_processing_duration);
     }
 }
 

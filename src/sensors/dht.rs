@@ -1033,9 +1033,9 @@ pub mod tests {
         let gpio_pin_number_dht22_io = config.gpio_handler.dht22_io;
         let gpio_pin_number_dht22_vcc = config.gpio_handler.dht22_vcc;
 
-        let dht = Dht::new(
+        let mut dht = Dht::new(
             config.dht,
-            gpio,
+            Some(gpio),
             gpio_pin_number_dht22_io,
             gpio_pin_number_dht22_vcc,
         );
