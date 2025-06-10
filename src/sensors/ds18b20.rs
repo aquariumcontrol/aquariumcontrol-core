@@ -14,10 +14,9 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use std::fs;
-use std::io;
 use std::path::PathBuf;
 use std::thread::sleep;
+use std::{fmt, fs};
 
 const LOG_TARGET_DS18B20: &str = "ds18b20";
 
@@ -27,6 +26,11 @@ use log::debug;
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use log::error;
 
+mod ds18b20_constants {
+    pub(crate) const MIN_TEMPERATURE: f32 = 0.0; // minimum viable temperature
+    
+    pub(crate) const MAX_TEMPERATURE: f32 = 100.0; // maximum viable temperature
+}
 /// Holds the configuration data for DS18B20 sensor communication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -68,6 +72,38 @@ pub struct Ds18b20Config {
     pub ambient_temperature_sensor_id: String,
 }
 
+pub enum Ds18b20Error {
+    SensorIdNotFound(String),
+    
+    ReadToStringFailure,
+
+    InsufficientLinesInFile,
+
+    Line0NotEndingWithYes,
+
+    TemperatureEntryNotFound,
+    
+    UnidentifiedError,
+
+    TemperatureParseError,
+
+    TemperatureOutRange,
+}
+
+impl fmt::Display for Ds18b20Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Ds18b20Error::SensorIdNotFound(id) => write!(f, "DS18B20 sensor with ID '{}' not found.", id),
+            Ds18b20Error::ReadToStringFailure => write!(f, "Failed to read content from the device file."),
+            Ds18b20Error::InsufficientLinesInFile => write!(f, "Device file contains insufficient lines (expected at least 2)."),
+            Ds18b20Error::Line0NotEndingWithYes => write!(f, "The first line of the device file does not end with ' YES', indicating a CRC error or incomplete reading."),
+            Ds18b20Error::TemperatureEntryNotFound => write!(f, "Temperature entry (t=) not found in the second line of the device file."),
+            Ds18b20Error::UnidentifiedError => write!(f, "An unidentified error occurred."),
+            Ds18b20Error::TemperatureParseError => write!(f, "Failed to parse temperature value as a floating-point number."),
+            Ds18b20Error::TemperatureOutRange => write!(f, "Read temperature value is outside the expected range."),
+        }
+    }
+}
 pub struct Ds18b20 {
     #[allow(unused)]
     /// configuration for communication with Ds18b20 sensor
@@ -141,46 +177,66 @@ impl Ds18b20 {
     /// # Returns
     /// A `Result<f32, io::Error>`:
     /// - `Ok(f32)`: The temperature in degree Celsius if successfully read and parsed.
-    /// - `Err(io::Error)`: If the sensor's device folder or file is not found, or if
-    ///   reading fails after all retries (e.g., due to communication errors, invalid data format).
-    pub fn read(&self, sensor_id: &str) -> Result<f32, io::Error> {
+    /// - `Err(Ds18b20Error)`: Description of the error which occurred during reading.
+    pub fn read(&self, sensor_id: &str) -> Result<f32, Ds18b20Error> {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
             base_dir.join(self.config.system_driver_sensor_path_prefix.to_string() + sensor_id);
 
         if !device_folder.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("DS18B20 sensor with ID '{}' not found!", sensor_id),
-            ));
+            return Err(Ds18b20Error::SensorIdNotFound(sensor_id.to_string()));
         }
 
         let device_file = device_folder.join(self.config.system_driver_file_name.clone());
 
         let mut retries = self.config.max_retries;
+        let mut last_error_recorded = Ds18b20Error::UnidentifiedError;
+        
         while retries > 0 {
-            let contents = fs::read_to_string(&device_file)?;
-            let lines: Vec<&str> = contents.trim().split('\n').collect();
-
-            if lines.len() >= 2 && lines[0].ends_with(" YES") {
-                if let Some(temp_line) = lines[1].find("t=") {
-                    if let Ok(temp_str) = lines[1][temp_line + 2..].trim().parse::<f32>() {
-                        let celsius = temp_str / 1000.0;
-                        // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
-                        return Ok(celsius);
+            match fs::read_to_string(&device_file) {
+                Ok(contents) => {
+                    let lines: Vec<&str> = contents.trim().split('\n').collect();
+                    if lines.len() >= 2 {
+                        if lines[0].ends_with(" YES") {
+                            if let Some(temp_index) = lines[1].find("t=") {
+                                if let Ok(temp_str) = lines[1][temp_index + 2..].trim().parse::<f32>() {
+                                    let celsius = temp_str / 1000.0;
+                                    if celsius >= ds18b20_constants::MIN_TEMPERATURE &&
+                                        celsius <= ds18b20_constants::MAX_TEMPERATURE {
+                                        // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
+                                        return Ok(celsius);
+                                    }
+                                    else {
+                                        last_error_recorded = Ds18b20Error::TemperatureOutRange;
+                                    }
+                                }
+                                else {
+                                    last_error_recorded = Ds18b20Error::TemperatureParseError;
+                                }
+                            }
+                            else {
+                                last_error_recorded = Ds18b20Error::TemperatureEntryNotFound;
+                            }
+                        } else {
+                            last_error_recorded = Ds18b20Error::Line0NotEndingWithYes;
+                        }
                     }
+                    else {
+                        last_error_recorded = Ds18b20Error::InsufficientLinesInFile;
+                    }
+                },
+                Err(e) => {
+                    last_error_recorded = Ds18b20Error::ReadToStringFailure;
                 }
             }
-
+            
             sleep(Duration::from_millis(
                 self.config.retry_pause_duration_millis,
             ));
             retries -= 1;
         }
 
-        Err(io::Error::other(
-            "Failed to read temperature after multiple retries.",
-        ))
+        Err(last_error_recorded)
     }
 
     /// Executes the main control loop for the DS18B20 sensor module.
