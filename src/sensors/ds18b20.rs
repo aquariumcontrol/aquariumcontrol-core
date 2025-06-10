@@ -25,10 +25,11 @@ use log::debug;
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use log::error;
+use log::warn;
 
 mod ds18b20_constants {
     pub(crate) const MIN_TEMPERATURE: f32 = 0.0; // minimum viable temperature
-    
+
     pub(crate) const MAX_TEMPERATURE: f32 = 100.0; // maximum viable temperature
 }
 /// Holds the configuration data for DS18B20 sensor communication.
@@ -72,9 +73,10 @@ pub struct Ds18b20Config {
     pub ambient_temperature_sensor_id: String,
 }
 
+#[derive(Debug)]
 pub enum Ds18b20Error {
     SensorIdNotFound(String),
-    
+
     ReadToStringFailure,
 
     InsufficientLinesInFile,
@@ -82,12 +84,12 @@ pub enum Ds18b20Error {
     Line0NotEndingWithYes,
 
     TemperatureEntryNotFound,
-    
+
     UnidentifiedError,
 
     TemperatureParseError,
 
-    TemperatureOutRange,
+    TemperatureOutOfRange,
 }
 
 impl fmt::Display for Ds18b20Error {
@@ -100,7 +102,7 @@ impl fmt::Display for Ds18b20Error {
             Ds18b20Error::TemperatureEntryNotFound => write!(f, "Temperature entry (t=) not found in the second line of the device file."),
             Ds18b20Error::UnidentifiedError => write!(f, "An unidentified error occurred."),
             Ds18b20Error::TemperatureParseError => write!(f, "Failed to parse temperature value as a floating-point number."),
-            Ds18b20Error::TemperatureOutRange => write!(f, "Read temperature value is outside the expected range."),
+            Ds18b20Error::TemperatureOutOfRange => write!(f, "Read temperature value is outside the expected range."),
         }
     }
 }
@@ -155,6 +157,12 @@ impl Ds18b20 {
                 LOG_TARGET_DS18B20
             );
         }
+        if config.active && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id {
+            warn!(
+                target: LOG_TARGET_DS18B20,
+                "Ambient and water temperature sensor IDs are identical."
+            );
+        }
         Ds18b20 { config }
     }
 
@@ -191,45 +199,46 @@ impl Ds18b20 {
 
         let mut retries = self.config.max_retries;
         let mut last_error_recorded = Ds18b20Error::UnidentifiedError;
-        
+
         while retries > 0 {
             match fs::read_to_string(&device_file) {
                 Ok(contents) => {
-                    let lines: Vec<&str> = contents.trim().split('\n').collect();
+                    let lines: Vec<&str> = contents.lines().collect();
                     if lines.len() >= 2 {
+                        println!("lines[0]={}", lines[0]);
                         if lines[0].ends_with(" YES") {
                             if let Some(temp_index) = lines[1].find("t=") {
-                                if let Ok(temp_str) = lines[1][temp_index + 2..].trim().parse::<f32>() {
+                                if let Ok(temp_str) =
+                                    lines[1][temp_index + 2..].trim().parse::<f32>()
+                                {
                                     let celsius = temp_str / 1000.0;
-                                    if celsius >= ds18b20_constants::MIN_TEMPERATURE &&
-                                        celsius <= ds18b20_constants::MAX_TEMPERATURE {
+                                    if (ds18b20_constants::MIN_TEMPERATURE
+                                        ..=ds18b20_constants::MAX_TEMPERATURE)
+                                        .contains(&celsius)
+                                    {
                                         // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
                                         return Ok(celsius);
+                                    } else {
+                                        last_error_recorded = Ds18b20Error::TemperatureOutOfRange;
                                     }
-                                    else {
-                                        last_error_recorded = Ds18b20Error::TemperatureOutRange;
-                                    }
-                                }
-                                else {
+                                } else {
                                     last_error_recorded = Ds18b20Error::TemperatureParseError;
                                 }
-                            }
-                            else {
+                            } else {
                                 last_error_recorded = Ds18b20Error::TemperatureEntryNotFound;
                             }
                         } else {
                             last_error_recorded = Ds18b20Error::Line0NotEndingWithYes;
                         }
-                    }
-                    else {
+                    } else {
                         last_error_recorded = Ds18b20Error::InsufficientLinesInFile;
                     }
-                },
+                }
                 Err(e) => {
                     last_error_recorded = Ds18b20Error::ReadToStringFailure;
                 }
             }
-            
+
             sleep(Duration::from_millis(
                 self.config.retry_pause_duration_millis,
             ));
@@ -352,7 +361,8 @@ pub mod tests {
         }
     }
 
-    use crate::sensors::ds18b20::Ds18b20;
+    use std::env;
+    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error, LOG_TARGET_DS18B20};
     use crate::utilities::config::read_config_file;
 
     #[test]
@@ -381,7 +391,6 @@ pub mod tests {
     }
 
     #[test]
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     // This test case read sensor data provided by a file.
     fn test_read_ds18b20_from_file() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
@@ -412,7 +421,7 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    // Test cases checks if invalid configuration of the system driver base path triggers a panic.
+    // Test case checks if invalid configuration of the system driver base path triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
         config.ds18b20.system_driver_base_path = "".to_string();
@@ -421,7 +430,7 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    // Test cases checks if invalid configuration of the system driver sensor path prefix triggers a panic.
+    // Test case checks if invalid configuration of the system driver sensor path prefix triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
         config.ds18b20.system_driver_sensor_path_prefix = "".to_string();
@@ -430,7 +439,7 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    // Test cases checks if invalid configuration of the system driver sensor file name triggers a panic.
+    // Test case checks if invalid configuration of the system driver sensor file name triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
         config.ds18b20.system_driver_file_name = "".to_string();
@@ -439,12 +448,198 @@ pub mod tests {
 
     #[test]
     #[should_panic]
-    // Test cases checks if invalid configuration of the sensor ids triggers a panic.
+    // Test case checks if invalid configuration of the sensor ids triggers a panic.
     fn test_dsb18b20_init_with_invalid_sensor_ids() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
         config.ds18b20.active = true;
         config.ds18b20.water_temperature_sensor_id = "".to_string();
         config.ds18b20.ambient_temperature_sensor_id = "".to_string();
         let _ = Ds18b20::new(config.ds18b20);
+    }
+
+    #[test]
+    // Test case checks if function returns error for an incorrect sensor id
+    fn test_dsb18b20_read_from_invalid_sensor_id() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let invalid_temperature_sensor_id = "33";
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+        
+        assert_eq!(
+            matches!(
+                ds18b20.read(&invalid_temperature_sensor_id),
+                Err(Ds18b20Error::SensorIdNotFound(_invalid_temperature_sensor_id))
+            ),
+            true
+        );
+    }
+
+    #[test]
+    // Test case checks if function returns error when not being able to read from the device file
+    fn test_dsb18b20_read_from_file_failed() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name = "xxx".to_string(); // invalidate file name
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+        
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+        
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+        
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::ReadToStringFailure)
+            ),
+            true
+        );
+    }
+    
+    #[test]
+    // Test case checks if function returns error when device file does not provide enough lines
+    fn test_dsb18b20_file_with_one_line_only() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_one_line"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::InsufficientLinesInFile)),
+            true
+        );
+    }
+    
+    #[test]
+    // Test case checks if function returns error when first line of device file content does not match "YES"
+    fn test_dsb18b20_file_with_line_not_ending_with_yes() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_no_yes"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::Line0NotEndingWithYes)),
+            true
+        );
+    }
+
+    #[test]
+    // Test case checks if function returns error when file content does not contain temperature
+    fn test_dsb18b20_file_without_temperature() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_no_temperature"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::TemperatureEntryNotFound)),
+            true
+        );
+    }
+
+    #[test]
+    // Test case checks if function returns error when file content contains unparsable data
+    fn test_dsb18b20_unparsable() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_unparsable"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::TemperatureParseError)),
+            true
+        );
+    }
+
+    #[test]
+    // Test case checks if function returns error when temperature is too hot
+    fn test_dsb18b20_temperature_too_hot() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_too_hot"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::TemperatureOutOfRange)),
+            true
+        );
+    }
+    
+    #[test]
+    // Test case checks if function returns error when temperature is too cold
+    fn test_dsb18b20_temperature_too_cold() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        config.ds18b20.system_driver_file_name += "_too_cold"; // file with only one line content
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+
+        let valid_temperature_sensor_id = config.ds18b20.water_temperature_sensor_id.clone();
+
+        let ds18b20 = Ds18b20::new(config.ds18b20);
+
+        assert_eq!(
+            matches!(
+                ds18b20.read(&valid_temperature_sensor_id),
+                Err(Ds18b20Error::TemperatureOutOfRange)),
+            true
+        );
     }
 }
