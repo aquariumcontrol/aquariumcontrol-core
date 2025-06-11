@@ -23,8 +23,6 @@ const LOG_TARGET_DS18B20: &str = "ds18b20";
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use log::error;
 use log::warn;
 
 mod ds18b20_constants {
@@ -173,7 +171,9 @@ impl Ds18b20 {
                 LOG_TARGET_DS18B20
             );
         }
-        if config.active && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id {
+        if config.active
+            && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id
+        {
             warn!(
                 target: LOG_TARGET_DS18B20,
                 "Ambient and water temperature sensor IDs are identical."
@@ -234,8 +234,7 @@ impl Ds18b20 {
                                     {
                                         // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
                                         return Ok(Ds18b20ResultData::new(celsius));
-                                    }
-                                    else {
+                                    } else {
                                         last_error_recorded = Ds18b20Error::TemperatureOutOfRange;
                                     }
                                 } else {
@@ -305,38 +304,12 @@ impl Ds18b20 {
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
                         if !self.config.ambient_temperature_sensor_id.is_empty() {
-                            match self.read(self.config.ambient_temperature_sensor_id.as_str()) {
-                                Ok(temp) => {
-                                    *ambient_temperature = temp;
-                                }
-                                Err(e) => {
-                                    error!(
-                                        target: LOG_TARGET_DS18B20,
-                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
-                                    );
-                                    *ambient_temperature =
-                                        self.config.replacement_value_ambient_temperature;
-                                }
-                            }
-                        } else {
-                            *ambient_temperature = self.config.replacement_value_water_temperature;
+                            *ambient_temperature =
+                                self.read(self.config.ambient_temperature_sensor_id.as_str());
                         }
                         if !self.config.water_temperature_sensor_id.is_empty() {
-                            match self.read(self.config.water_temperature_sensor_id.as_str()) {
-                                Ok(temp) => {
-                                    *water_temperature = temp;
-                                }
-                                Err(e) => {
-                                    error!(
-                                        target: LOG_TARGET_DS18B20,
-                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
-                                    );
-                                    *water_temperature =
-                                        self.config.replacement_value_water_temperature;
-                                }
-                            }
-                        } else {
-                            *water_temperature = self.config.replacement_value_water_temperature;
+                            *water_temperature =
+                                self.read(self.config.water_temperature_sensor_id.as_str());
                         }
                     }
 
@@ -522,7 +495,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when the device file does not provide enough lines
+    // Test case checks if function returns error when device file does not provide enough lines
     fn test_dsb18b20_file_with_one_line_only() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -545,7 +518,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when the first line of device file content does not match "YES"
+    // Test case checks if function returns error when first line of device file content does not match "YES"
     fn test_dsb18b20_file_with_line_not_ending_with_yes() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -614,7 +587,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when the temperature is too hot
+    // Test case checks if function returns error when temperature is too hot
     fn test_dsb18b20_temperature_too_hot() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -637,7 +610,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when the temperature is too cold
+    // Test case checks if function returns error when temperature is too cold
     fn test_dsb18b20_temperature_too_cold() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
