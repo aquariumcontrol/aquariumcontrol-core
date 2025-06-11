@@ -23,8 +23,6 @@ const LOG_TARGET_DS18B20: &str = "ds18b20";
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use log::error;
 use log::warn;
 
 mod ds18b20_constants {
@@ -173,7 +171,9 @@ impl Ds18b20 {
                 LOG_TARGET_DS18B20
             );
         }
-        if config.active && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id {
+        if config.active
+            && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id
+        {
             warn!(
                 target: LOG_TARGET_DS18B20,
                 "Ambient and water temperature sensor IDs are identical."
@@ -234,8 +234,7 @@ impl Ds18b20 {
                                     {
                                         // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
                                         return Ok(Ds18b20ResultData::new(celsius));
-                                    }
-                                    else {
+                                    } else {
                                         last_error_recorded = Ds18b20Error::TemperatureOutOfRange;
                                     }
                                 } else {
@@ -305,38 +304,12 @@ impl Ds18b20 {
                     #[cfg(all(target_os = "linux", feature = "target_hw"))]
                     {
                         if !self.config.ambient_temperature_sensor_id.is_empty() {
-                            match self.read(self.config.ambient_temperature_sensor_id.as_str()) {
-                                Ok(temp) => {
-                                    *ambient_temperature = temp;
-                                }
-                                Err(e) => {
-                                    error!(
-                                        target: LOG_TARGET_DS18B20,
-                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
-                                    );
-                                    *ambient_temperature =
-                                        self.config.replacement_value_ambient_temperature;
-                                }
-                            }
-                        } else {
-                            *ambient_temperature = self.config.replacement_value_water_temperature;
+                            *ambient_temperature =
+                                self.read(self.config.ambient_temperature_sensor_id.as_str());
                         }
                         if !self.config.water_temperature_sensor_id.is_empty() {
-                            match self.read(self.config.water_temperature_sensor_id.as_str()) {
-                                Ok(temp) => {
-                                    *water_temperature = temp;
-                                }
-                                Err(e) => {
-                                    error!(
-                                        target: LOG_TARGET_DS18B20,
-                                        "Encountered error ({e:?}) when reading from DS18B20 sensor."
-                                    );
-                                    *water_temperature =
-                                        self.config.replacement_value_water_temperature;
-                                }
-                            }
-                        } else {
-                            *water_temperature = self.config.replacement_value_water_temperature;
+                            *water_temperature =
+                                self.read(self.config.water_temperature_sensor_id.as_str());
                         }
                     }
 
@@ -378,9 +351,9 @@ pub mod tests {
         }
     }
 
-    use std::env;
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error, LOG_TARGET_DS18B20};
     use crate::utilities::config::read_config_file;
+    use std::env;
 
     #[test]
     #[ignore]
@@ -425,7 +398,9 @@ pub mod tests {
             Ok(temperature) => {
                 println!(
                     "{}: Temperature read from file: {:.2}°C ({} milliseconds ago)",
-                    LOG_TARGET_DS18B20, temperature.value, temperature.measurement_instant.elapsed().as_millis()
+                    LOG_TARGET_DS18B20,
+                    temperature.value,
+                    temperature.measurement_instant.elapsed().as_millis()
                 );
                 assert!(true);
             }
@@ -492,7 +467,9 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&invalid_temperature_sensor_id),
-                Err(Ds18b20Error::SensorIdNotFound(_invalid_temperature_sensor_id))
+                Err(Ds18b20Error::SensorIdNotFound(
+                    _invalid_temperature_sensor_id
+                ))
             ),
             true
         );
@@ -540,7 +517,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::InsufficientLinesInFile)),
+                Err(Ds18b20Error::InsufficientLinesInFile)
+            ),
             true
         );
     }
@@ -563,7 +541,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::Line0NotEndingWithYes)),
+                Err(Ds18b20Error::Line0NotEndingWithYes)
+            ),
             true
         );
     }
@@ -586,7 +565,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureEntryNotFound)),
+                Err(Ds18b20Error::TemperatureEntryNotFound)
+            ),
             true
         );
     }
@@ -609,7 +589,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureParseError)),
+                Err(Ds18b20Error::TemperatureParseError)
+            ),
             true
         );
     }
@@ -632,7 +613,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)),
+                Err(Ds18b20Error::TemperatureOutOfRange)
+            ),
             true
         );
     }
@@ -655,7 +637,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)),
+                Err(Ds18b20Error::TemperatureOutOfRange)
+            ),
             true
         );
     }

@@ -941,7 +941,7 @@ impl DataLogger {
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
-        
+
         loop {
             self.update_signals(
                 &mut refill_in_progress_live,

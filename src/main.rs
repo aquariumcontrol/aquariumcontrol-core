@@ -88,7 +88,9 @@ use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
 use crate::sensors::atlas_scientific::{
     AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
 };
-use crate::sensors::sensor_manager::{SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals};
+use crate::sensors::sensor_manager::{
+    SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
+};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
@@ -1094,17 +1096,17 @@ fn main() {
     let mutex_device_scheduler = Arc::new(Mutex::new(0));
 
     // Mutexes for DS18B20 signals
-    let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(
-        Ok(Ds18b20ResultData::new(
+    let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
         config.sensor_manager.replacement_value_water_temperature,
-        ))
-    ));
-    let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(
-            Ok(Ds18b20ResultData::new(config.sensor_manager.replacement_value_ambient_temperature))
-    ));
-    let mutex_ds18b20_water_temperature_clone_for_sensor_manager = mutex_ds18b20_water_temperature.clone();
-    let mutex_ds18b20_ambient_temperature_clone_for_sensor_manager = mutex_ds18b20_ambient_temperature.clone();
-    
+    ))));
+    let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+        config.sensor_manager.replacement_value_ambient_temperature,
+    ))));
+    let mutex_ds18b20_water_temperature_clone_for_sensor_manager =
+        mutex_ds18b20_water_temperature.clone();
+    let mutex_ds18b20_ambient_temperature_clone_for_sensor_manager =
+        mutex_ds18b20_ambient_temperature.clone();
+
     // Mutexes for Atlas Scientific signals
     let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
         AtlasScientificResultData::new(config.sensor_manager.replacement_value_water_temperature),
@@ -1441,19 +1443,20 @@ fn main() {
             };
 
             let mutexes_sensor_manager = SensorManagerMutexes {
-                mutex_ds18b20_ambient_temperature: mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
-                mutex_ds18b20_water_temperature: mutex_ds18b20_water_temperature_clone_for_sensor_manager,
-                mutex_dht: mutex_dht_clone_for_sensor_manager, 
-                mutex_atlas_scientific_temperature: mutex_atlas_scientific_temperature_clone_for_sensor_manager,
+                mutex_ds18b20_ambient_temperature:
+                    mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
+                mutex_ds18b20_water_temperature:
+                    mutex_ds18b20_water_temperature_clone_for_sensor_manager,
+                mutex_dht: mutex_dht_clone_for_sensor_manager,
+                mutex_atlas_scientific_temperature:
+                    mutex_atlas_scientific_temperature_clone_for_sensor_manager,
                 mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
-                mutex_atlas_scientific_conductivity: mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
+                mutex_atlas_scientific_conductivity:
+                    mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
                 mutex_sensor_manager_signals,
             };
-            
-            sensor_manager.execute(
-                sensor_manager_channels,
-                mutexes_sensor_manager,
-            );
+
+            sensor_manager.execute(sensor_manager_channels, mutexes_sensor_manager);
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
