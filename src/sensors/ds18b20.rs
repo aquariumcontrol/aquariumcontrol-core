@@ -378,8 +378,7 @@ pub mod tests {
         }
     }
 
-    use std::env;
-    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error, LOG_TARGET_DS18B20};
+    use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
     use crate::utilities::config::read_config_file;
 
     #[test]
@@ -523,7 +522,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when device file does not provide enough lines
+    // Test case checks if function returns error when the device file does not provide enough lines
     fn test_dsb18b20_file_with_one_line_only() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -546,7 +545,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when first line of device file content does not match "YES"
+    // Test case checks if function returns error when the first line of device file content does not match "YES"
     fn test_dsb18b20_file_with_line_not_ending_with_yes() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -615,7 +614,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when temperature is too hot
+    // Test case checks if function returns error when the temperature is too hot
     fn test_dsb18b20_temperature_too_hot() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -638,7 +637,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when temperature is too cold
+    // Test case checks if function returns error when the temperature is too cold
     fn test_dsb18b20_temperature_too_cold() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
