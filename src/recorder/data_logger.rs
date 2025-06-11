@@ -103,12 +103,6 @@ pub struct DataLoggerConfig {
 
     /// output file name (in ramdisk) for the current refill pump status
     output_file_name_refill_in_progress: String,
-
-    /// output file name (in ramdisk) for the water temperature measured by DS18B20 sensor
-    output_file_name_water_temperature_ds18b20: String,
-
-    /// output file name (in ramdisk) for the ambient temperature measured by DS18B20 sensor
-    output_file_name_ambient_temperature_ds18b20: String,
 }
 
 /// Struct acts as a central hub for communication channels used by the DataLogger.
@@ -127,12 +121,6 @@ pub struct DataLoggerChannels<'a> {
 /// These mutexes provide thread-safe access to various sensor readings and
 /// device states that are collected by the data logger for recording and filtering.
 pub struct DataLoggerMutexes {
-    /// Mutex for water temperature from DS18B20 sensor
-    pub mutex_water_temperature_ds18b20: Arc<Mutex<f32>>,
-
-    /// Mutex for ambient temperature from DS18B20 sensor
-    pub mutex_ambient_temperature_dsb18b20: Arc<Mutex<f32>>,
-
     /// Mutex for sensor manager signals
     pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
 
@@ -230,12 +218,6 @@ pub struct DataLogger {
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
 
-    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write water temperature from DS18B20 sensor to disk
-    lock_error_output_signal_water_temperature_ds18b20: bool,
-
-    /// an inhibition flag to avoid flooding the log file with repeated messages about failure to write ambient temperature from DS18B20 sensor to disk
-    lock_error_output_signal_ambient_temperature_ds18b20: bool,
-
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
@@ -307,10 +289,6 @@ impl DataLogger {
                 || config.output_file_name_ambient_temperature.is_empty()
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
-                || config.output_file_name_water_temperature_ds18b20.is_empty()
-                || config
-                    .output_file_name_ambient_temperature_ds18b20
-                    .is_empty()
             {
                 panic!(
                     "{}: one of the output file names is empty.",
@@ -358,12 +336,6 @@ impl DataLogger {
                 fs::write(config.output_file_name_refill_in_progress.clone(), "").expect(
                     "DataLogger: Could not reset content of output file for refill in progress.",
                 );
-                fs::write(config.output_file_name_water_temperature_ds18b20.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for water temperature from DS18B20 sensor.",
-                );
-                fs::write(config.output_file_name_ambient_temperature_ds18b20.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for ambient air temperature from DS18B20 sensor.",
-                );
             }
         }
 
@@ -390,8 +362,6 @@ impl DataLogger {
             lock_error_output_timestamp: false,
             lock_warn_inapplicable_command: false,
             lock_error_channel_receive_termination: false,
-            lock_error_output_signal_water_temperature_ds18b20: false,
-            lock_error_output_signal_ambient_temperature_ds18b20: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_error_mutex_signal_manager: false,
@@ -741,48 +711,6 @@ impl DataLogger {
         }
     }
 
-    /// Read values of DS18B20 sensor from Mutex and write them to RAM disk
-    /// # Arguments
-    /// * `mutex_water_temperature` - Mutex for water temperature
-    /// * `mutex_ambient_temperature` - Mutex for ambient temperature
-    /// * `water_temperature` - Reference to water temperature variable
-    /// * `ambient_temperature` - Reference to ambient temperature variable
-    fn update_ds18b20_signals(
-        &mut self,
-        mutex_water_temperature: Arc<Mutex<f32>>,
-        mutex_ambient_temperature: Arc<Mutex<f32>>,
-        water_temperature: &mut Option<f32>,
-        ambient_temperature: &mut Option<f32>,
-    ) {
-        {
-            // internal scope to limit lifetime of mutex lock
-            *water_temperature = match mutex_water_temperature.lock() {
-                Ok(c) => {
-                    self.lock_error_output_signal_water_temperature_ds18b20 = self.output_signal(
-                        *c,
-                        AquariumSignal::WaterTemperature,
-                        &self.config.output_file_name_water_temperature_ds18b20,
-                        self.lock_error_output_signal_water_temperature_ds18b20,
-                    );
-                    Some(*c)
-                }
-                Err(_) => None,
-            };
-            *ambient_temperature = match mutex_ambient_temperature.lock() {
-                Ok(c) => {
-                    self.lock_error_output_signal_ambient_temperature_ds18b20 = self.output_signal(
-                        *c,
-                        AquariumSignal::AmbientTemperature,
-                        &self.config.output_file_name_ambient_temperature_ds18b20,
-                        self.lock_error_output_signal_ambient_temperature_ds18b20,
-                    );
-                    Some(*c)
-                }
-                Err(_) => None,
-            };
-        }
-    }
-
     /// Retrieves current temperature readings from DS18B20 sensors via shared mutexes and outputs them to files.
     ///
     /// This private helper function accesses `Arc<Mutex<f32>>` protected data for water temperature
@@ -1013,9 +941,7 @@ impl DataLogger {
         let mut start_time = SystemTime::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
-        let mut water_temperature_ds18b20: Option<f32> = Some(0.0);
-        let mut ambient_temperature_ds18b20: Option<f32> = Some(0.0);
-
+        
         loop {
             self.update_signals(
                 &mut refill_in_progress_live,
@@ -1024,16 +950,6 @@ impl DataLogger {
                 &mut heater_is_on,
                 &mut ventilation_is_on,
                 &data_logger_mutexes,
-            );
-
-            // update signals by accessing mutex for DS18B20 sensor signals
-            self.update_ds18b20_signals(
-                data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
-                data_logger_mutexes
-                    .mutex_ambient_temperature_dsb18b20
-                    .clone(),
-                &mut water_temperature_ds18b20,
-                &mut ambient_temperature_ds18b20,
             );
 
             // update signals by accessing mutex for Atlas Scientific signals
@@ -1082,8 +998,6 @@ impl DataLogger {
                 ambient_temperature,
                 ambient_humidity,
                 heater_status: Some(heater_is_on),
-                water_temperature_ds18b20,
-                ambient_temperature_ds18b20,
             };
 
             data_injection.inject_data(data_frame, &mut sql_interface_data);
@@ -1145,16 +1059,6 @@ impl DataLogger {
                         &mut heater_is_on,
                         &mut ventilation_is_on,
                         &data_logger_mutexes,
-                    );
-
-                    // update signals by accessing mutex for DS18B20 sensor signals
-                    self.update_ds18b20_signals(
-                        data_logger_mutexes.mutex_water_temperature_ds18b20.clone(),
-                        data_logger_mutexes
-                            .mutex_ambient_temperature_dsb18b20
-                            .clone(),
-                        &mut water_temperature_ds18b20,
-                        &mut ambient_temperature_ds18b20,
                     );
 
                     // update signals by accessing mutex for Atlas Scientific signals
@@ -1324,8 +1228,6 @@ pub mod tests {
         target_ambient_temperature: f32,
         target_ambient_humidity: f32,
         target_heater_status: bool,
-        target_water_temperature_ds18b20: f32,
-        target_ambient_temperature_ds18b20: f32,
     ) {
         assert_eq!(
             fs::read_to_string(&data_logger_config.output_file_name_water_temperature)
@@ -1440,20 +1342,6 @@ pub mod tests {
                 .expect("Could not read back heater status from disk."),
             target_heater_status_string,
         );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_water_temperature_ds18b20)
-                .expect("Could not read back DS18B20 water temperature from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_water_temperature_ds18b20,
-        );
-        assert_eq!(
-            fs::read_to_string(&data_logger_config.output_file_name_ambient_temperature_ds18b20)
-                .expect("Could not read back DS18B20 ambient temperature from disk.")
-                .parse::<f32>()
-                .unwrap(),
-            target_ambient_temperature_ds18b20,
-        );
     }
 
     #[test]
@@ -1503,11 +1391,7 @@ pub mod tests {
         config.sensor_manager.replacement_value_conductivity = 12.0;
 
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(15.0));
-        let mutex_ds18b20_water_temperature_clone_for_data_logger =
-            mutex_ds18b20_water_temperature.clone();
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(16.0));
-        let mutex_ds18b20_ambient_temperature_clone_for_data_logger =
-            mutex_ds18b20_ambient_temperature.clone();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_heating_status = Arc::new(Mutex::new(false));
@@ -1671,10 +1555,6 @@ pub mod tests {
                 };
 
                 let data_logger_mutexes = DataLoggerMutexes {
-                    mutex_water_temperature_ds18b20:
-                        mutex_ds18b20_water_temperature_clone_for_data_logger,
-                    mutex_ambient_temperature_dsb18b20:
-                        mutex_ds18b20_ambient_temperature_clone_for_data_logger,
                     mutex_sensor_manager_signals:
                         mutex_sensor_manager_signals_clone_for_data_logger,
                     mutex_tank_level_switch_signals,
@@ -1721,8 +1601,6 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(15.5),      // target DS18B20 water temperature
-                    Some(16.5),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #5
@@ -1744,8 +1622,6 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(66.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(15.0),      // target DS18B20 water temperature
-                    Some(16.0),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #4
@@ -1767,8 +1643,6 @@ pub mod tests {
                     Some(35.0),      // target_ambient_temperature
                     Some(14.0),      // target_ambient_humidity
                     Some(true),      // target_heater_status
-                    Some(15.0),      // target DS18B20 water temperature
-                    Some(16.0),      // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #3
@@ -1790,8 +1664,6 @@ pub mod tests {
                     Some(13.0),     // target_ambient_temperature
                     Some(14.0),     // target_ambient_humidity
                     Some(true),     // target_heater_status
-                    Some(15.0),     // target DS18B20 water temperature
-                    Some(16.0),     // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #2
@@ -1813,8 +1685,6 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(true),  // target_heater_status
-                    Some(15.0),  // target DS18B20 water temperature
-                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #1
@@ -1836,8 +1706,6 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
-                    Some(15.0),  // target DS18B20 water temperature
-                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 // Dataframe #0
@@ -1859,8 +1727,6 @@ pub mod tests {
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
                     Some(false), // target_heater_status
-                    Some(15.0),  // target DS18B20 water temperature
-                    Some(16.0),  // target DS18B20 ambient temperature
                 );
 
                 assert_output_file_contents(
@@ -1880,8 +1746,6 @@ pub mod tests {
                     35.0,                 // target_ambient_temperature
                     66.0,                 // target_ambient_humidity
                     true,                 // target_heater_status
-                    15.5,                 // target DS18B20 water temperature
-                    16.5,                 // target DS18B20 ambient temperature
                 );
             })
             .unwrap();

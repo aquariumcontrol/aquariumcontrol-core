@@ -12,7 +12,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use std::path::PathBuf;
 use std::thread::sleep;
@@ -41,12 +41,6 @@ pub struct Ds18b20Config {
 
     /// pause duration between two measurements in milliseconds
     measurement_pause_duration_millis: u64,
-
-    /// replacement value for ambient temperature
-    pub replacement_value_ambient_temperature: f32,
-
-    /// replacement value for water temperature
-    pub replacement_value_water_temperature: f32,
 
     /// system driver base path
     pub system_driver_base_path: String,
@@ -104,6 +98,28 @@ impl fmt::Display for Ds18b20Error {
         }
     }
 }
+
+pub struct Ds18b20ResultData {
+    pub value: f32,
+
+    #[allow(unused)]
+    invalid: bool,
+
+    #[allow(unused)]
+    measurement_instant: Instant,
+}
+
+impl Ds18b20ResultData {
+    pub fn new(value: f32) -> Self {
+        Ds18b20ResultData {
+            value,
+            invalid: false,
+            measurement_instant: Instant::now(),
+        }
+    }
+}
+pub type Ds18b20Result = Result<Ds18b20ResultData, Ds18b20Error>;
+
 pub struct Ds18b20 {
     #[allow(unused)]
     /// configuration for communication with Ds18b20 sensor
@@ -175,10 +191,10 @@ impl Ds18b20 {
     ///   to read (e.g., "28-00000abcde12").
     ///
     /// # Returns
-    /// A `Result<f32, io::Error>`:
+    /// A `Ds18b20Result`:
     /// - `Ok(f32)`: The temperature in degree Celsius if successfully read and parsed.
     /// - `Err(Ds18b20Error)`: Description of the error which occurred during reading.
-    pub fn read(&self, sensor_id: &str) -> Result<f32, Ds18b20Error> {
+    pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
             base_dir.join(self.config.system_driver_sensor_path_prefix.to_string() + sensor_id);
@@ -204,7 +220,7 @@ impl Ds18b20 {
                                     if celsius >= ds18b20_constants::MIN_TEMPERATURE &&
                                         celsius <= ds18b20_constants::MAX_TEMPERATURE {
                                         // let fahrenheit = (celsius * 9.0 / 5.0) + 32.0;
-                                        return Ok(celsius);
+                                        return Ok(Ds18b20ResultData::new(celsius));
                                     }
                                     else {
                                         last_error_recorded = Ds18b20Error::TemperatureOutRange;
@@ -249,15 +265,15 @@ impl Ds18b20 {
     ///
     /// # Arguments
     /// * `rx_from_signal_handler` - The receiver channel for commands (e.g., `Quit`) from the main signal handler.
-    /// * `mutex_water_temperature` - An `Arc<Mutex<f32>>` into which the latest water temperature reading
+    /// * `mutex_water_temperature` - An `Arc<Mutex<Ds18b20Result>>` into which the latest water temperature reading
     ///   will be written, ensuring thread-safe access for other modules.
-    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` into which the latest ambient temperature reading
+    /// * `mutex_ambient_temperature` - An `Arc<Mutex<Ds18b20Result>>` into which the latest ambient temperature reading
     ///   will be written, ensuring thread-safe access for other modules.
     pub fn execute(
         &mut self,
         rx_from_signal_handler: Receiver<InternalCommand>,
-        mutex_water_temperature: Arc<Mutex<f32>>,
-        mutex_ambient_temperature: Arc<Mutex<f32>>,
+        mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
+        mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -320,8 +336,8 @@ impl Ds18b20 {
                     // avoid compiler warning - write default values for mutex
                     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
                     {
-                        *ambient_temperature = self.config.replacement_value_ambient_temperature;
-                        *water_temperature = self.config.replacement_value_water_temperature;
+                        *ambient_temperature = Ok(Ds18b20ResultData::new(22.0));
+                        *water_temperature = Ok(Ds18b20ResultData::new(25.0));
                     }
                 }
             }
@@ -398,8 +414,8 @@ pub mod tests {
         match ds18b20.read(&water_temperature_sensor_id) {
             Ok(temperature) => {
                 println!(
-                    "{}: Temperature read from file: {:.2}°C ",
-                    LOG_TARGET_DS18B20, temperature
+                    "{}: Temperature read from file: {:.2}°C ({} milliseconds ago)",
+                    LOG_TARGET_DS18B20, temperature.value, temperature.measurement_instant.elapsed().as_millis()
                 );
                 assert!(true);
             }

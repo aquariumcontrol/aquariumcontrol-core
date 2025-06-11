@@ -141,7 +141,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         RefillInProgress, \
         TankLevelSwitchPosition, TankLevelSwitchInvalid, TankLevelSwitchPositionStabilized, \
         SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20) \
+        AmbTemp, AmbHum, Heater) \
         values (:timestamp, \
         #TemperatureUnfiltered, #TemperatureFiltered, \
         #pHUnfiltered, #pHFiltered, \
@@ -150,8 +150,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         #TankLevelSwitchPosition, #TankLevelSwitchInvalid, #TankLevelSwitchPositionStabilized, \
         #SurfaceVentilation, \
         #AmbTemp, #AmbHum, \
-        #Heater, \
-        #TempWaterDs18B20, #TempAmbDs18B20) \
+        #Heater) \
         ON DUPLICATE KEY UPDATE \
         Temperature=#TemperatureUnfiltered, TemperatureFiltered=#TemperatureFiltered, \
         pH=#pHUnfiltered, pHFiltered=#pHFiltered, \
@@ -163,8 +162,7 @@ pub const SQL_QUERY_WRITE_DATA: &str = "insert into data \
         TankLevelSwitchPositionStabilized=#TankLevelSwitchPositionStabilized, \
         SurfaceVentilation=#SurfaceVentilation, \
         AmbTemp=#AmbTemp, AmbHum=#AmbHum, \
-        Heater=#Heater, \
-        TempWaterDs18B20=#TempWaterDs18B20, TempAmbDs18B20=#TempAmbDs18B20;";
+        Heater=#Heater;";
 
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";

@@ -62,12 +62,6 @@ pub struct RecorderDataFrame {
 
     // status bit indicating that the heater is switched on
     pub heater_status: Option<bool>,
-
-    // measured water temperature from DS18B20 sensor in °C
-    pub water_temperature_ds18b20: Option<f32>,
-
-    // measured ambient temperature from DS18B20 sensor in °C
-    pub ambient_temperature_ds18b20: Option<f32>,
 }
 
 impl fmt::Display for RecorderDataFrame {
@@ -167,14 +161,6 @@ impl fmt::Display for RecorderDataFrame {
             },
             None => none_string.clone(),
         };
-        let water_temperature_ds18b20_string = match self.water_temperature_ds18b20 {
-            Some(water_temperature_ds18b20) => water_temperature_ds18b20.to_string(),
-            None => none_string.clone(),
-        };
-        let ambient_temperature_ds18b20_string = match self.ambient_temperature_ds18b20 {
-            Some(ambient_temperature_ds18b20) => ambient_temperature_ds18b20.to_string(),
-            None => none_string.clone(),
-        };
         write!(
             f,
             "\n**************************************\ntimestamp: {}\
@@ -185,8 +171,7 @@ impl fmt::Display for RecorderDataFrame {
             \ntank_level_switch_position: {},\ntank_level_switch_position_stabilized: {}\ntank_level_switch_invalid: {},\
             \nsurface_ventilation_status: {},\
             \nambient_temperature: {},\nambient_humidity: {}, \
-            \nheater_status: {} \
-            \nwater_temperature_ds18b20: {}, ambient_temperature_ds18b20: {}\n
+            \nheater_status: {} \n
             **************************************\n",
             self.timestamp,
             water_temperature_string,
@@ -204,8 +189,6 @@ impl fmt::Display for RecorderDataFrame {
             ambient_temperature_string,
             ambient_humidity_string,
             heater_status_string,
-            water_temperature_ds18b20_string,
-            ambient_temperature_ds18b20_string,
         )
     }
 }
@@ -259,8 +242,6 @@ impl RecorderDataFrame {
         target_ambient_temperature: Option<f32>,
         target_ambient_humidity: Option<f32>,
         target_heater_status: Option<bool>,
-        target_water_temperature_ds18b20: Option<f32>,
-        target_ambient_temperature_ds18b20: Option<f32>,
     ) {
         assert_eq!(self.water_temperature, target_water_temperature);
         assert_eq!(
@@ -298,13 +279,5 @@ impl RecorderDataFrame {
         assert_eq!(self.ambient_temperature, target_ambient_temperature);
         assert_eq!(self.ambient_humidity, target_ambient_humidity);
         assert_eq!(self.heater_status, target_heater_status);
-        assert_eq!(
-            self.water_temperature_ds18b20,
-            target_water_temperature_ds18b20
-        );
-        assert_eq!(
-            self.ambient_temperature_ds18b20,
-            target_ambient_temperature_ds18b20
-        );
     }
 }

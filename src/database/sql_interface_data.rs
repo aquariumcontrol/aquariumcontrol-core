@@ -220,7 +220,7 @@ impl SqlInterfaceData {
         );
 
         let heater_string: String;
-        let sql_query_string_heater_replaced = str::replace(
+        let sql_query_string = str::replace(
             &sql_query_ambient_humidity_replaced,
             "#Heater",
             match data.heater_status {
@@ -230,22 +230,6 @@ impl SqlInterfaceData {
                 }
                 None => &null_string,
             },
-        );
-
-        let water_temperature_ds18b20_string =
-            Self::get_string_from_value(data.water_temperature_ds18b20);
-        let sql_query_water_temperature_ds18b20_replaced = str::replace(
-            &sql_query_string_heater_replaced,
-            "#TempWaterDs18B20",
-            &water_temperature_ds18b20_string,
-        );
-
-        let ambient_temperature_ds18b20_string =
-            Self::get_string_from_value(data.ambient_temperature_ds18b20);
-        let sql_query_string = str::replace(
-            &sql_query_water_temperature_ds18b20_replaced,
-            "#TempAmbDs18B20",
-            &ambient_temperature_ds18b20_string,
         );
 
         println!("Executing query: {}", sql_query_string);
@@ -288,8 +272,8 @@ pub mod tests {
 
     // This struct contains the first part of one row from table 'data'
     // Due to limitations of the library, this struct can only contain up to 12 elements.
-    // The library has no means for handling NULL values.
-    // So the data types of this struct are no optionals.
+    // The library has no means to handle NULL values.
+    // So the data types of this struct are not optional.
     pub struct SqlDataFrame1 {
         pub timestamp: String,
         pub water_temperature: f32,
@@ -303,8 +287,8 @@ pub mod tests {
 
     // This struct contains the second part of one row from table 'data'
     // Due to limitations of the library, this struct can only contain up to 12 elements.
-    // The library has no means for handling NULL values.
-    // So the data types of this struct are no optionals.
+    // The library has no means to handle NULL values.
+    // So the data types of this struct are not optional.
     pub struct SqlDataFrame2 {
         pub refill_in_progress: bool,
         pub tank_level_switch_position: bool,
@@ -314,8 +298,6 @@ pub mod tests {
         pub ambient_temperature: f32,
         pub ambient_humidity: f32,
         pub heater_status: bool,
-        pub water_temperature_ds18b20: f32,
-        pub ambient_temperature_ds18b20: f32,
     }
 
     // Query for reading the first part from data for test cases operating on a valid database entry
@@ -329,7 +311,7 @@ pub mod tests {
     pub const SQL_QUERY_READ_DATA_FRAME_2: &str = "SELECT \
         RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
         TankLevelSwitchPositionStabilized, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
+        AmbTemp, AmbHum, Heater FROM data \
         WHERE Timestamp = '#timestamp';";
 
     // Query for reading a complete data set for test cases with operating on an invalid database entry
@@ -339,7 +321,7 @@ pub mod tests {
         Conductivity, ConductivityFiltered, ConductivityCompensated \
         RefillInProgress, TankLevelSwitchPosition, TankLevelSwitchInvalid, \
         TankLevelSwitchPositionStabilized, SurfaceVentilation, \
-        AmbTemp, AmbHum, Heater, TempWaterDs18B20, TempAmbDs18B20 FROM data \
+        AmbTemp, AmbHum, Heater FROM data \
         WHERE Timestamp = '#timestamp';";
 
     // Retrieves a single `RecorderDataFrame` from the 'data' table in the database.
@@ -412,8 +394,6 @@ pub mod tests {
                 ambient_temperature,
                 ambient_humidity,
                 heater_status,
-                temperature_water_ds18b20,
-                temperature_ambient_ds18b20,
             )| SqlDataFrame2 {
                 refill_in_progress,
                 tank_level_switch_position,
@@ -423,8 +403,6 @@ pub mod tests {
                 ambient_temperature,
                 ambient_humidity,
                 heater_status,
-                water_temperature_ds18b20: temperature_water_ds18b20,
-                ambient_temperature_ds18b20: temperature_ambient_ds18b20,
             },
         ) {
             Ok(c) => c,
@@ -468,8 +446,6 @@ pub mod tests {
             ambient_temperature: Some(data_frame_2.ambient_temperature),
             ambient_humidity: Some(data_frame_2.ambient_humidity),
             heater_status: Some(data_frame_2.heater_status),
-            water_temperature_ds18b20: Some(data_frame_2.water_temperature_ds18b20),
-            ambient_temperature_ds18b20: Some(data_frame_2.ambient_temperature_ds18b20),
         })
     }
 
@@ -546,8 +522,6 @@ pub mod tests {
             ambient_temperature: Some(22.0),
             ambient_humidity: Some(60.0),
             heater_status: Some(true),
-            water_temperature_ds18b20: Some(25.6),
-            ambient_temperature_ds18b20: Some(22.1),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_1) {
             Ok(()) => {}
@@ -586,8 +560,6 @@ pub mod tests {
             ambient_temperature: Some(23.0),
             ambient_humidity: Some(61.0),
             heater_status: Some(false),
-            water_temperature_ds18b20: Some(26.6),
-            ambient_temperature_ds18b20: Some(23.1),
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_2) {
             Ok(()) => {}
@@ -636,8 +608,6 @@ pub mod tests {
             ambient_temperature: None,
             ambient_humidity: None,
             heater_status: None,
-            water_temperature_ds18b20: None,
-            ambient_temperature_ds18b20: None,
         };
         match sql_interface_data.write_data_frame_to_database(&dataframe_reference_3) {
             Ok(()) => {}

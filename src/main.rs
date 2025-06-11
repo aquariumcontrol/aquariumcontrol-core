@@ -88,7 +88,7 @@ use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
 use crate::sensors::atlas_scientific::{
     AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
 };
-use crate::sensors::sensor_manager::{SensorManager, SensorManagerChannels, SensorManagerSignals};
+use crate::sensors::sensor_manager::{SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
@@ -117,7 +117,7 @@ use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
 use crate::relays::actuate_controllino::ActuateControllino;
 use crate::sensors::dht::{Dht, DhtResult};
-use crate::sensors::ds18b20::Ds18b20;
+use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::{TcpCommunication, TcpCommunicationChannels};
@@ -1095,16 +1095,16 @@ fn main() {
 
     // Mutexes for DS18B20 signals
     let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(
-        config.ds18b20.replacement_value_water_temperature,
+        Ok(Ds18b20ResultData::new(
+        config.sensor_manager.replacement_value_water_temperature,
+        ))
     ));
     let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(
-        config.ds18b20.replacement_value_ambient_temperature,
+            Ok(Ds18b20ResultData::new(config.sensor_manager.replacement_value_ambient_temperature))
     ));
-    let mutex_ds18b20_water_temperature_clone_for_data_logger =
-        mutex_ds18b20_water_temperature.clone();
-    let mutex_ds18b20_ambient_temperature_clone_for_data_logger =
-        mutex_ds18b20_ambient_temperature.clone();
-
+    let mutex_ds18b20_water_temperature_clone_for_sensor_manager = mutex_ds18b20_water_temperature.clone();
+    let mutex_ds18b20_ambient_temperature_clone_for_sensor_manager = mutex_ds18b20_ambient_temperature.clone();
+    
     // Mutexes for Atlas Scientific signals
     let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
         AtlasScientificResultData::new(config.sensor_manager.replacement_value_water_temperature),
@@ -1147,7 +1147,7 @@ fn main() {
 
     // Mutex for Dht
     let mutex_dht: Arc<Mutex<DhtResult>> = Arc::new(Mutex::new(Ok((0.0, 0.0))));
-    let mutex_dht_clone_for_ambient = mutex_dht.clone();
+    let mutex_dht_clone_for_sensor_manager = mutex_dht.clone();
 
     // Mutex for Sensor manager
     let mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>> = Arc::new(Mutex::new(
@@ -1440,13 +1440,19 @@ fn main() {
                 rx_sensor_manager_from_signal_handler,
             };
 
+            let mutexes_sensor_manager = SensorManagerMutexes {
+                mutex_ds18b20_ambient_temperature: mutex_ds18b20_ambient_temperature_clone_for_sensor_manager,
+                mutex_ds18b20_water_temperature: mutex_ds18b20_water_temperature_clone_for_sensor_manager,
+                mutex_dht: mutex_dht_clone_for_sensor_manager, 
+                mutex_atlas_scientific_temperature: mutex_atlas_scientific_temperature_clone_for_sensor_manager,
+                mutex_atlas_scientific_ph: mutex_atlas_scientific_ph_clone_for_sensor_manager,
+                mutex_atlas_scientific_conductivity: mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
+                mutex_sensor_manager_signals,
+            };
+            
             sensor_manager.execute(
                 sensor_manager_channels,
-                mutex_dht_clone_for_ambient,
-                mutex_atlas_scientific_temperature_clone_for_sensor_manager,
-                mutex_atlas_scientific_ph_clone_for_sensor_manager,
-                mutex_atlas_scientific_conductivity_clone_for_sensor_manager,
-                mutex_sensor_manager_signals,
+                mutexes_sensor_manager,
             );
 
             #[cfg(feature = "debug_main")]
@@ -1471,10 +1477,6 @@ fn main() {
             };
 
             let data_logger_mutexes = DataLoggerMutexes {
-                mutex_water_temperature_ds18b20:
-                    mutex_ds18b20_water_temperature_clone_for_data_logger,
-                mutex_ambient_temperature_dsb18b20:
-                    mutex_ds18b20_ambient_temperature_clone_for_data_logger,
                 mutex_sensor_manager_signals: mutex_sensor_manager_signals_clone_for_data_logger,
                 mutex_tank_level_switch_signals:
                     mutex_tank_level_switch_signals_clone_for_data_logger,
