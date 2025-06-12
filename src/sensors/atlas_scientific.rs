@@ -448,8 +448,9 @@ impl AtlasScientific {
                                 Err(e) => {
                                     error!(
                                         target: LOG_TARGET_ATLAS_SCIENTIFIC,
-                                        "error in sensor unit response for {}: (:?)",
+                                        "error in sensor unit response for {}: {:?}",
                                         signal
+                                        e
                                     );
                                     Err(e)
                                 }
