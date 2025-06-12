@@ -251,6 +251,7 @@ impl ProcessExternalRequestTrait for Refill {
 /// - The third `bool` is always `false` as "Stop" commands are not processed by this function.
 fn process_external_request_without_messaging(
     rx_from_signal_handler: &Receiver<InternalCommand>,
+    sender: String,
 ) -> (bool, bool, bool) {
     let quit_command_received = match rx_from_signal_handler.try_recv() {
         Ok(c) => match c {
@@ -270,7 +271,8 @@ fn process_external_request_without_messaging(
                     #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_PROC_EXT_REQ,
-                        "(process_external_request_without_messaging) receiving command from messaging failed ({e:?})"
+                        "({}) receiving command from signal handler failed ({e:?})",
+                        sender
                     );
                 }
             }
@@ -305,7 +307,7 @@ impl ProcessExternalRequestTrait for DataLogger {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "DataLogger".to_string())
     }
 }
 
@@ -333,7 +335,7 @@ impl ProcessExternalRequestTrait for FoodInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "FoodInjection".to_string())
     }
 }
 
@@ -361,7 +363,7 @@ impl ProcessExternalRequestTrait for MineralInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "MineralInjection".to_string())
     }
 }
 
@@ -389,7 +391,7 @@ impl ProcessExternalRequestTrait for WaterInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "WaterInjection".to_string())
     }
 }
 
@@ -417,7 +419,7 @@ impl ProcessExternalRequestTrait for I2cInterface {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "I2cInterface".to_string())
     }
 }
 
@@ -445,7 +447,7 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler,  "ScheduleCheck".to_string())
     }
 }
 
@@ -473,7 +475,7 @@ impl ProcessExternalRequestTrait for RelayManager {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler,  "RelayManager".to_string())
     }
 }
 
@@ -505,7 +507,7 @@ impl ProcessExternalRequestTrait for Messaging {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler, "Messaging".to_string())
     }
 }
 
@@ -533,7 +535,7 @@ impl ProcessExternalRequestTrait for TcpCommunication {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler)
+        process_external_request_without_messaging(rx_from_signal_handler,  "TcpCommunication".to_string())
     }
 }
 
