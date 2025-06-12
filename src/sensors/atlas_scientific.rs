@@ -96,7 +96,7 @@ pub enum AtlasScientificError {
     LastCharacterNotMagic,
 
     /// The message sent from the sensor unit contains non-numeric characters in the data section
-    ContainsInvalidCharacter,
+    ContainsInvalidCharacter(u8),
 
     /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
     InvalidUtf8Sequence,
@@ -321,7 +321,7 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
-                return Err(AtlasScientificError::ContainsInvalidCharacter);
+                return Err(AtlasScientificError::ContainsInvalidCharacter(character.clone()));
             }
         }
 
@@ -712,7 +712,7 @@ pub mod tests {
         ];
         assert_eq!(
             AtlasScientific::check_response(stimuli, true),
-            Err(AtlasScientificError::ContainsInvalidCharacter)
+            Err(AtlasScientificError::ContainsInvalidCharacter('-' as u8))
         );
     }
 
