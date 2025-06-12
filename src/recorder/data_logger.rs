@@ -103,6 +103,9 @@ pub struct DataLoggerConfig {
 
     /// output file name (in ramdisk) for the current refill pump status
     output_file_name_refill_in_progress: String,
+
+    /// sleep time in milliseconds before starting the data recording
+    initial_sleep_time_millis: u64,
 }
 
 /// Struct acts as a central hub for communication channels used by the DataLogger.
@@ -511,51 +514,6 @@ impl DataLogger {
         }
     }
 
-    /// Retrieves current ambient temperature and humidity readings from shared mutexes and outputs them to files.
-    ///
-    /// This private helper function accesses `Arc<Mutex<f32>>` protected data for ambient temperature
-    /// and humidity. It updates the corresponding `Option<f32>` variables with the retrieved values
-    /// and then calls `output_signal` to write these readings to their respective configured files on disk.
-    /// If a mutex lock fails, the corresponding `Option` will be set to `None`.
-    ///
-    /// # Arguments
-    /// * `mutex_ambient_temperature` - An `Arc<Mutex<f32>>` holding the latest ambient temperature reading.
-    /// * `mutex_humidity` - An `Arc<Mutex<f32>>` holding the latest ambient humidity reading.
-    /// * `ambient_temperature` - A mutable reference to an `Option<f32>` where the retrieved ambient temperature will be stored.
-    /// * `humidity` - A mutable reference to an `Option<f32>` where the retrieved ambient humidity will be stored.
-    fn update_ambient_signals(
-        &mut self,
-        mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-        ambient_temperature: &mut Option<f32>,
-        humidity: &mut Option<f32>,
-    ) {
-        {
-            // internal scope to limit lifetime of mutex lock
-            match mutex_sensor_manager_signals.lock() {
-                Ok(c) => {
-                    self.lock_error_output_signal_ambient_temperature = self.output_signal(
-                        c.ambient_temperature,
-                        AquariumSignal::AmbientTemperature,
-                        &self.config.output_file_name_ambient_temperature,
-                        self.lock_error_output_signal_ambient_temperature,
-                    );
-                    *ambient_temperature = Some(c.ambient_temperature);
-                    self.lock_error_output_signal_humidity = self.output_signal(
-                        c.ambient_humidity,
-                        AquariumSignal::AmbientHumidity,
-                        &self.config.output_file_name_humidity,
-                        self.lock_error_output_signal_humidity,
-                    );
-                    *humidity = Some(c.ambient_humidity);
-                }
-                Err(_) => {
-                    *ambient_temperature = None;
-                    *humidity = None;
-                }
-            };
-        }
-    }
-
     /// Retrieves current ON/OFF status signals from Refill, Heating, and Ventilation control modules via channels.
     ///
     /// This function sends a `RequestSignal` command to each of the specified
@@ -656,27 +614,35 @@ impl DataLogger {
     /// * `mutex_temperature` - An `Arc<Mutex<f32>>` holding the latest water temperature reading from Atlas Scientific.
     /// * `mutex_ph` - An `Arc<Mutex<f32>>` holding the latest pH reading from Atlas Scientific.
     /// * `mutex_conductivity` - An `Arc<Mutex<f32>>` holding the latest conductivity reading from Atlas Scientific.
-    /// * `temperature` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
-    /// * `ph` - A mutable reference to an `Option<f32>` where the retrieved pH value will be stored.
-    /// * `conductivity` - A mutable reference to an `Option<f32>` where the retrieved conductivity value will be stored.
+    /// * `water_temperature_opt` - A mutable reference to an `Option<f32>` where the retrieved water temperature will be stored.
+    /// * `ph_opt` - A mutable reference to an `Option<f32>` where the retrieved pH value will be stored.
+    /// * `conductivity_opt` - A mutable reference to an `Option<f32>` where the retrieved conductivity value will be stored.
+    /// * `ambient_temperature_opt` - A mutable reference to an `Option<f32>` where the retrieved ambient temperature will be stored.
+    /// * `humidity_opt` - A mutable reference to an `Option<f32>` where the retrieved humidity will be stored.
     fn update_sensor_manager_signals(
         &mut self,
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
-        temperature_opt: &mut Option<f32>,
+        water_temperature_opt: &mut Option<f32>,
         ph_opt: &mut Option<f32>,
         conductivity_opt: &mut Option<f32>,
+        ambient_temperature_opt: &mut Option<f32>,
+        humidity_opt: &mut Option<f32>,
     ) {
-        let temperature: f32;
+        let water_temperature: f32;
         let ph: f32;
         let conductivity: f32;
+        let ambient_temperature: f32;
+        let humidity: f32;
         {
             // internal scope to limit lifetime of mutex lock
             match mutex_sensor_manager_signals.lock() {
                 Ok(c) => {
                     self.lock_error_mutex_signal_manager = false;
-                    temperature = c.water_temperature;
+                    water_temperature = c.water_temperature;
                     ph = c.ph;
                     conductivity = c.conductivity;
+                    ambient_temperature =  c.ambient_temperature;
+                    humidity = c.ambient_humidity;
                 }
                 Err(_) => {
                     if !self.lock_error_mutex_signal_manager {
@@ -687,7 +653,7 @@ impl DataLogger {
                 }
             };
             self.lock_error_output_signal_water_temperature = self.output_signal(
-                temperature,
+                water_temperature,
                 AquariumSignal::WaterTemperature,
                 &self.config.output_file_name_water_temperature,
                 self.lock_error_output_signal_water_temperature,
@@ -704,10 +670,24 @@ impl DataLogger {
                 &self.config.output_file_name_conductivity,
                 self.lock_error_output_signal_conductivity,
             );
+            self.lock_error_output_signal_ambient_temperature = self.output_signal(
+                ambient_temperature,
+                AquariumSignal::AmbientTemperature,
+                &self.config.output_file_name_ambient_temperature,
+                self.lock_error_output_signal_ambient_temperature,
+            );
+            self.lock_error_output_signal_humidity = self.output_signal(
+                humidity,
+                AquariumSignal::AmbientHumidity,
+                &self.config.output_file_name_humidity,
+                self.lock_error_output_signal_humidity,
+            );
 
-            *temperature_opt = Some(temperature);
+            *water_temperature_opt = Some(water_temperature);
             *ph_opt = Some(ph);
             *conductivity_opt = Some(conductivity);
+            *ambient_temperature_opt = Some(ambient_temperature);
+            *humidity_opt = Some(humidity);
         }
     }
 
@@ -890,6 +870,80 @@ impl DataLogger {
         }
     }
 
+    /// Confirms the application's readiness to quit and then waits for a specific termination command from the signal handler.
+    ///
+    /// This function is called when the thread has received the Quit-command from the signal handler.
+    /// It first sends a confirmation back to the signal handler,
+    /// indicating that this component is ready to proceed with shutdown.
+    ///
+    /// After confirming, it enters a loop, continuously listening for an `InternalCommand::Terminate`
+    /// signal from the `signal_handler`. This ensures that the application's internal threads,
+    /// which might be listening to this component's channels, stop receiving commands.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx_to_signal_handler` - A `Sender<bool>` used to send a `true` value back to the
+    ///   signal handler, confirming that the application is ready for the next phase of shutdown.
+    /// * `rx_from_signal_handler` - A `Receiver<InternalCommand>` used to receive commands
+    ///   from the signal handler, specifically waiting for the `InternalCommand::Terminate` signal.
+    fn confirm_quit_and_wait_for_termination_command(
+        &mut self,
+        tx_to_signal_handler: &Sender<bool>,
+        rx_from_signal_handler: &Receiver<InternalCommand>,
+    ) {
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_hundred_millis = Duration::from_millis(100);
+
+        // Application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        match tx_to_signal_handler.send(true) {
+            Ok(()) => {}
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_DATA_LOGGER,
+                    "sending confirmation back to signal handler failed ({e:?})"
+                );
+            }
+        };
+
+        // This thread has channel connections to underlying threads.
+        // Those threads have to stop receiving commands from this thread.
+        // The shutdown sequence is handled by the signal_handler module.
+        let mut termination_command_received = false;
+        while !termination_command_received {
+            termination_command_received = match rx_from_signal_handler.recv() {
+                Ok(c) => match c {
+                    InternalCommand::Terminate => {
+                        self.lock_warn_inapplicable_command = false;
+                        true
+                    }
+                    _ => {
+                        if !self.lock_warn_inapplicable_command {
+                            warn!(
+                                target: LOG_TARGET_DATA_LOGGER,
+                                "ignoring inapplicable command from signal handler ({})",
+                                c
+                            );
+                            self.lock_warn_inapplicable_command = true;
+                        }
+                        false
+                    }
+                },
+                Err(e) => {
+                    if !self.lock_error_channel_receive_termination {
+                        error!(
+                            target: LOG_TARGET_DATA_LOGGER,
+                            "receiving termination signal from signal handler failed ({e:?})"
+                        );
+                        self.lock_error_channel_receive_termination = true;
+                    }
+                    false
+                }
+            };
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
+        }
+    }
+
     /// Executes the main control loop for the data logger module.
     ///
     /// This function runs continuously, acting as the central data collection and logging hub for
@@ -942,6 +996,21 @@ impl DataLogger {
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
+        i = 0;
+        while i < self.config.initial_sleep_time_millis {
+            i += 100;
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            (quit_command_received, _, _) =
+                self.process_external_request(data_logger_channels.rx_from_signal_handler, None);
+            if quit_command_received {
+                self.confirm_quit_and_wait_for_termination_command(
+                    data_logger_channels.tx_to_signal_handler,
+                    data_logger_channels.rx_from_signal_handler,
+                );
+                return;
+            }
+        }
+
         loop {
             self.update_signals(
                 &mut refill_in_progress_live,
@@ -958,11 +1027,6 @@ impl DataLogger {
                 &mut water_temperature,
                 &mut ph,
                 &mut conductivity,
-            );
-
-            // update signals by accessing mutex for ambient signal
-            self.update_ambient_signals(
-                data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                 &mut ambient_temperature,
                 &mut ambient_humidity,
             );
@@ -1067,11 +1131,6 @@ impl DataLogger {
                         &mut water_temperature,
                         &mut ph,
                         &mut conductivity,
-                    );
-
-                    // update signals by accessing mutex for ambient signal
-                    self.update_ambient_signals(
-                        data_logger_mutexes.mutex_sensor_manager_signals.clone(),
                         &mut ambient_temperature,
                         &mut ambient_humidity,
                     );
@@ -1105,55 +1164,10 @@ impl DataLogger {
             start_time = SystemTime::now(); // start time for the next cycle
         }
 
-        // Application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match data_logger_channels.tx_to_signal_handler.send(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_DATA_LOGGER,
-                    "sending confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
-
-        // This thread has channel connections to underlying threads.
-        // Those threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match data_logger_channels.rx_from_signal_handler.recv()
-            {
-                Ok(c) => match c {
-                    InternalCommand::Terminate => {
-                        self.lock_warn_inapplicable_command = false;
-                        true
-                    }
-                    _ => {
-                        if !self.lock_warn_inapplicable_command {
-                            warn!(
-                                target: LOG_TARGET_DATA_LOGGER,
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
-                            );
-                            self.lock_warn_inapplicable_command = true;
-                        }
-                        false
-                    }
-                },
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination {
-                        error!(
-                            target: LOG_TARGET_DATA_LOGGER,
-                            "receiving termination signal from signal handler failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
+        self.confirm_quit_and_wait_for_termination_command(
+            data_logger_channels.tx_to_signal_handler,
+            data_logger_channels.rx_from_signal_handler,
+        );
     }
 }
 
@@ -1587,11 +1601,11 @@ pub mod tests {
                 println!("Asserting data frame #6");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
-                    Some(28.625),    // target_water_temperature_filtered
+                    Some(28.546875), // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
-                    Some(7.0390625), // target_water_ph_filtered
+                    Some(6.890625),  // target_water_ph_filtered
                     Some(50_000.0),  // target_water_conductivity
-                    Some(46875.656), // target_water_conductivity_filtered
+                    Some(46875.563), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
@@ -1608,11 +1622,11 @@ pub mod tests {
                 println!("Asserting data frame #5");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
-                    Some(28.25),     // target_water_temperature_filtered
+                    Some(28.09375),  // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
-                    Some(7.078125),  // target_water_ph_filtered
+                    Some(6.78125),   // target_water_ph_filtered
                     Some(50_000.0),  // target_water_conductivity
-                    Some(43751.313), // target_water_conductivity_filtered
+                    Some(43751.125), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
@@ -1629,11 +1643,11 @@ pub mod tests {
                 println!("Asserting data frame #4");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
-                    Some(27.5),      // target_water_temperature_filtered
+                    Some(27.1875),   // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
-                    Some(7.15625),   // target_water_ph_filtered
+                    Some(6.5625),    // target_water_ph_filtered
                     Some(50_000.0),  // target_water_conductivity
-                    Some(37502.625), // target_water_conductivity_filtered
+                    Some(37502.25),  // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(true),      // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
@@ -1650,11 +1664,11 @@ pub mod tests {
                 println!("Asserting data frame #3");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
-                    Some(26.0),     // target_water_temperature_filtered
+                    Some(25.375),   // target_water_temperature_filtered
                     Some(7.0),      // target_water_ph
-                    Some(7.3125),   // target_water_ph_filtered
+                    Some(6.125),    // target_water_ph_filtered
                     Some(50_000.0), // target_water_conductivity
-                    Some(25005.25), // target_water_conductivity_filtered
+                    Some(25004.5),  // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
@@ -1670,12 +1684,33 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #2");
                 data_frame.assert(
+                    Some(29.0),     // target_water_temperature
+                    Some(21.75),    // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(5.25),     // target_water_ph_filtered
+                    Some(12.0),     // target_water_conductivity
+                    Some(9.0),      // target_water_conductivity_filtered
+                    None,           // target_water_conductivity_compensated
+                    Some(false),    // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(false),    // target_tank_level_switch_invalid
+                    Some(true),     // target_surface_ventilation_status
+                    Some(13.0),     // target_ambient_temperature
+                    Some(14.0),     // target_ambient_humidity
+                    Some(true),     // target_heater_status
+                );
+
+                // Dataframe #1
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
+                println!("Asserting data frame #1");
+                data_frame.assert(
                     Some(29.0),  // target_water_temperature
-                    Some(23.0),  // target_water_temperature_filtered
+                    Some(14.5),  // target_water_temperature_filtered
                     Some(7.0),   // target_water_ph
-                    Some(7.625), // target_water_ph_filtered
+                    Some(3.5),   // target_water_ph_filtered
                     Some(12.0),  // target_water_conductivity
-                    Some(10.5),  // target_water_conductivity_filtered
+                    Some(6.0),   // target_water_conductivity_filtered
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
@@ -1687,54 +1722,12 @@ pub mod tests {
                     Some(true),  // target_heater_status
                 );
 
-                // Dataframe #1
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #1");
-                data_frame.assert(
-                    Some(29.0),  // target_water_temperature
-                    Some(17.0),  // target_water_temperature_filtered
-                    Some(11.0),  // target_water_ph
-                    Some(8.25),  // target_water_ph_filtered
-                    Some(12.0),  // target_water_conductivity
-                    Some(9.0),   // target_water_conductivity_filtered
-                    None,        // target_water_conductivity_compensated
-                    Some(false), // target_refill_in_progress
-                    Some(true),  // target_tank_level_switch_position
-                    Some(true),  // target_tank_level_switch_position_stabilized
-                    Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_surface_ventilation_status
-                    Some(13.0),  // target_ambient_temperature
-                    Some(14.0),  // target_ambient_humidity
-                    Some(false), // target_heater_status
-                );
-
-                // Dataframe #0
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #0");
-                data_frame.assert(
-                    Some(10.0),  // target_water_temperature
-                    Some(5.0),   // target_water_temperature_filtered
-                    Some(11.0),  // target_water_ph
-                    Some(5.5),   // target_water_ph_filtered
-                    Some(12.0),  // target_water_conductivity
-                    Some(6.0),   // target_water_conductivity_filtered
-                    None,        // target_water_conductivity_compensated
-                    Some(false), // target_refill_in_progress
-                    Some(true),  // target_tank_level_switch_position
-                    Some(true),  // target_tank_level_switch_position_stabilized
-                    Some(false), // target_tank_level_switch_invalid
-                    Some(false), // target_surface_ventilation_status
-                    Some(13.0),  // target_ambient_temperature
-                    Some(14.0),  // target_ambient_humidity
-                    Some(false), // target_heater_status
-                );
-
                 assert_output_file_contents(
                     &config2.data_logger, // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.6,                 // target_water_temperature_filtered
+                    28.5,                 // target_water_temperature_filtered
                     7.0,                  // target_water_ph
-                    7.04,                 // target_water_ph_filtered
+                    6.89,                 // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated

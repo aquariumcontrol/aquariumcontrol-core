@@ -397,7 +397,9 @@ pub mod tests {
             Ok(temperature) => {
                 println!(
                     "{}: Temperature read from file: {:.2}°C ({} milliseconds ago)",
-                    LOG_TARGET_DS18B20, temperature.value, temperature.measurement_instant.elapsed().as_millis()
+                    LOG_TARGET_DS18B20,
+                    temperature.value,
+                    temperature.measurement_instant.elapsed().as_millis()
                 );
                 assert!(true);
             }
@@ -464,7 +466,9 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&invalid_temperature_sensor_id),
-                Err(Ds18b20Error::SensorIdNotFound(_invalid_temperature_sensor_id))
+                Err(Ds18b20Error::SensorIdNotFound(
+                    _invalid_temperature_sensor_id
+                ))
             ),
             true
         );
@@ -512,7 +516,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::InsufficientLinesInFile)),
+                Err(Ds18b20Error::InsufficientLinesInFile)
+            ),
             true
         );
     }
@@ -535,7 +540,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::Line0NotEndingWithYes)),
+                Err(Ds18b20Error::Line0NotEndingWithYes)
+            ),
             true
         );
     }
@@ -558,7 +564,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureEntryNotFound)),
+                Err(Ds18b20Error::TemperatureEntryNotFound)
+            ),
             true
         );
     }
@@ -581,7 +588,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureParseError)),
+                Err(Ds18b20Error::TemperatureParseError)
+            ),
             true
         );
     }
@@ -604,7 +612,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)),
+                Err(Ds18b20Error::TemperatureOutOfRange)
+            ),
             true
         );
     }
@@ -627,7 +636,8 @@ pub mod tests {
         assert_eq!(
             matches!(
                 ds18b20.read(&valid_temperature_sensor_id),
-                Err(Ds18b20Error::TemperatureOutOfRange)),
+                Err(Ds18b20Error::TemperatureOutOfRange)
+            ),
             true
         );
     }

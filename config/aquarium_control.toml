@@ -59,8 +59,7 @@ output_file_name_heating_is_on = "/var/local/aquarium-ctrl/htng"                
 output_file_name_ambient_temperature = "/var/local/aquarium-ctrl/ambtemp"                       # output file name (in ramdisk) for the current value of ambient air temperature
 output_file_name_humidity = "/var/local/aquarium-ctrl/ambhum"                                   # output file name (in ramdisk) for the current value of air humidity
 output_file_name_refill_in_progress = "/var/local/aquarium-ctrl/refillpump"                     # output file name (in ramdisk) for the current refill pump status
-output_file_name_water_temperature_ds18b20 = "/var/local/aquarium-ctrl/ds18b20-temp-water"      # output file name (in ramdisk) for the current value of water temperature measured by DS18B20 sensor
-output_file_name_ambient_temperature_ds18b20 = "/var/local/aquarium-ctrl/ds18b20-temp-ambient"  # output file name (in ramdisk) for the current value of ambient temperature measured by DS18B20 sensor
+initial_sleep_time_millis = 2000                                                                # sleep time in milliseconds before starting the data recording
 
 [refill]
 active = true
