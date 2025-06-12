@@ -275,6 +275,28 @@ impl AtlasScientific {
         }
     }
 
+    /// Outputs the ASCII (byte) values of a `[u8]` slice to the console.
+    ///
+    /// Each byte's integer value, representing its ASCII code, is printed,
+    /// separated by spaces.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - A slice of `u8` (bytes) whose ASCII values are to be printed.
+    pub fn print_ascii_values(data: &[u8]) {
+        // Iterate over each byte in the input slice.
+        for (i, &byte) in data.iter().enumerate() {
+            // Print the byte's integer value (its ASCII value).
+            // Use space as a separator for all but the last byte.
+            if i > 0 {
+                print!(" ");
+            }
+            print!("{}", byte);
+        }
+        // Print a newline character at the end to ensure the next output appears on a new line.
+        println!();
+    }
+    
     /// Evaluates a raw byte array response from an Atlas Scientific sensor unit, validating its format and converting it to `f32`.
     ///
     /// This private helper function performs several critical steps to parse sensor data:
@@ -321,6 +343,8 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
+                println!("Encountered non-numeric character {} in sequence: ", character);
+                Self::print_ascii_values(numeric_content);
                 return Err(AtlasScientificError::ContainsInvalidCharacter(character.clone()));
             }
         }

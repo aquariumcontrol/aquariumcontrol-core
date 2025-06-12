@@ -221,7 +221,6 @@ impl Ds18b20 {
                 Ok(contents) => {
                     let lines: Vec<&str> = contents.lines().collect();
                     if lines.len() >= 2 {
-                        println!("lines[0]={}", lines[0]);
                         if lines[0].ends_with(" YES") {
                             if let Some(temp_index) = lines[1].find("t=") {
                                 if let Ok(temp_str) =
@@ -499,7 +498,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when device file does not provide enough lines
+    // Test case checks if function returns error when the device file does not provide enough lines
     fn test_dsb18b20_file_with_one_line_only() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -523,7 +522,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when first line of device file content does not match "YES"
+    // Test case checks if function returns error when the first line of device file content does not match "YES"
     fn test_dsb18b20_file_with_line_not_ending_with_yes() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -595,7 +594,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when temperature is too hot
+    // Test case checks if function returns error when the temperature is too hot
     fn test_dsb18b20_temperature_too_hot() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
@@ -619,7 +618,7 @@ pub mod tests {
     }
 
     #[test]
-    // Test case checks if function returns error when temperature is too cold
+    // Test case checks if function returns error when the temperature is too cold
     fn test_dsb18b20_temperature_too_cold() {
         let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
 
