@@ -459,7 +459,7 @@ impl ScheduleCheck {
             }
         }
 
-        // Application received the request to terminate, that is why the loop was left.
+        // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match schedule_check_channels
             .tx_schedule_check_to_signal_handler
