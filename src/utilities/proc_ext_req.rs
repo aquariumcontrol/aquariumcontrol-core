@@ -7,10 +7,10 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::warn;
+use log::{warn, error};
 
 #[cfg(not(test))]
-use log::{error, info};
+use log::info;
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -268,7 +268,6 @@ fn process_external_request_without_messaging(
             match e {
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
-                    #[cfg(not(test))]
                     error!(
                         target: LOG_TARGET_PROC_EXT_REQ,
                         "({}) receiving command from signal handler failed ({e:?})",
