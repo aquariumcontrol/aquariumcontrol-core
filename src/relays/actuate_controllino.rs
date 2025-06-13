@@ -420,7 +420,7 @@ impl RelayActuationTrait for ActuateControllino {
     /// - `Err(RelayError::IncorrectChecksum)` if the received response has an invalid checksum.
     /// - `Err(RelayError::IrrelevantCommand)` if an inapplicable command is provided.
     /// - `Err(RelayError::PulseNotAllowedForDevice)` if a `Pulse` command is attempted on a non-pulsable device.
-    fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
+    fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref _c)
             | InternalCommand::SwitchOff(ref _c)
@@ -465,7 +465,8 @@ impl RelayActuationTrait for ActuateControllino {
                 // for pulse command, also wait the pulse duration
                 match internal_command {
                     InternalCommand::Pulse(_, t) => {
-                        let pulse_duration = Duration::from_millis(t as u64);
+                        let pulse_duration_millis = *t;
+                        let pulse_duration = Duration::from_millis(pulse_duration_millis as u64);
                         self.spin_sleeper.sleep(pulse_duration);
                     }
                     _ => { /* do nothing */ }
@@ -500,7 +501,7 @@ impl RelayActuationTrait for ActuateControllino {
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
-                Err(RelayError::IrrelevantCommand(internal_command))
+                Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }
         }
     }

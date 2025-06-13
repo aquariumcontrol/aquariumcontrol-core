@@ -2,6 +2,8 @@
 active = true			                    	        # used for testing purposes
 use_simulator = false                                   # if true, then do not use real HW
 use_gpio = false                                        # if true, then use GPIO instead of Controllino
+actuation_retries = 3                                   # number of retries to write to Controllino
+pause_between_retries_millis = 500                      # time in milliseconds to wait between retries
 
 [controllino_relay]
 baud_rate = 9600                                        # baud rate for communication via serial port

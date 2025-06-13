@@ -46,12 +46,12 @@ impl RelayActuationTrait for ActuateSimulator {
     /// - The internal `tx_to_tcp_opt` channel sender is `None` (meaning the TCP communication channel was not set up).
     /// - There's an error translating the `internal_command` into a relay-specific command (e.g., `Pulse` command for a non-pulsable device).
     /// - There's a failure sending the command through the TCP channel.
-    fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
+    fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         let tx_to_tcp = self.tx_to_tcp_opt.as_ref().unwrap();
         match internal_command {
             InternalCommand::SwitchOn(ref c) | InternalCommand::SwitchOff(ref c) => {
                 let relay_command = match get_relay_command(
-                    &internal_command,
+                    internal_command,
                     c.clone(),
                     &self.config,
                 ) {
@@ -76,7 +76,7 @@ impl RelayActuationTrait for ActuateSimulator {
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
-                Err(RelayError::IrrelevantCommand(internal_command))
+                Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }
         }
     }
@@ -104,7 +104,7 @@ impl ActuateSimulator {
     ///   used to send simulated relay commands via TCP. If `None`, attempts to `actuate`
     ///   will panic.
     /// * `config` - The `ActuateControllinoConfig` struct, providing device-to-relay mappings
-    ///   and other configuration relevant for simulating Controllino behavior.
+    ///   and other configuration relevant when simulating Controllino behavior.
     ///
     /// # Returns
     /// A new `ActuateSimulator` struct.

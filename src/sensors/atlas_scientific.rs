@@ -345,7 +345,7 @@ impl AtlasScientific {
             if !Self::is_numeric(*character, !is_ph) {
                 println!("Encountered non-numeric character {} in sequence: ", character);
                 Self::print_ascii_values(numeric_content);
-                return Err(AtlasScientificError::ContainsInvalidCharacter(character.clone()));
+                return Err(AtlasScientificError::ContainsInvalidCharacter(*character));
             }
         }
 

@@ -236,11 +236,11 @@ impl RelayActuationTrait for ActuateGpio {
     /// - `Ok(())` if the GPIO pin state was successfully set.
     /// - `Err(RelayError::IrrelevantCommand)` if the `internal_command` is not `SwitchOn` or `SwitchOff` (e.g., `Pulse`, `RequestSignal`).
     /// - `Err(RelayError::PulseNotAllowedForDevice)` if `get_relay_command_gpio` returns an error (which it does for `Pulse` commands on non-pulsable devices).
-    fn actuate(&mut self, internal_command: InternalCommand) -> Result<(), RelayError> {
+    fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
         match internal_command {
             InternalCommand::SwitchOn(ref aquarium_device)
             | InternalCommand::SwitchOff(ref aquarium_device) => {
-                match get_relay_command_gpio(&internal_command, aquarium_device.clone()) {
+                match get_relay_command_gpio(internal_command, aquarium_device.clone()) {
                     Ok(gpio_target_state) => match gpio_target_state {
                         true => {
                             #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -342,7 +342,7 @@ impl RelayActuationTrait for ActuateGpio {
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
-                Err(RelayError::IrrelevantCommand(internal_command))
+                Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }
         }
     }
