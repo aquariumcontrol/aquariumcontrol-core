@@ -343,12 +343,8 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    cfg_if::cfg_if! {
-        if #[cfg(any(target_os = "linux", target_os = "macos"))] {
-            use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
-            use std::env;
-        }
-    }
+    use std::env;
+    use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
 
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
     use crate::utilities::config::read_config_file;
