@@ -158,15 +158,6 @@ pub struct DataLogger {
     /// configuration data for the data logger
     config: DataLoggerConfig,
 
-    /// filter for the water temperature signal
-    filter_water_temperature: IIRFilter,
-
-    /// filter for the pH signal
-    filter_pH: IIRFilter,
-
-    /// filter for the conductivity signal
-    filter_conductivity: IIRFilter,
-
     /// an inhibition flag to avoid flooding the log file with repeated messages about failure to create the timestamp
     lock_error_get_timestamp: bool,
 
@@ -233,12 +224,8 @@ impl DataLogger {
     /// Creates a new `DataLogger` instance.
     ///
     /// This constructor initializes the data logger module with its configuration,
-    /// sets up Infinite Impulse Response (IIR) filters for various sensor signals,
     /// and prepares output files on disk (if enabled). It also initializes many
     /// internal "lock" flags designed to prevent log flooding during operation.
-    ///
-    /// The IIR filters for water temperature, pH, and conductivity are initialized
-    /// with a zero initial value and a 1-second time step.
     ///
     /// # Arguments
     /// * `config` - Configuration data for the data logger, defining logging intervals,
@@ -252,24 +239,7 @@ impl DataLogger {
     /// This function will panic if:
     /// - Any of the required output file names in the `config` are empty when `output_to_disk` is `true`.
     /// - It fails to reset the content of any configured output file on disk (e.g., due to permissions issues).
-    /// - An `IIRFilter` cannot be initialized (e.g., if a filter coefficient is invalid).
     pub fn new(config: DataLoggerConfig, database_ping_interval: Duration) -> DataLogger {
-        let filter_water_temperature = IIRFilter::new_requires_initial(
-            &config.filter_coefficient_water_temperature,
-            0.0, // initialization value (measured value not available at this time)
-            1.0, // 1 second time step
-        );
-        let filter_pH = IIRFilter::new_requires_initial(
-            &config.filter_coefficient_pH,
-            0.0, // initialization value (measured value not available at this time)
-            1.0, // 1 second time step
-        );
-        let filter_conductivity = IIRFilter::new_requires_initial(
-            &config.filter_coefficient_conductivity,
-            0.0, // initialization value (measured value not available at this time)
-            1.0, // 1 second time step
-        );
-
         if config.output_to_disk {
             if config.output_file_name_timestamp.is_empty()
                 || config.output_file_name_water_temperature.is_empty()
@@ -344,9 +314,6 @@ impl DataLogger {
 
         Self {
             config,
-            filter_water_temperature,
-            filter_pH,
-            filter_conductivity,
             lock_error_get_timestamp: false,
             lock_error_output_signal_water_temperature: false,
             lock_error_output_state_refill_in_progress: false,
@@ -641,7 +608,7 @@ impl DataLogger {
                     water_temperature = c.water_temperature;
                     ph = c.ph;
                     conductivity = c.conductivity;
-                    ambient_temperature =  c.ambient_temperature;
+                    ambient_temperature = c.ambient_temperature;
                     humidity = c.ambient_humidity;
                 }
                 Err(_) => {
@@ -779,11 +746,14 @@ impl DataLogger {
         water_temperature: Option<f32>,
         ph: Option<f32>,
         conductivity: Option<f32>,
+        filter_water_temperature: &mut IIRFilter,
+        filter_pH: &mut IIRFilter,
+        filter_conductivity: &mut IIRFilter,
     ) -> (Option<f32>, Option<f32>, Option<f32>) {
         let water_temperature_filtered = match water_temperature {
-            Some(c) => {
+            Some(water_temperature_data) => {
                 let filtered_water_temperature =
-                    self.filter_water_temperature.get_filtered_value(c);
+                    filter_water_temperature.get_filtered_value(water_temperature_data);
                 self.lock_error_output_signal_water_temperature_filtered = self.output_signal(
                     filtered_water_temperature,
                     AquariumSignal::WaterTemperature,
@@ -796,8 +766,8 @@ impl DataLogger {
         };
 
         let pH_filtered = match ph {
-            Some(c) => {
-                let filtered_pH = self.filter_pH.get_filtered_value(c);
+            Some(ph_data) => {
+                let filtered_pH = filter_pH.get_filtered_value(ph_data);
                 self.lock_error_output_signal_pH_filtered = self.output_signal(
                     filtered_pH,
                     AquariumSignal::pH,
@@ -810,8 +780,9 @@ impl DataLogger {
         };
 
         let conductivity_filtered = match conductivity {
-            Some(c) => {
-                let filtered_conductivity = self.filter_conductivity.get_filtered_value(c);
+            Some(conductivity_data) => {
+                let filtered_conductivity =
+                    filter_conductivity.get_filtered_value(conductivity_data);
                 self.lock_error_output_signal_conductivity_filtered = self.output_signal(
                     filtered_conductivity,
                     AquariumSignal::Conductivity,
@@ -948,6 +919,11 @@ impl DataLogger {
     ///
     /// This function runs continuously, acting as the central data collection and logging hub for
     /// the application.
+    /// Before entering the loop, the function will set up Infinite Impulse Response (IIR) filters
+    /// for various sensor signals.  
+    /// The IIR filters for water temperature, pH, and conductivity are initialized
+    /// with available data and a 1-second time step.
+    ///
     /// It performs the following key tasks in a recurring cycle:
     /// 1. **Signal Retrieval**: Gathers current status (ON/OFF) from control modules (Refill, Heating, Ventilation) via channels.
     /// 2. **Sensor Data Acquisition**: Reads raw sensor values (temperatures, pH, conductivity, ambient conditions, tank level switch states) from shared mutexes, which are updated by other sensor-reading threads.
@@ -996,6 +972,32 @@ impl DataLogger {
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
+        // update signals by accessing mutex for Atlas Scientific signals
+        self.update_sensor_manager_signals(
+            data_logger_mutexes.mutex_sensor_manager_signals.clone(),
+            &mut water_temperature,
+            &mut ph,
+            &mut conductivity,
+            &mut ambient_temperature,
+            &mut ambient_humidity,
+        );
+
+        let mut filter_water_temperature = IIRFilter::new_requires_initial(
+            &self.config.filter_coefficient_water_temperature,
+            water_temperature.unwrap_or(25.0),
+            1.0, // 1 second time step
+        );
+        let mut filter_pH = IIRFilter::new_requires_initial(
+            &self.config.filter_coefficient_pH,
+            ph.unwrap_or(7.0),
+            1.0, // 1 second time step
+        );
+        let mut filter_conductivity = IIRFilter::new_requires_initial(
+            &self.config.filter_coefficient_conductivity,
+            conductivity.unwrap_or(50_000.0),
+            1.0, // 1 second time step
+        );
+
         i = 0;
         while i < self.config.initial_sleep_time_millis {
             i += 100;
@@ -1039,8 +1041,15 @@ impl DataLogger {
                 &mut tank_level_switch_invalid,
             );
 
-            let (water_temperature_filtered, pH_filtered, conductivity_filtered) =
-                self.calculate_filtered_signals(water_temperature, ph, conductivity);
+            let (water_temperature_filtered, pH_filtered, conductivity_filtered) = self
+                .calculate_filtered_signals(
+                    water_temperature,
+                    ph,
+                    conductivity,
+                    &mut filter_water_temperature,
+                    &mut filter_pH,
+                    &mut filter_conductivity,
+                );
 
             let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
 
@@ -1601,11 +1610,11 @@ pub mod tests {
                 println!("Asserting data frame #6");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
-                    Some(28.546875), // target_water_temperature_filtered
+                    Some(28.703125), // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
-                    Some(6.890625),  // target_water_ph_filtered
+                    Some(7.0625),  // target_water_ph_filtered
                     Some(50_000.0),  // target_water_conductivity
-                    Some(46875.563), // target_water_conductivity_filtered
+                    Some(46875.75), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
@@ -1622,11 +1631,11 @@ pub mod tests {
                 println!("Asserting data frame #5");
                 data_frame.assert(
                     Some(29.0),      // target_water_temperature
-                    Some(28.09375),  // target_water_temperature_filtered
+                    Some(28.40625),  // target_water_temperature_filtered
                     Some(7.0),       // target_water_ph
-                    Some(6.78125),   // target_water_ph_filtered
+                    Some(7.125),   // target_water_ph_filtered
                     Some(50_000.0),  // target_water_conductivity
-                    Some(43751.125), // target_water_conductivity_filtered
+                    Some(43751.5), // target_water_conductivity_filtered
                     None,            // target_water_conductivity_compensated
                     Some(false),     // target_refill_in_progress
                     Some(true),      // target_tank_level_switch_position
@@ -1642,21 +1651,21 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #4");
                 data_frame.assert(
-                    Some(29.0),      // target_water_temperature
-                    Some(27.1875),   // target_water_temperature_filtered
-                    Some(7.0),       // target_water_ph
-                    Some(6.5625),    // target_water_ph_filtered
-                    Some(50_000.0),  // target_water_conductivity
-                    Some(37502.25),  // target_water_conductivity_filtered
-                    None,            // target_water_conductivity_compensated
-                    Some(true),      // target_refill_in_progress
-                    Some(true),      // target_tank_level_switch_position
-                    Some(true),      // target_tank_level_switch_position_stabilized
-                    Some(false),     // target_tank_level_switch_invalid
-                    Some(true),      // target_surface_ventilation_status
-                    Some(35.0),      // target_ambient_temperature
-                    Some(14.0),      // target_ambient_humidity
-                    Some(true),      // target_heater_status
+                    Some(29.0),     // target_water_temperature
+                    Some(27.8125),  // target_water_temperature_filtered
+                    Some(7.0),      // target_water_ph
+                    Some(7.25),     // target_water_ph_filtered
+                    Some(50_000.0), // target_water_conductivity
+                    Some(37503.0),  // target_water_conductivity_filtered
+                    None,           // target_water_conductivity_compensated
+                    Some(true),     // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(false),    // target_tank_level_switch_invalid
+                    Some(true),     // target_surface_ventilation_status
+                    Some(35.0),     // target_ambient_temperature
+                    Some(14.0),     // target_ambient_humidity
+                    Some(true),     // target_heater_status
                 );
 
                 // Dataframe #3
@@ -1664,11 +1673,11 @@ pub mod tests {
                 println!("Asserting data frame #3");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
-                    Some(25.375),   // target_water_temperature_filtered
+                    Some(26.625),   // target_water_temperature_filtered
                     Some(7.0),      // target_water_ph
-                    Some(6.125),    // target_water_ph_filtered
+                    Some(7.5),      // target_water_ph_filtered
                     Some(50_000.0), // target_water_conductivity
-                    Some(25004.5),  // target_water_conductivity_filtered
+                    Some(25006.0),  // target_water_conductivity_filtered
                     None,           // target_water_conductivity_compensated
                     Some(false),    // target_refill_in_progress
                     Some(true),     // target_tank_level_switch_position
@@ -1684,21 +1693,21 @@ pub mod tests {
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #2");
                 data_frame.assert(
-                    Some(29.0),     // target_water_temperature
-                    Some(21.75),    // target_water_temperature_filtered
-                    Some(7.0),      // target_water_ph
-                    Some(5.25),     // target_water_ph_filtered
-                    Some(12.0),     // target_water_conductivity
-                    Some(9.0),      // target_water_conductivity_filtered
-                    None,           // target_water_conductivity_compensated
-                    Some(false),    // target_refill_in_progress
-                    Some(true),     // target_tank_level_switch_position
-                    Some(true),     // target_tank_level_switch_position_stabilized
-                    Some(false),    // target_tank_level_switch_invalid
-                    Some(true),     // target_surface_ventilation_status
-                    Some(13.0),     // target_ambient_temperature
-                    Some(14.0),     // target_ambient_humidity
-                    Some(true),     // target_heater_status
+                    Some(29.0),  // target_water_temperature
+                    Some(24.25), // target_water_temperature_filtered
+                    Some(7.0),   // target_water_ph
+                    Some(8.0),   // target_water_ph_filtered
+                    Some(12.0),  // target_water_conductivity
+                    Some(12.0),  // target_water_conductivity_filtered
+                    None,        // target_water_conductivity_compensated
+                    Some(false), // target_refill_in_progress
+                    Some(true),  // target_tank_level_switch_position
+                    Some(true),  // target_tank_level_switch_position_stabilized
+                    Some(false), // target_tank_level_switch_invalid
+                    Some(true),  // target_surface_ventilation_status
+                    Some(13.0),  // target_ambient_temperature
+                    Some(14.0),  // target_ambient_humidity
+                    Some(true),  // target_heater_status
                 );
 
                 // Dataframe #1
@@ -1706,11 +1715,11 @@ pub mod tests {
                 println!("Asserting data frame #1");
                 data_frame.assert(
                     Some(29.0),  // target_water_temperature
-                    Some(14.5),  // target_water_temperature_filtered
+                    Some(19.5),  // target_water_temperature_filtered
                     Some(7.0),   // target_water_ph
-                    Some(3.5),   // target_water_ph_filtered
+                    Some(9.0),   // target_water_ph_filtered
                     Some(12.0),  // target_water_conductivity
-                    Some(6.0),   // target_water_conductivity_filtered
+                    Some(12.0),  // target_water_conductivity_filtered
                     None,        // target_water_conductivity_compensated
                     Some(false), // target_refill_in_progress
                     Some(true),  // target_tank_level_switch_position
@@ -1725,9 +1734,9 @@ pub mod tests {
                 assert_output_file_contents(
                     &config2.data_logger, // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.5,                 // target_water_temperature_filtered
+                    28.7,                 // target_water_temperature_filtered
                     7.0,                  // target_water_ph
-                    6.89,                 // target_water_ph_filtered
+                    7.06,                 // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
                     46876.0,              // target_water_conductivity_filtered
                     0.0,                  // target_water_conductivity_compensated

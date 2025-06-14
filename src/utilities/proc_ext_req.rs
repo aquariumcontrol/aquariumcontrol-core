@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{warn, error};
+use log::{error, warn};
 
 #[cfg(not(test))]
 use log::info;
@@ -334,7 +334,10 @@ impl ProcessExternalRequestTrait for FoodInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "FoodInjection".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "FoodInjection".to_string(),
+        )
     }
 }
 
@@ -362,7 +365,10 @@ impl ProcessExternalRequestTrait for MineralInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "MineralInjection".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "MineralInjection".to_string(),
+        )
     }
 }
 
@@ -390,7 +396,10 @@ impl ProcessExternalRequestTrait for WaterInjection {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "WaterInjection".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "WaterInjection".to_string(),
+        )
     }
 }
 
@@ -418,7 +427,10 @@ impl ProcessExternalRequestTrait for I2cInterface {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler, "I2cInterface".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "I2cInterface".to_string(),
+        )
     }
 }
 
@@ -446,7 +458,10 @@ impl ProcessExternalRequestTrait for ScheduleCheck {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler,  "ScheduleCheck".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "ScheduleCheck".to_string(),
+        )
     }
 }
 
@@ -474,7 +489,10 @@ impl ProcessExternalRequestTrait for RelayManager {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler,  "RelayManager".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "RelayManager".to_string(),
+        )
     }
 }
 
@@ -534,7 +552,10 @@ impl ProcessExternalRequestTrait for TcpCommunication {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         _: Option<&Receiver<InternalCommand>>,
     ) -> (bool, bool, bool) {
-        process_external_request_without_messaging(rx_from_signal_handler,  "TcpCommunication".to_string())
+        process_external_request_without_messaging(
+            rx_from_signal_handler,
+            "TcpCommunication".to_string(),
+        )
     }
 }
 

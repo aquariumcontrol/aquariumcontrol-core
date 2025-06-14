@@ -296,7 +296,7 @@ impl AtlasScientific {
         // Print a newline character at the end to ensure the next output appears on a new line.
         println!();
     }
-    
+
     /// Evaluates a raw byte array response from an Atlas Scientific sensor unit, validating its format and converting it to `f32`.
     ///
     /// This private helper function performs several critical steps to parse sensor data:
@@ -343,7 +343,10 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
-                println!("Encountered non-numeric character {} in sequence: ", character);
+                println!(
+                    "Encountered non-numeric character {} in sequence: ",
+                    character
+                );
                 Self::print_ascii_values(numeric_content);
                 return Err(AtlasScientificError::ContainsInvalidCharacter(*character));
             }

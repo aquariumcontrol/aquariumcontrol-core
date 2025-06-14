@@ -6,7 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use log::warn;
 use serde_derive::Deserialize;
 
 const LOG_TARGET_IIR_FILTER: &str = "iir_filter";
@@ -78,20 +78,17 @@ impl IIRFilter {
     /// # Returns
     /// A new `IIRFilter` struct, initialized with the provided values and a
     /// time-step-corrected filter coefficient.
-    ///
-    /// # Panics
-    /// This function will panic if `time_step` is `0.0`, as this would lead to a
-    /// division-by-zero error in the filter coefficient calculation.
     pub fn new_requires_initial(
         filter_config: &IIRFilterConfig<()>,
         initial_value: f32,
-        time_step: f32,
+        mut time_step: f32,
     ) -> Self {
         if time_step == 0.0 {
-            panic!(
-                "{}: filter initialized with invalid time step value ({}).",
+            warn!(
+                "{}: filter initialized with invalid time step value ({}) - using fallback default of 1.0.",
                 LOG_TARGET_IIR_FILTER, time_step
             );
+            time_step = 1.0;
         }
         Self {
             filter_coefficient: filter_config.filter_coefficient * 1.0 / time_step,

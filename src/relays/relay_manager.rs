@@ -15,10 +15,10 @@ use log::debug;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
 use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
-use spin_sleep::SpinSleeper;
 
 const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 
@@ -88,7 +88,7 @@ pub struct RelayManagerConfig {
     /// The number of retries in case write operation to actuator fails
     /// Applicable only to Controllino, because GPIO actuation does not execute a write operation
     pub actuation_retries: u64,
- 
+
     /// Pause time in milliseconds between retries
     pub pause_between_retries_millis: u64,
 }
@@ -215,7 +215,7 @@ impl RelayManager {
             lock_error_channel_receive_feed: false,
         }
     }
-    
+
     /// Attempts to actuate a given command a fixed number of times in case of failure.
     ///
     /// This helper function encapsulates the retry logic for actuator commands. It
@@ -244,7 +244,7 @@ impl RelayManager {
         command: &InternalCommand,
         actuation_name: &str, // Name for logging, e.g., "refill pump", "heater"
         spin_sleeper: &mut SpinSleeper,
-        sleep_duration: Duration
+        sleep_duration: Duration,
     ) {
         let mut attempts = 0;
         let max_attempts = 1 + self.config.actuation_retries; // 1 initial attempt + `actuation_retries` retries
@@ -273,8 +273,7 @@ impl RelayManager {
                             max_attempts,
                             e
                         );
-                    }
-                    else {
+                    } else {
                         // Wait a little before retrying
                         spin_sleeper.sleep(sleep_duration);
                     }
@@ -307,9 +306,9 @@ impl RelayManager {
         actuator: &mut impl RelayActuationTrait,
     ) {
         let mut last_heartbeat_time = Instant::now();
-        let mut spin_sleeper =  SpinSleeper::default();
+        let mut spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(self.config.pause_between_retries_millis);
-        
+
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &relay_manager_channels.rx_relay_manager_from_signal_handler,
@@ -338,7 +337,7 @@ impl RelayManager {
                             &command,
                             "refill",
                             &mut spin_sleeper,
-                            sleep_duration
+                            sleep_duration,
                         );
                     }
                     match &relay_manager_channels.tx_relay_manager_to_refill.send(true) {
@@ -388,7 +387,7 @@ impl RelayManager {
                         &command,
                         "heating",
                         &mut spin_sleeper,
-                        sleep_duration
+                        sleep_duration,
                     );
                     match &relay_manager_channels
                         .tx_relay_manager_to_heating
@@ -440,7 +439,7 @@ impl RelayManager {
                         &command,
                         "ventilation",
                         &mut spin_sleeper,
-                        sleep_duration
+                        sleep_duration,
                     );
                     match &relay_manager_channels
                         .tx_relay_manager_to_ventilation
@@ -492,7 +491,7 @@ impl RelayManager {
                         &command,
                         "balling",
                         &mut spin_sleeper,
-                        sleep_duration
+                        sleep_duration,
                     );
                     match &relay_manager_channels
                         .tx_relay_manager_to_balling
@@ -541,7 +540,7 @@ impl RelayManager {
                         &command,
                         "feed",
                         &mut spin_sleeper,
-                        sleep_duration
+                        sleep_duration,
                     );
                     match &relay_manager_channels.tx_relay_manager_to_feed.send(true) {
                         Ok(()) => {
@@ -642,7 +641,10 @@ pub mod tests {
     impl RelayActuationTrait for ActuateVoid {
         // Mock function for testing
         fn actuate(&mut self, _internal_command: &InternalCommand) -> Result<(), RelayError> {
-            println!("Increasing execution counter (currently at {})", self.execution_counter);
+            println!(
+                "Increasing execution counter (currently at {})",
+                self.execution_counter
+            );
             self.execution_counter += 1;
             Ok(())
         }

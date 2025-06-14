@@ -304,7 +304,8 @@ impl I2cInterface {
         let spin_sleeper = SpinSleeper::default();
 
         loop {
-            let (quit_command_received, _, _) = self.process_external_request(&rx_from_signal_handler, None);
+            let (quit_command_received, _, _) =
+                self.process_external_request(&rx_from_signal_handler, None);
             if quit_command_received {
                 break;
             }

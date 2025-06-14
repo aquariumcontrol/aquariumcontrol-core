@@ -568,11 +568,14 @@ impl SensorManager {
                     // write the measurement result to Mutex
                     {
                         match mutexes.mutex_sensor_manager_signals.lock() {
-                            Ok(mut c) => {
-                                c.ambient_humidity = self.ambient_humidity;
-                                c.ambient_temperature = self.ambient_temperature;
-                                c.water_temperature = self.water_temperature;
-                                c.instant_last_recording = Instant::now();
+                            Ok(mut sensor_manager_signals) => {
+                                sensor_manager_signals.ambient_humidity = self.ambient_humidity;
+                                sensor_manager_signals.ambient_temperature =
+                                    self.ambient_temperature;
+                                sensor_manager_signals.water_temperature = self.water_temperature;
+                                sensor_manager_signals.conductivity = self.conductivity;
+                                sensor_manager_signals.ph = self.pH;
+                                sensor_manager_signals.instant_last_recording = Instant::now();
                             }
                             Err(_) => {
                                 // do nothing
