@@ -587,7 +587,7 @@ impl SensorManager {
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
-
+        //println!("{}: finished loop. Shutting down.", LOG_TARGET_SENSOR_MANAGER);
         match sensor_manager_channels
             .tx_sensor_manager_to_signal_handler
             .send(true)
@@ -650,11 +650,10 @@ pub mod tests {
     use crate::sensors::sensor_manager::{
         SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
     };
-    use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
-    use std::sync::mpsc::TryRecvError;
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
@@ -682,18 +681,15 @@ pub mod tests {
     // @todo: toggle the switches and check if output is changing accordingly
     pub fn test_sensor_manager_interfaces() {
         // channels for communication with the test environment
-        let (tx_tcp_to_sensor_manager, rx_sensor_manager_from_tcp) = mpsc::channel();
-        let (tx_sensor_manager_to_tcp, rx_tcp_from_sensor_manager) = mpsc::channel();
-        let tx_sensor_manager_to_tcp_opt = Some(tx_sensor_manager_to_tcp.clone());
-        let rx_sensor_manager_from_tcp_opt = Some(rx_sensor_manager_from_tcp);
         let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
             mpsc::channel();
         let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
             mpsc::channel();
 
-        let config: ConfigData =
+        let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
-
+        config.sensor_manager.use_simulator =  false;
+        
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
             config.sensor_manager.replacement_value_water_temperature,
         ))));
@@ -728,60 +724,11 @@ pub mod tests {
                 rx_signal_handler_from_sensor_manager.recv().unwrap();
                 let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
             });
-
-            scope.spawn(move || {
-                // mock TCP communication thread
-                let sleep_duration_one_millisecond = Duration::from_millis(1);
-                let spin_sleeper = SpinSleeper::default();
-                loop {
-                    match rx_tcp_from_sensor_manager.try_recv() {
-                        Ok(c) => {
-                            let response_value = match c {
-                                InternalCommand::RequestSignal(d) => {
-                                    match d {
-                                        AquariumSignal::AmbientTemperature => 20.0,
-                                        AquariumSignal::AmbientHumidity => 60.0,
-                                        AquariumSignal::WaterTemperature => 25.0,
-                                        AquariumSignal::Conductivity => 50000.0,
-                                        AquariumSignal::pH => 7.0,
-                                        _ => {
-                                            panic!("Mock TCP communication: Received request for inapplicable signal  {}.", d);
-                                        }
-                                    }
-                                },
-                                InternalCommand::Quit => {
-                                    break;
-                                }
-                                _ => {
-                                    panic!("Mock TCP communication: Received invalid command.");
-                                },
-                            };
-                            match tx_tcp_to_sensor_manager.send(response_value) {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    panic!(
-                                        "Error in trying to send mock TCP communication response back to test object: {e:?}"
-                                    );
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            match e {
-                                TryRecvError::Empty => { /* empty buffer - no action required */ }
-                                TryRecvError::Disconnected => {
-                                    panic!("Mock TCP communication: Error in trying to receive command from data logger: {e:?}");
-                                }
-                            }
-                        }
-                    }
-                    spin_sleeper.sleep(sleep_duration_one_millisecond);
-                }
-            });
-
+            
             scope.spawn(move || {
                 let sensor_manager_channels = SensorManagerChannels {
-                    tx_sensor_manager_to_tcp_opt: &tx_sensor_manager_to_tcp_opt,
-                    rx_sensor_manager_from_tcp_opt: &rx_sensor_manager_from_tcp_opt,
+                    tx_sensor_manager_to_tcp_opt: &None,
+                    rx_sensor_manager_from_tcp_opt: &None,
                     tx_sensor_manager_to_signal_handler,
                     rx_sensor_manager_from_signal_handler,
                 };
@@ -798,9 +745,6 @@ pub mod tests {
 
                 // test object
                 sensor_manager.execute(sensor_manager_channels, mutexes);
-
-                // signal end of test case execution to mock TCP communication thread
-                let _ = tx_sensor_manager_to_tcp.send(InternalCommand::Quit);
             });
         });
     }
