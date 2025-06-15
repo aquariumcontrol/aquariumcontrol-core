@@ -216,3 +216,7 @@ max_retries = 3                                         # max. number of retries
 retry_pause_duration_millis = 200                       # pause duration in milliseconds between retries
 water_temperature_sensor_id = "0114540015aa"            # unique 64-bit ID of water temperature sensor
 ambient_temperature_sensor_id = ""                      # sensor is not used
+
+[ws2812b]
+active = true
+device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
