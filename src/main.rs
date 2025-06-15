@@ -60,6 +60,7 @@ mod watchmen;
 
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
+mod beacon;
 
 use log::{error, info, warn};
 
@@ -100,7 +101,7 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
 use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
-
+use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::{Messaging, MessagingChannels};
 
@@ -444,6 +445,10 @@ fn main() {
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
 
+    // instantiate driver for RGB LED
+    let mut ws2812b = Ws2812B::new(config.ws2812b);
+    ws2812b.set_color(RgbLedColor::Red);
+    
     // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
