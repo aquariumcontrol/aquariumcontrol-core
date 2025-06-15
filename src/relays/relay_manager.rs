@@ -35,7 +35,7 @@ pub trait RelayActuationTrait {
 }
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum RelayError {
     IrrelevantCommand(InternalCommand),
     FailureCommandMessageCreation,
@@ -268,7 +268,7 @@ impl RelayManager {
                     if e == RelayError::IncorrectChecksum {
                         actuator.flush_buffer();
                     }
-                    
+
                     // Log error only after the final attempt
                     if attempts == max_attempts - 1 {
                         error!(
@@ -638,24 +638,42 @@ pub mod tests {
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
         // execution counter for testing purposes
-        execution_counter: u32,
+        execution_counter: u64,
 
         // heartbeat counter for testing purposes
-        heartbeat_counter: u32,
-        
+        heartbeat_counter: u64,
+
         // flush counter for testing purposes
-        flush_counter: u32,
+        flush_counter: u64,
+
+        // injection of error: if not None, this value is used one time by actuate and then set to None
+        onetime_error_result: Option<RelayError>,
+        
+        // injection of error: if not None, this value is used one time by actuate and then set to None
+        permanent_error_result: Option<RelayError>,
     }
 
     impl RelayActuationTrait for ActuateVoid {
         // Mock function for testing
-        fn actuate(&mut self, _internal_command: &InternalCommand) -> Result<(), RelayError> {
+        fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
             println!(
-                "Increasing execution counter (currently at {})",
+                "Received {} - increasing execution counter (currently at {})",
+                internal_command,
                 self.execution_counter
             );
             self.execution_counter += 1;
-            Ok(())
+            if self.onetime_error_result.is_some() {
+                // call will replace error value with "None" - inducing Ok-result for next call
+                // of actuate
+                Err(self.onetime_error_result.take().unwrap())
+            } else {
+                if self.permanent_error_result.is_some() {
+                    Err(self.permanent_error_result.clone().unwrap())    
+                }
+                else {
+                    Ok(())
+                }
+            }
         }
 
         fn get_heartbeat_interval_seconds(&self) -> Option<u64> {
@@ -673,13 +691,14 @@ pub mod tests {
 
     impl ActuateVoid {
         // provides the number of executions to the test case for assertion
-        pub fn get_execution_count(&self) -> u32 {
+        pub fn get_execution_count(&self) -> u64 {
             self.execution_counter
         }
     }
 
     #[test]
     // Test case tests the channel communication for the .execute function of relay manager.
+    // It also checks the heartbeat communication.
     pub fn test_relay_manager_channel_communication() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
@@ -936,6 +955,8 @@ pub mod tests {
                     execution_counter: 0,
                     heartbeat_counter: 0,
                     flush_counter: 0,
+                    onetime_error_result: None,
+                    permanent_error_result: None,
                 };
 
                 let relay_manager_channels = RelayManagerChannels {
@@ -958,6 +979,168 @@ pub mod tests {
                 // Test object thread has ended.
                 assert_eq!(mock_actuator.get_execution_count(), 24); //Assertion checks the number of calls to the actuator.
                 assert_eq!(mock_actuator.heartbeat_counter, 2); // Assertion checks the number of heartbeats.
+            });
+        });
+    }
+    #[test]
+    // Test case tests if the relay manager is calling the flush functionality when the
+    // actuator returns the IncorrectChecksum error.
+    pub fn test_relay_manager_flush() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
+
+        let mut relay_manager = RelayManager::new(config.relay_manager);
+
+        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
+        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
+        let (tx_relay_manager_to_heating, rx_heating_from_relay_manager) = mpsc::channel();
+        let (tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, _rx_ventilation_from_relay_manager) = mpsc::channel();
+        let (_tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_balling, _rx_balling_from_relay_manager) = mpsc::channel();
+        let (_tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
+        let (tx_relay_manager_to_feed, _rx_feed_from_relay_manager) = mpsc::channel();
+        let (_tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
+        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager) =
+            mpsc::channel();
+        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler) =
+            mpsc::channel();
+
+        scope(|scope| {
+            // thread for test environment
+            scope.spawn(move || {
+                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match rx_refill_from_relay_manager.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);
+                    },
+                    Err(e) => {
+                        panic!("test_relay_manager_channel_communication: error when receiving answer for refill thread: {e:?}");
+                    }
+                }
+                let _ = tx_heating_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::Heater));
+                match rx_heating_from_relay_manager.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);
+                    },
+                    Err(e) => {
+                        panic!("test_relay_manager_channel_communication: error when receiving answer for heating thread: {e:?}");
+                    }
+                }
+
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                rx_signal_handler_from_relay_manager.recv().unwrap();
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                let mut mock_actuator = ActuateVoid {
+                    execution_counter: 0,
+                    heartbeat_counter: 0,
+                    flush_counter: 0,
+                    onetime_error_result: Some(RelayError::IncorrectChecksum),
+                    permanent_error_result: None,
+                };
+
+                let relay_manager_channels = RelayManagerChannels {
+                    tx_relay_manager_to_refill,
+                    rx_relay_manager_from_refill,
+                    tx_relay_manager_to_heating,
+                    rx_relay_manager_from_heating,
+                    tx_relay_manager_to_ventilation,
+                    rx_relay_manager_from_ventilation,
+                    tx_relay_manager_to_balling,
+                    rx_relay_manager_from_balling,
+                    tx_relay_manager_to_feed,
+                    rx_relay_manager_from_feed,
+                    tx_relay_manager_to_signal_handler,
+                    rx_relay_manager_from_signal_handler,
+                };
+
+                relay_manager.execute(relay_manager_channels, &mut mock_actuator);
+
+                // Test object thread has ended.
+                assert_eq!(mock_actuator.get_execution_count(), 3); //Assertion checks the number of calls to the actuator.
+                assert_eq!(mock_actuator.flush_counter, 1); // Assertion checks the number of buffer flush operations.
+            });
+        });
+    }
+
+    #[test]
+    // Test case tests if the relay manager is calling the actuate function multiple times
+    // in case actuator returns an error.
+    pub fn test_relay_manager_repeat() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
+
+        let target_repeat_times = config.relay_manager.actuation_retries;
+        
+        let mut relay_manager = RelayManager::new(config.relay_manager);
+
+        let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
+        let (tx_refill_to_relay_manager, rx_relay_manager_from_refill) = mpsc::channel();
+        let (tx_relay_manager_to_heating, _rx_heating_from_relay_manager) = mpsc::channel();
+        let (_tx_heating_to_relay_manager, rx_relay_manager_from_heating) = mpsc::channel();
+        let (tx_relay_manager_to_ventilation, _rx_ventilation_from_relay_manager) = mpsc::channel();
+        let (_tx_ventilation_to_relay_manager, rx_relay_manager_from_ventilation) = mpsc::channel();
+        let (tx_relay_manager_to_balling, _rx_balling_from_relay_manager) = mpsc::channel();
+        let (_tx_balling_to_relay_manager, rx_relay_manager_from_balling) = mpsc::channel();
+        let (tx_relay_manager_to_feed, _rx_feed_from_relay_manager) = mpsc::channel();
+        let (_tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
+        let (tx_relay_manager_to_signal_handler, rx_signal_handler_from_relay_manager) =
+            mpsc::channel();
+        let (tx_signal_handler_to_relay_manager, rx_relay_manager_from_signal_handler) =
+            mpsc::channel();
+
+        scope(|scope| {
+            // thread for test environment
+            scope.spawn(move || {
+                let _ = tx_refill_to_relay_manager.send(InternalCommand::SwitchOn(AquariumDevice::RefillPump));
+                match rx_refill_from_relay_manager.recv() {
+                    Ok(c) => {
+                        assert_eq!(c, true);
+                    },
+                    Err(e) => {
+                        panic!("test_relay_manager_channel_communication: error when receiving answer for refill thread: {e:?}");
+                    }
+                }
+
+                let _ = tx_signal_handler_to_relay_manager.send(InternalCommand::Quit);
+                rx_signal_handler_from_relay_manager.recv().unwrap();
+            });
+
+            // thread for the test object
+            scope.spawn(move || {
+                let mut mock_actuator = ActuateVoid {
+                    execution_counter: 0,
+                    heartbeat_counter: 0,
+                    flush_counter: 0,
+                    onetime_error_result: None,
+                    permanent_error_result: Some(RelayError::WriteError),
+                };
+
+                let relay_manager_channels = RelayManagerChannels {
+                    tx_relay_manager_to_refill,
+                    rx_relay_manager_from_refill,
+                    tx_relay_manager_to_heating,
+                    rx_relay_manager_from_heating,
+                    tx_relay_manager_to_ventilation,
+                    rx_relay_manager_from_ventilation,
+                    tx_relay_manager_to_balling,
+                    rx_relay_manager_from_balling,
+                    tx_relay_manager_to_feed,
+                    rx_relay_manager_from_feed,
+                    tx_relay_manager_to_signal_handler,
+                    rx_relay_manager_from_signal_handler,
+                };
+
+                relay_manager.execute(relay_manager_channels, &mut mock_actuator);
+
+                // Test object thread has ended.
+                
+                // Assertion checks the number of calls to the actuator.
+                // Relay manager shall repeat in case of failure as configured by user.
+                assert_eq!(mock_actuator.get_execution_count(), target_repeat_times + 1); 
             });
         });
     }
