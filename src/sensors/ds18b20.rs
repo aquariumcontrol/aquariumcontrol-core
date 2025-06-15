@@ -343,8 +343,8 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    use std::env;
     use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
+    use std::env;
 
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
     use crate::utilities::config::read_config_file;

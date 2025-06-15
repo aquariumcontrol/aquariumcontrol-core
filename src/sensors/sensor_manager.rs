@@ -91,6 +91,7 @@ pub struct SensorManagerChannels<'a> {
 ///
 /// These mutexes provide thread-safe access to various sensor readings and
 /// allow the sensor manager to communicate the output to other threads.
+#[derive(Clone)]
 pub struct SensorManagerMutexes {
     /// Mutex for ambient temperature from Ds18b20 sensor
     pub mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
@@ -654,6 +655,7 @@ pub mod tests {
     use crate::utilities::config::{read_config_file, ConfigData};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc;
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread::scope;
     use std::time::Duration;
@@ -676,10 +678,63 @@ pub mod tests {
         let _ = SensorManager::new(config.sensor_manager);
     }
 
+    fn mock_signal_handler_for_sensor_manager(
+        tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
+        rx_signal_handler_from_sensor_manager: Receiver<bool>,
+    ) {
+        // mock signal handler
+        let sleep_duration_8_seconds = Duration::from_millis(8000);
+        let spin_sleeper = SpinSleeper::default();
+        spin_sleeper.sleep(sleep_duration_8_seconds);
+        let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Quit);
+        rx_signal_handler_from_sensor_manager.recv().unwrap();
+        let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
+    }
+
+    fn execute_and_assert_sensor_manager(
+        tx_sensor_manager_to_signal_handler: Sender<bool>,
+        rx_sensor_manager_from_signal_handler: Receiver<InternalCommand>,
+        mut sensor_manager: SensorManager,
+        mutexes: SensorManagerMutexes,
+        target_value_water_temperature: f32,
+        target_value_ambient_temperature: f32,
+    ) {
+        let sensor_manager_channels = SensorManagerChannels {
+            tx_sensor_manager_to_tcp_opt: &None,
+            rx_sensor_manager_from_tcp_opt: &None,
+            tx_sensor_manager_to_signal_handler,
+            rx_sensor_manager_from_signal_handler,
+        };
+
+        let mutexes_clone_for_asserts = mutexes.clone();
+
+        // test object
+        sensor_manager.execute(sensor_manager_channels, mutexes);
+
+        match mutexes_clone_for_asserts
+            .mutex_sensor_manager_signals
+            .lock()
+        {
+            Ok(mutex_sensor_manager_signals_after_run) => {
+                assert_eq!(
+                    mutex_sensor_manager_signals_after_run.water_temperature,
+                    target_value_water_temperature
+                );
+                assert_eq!(
+                    mutex_sensor_manager_signals_after_run.ambient_temperature,
+                    target_value_ambient_temperature
+                );
+            }
+            Err(e) => {
+                panic!("Could not lock mutex: {e:?}")
+            }
+        };
+    }
+
     #[test]
-    // Test case verifies if the test object is processing the interfaces correctly.
-    // @todo: toggle the switches and check if output is changing accordingly
-    pub fn test_sensor_manager_interfaces() {
+    // Test case verifies if the test object is processing the interfaces correctly using input
+    // from Ds18b20 sensors.
+    pub fn test_sensor_manager_interfaces_using_ds18b20_as_input() {
         // channels for communication with the test environment
         let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
             mpsc::channel();
@@ -688,18 +743,24 @@ pub mod tests {
 
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());
-        config.sensor_manager.use_simulator =  false;
-        
+        config.sensor_manager.use_simulator = false;
+        config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
+        config.sensor_manager.source_water_temperature = "ds18b20".to_string();
+
+        let target_value_water_temperature =
+            config.sensor_manager.replacement_value_water_temperature;
+        let target_value_ambient_temperature =
+            config.sensor_manager.replacement_value_ambient_temperature;
+
         let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
-            config.sensor_manager.replacement_value_water_temperature,
+            target_value_water_temperature,
         ))));
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
-            config.sensor_manager.replacement_value_ambient_temperature,
+            target_value_ambient_temperature,
         ))));
-        let mutex_atlas_scientific_temperature =
-            Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
-                config.sensor_manager.replacement_value_water_temperature,
-            ))));
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(target_value_water_temperature + 1.0),
+        )));
         let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
             AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
         )));
@@ -709,42 +770,113 @@ pub mod tests {
         let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
             &config.sensor_manager,
         )));
-        let mut sensor_manager = SensorManager::new(config.sensor_manager);
-
-        let dht_result = Ok((1.0, 2.0));
+        let dht_result = Ok((target_value_ambient_temperature + 1.0, 2.0));
         let mutex_dht = Arc::new(Mutex::new(dht_result));
+
+        let sensor_manager = SensorManager::new(config.sensor_manager);
+
+        let mutexes = SensorManagerMutexes {
+            mutex_ds18b20_ambient_temperature,
+            mutex_ds18b20_water_temperature,
+            mutex_dht,
+            mutex_atlas_scientific_temperature,
+            mutex_atlas_scientific_ph,
+            mutex_atlas_scientific_conductivity,
+            mutex_sensor_manager_signals,
+        };
 
         scope(|scope| {
             scope.spawn(move || {
-                // mock signal handler
-                let sleep_duration_8_seconds = Duration::from_millis(8000);
-                let spin_sleeper = SpinSleeper::default();
-                spin_sleeper.sleep(sleep_duration_8_seconds);
-                let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Quit);
-                rx_signal_handler_from_sensor_manager.recv().unwrap();
-                let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
+                mock_signal_handler_for_sensor_manager(
+                    tx_signal_handler_to_sensor_manager,
+                    rx_signal_handler_from_sensor_manager,
+                );
             });
-            
+
             scope.spawn(move || {
-                let sensor_manager_channels = SensorManagerChannels {
-                    tx_sensor_manager_to_tcp_opt: &None,
-                    rx_sensor_manager_from_tcp_opt: &None,
+                execute_and_assert_sensor_manager(
                     tx_sensor_manager_to_signal_handler,
                     rx_sensor_manager_from_signal_handler,
-                };
+                    sensor_manager,
+                    mutexes,
+                    target_value_water_temperature,
+                    target_value_ambient_temperature,
+                );
+            });
+        });
+    }
 
-                let mutexes = SensorManagerMutexes {
-                    mutex_ds18b20_ambient_temperature,
-                    mutex_ds18b20_water_temperature,
-                    mutex_dht,
-                    mutex_atlas_scientific_temperature,
-                    mutex_atlas_scientific_ph,
-                    mutex_atlas_scientific_conductivity,
-                    mutex_sensor_manager_signals,
-                };
+    #[test]
+    // Test case verifies if the test object is processing the interfaces correctly using input
+    // from Ds18b20 sensors.
+    pub fn test_sensor_manager_interfaces_using_atlas_scientific_and_dht_as_input() {
+        // channels for communication with the test environment
+        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
+            mpsc::channel();
+        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
+            mpsc::channel();
 
-                // test object
-                sensor_manager.execute(sensor_manager_channels, mutexes);
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.sensor_manager.use_simulator = false;
+        config.sensor_manager.source_ambient_temperature = "dht".to_string();
+        config.sensor_manager.source_water_temperature = "atlas_scientific".to_string();
+
+        let target_value_water_temperature =
+            config.sensor_manager.replacement_value_water_temperature;
+        let target_value_ambient_temperature =
+            config.sensor_manager.replacement_value_ambient_temperature;
+
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+            target_value_water_temperature + 1.0,
+        ))));
+        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+            target_value_ambient_temperature + 1.0,
+        ))));
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(target_value_water_temperature),
+        )));
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
+        )));
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+            config.sensor_manager.replacement_value_ph,
+        ))));
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+        let dht_result = Ok((target_value_ambient_temperature, 2.0));
+        let mutex_dht = Arc::new(Mutex::new(dht_result));
+
+        let sensor_manager = SensorManager::new(config.sensor_manager);
+
+        let mutexes = SensorManagerMutexes {
+            mutex_ds18b20_ambient_temperature,
+            mutex_ds18b20_water_temperature,
+            mutex_dht,
+            mutex_atlas_scientific_temperature,
+            mutex_atlas_scientific_ph,
+            mutex_atlas_scientific_conductivity,
+            mutex_sensor_manager_signals,
+        };
+
+        scope(|scope| {
+            scope.spawn(move || {
+                mock_signal_handler_for_sensor_manager(
+                    tx_signal_handler_to_sensor_manager,
+                    rx_signal_handler_from_sensor_manager,
+                );
+            });
+
+            scope.spawn(move || {
+                execute_and_assert_sensor_manager(
+                    tx_sensor_manager_to_signal_handler,
+                    rx_sensor_manager_from_signal_handler,
+                    sensor_manager,
+                    mutexes,
+                    target_value_water_temperature,
+                    target_value_ambient_temperature,
+                );
             });
         });
     }
