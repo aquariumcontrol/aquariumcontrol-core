@@ -356,4 +356,9 @@ impl RelayActuationTrait for ActuateGpio {
     fn heartbeat(&mut self) {
         // do nothing
     }
+
+    /// Flushing the buffer is not used by this trait implementation.
+    fn flush_buffer(&mut self) {
+        // do nothing
+    }
 }

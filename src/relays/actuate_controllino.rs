@@ -545,6 +545,30 @@ impl RelayActuationTrait for ActuateControllino {
         self.spin_sleeper
             .sleep(self.controllino_processing_duration);
     }
+
+    /// For communication with Controllino it may be necessary to flush the communication buffer
+    /// due to framing errors.
+    /// 
+    /// The root cause is usually a desynchronization between the sender (Controllino) and receiver (Raspberry Pi). This can happen due to:
+    /// - Noise on the line: A stray bit flip could make the Pi misinterpret the start of a message.
+    /// - Timing issues: The Pi's read might start too early or too late relative to when the Controllino actually begins sending data.
+    /// - Buffer state: Leftover bytes from a previous, incomplete, or corrupted transmission can throw off further reads.
+    fn flush_buffer(&mut self) {
+        match self.serial_port.clear(ClearBuffer::All) {
+            Ok(_) => {
+                warn!("{}: flushed Controllino communication buffer.", LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE);
+            }
+            Err(e) => {
+                error!(
+                    "{}: error when clearing buffer ({e:?})",
+                    LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                );
+            }
+        }
+
+        self.spin_sleeper
+            .sleep(self.controllino_processing_duration);
+    }
 }
 
 /// Opens and initializes a serial port connection to the Controllino device.

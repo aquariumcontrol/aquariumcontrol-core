@@ -30,6 +30,8 @@ pub trait RelayActuationTrait {
     fn get_heartbeat_interval_seconds(&self) -> Option<u64>;
 
     fn heartbeat(&mut self);
+
+    fn flush_buffer(&mut self);
 }
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
@@ -263,6 +265,10 @@ impl RelayManager {
                     break;
                 }
                 Err(e) => {
+                    if e == RelayError::IncorrectChecksum {
+                        actuator.flush_buffer();
+                    }
+                    
                     // Log error only after the final attempt
                     if attempts == max_attempts - 1 {
                         error!(
@@ -636,6 +642,9 @@ pub mod tests {
 
         // heartbeat counter for testing purposes
         heartbeat_counter: u32,
+        
+        // flush counter for testing purposes
+        flush_counter: u32,
     }
 
     impl RelayActuationTrait for ActuateVoid {
@@ -655,6 +664,10 @@ pub mod tests {
 
         fn heartbeat(&mut self) {
             self.heartbeat_counter += 1;
+        }
+
+        fn flush_buffer(&mut self) {
+            self.flush_counter += 1;
         }
     }
 
@@ -922,6 +935,7 @@ pub mod tests {
                 let mut mock_actuator = ActuateVoid {
                     execution_counter: 0,
                     heartbeat_counter: 0,
+                    flush_counter: 0,
                 };
 
                 let relay_manager_channels = RelayManagerChannels {

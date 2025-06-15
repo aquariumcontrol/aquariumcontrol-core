@@ -90,6 +90,11 @@ impl RelayActuationTrait for ActuateSimulator {
     fn heartbeat(&mut self) {
         // do nothing
     }
+
+    /// Flush buffer is not used by this trait implementation.
+    fn flush_buffer(&mut self) {
+        // do nothing
+    }
 }
 
 impl ActuateSimulator {
