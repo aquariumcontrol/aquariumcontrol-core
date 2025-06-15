@@ -20,7 +20,7 @@ cfg_if::cfg_if! {
 
 const LOG_TARGET_GPIO_HANDLER: &str = "gpio_handler";
 
-// create stub version of type to allow build on non-target platforms
+// create a stub version of the type to allow build on non-target platforms
 #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
 pub type Gpio = u64;
 
@@ -133,7 +133,8 @@ impl GpioHandler {
                 #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_GPIO_HANDLER,
-                    "Not all GPIOs are inside permissible range."
+                    "Not all GPIOs are inside permissible range. GPIO {} is not valid.",
+                    value
                 );
                 #[cfg(test)]
                 println!("Not all GPIOs are inside permissible range.");
@@ -162,7 +163,7 @@ impl GpioHandler {
     /// If `use_simulator` is true, it creates a handler without a real GPIO interface.
     ///
     /// # Arguments
-    /// * `config` - Configuration data for the GPIO handler, specifying pins and simulation mode.
+    /// * `config` - Configuration data for the GPIO handler, specifying the pins and simulation mode.
     ///
     /// # Returns
     /// An `Option<GpioHandler>`:
