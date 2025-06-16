@@ -6,6 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
 use log::warn;
 use serde_derive::Deserialize;
 use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
@@ -14,8 +15,13 @@ use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
 const LOG_TAG_WS2812B: &str = "WS2812B";
 
 pub enum RgbLedColor {
+    #[allow(unused)]
     Red,
+
+    #[allow(unused)]
     Green,
+
+    #[allow(unused)]
     Blue,
 }
 
@@ -58,5 +64,34 @@ impl Ws2812B {
                 warn!("{}: Could not set color {e:?}", LOG_TAG_WS2812B);
             }
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests { 
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use crate::beacon::ws2812b::RgbLedColor;
+        use crate::utilities::config;
+        use crate::utilities::config::ConfigData;
+        use spin_sleep::SpinSleeper;
+    }
+}
+
+    #[test]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[ignore]
+    pub fn test_ws2821b_set_colors() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration = Duration::from_millis(500);
+        let mut ws2812b = Ws2812B::new(config.ws2812b);
+        
+        ws2812b.set_color(RgbLedColor::Green);
+        spin_sleeper.sleep(sleep_duration);
+        ws2812b.set_color(RgbLedColor::Blue);
+        spin_sleeper.sleep(sleep_duration);
+        ws2812b.set_color(RgbLedColor::Red);
     }
 }
