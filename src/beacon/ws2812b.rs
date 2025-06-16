@@ -71,10 +71,11 @@ impl Ws2812B {
 pub mod tests { 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use crate::beacon::ws2812b::RgbLedColor;
-        use crate::utilities::config;
-        use crate::utilities::config::ConfigData;
         use spin_sleep::SpinSleeper;
+        use std::time::Duration;
+        
+        use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
+        use crate::utilities::config::{ConfigData, read_config_file};
     }
 }
 
