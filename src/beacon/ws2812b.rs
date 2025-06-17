@@ -6,8 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use log::warn;
 use serde_derive::Deserialize;
+use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
 use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
 use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
 
@@ -76,6 +77,13 @@ impl Ws2812B {
                 raw_color_bytes[0], // Green component
                 raw_color_bytes[2], // Blue component
             ));
+        }
+
+        match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
+            Ok(_) => {},
+            Err(e) => {
+                warn!(target: LOG_TAG_WS2812B, "Could not set color {e:?}");
+            }
         }
     }
 }
