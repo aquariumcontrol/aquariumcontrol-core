@@ -218,3 +218,4 @@ ambient_temperature_sensor_id = ""                      # sensor is not used
 [ws2812b]
 active = true
 device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
+number_leds = 3                                         # number of LEDs

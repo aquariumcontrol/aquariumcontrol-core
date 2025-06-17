@@ -7,10 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::warn;
 use serde_derive::Deserialize;
-use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
 use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
+use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
 
 const LOG_TAG_WS2812B: &str = "WS2812B";
 
@@ -38,9 +37,16 @@ pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
 #[derive(Deserialize)]
 pub struct Ws2812BConfig {
     pub device_name: String,
+    pub number_leds: usize
 }
+
 pub struct Ws2812B {
+    #[allow(unused)]
+    /// SPI-based driver interface
     adapter: WS28xxSpiAdapter,
+    
+    /// holds configuration data
+    config: Ws2812BConfig,
 }
 
 impl Ws2812B {
@@ -51,33 +57,39 @@ impl Ws2812B {
         };
         
         Ws2812B {
-            adapter
+            adapter,
+            config,
         }
     }
 
     pub fn set_color(&mut self, color: RgbLedColor) {
-        let color_code = get_ws2812b_color_bytes(color);
+        let raw_color_bytes = get_ws2812b_color_bytes(color); // This is [G, R, B]
 
-        match self.adapter.write_encoded_rgb(color_code) {
-            Ok(_) => {},
-            Err(e) => {
-                warn!("{}: Could not set color {e:?}", LOG_TAG_WS2812B);
-            }
+        // Create a vector to hold the encoded data for all LEDs
+        // Each LED needs 3 bytes (GRB) in input, which gets expanded by the driver
+        let mut spi_encoded_rgb_bits = Vec::with_capacity(self.config.number_leds * 3);
+
+        // Repeat the color for each LED on the strip
+        for _i in 0..self.config.number_leds {
+            spi_encoded_rgb_bits.extend_from_slice(&encode_rgb(
+                raw_color_bytes[1], // Red component
+                raw_color_bytes[0], // Green component
+                raw_color_bytes[2], // Blue component
+            ));
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests { 
-cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use spin_sleep::SpinSleeper;
-        use std::time::Duration;
-        
-        use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
-        use crate::utilities::config::{ConfigData, read_config_file};
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+            use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
+            use crate::utilities::config::{read_config_file, ConfigData};
+            use spin_sleep::SpinSleeper;
+            use std::time::Duration;
+        }
     }
-}
 
     #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
