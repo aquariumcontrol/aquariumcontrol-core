@@ -90,7 +90,6 @@ pub struct GpioHandler {
 }
 
 impl GpioHandler {
-    #[allow(unused)]
     /// Checks if the GPIO pin configuration is **valid and free from conflicts**.
     ///
     /// This function performs two essential validation checks on the configured GPIO pins:
