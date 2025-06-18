@@ -32,7 +32,7 @@ db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium"
-db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
+db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users", "ventilationsetvals", "heatingsetvals" ]
 db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. use a value of 0 to deactivate the check.
 db_ping_interval = 3600                                 # database-ping interval in seconds
 
@@ -158,15 +158,15 @@ use_simulator = true                                    # if true, then do not u
 tank_level_switch = 20                                  # GPIO where the tank level sensor is connected
 dht22_io = 11                                           # GPIO where the DHT sensor data line is connected
 dht22_vcc = 17                                          # GPIO for power supply of DHT sensor
-skimmer = 3                                             # GPIO of the protein skimmer
+skimmer = 27                                            # GPIO of the protein skimmer
 main_pump1 = 4                                          # GPIO of the main pump #1
 main_pump2 = 5                                          # GPIO of the main pump #2
 aux_pump1 = 6                                           # GPIO of the auxiliary pump #1
 aux_pump2 = 7                                           # GPIO of the auxiliary pump #2
 feeder = 8                                              # GPIO of the feeder
-refill_pump = 11                                        # GPIO of the refill pump
-heater = 2                                              # GPIO of the heater
-ventilation = 10                                        # GPIO of the surface ventilation
+refill_pump = 10                                        # GPIO of the refill pump
+heater = 9                                              # GPIO of the heater
+ventilation = 26                                        # GPIO of the surface ventilation
 peristaltic_pump1 = 12                                  # GPIO of the peristaltic pump #1
 peristaltic_pump2 = 13                                  # GPIO of the peristaltic pump #2
 peristaltic_pump3 = 14                                  # GPIO of the peristaltic pump #3
@@ -215,3 +215,8 @@ max_retries = 3                                         # max. number of retries
 retry_pause_duration_millis = 200                       # pause duration in milliseconds between retries
 water_temperature_sensor_id = "0114540015aa"            # unique 64-bit ID of water temperature sensor
 ambient_temperature_sensor_id = ""                      # sensor is not used
+
+[ws2812b]
+active = true
+device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
+number_leds = 3                                         # number of LEDs

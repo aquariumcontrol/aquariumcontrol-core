@@ -31,7 +31,7 @@ db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium"
-db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users" ]
+db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users", "ventilationsetvals", "heatingsetvals"  ]
 db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. use a value of 0 to deactivate the check.
 db_ping_interval = 3600                                 # database-ping interval in seconds
 
@@ -165,7 +165,7 @@ aux_pump2 = 7                                           # GPIO of the auxiliary 
 feeder = 8                                              # GPIO of the feeder
 refill_pump = 21                                        # GPIO of the refill pump
 heater = 18                                             # GPIO of the heater
-ventilation = 10                                        # GPIO of the surface ventilation
+ventilation = 26                                        # GPIO of the surface ventilation
 peristaltic_pump1 = 12                                  # GPIO of the peristaltic pump #1
 peristaltic_pump2 = 13                                  # GPIO of the peristaltic pump #2
 peristaltic_pump3 = 14                                  # GPIO of the peristaltic pump #3
@@ -214,3 +214,8 @@ max_retries = 3                                         # max. number of retries
 retry_pause_duration_millis = 200                       # pause duration in milliseconds between retries
 water_temperature_sensor_id = "a46e500a6461"            # unique 64-bit ID of water temperature sensor
 ambient_temperature_sensor_id = "9491510a6461"          # ... ambient temperature sensor
+
+[ws2812b]
+active = true
+device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
+number_leds = 3                                         # number of LEDs

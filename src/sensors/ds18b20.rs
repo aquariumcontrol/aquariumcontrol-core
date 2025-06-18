@@ -364,7 +364,7 @@ pub mod tests {
 
         match ds18b20.read(&water_temperature_sensor_id) {
             Ok(temperature) => {
-                println!("Temperature: {:.2}°C ", temperature);
+                println!("Temperature: {:.2}°C ", temperature.value);
                 assert!(true);
             }
             Err(e) => {

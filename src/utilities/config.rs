@@ -15,7 +15,7 @@ use std::fs;
 
 #[cfg(test)]
 use std::env;
-
+use crate::beacon::ws2812b::Ws2812BConfig;
 use crate::food::feed::FeedConfig;
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
@@ -118,6 +118,9 @@ pub struct ConfigData {
 
     /// configuration of DS18B20 temperature sensor communication
     pub ds18b20: Ds18b20Config,
+    
+    /// configuration of WS2812B RGB LED
+    pub ws2812b: Ws2812BConfig,
 }
 
 #[cfg(not(test))]
