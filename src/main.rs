@@ -328,7 +328,7 @@ fn is_running_as_root() -> bool {
 ///     heating --> relay_manager
 ///     relay_manager --> heating
 ///     tank_level_switch -.-> heating
-///     ambient -.-> heating
+///     sensor_manager -.-> heating
 ///     tank_level_switch -.-> data_logger
 ///     ventilation -.-> data_logger
 ///     signal_handler --> data_logger
@@ -360,7 +360,7 @@ fn is_running_as_root() -> bool {
 ///     atlas_scientific --> signal_handler
 ///     atlas_scientific --> i2c_interface[I2C interface]
 ///     i2c_interface --> atlas_scientific
-///     dht -.-> ambient
+///     dht -.-> sensor_manager
 ///     messaging --> refill
 ///     messaging --> ventilation
 ///     messaging --> heating
@@ -1002,7 +1002,7 @@ fn main() {
             false => None,
         };
 
-    let rx_ambient_from_tcp_opt: Option<Receiver<f32>> = match config.sensor_manager.use_simulator {
+    let rx_sensor_manager_from_tcp_opt: Option<Receiver<f32>> = match config.sensor_manager.use_simulator {
         true => Some(rx_sensor_manager_from_tcp),
         false => None,
     };
@@ -1442,7 +1442,7 @@ fn main() {
         scope.spawn(move || {
             let sensor_manager_channels = SensorManagerChannels {
                 tx_sensor_manager_to_tcp_opt: &tx_sensor_manager_to_tcp_opt,
-                rx_sensor_manager_from_tcp_opt: &rx_ambient_from_tcp_opt,
+                rx_sensor_manager_from_tcp_opt: &rx_sensor_manager_from_tcp_opt,
                 tx_sensor_manager_to_signal_handler,
                 rx_sensor_manager_from_signal_handler,
             };
@@ -1467,7 +1467,7 @@ fn main() {
             debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
         });
 
-        // give Ambient ant AtlasScientific some time so that they can acquire a first data set
+        // give sensor reading components some time so that they can acquire a first data set
         let spin_sleeper = SpinSleeper::default();
         let duration_one_second = Duration::from_secs(1);
         println!("trying to acquire data before starting control in 3 seconds...");
