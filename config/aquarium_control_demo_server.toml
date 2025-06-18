@@ -89,7 +89,6 @@ strategy_multiple_schedule_entries_in_past = 0          # strategy to apply when
 
 [ventilation]
 active = true
-use_simulator = true                                    # if true, then do not use real HW
 switch_on_temperature = 27.0                            # temperature, at which the ventilation shall be switched on 100% of the time
 switch_off_temperature = 26.0                           # temperature, at which the ventilation shall be switched off 100% of the time
 switch_on_when_terminating = false           		# behavior when terminating the application
@@ -116,7 +115,6 @@ active = false
 
 [heating]
 active = true
-use_simulator = true                                    # if true, then do not use real HW
 switch_on_temperature = 24.0                            # temperature, at which the heating shall be switched on 100% of the time
 switch_off_temperature = 25.5                           # temperature, at which the heating shall be switched off 100% of the time
 stop_on_refill_error = true                             # if true, then heating shall be switched off after a configurable time period
