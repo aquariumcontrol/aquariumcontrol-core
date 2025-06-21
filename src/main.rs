@@ -58,9 +58,9 @@ mod utilities;
 /// This container module features all functionality to monitor the control system.
 mod watchmen;
 
+mod beacon;
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
-mod beacon;
 
 use log::{error, info, warn};
 
@@ -96,14 +96,14 @@ use crate::sensors::sensor_manager::{
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::sensors::gpio_handler::GpioHandler;
 
+use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging::{Messaging, MessagingChannels};
 use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
 use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
-use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging::{Messaging, MessagingChannels};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
@@ -448,7 +448,7 @@ fn main() {
     // instantiate driver for RGB LED
     let mut ws2812b = Ws2812B::new(config.ws2812b);
     ws2812b.set_color(RgbLedColor::Red);
-    
+
     // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
@@ -1002,10 +1002,11 @@ fn main() {
             false => None,
         };
 
-    let rx_sensor_manager_from_tcp_opt: Option<Receiver<f32>> = match config.sensor_manager.use_simulator {
-        true => Some(rx_sensor_manager_from_tcp),
-        false => None,
-    };
+    let rx_sensor_manager_from_tcp_opt: Option<Receiver<f32>> =
+        match config.sensor_manager.use_simulator {
+            true => Some(rx_sensor_manager_from_tcp),
+            false => None,
+        };
 
     let (tx_signal_handler_to_dht, rx_dht_from_signal_handler): (
         Sender<InternalCommand>,

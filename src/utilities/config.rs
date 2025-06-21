@@ -13,8 +13,6 @@ use log::info;
 use serde_derive::Deserialize;
 use std::fs;
 
-#[cfg(test)]
-use std::env;
 use crate::beacon::ws2812b::Ws2812BConfig;
 use crate::food::feed::FeedConfig;
 use crate::mineral::balling::BallingConfig;
@@ -26,6 +24,8 @@ use crate::sensors::dht::DhtConfig;
 use crate::sensors::gpio_handler::GpioHandlerConfig;
 use crate::sensors::sensor_manager::SensorManagerConfig;
 use crate::thermal::heating::HeatingConfig;
+#[cfg(test)]
+use std::env;
 
 #[cfg(feature = "target_hw")]
 use crate::sensors::i2c_interface::I2cInterfaceConfig;
@@ -118,7 +118,7 @@ pub struct ConfigData {
 
     /// configuration of DS18B20 temperature sensor communication
     pub ds18b20: Ds18b20Config,
-    
+
     /// configuration of WS2812B RGB LED
     pub ws2812b: Ws2812BConfig,
 }

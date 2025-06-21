@@ -648,7 +648,7 @@ pub mod tests {
 
         // injection of error: if not None, this value is used one time by actuate and then set to None
         onetime_error_result: Option<RelayError>,
-        
+
         // injection of error: if not None, this value is used one time by actuate and then set to None
         permanent_error_result: Option<RelayError>,
     }
@@ -658,8 +658,7 @@ pub mod tests {
         fn actuate(&mut self, internal_command: &InternalCommand) -> Result<(), RelayError> {
             println!(
                 "Received {} - increasing execution counter (currently at {})",
-                internal_command,
-                self.execution_counter
+                internal_command, self.execution_counter
             );
             self.execution_counter += 1;
             if self.onetime_error_result.is_some() {
@@ -668,9 +667,8 @@ pub mod tests {
                 Err(self.onetime_error_result.take().unwrap())
             } else {
                 if self.permanent_error_result.is_some() {
-                    Err(self.permanent_error_result.clone().unwrap())    
-                }
-                else {
+                    Err(self.permanent_error_result.clone().unwrap())
+                } else {
                     Ok(())
                 }
             }
@@ -1074,7 +1072,7 @@ pub mod tests {
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
 
         let target_repeat_times = config.relay_manager.actuation_retries;
-        
+
         let mut relay_manager = RelayManager::new(config.relay_manager);
 
         let (tx_relay_manager_to_refill, rx_refill_from_relay_manager) = mpsc::channel();
@@ -1137,10 +1135,10 @@ pub mod tests {
                 relay_manager.execute(relay_manager_channels, &mut mock_actuator);
 
                 // Test object thread has ended.
-                
+
                 // Assertion checks the number of calls to the actuator.
                 // Relay manager shall repeat in case of failure as configured by user.
-                assert_eq!(mock_actuator.get_execution_count(), target_repeat_times + 1); 
+                assert_eq!(mock_actuator.get_execution_count(), target_repeat_times + 1);
             });
         });
     }

@@ -29,23 +29,23 @@ pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
     match color {
         // WS2812B is commonly GRB: Green, Red, Blue
         // [G, R, B]
-        RgbLedColor::Red => &[0, 255, 0],   // Green=0, Red=255, Blue=0
+        RgbLedColor::Red => &[0, 255, 0], // Green=0, Red=255, Blue=0
         RgbLedColor::Green => &[255, 0, 0], // Green=255, Red=0, Blue=0
-        RgbLedColor::Blue => &[0, 0, 255],  // Green=0, Red=0, Blue=255
+        RgbLedColor::Blue => &[0, 0, 255], // Green=0, Red=0, Blue=255
     }
 }
 
 #[derive(Deserialize)]
 pub struct Ws2812BConfig {
     pub device_name: String,
-    pub number_leds: usize
+    pub number_leds: usize,
 }
 
 pub struct Ws2812B {
     #[allow(unused)]
     /// SPI-based driver interface
     adapter: WS28xxSpiAdapter,
-    
+
     /// holds configuration data
     config: Ws2812BConfig,
 }
@@ -54,13 +54,13 @@ impl Ws2812B {
     pub fn new(config: Ws2812BConfig) -> Ws2812B {
         let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
             Ok(adapter) => adapter,
-            Err(e) => panic!("{}: Could not instantiate adapter for RGB LED {e:?}", LOG_TAG_WS2812B),
+            Err(e) => panic!(
+                "{}: Could not instantiate adapter for RGB LED {e:?}",
+                LOG_TAG_WS2812B
+            ),
         };
-        
-        Ws2812B {
-            adapter,
-            config,
-        }
+
+        Ws2812B { adapter, config }
     }
 
     pub fn set_color(&mut self, color: RgbLedColor) {
@@ -80,7 +80,7 @@ impl Ws2812B {
         }
 
         match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 warn!(target: LOG_TAG_WS2812B, "Could not set color {e:?}");
             }
@@ -89,7 +89,7 @@ impl Ws2812B {
 }
 
 #[cfg(test)]
-pub mod tests { 
+pub mod tests {
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
             use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
@@ -108,7 +108,7 @@ pub mod tests {
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(500);
         let mut ws2812b = Ws2812B::new(config.ws2812b);
-        
+
         ws2812b.set_color(RgbLedColor::Green);
         spin_sleeper.sleep(sleep_duration);
         ws2812b.set_color(RgbLedColor::Blue);

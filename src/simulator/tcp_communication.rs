@@ -10,8 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{debug, error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::{fmt, io};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::{fmt, io};
 use std::{
     io::{prelude::*, BufReader},
     net::TcpStream,
@@ -104,7 +104,10 @@ impl fmt::Display for TcpCommunicationChannels {
         writeln!(
             f,
             "- rx_tcp_communication_from_tank_level_switch_opt: {}",
-            if self.rx_tcp_communication_from_tank_level_switch_opt.is_some() {
+            if self
+                .rx_tcp_communication_from_tank_level_switch_opt
+                .is_some()
+            {
                 "Some"
             } else {
                 "None"
@@ -121,15 +124,9 @@ impl fmt::Display for TcpCommunicationChannels {
             }
         )?;
 
-        writeln!(
-            f,
-            "- tx_tcp_communication_to_signal_handler: Present"
-        )?;
+        writeln!(f, "- tx_tcp_communication_to_signal_handler: Present")?;
 
-        writeln!(
-            f,
-            "- rx_tcp_communication_from_signal_handler: Present"
-        )
+        writeln!(f, "- rx_tcp_communication_from_signal_handler: Present")
     }
 }
 
@@ -503,9 +500,9 @@ impl TcpCommunication {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
-        
+
         println!("{}", tcp_communication_channels);
-        
+
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &tcp_communication_channels.rx_tcp_communication_from_signal_handler,
@@ -586,5 +583,77 @@ impl TcpCommunication {
                 );
             }
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc::channel;
+
+    #[test]
+    fn test_tcp_channels_display_all_some() {
+        let (_, rx1) = channel();
+        let (_, rx2) = channel();
+        let (tx3, _) = channel();
+        let (_, rx4) = channel();
+        let (tx5, _) = channel();
+        let (tx6, _) = channel();
+        let (_, rx7) = channel();
+
+        let channels = TcpCommunicationChannels {
+            rx_tcp_communication_from_relay_manager_opt: Some(rx1),
+            rx_tcp_communication_from_sensor_manager_opt: Some(rx2),
+            tx_tcp_communication_to_sensor_manager_opt: Some(tx3),
+            rx_tcp_communication_from_tank_level_switch_opt: Some(rx4),
+            tx_tcp_communication_to_tank_level_switch_opt: Some(tx5),
+            tx_tcp_communication_to_signal_handler: tx6,
+            rx_tcp_communication_from_signal_handler: rx7,
+        };
+
+        println!("Output for TcpCommunicationChannels: {}", channels);
+
+        let expected_output = "\
+TcpCommunicationChannels Status:
+- rx_tcp_communication_from_relay_manager_opt: Some
+- rx_tcp_communication_from_sensor_manager_opt: Some
+- tx_tcp_communication_to_sensor_manager_opt: Some
+- rx_tcp_communication_from_tank_level_switch_opt: Some
+- tx_tcp_communication_to_tank_level_switch_opt: Some
+- tx_tcp_communication_to_signal_handler: Present
+- rx_tcp_communication_from_signal_handler: Present
+";
+        assert_eq!(format!("{}", channels), expected_output);
+    }
+
+    #[test]
+    fn test_tcp_channels_display_some_none_mix() {
+        let (_, rx1) = channel();
+        let (tx6, _) = channel();
+        let (_, rx7) = channel();
+
+        let channels = TcpCommunicationChannels {
+            rx_tcp_communication_from_relay_manager_opt: None, // None
+            rx_tcp_communication_from_sensor_manager_opt: Some(rx1), // Some
+            tx_tcp_communication_to_sensor_manager_opt: None,  // None
+            rx_tcp_communication_from_tank_level_switch_opt: Some(channel().1), // Some (new channel)
+            tx_tcp_communication_to_tank_level_switch_opt: None,                // None
+            tx_tcp_communication_to_signal_handler: tx6,
+            rx_tcp_communication_from_signal_handler: rx7,
+        };
+
+        println!("Output for TcpCommunicationChannels: {}", channels);
+
+        let expected_output = "\
+TcpCommunicationChannels Status:
+- rx_tcp_communication_from_relay_manager_opt: None
+- rx_tcp_communication_from_sensor_manager_opt: Some
+- tx_tcp_communication_to_sensor_manager_opt: None
+- rx_tcp_communication_from_tank_level_switch_opt: Some
+- tx_tcp_communication_to_tank_level_switch_opt: None
+- tx_tcp_communication_to_signal_handler: Present
+- rx_tcp_communication_from_signal_handler: Present
+";
+        assert_eq!(format!("{}", channels), expected_output);
     }
 }

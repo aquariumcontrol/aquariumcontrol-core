@@ -693,7 +693,7 @@ pub mod tests {
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificError,
     };
-    use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse, I2cInterface};
+    use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse};
     use crate::utilities::channel_content::AquariumSignal;
     use crate::utilities::config::{read_config_file, ConfigData};
     use assert_float_eq::*;
