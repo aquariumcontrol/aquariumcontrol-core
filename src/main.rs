@@ -1053,10 +1053,10 @@ fn main() {
             // clone information from config before giving config to GpioHandler
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
             let actuate_gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
-            let use_simulator = config.gpio_handler.use_simulator;
+            let use_simulator_for_gpio = config.gpio_handler.use_simulator;
             let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
 
-            if use_simulator {
+            if use_simulator_for_gpio {
                 // use the simulator-version for TankLevelSwitch
                 tank_level_switch = TankLevelSwitch::new(
                     config.tank_level_switch,
