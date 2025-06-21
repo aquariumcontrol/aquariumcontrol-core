@@ -263,11 +263,13 @@ impl TankLevelSwitch {
             let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
             let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
             self.tank_level_switch_position = Self::get_response_from_simulator(
+                LOG_TARGET_TANK_LEVEL_SWITCH.to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
             ) > 0.0;
             self.tank_level_switch_invalid = Self::get_response_from_simulator(
+                LOG_TARGET_TANK_LEVEL_SWITCH.to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),

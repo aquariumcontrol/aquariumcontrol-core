@@ -325,26 +325,31 @@ impl SensorManager {
         let rx_sensor_manager_from_simulator = rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
+            LOG_TARGET_SENSOR_MANAGER.to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
         );
         self.ambient_humidity = Self::get_response_from_simulator(
+            LOG_TARGET_SENSOR_MANAGER.to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
         );
         self.water_temperature = Self::get_response_from_simulator(
+            LOG_TARGET_SENSOR_MANAGER.to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
         );
         self.conductivity = Self::get_response_from_simulator(
+            LOG_TARGET_SENSOR_MANAGER.to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::Conductivity),
         );
         self.pH = Self::get_response_from_simulator(
+            LOG_TARGET_SENSOR_MANAGER.to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::pH),

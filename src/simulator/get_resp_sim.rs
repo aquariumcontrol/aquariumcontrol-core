@@ -25,6 +25,7 @@ pub trait GetResponseFromSimulatorTrait {
     /// Inapplicable commands are logged as warnings and return a default value.
     ///
     /// # Arguments
+    /// * `requester` - For debugging purposes: identify the thread which is requesting the response.
     /// * `tx_to_tcp` - A reference to the sender channel for sending commands to the TCP communication thread.
     /// * `rx_from_tcp` - A reference to the receiver channel for receiving `f32` data from the TCP communication thread.
     /// * `internal_command` - The `InternalCommand` to send, expected to be a `RequestSignal` for sensor data.
@@ -37,6 +38,7 @@ pub trait GetResponseFromSimulatorTrait {
     /// - The `internal_command` is a `RequestSignal`, but sending the request fails (e.g., the channel disconnected).
     /// - The `internal_command` is a `RequestSignal`, but receiving the response fails (e.g., the channel disconnected).
     fn get_response_from_simulator(
+        requester: String,
         tx_to_tcp: &Sender<InternalCommand>,
         rx_from_tcp: &Receiver<f32>,
         internal_command: InternalCommand,
@@ -47,22 +49,26 @@ pub trait GetResponseFromSimulatorTrait {
                     Ok(c) => c,
                     Err(e) => {
                         panic!(
-                                "{}: Error occurred when trying to receive response from TCP thread ({e:?})",
-                                LOG_TARGET_GET_RESP_SIM);
+                                "{}: Error occurred when trying to receive response from TCP thread for {} ({e:?})",
+                                LOG_TARGET_GET_RESP_SIM,
+                                requester
+                        );
                     }
                 },
                 Err(e) => {
                     panic!(
-                        "{}: Error occurred when trying to send request to TCP thread ({e:?})",
-                        LOG_TARGET_GET_RESP_SIM
+                        "{}: Error occurred when trying to send request from {} to TCP thread ({e:?})",
+                        LOG_TARGET_GET_RESP_SIM,
+                        requester
                     );
                 }
             },
             _ => {
                 warn!(
                     target: LOG_TARGET_GET_RESP_SIM,
-                    "ignoring not applicable internal command ({})",
-                    internal_command
+                    "ignoring not applicable internal command ({}) from {}",
+                    internal_command,
+                    requester
                 );
                 0.0
             }
