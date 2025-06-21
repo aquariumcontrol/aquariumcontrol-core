@@ -26,7 +26,7 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_SENSOR_MANAGER: &str = "ambient";
+const LOG_TARGET_SENSOR_MANAGER: &str = "sensor_manager";
 
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor

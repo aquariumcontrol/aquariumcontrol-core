@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::{debug, error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::io;
+use std::{fmt, io};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::{
     io::{prelude::*, BufReader},
@@ -65,6 +65,72 @@ pub struct TcpCommunicationChannels {
 
     /// Receiver part of the channel for communication from the signal handler       
     pub rx_tcp_communication_from_signal_handler: Receiver<InternalCommand>,
+}
+
+impl fmt::Display for TcpCommunicationChannels {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "TcpCommunicationChannels Status:")?;
+
+        writeln!(
+            f,
+            "- rx_tcp_communication_from_relay_manager_opt: {}",
+            if self.rx_tcp_communication_from_relay_manager_opt.is_some() {
+                "Some"
+            } else {
+                "None"
+            }
+        )?;
+
+        writeln!(
+            f,
+            "- rx_tcp_communication_from_sensor_manager_opt: {}",
+            if self.rx_tcp_communication_from_sensor_manager_opt.is_some() {
+                "Some"
+            } else {
+                "None"
+            }
+        )?;
+
+        writeln!(
+            f,
+            "- tx_tcp_communication_to_sensor_manager_opt: {}",
+            if self.tx_tcp_communication_to_sensor_manager_opt.is_some() {
+                "Some"
+            } else {
+                "None"
+            }
+        )?;
+
+        writeln!(
+            f,
+            "- rx_tcp_communication_from_tank_level_switch_opt: {}",
+            if self.rx_tcp_communication_from_tank_level_switch_opt.is_some() {
+                "Some"
+            } else {
+                "None"
+            }
+        )?;
+
+        writeln!(
+            f,
+            "- tx_tcp_communication_to_tank_level_switch_opt: {}",
+            if self.tx_tcp_communication_to_tank_level_switch_opt.is_some() {
+                "Some"
+            } else {
+                "None"
+            }
+        )?;
+
+        writeln!(
+            f,
+            "- tx_tcp_communication_to_signal_handler: Present"
+        )?;
+
+        writeln!(
+            f,
+            "- rx_tcp_communication_from_signal_handler: Present"
+        )
+    }
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -437,6 +503,9 @@ impl TcpCommunication {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
+        
+        println!("{}", tcp_communication_channels);
+        
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
                 &tcp_communication_channels.rx_tcp_communication_from_signal_handler,
