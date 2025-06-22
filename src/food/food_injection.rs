@@ -500,7 +500,7 @@ pub mod tests {
     use all_asserts::{assert_ge, assert_le};
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::thread::scope;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::Instant;
 
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
@@ -634,14 +634,14 @@ pub mod tests {
                     feedphases,
                 };
 
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+                let start_time = Instant::now();
                 food_injection.inject_food(
                     &tx_feed_to_relay_manager,
                     &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
-                let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+                let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
 
@@ -728,14 +728,14 @@ pub mod tests {
                     feedphases,
                 };
 
-                let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+                let start_time = Instant::now();
                 food_injection.inject_food(
                     &tx_feed_to_relay_manager,
                     &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
                     &feedpattern,
                 );
-                let end_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+                let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
 

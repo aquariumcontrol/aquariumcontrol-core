@@ -20,7 +20,7 @@ use spin_sleep::SpinSleeper;
 use std::fs;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -950,6 +950,7 @@ impl DataLogger {
         data_logger_channels: DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
+        let cycle_time_duration = Duration::from_millis(self.config.logging_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut i;
@@ -968,7 +969,7 @@ impl DataLogger {
         let mut refill_in_progress_live: bool = false;
         let mut refill_in_progress_for_database: bool = false;
         let mut quit_command_received = false;
-        let mut start_time = SystemTime::now();
+        let mut start_time = Instant::now();
         let mut lock_warn_cycle_time_exceeded = false;
         let mut cycle_time_exceeded: bool; // ensures that signal handler/messaging are polled at least once even if cycle time is exceeded
 
@@ -1075,18 +1076,17 @@ impl DataLogger {
 
             data_injection.inject_data(data_frame, &mut sql_interface_data);
 
-            let stop_time = SystemTime::now();
-            let execution_duration_millis =
-                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
 
             // deduct the execution time of the thread from the target cycle time
             let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= self.config.logging_interval * MILLIS_PER_SEC {
+            if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded {
                     warn!(target: LOG_TARGET_DATA_LOGGER,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration_millis,
-                        self.config.logging_interval * MILLIS_PER_SEC);
+                        execution_duration.as_millis(),
+                        cycle_time_duration.as_millis());
                     lock_warn_cycle_time_exceeded = true;
                 } else {
                     lock_warn_cycle_time_exceeded = false;
@@ -1095,8 +1095,8 @@ impl DataLogger {
                 cycle_time_exceeded = true;
             } else {
                 // underflow cannot happen because the else statement requires that the first operand is higher than the second
-                remaining_sleep_time_millis =
-                    self.config.logging_interval * MILLIS_PER_SEC - execution_duration_millis;
+                let remaining_sleep_time_duration =  cycle_time_duration - execution_duration;
+                remaining_sleep_time_millis = remaining_sleep_time_duration.as_millis() as u64;
                 cycle_time_exceeded = false;
             }
 
@@ -1170,7 +1170,7 @@ impl DataLogger {
                 self.last_ping_instant = Instant::now();
             }
 
-            start_time = SystemTime::now(); // start time for the next cycle
+            start_time = Instant::now(); // start time for the next cycle
         }
 
         self.confirm_quit_and_wait_for_termination_command(

@@ -22,7 +22,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 const LOG_TARGET_VENTILATION: &str = "ventilation";
 
@@ -355,6 +355,7 @@ impl Ventilation {
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
+        let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut saw_tooth_profile = SawToothProfile::new(&self.config.saw_tooth_profile_config);
@@ -364,7 +365,7 @@ impl Ventilation {
         let mut schedule_check_result: bool = false;
         let mut ventilation_inhibited = false; // state of ventilation control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
-        let mut start_time = SystemTime::now();
+        let mut start_time = Instant::now();
         let mut mutex_was_blocked_during_actuation: bool = false;
 
         loop {
@@ -552,39 +553,26 @@ impl Ventilation {
 
             saw_tooth_profile.execute_with(TIME_INCREMENT_VENTILATION_SECS);
 
-            let stop_time = SystemTime::now();
-            let execution_duration_millis = match stop_time.duration_since(start_time) {
-                Ok(c) => c.as_millis() as u64,
-                Err(e) => {
-                    warn!(
-                        target: LOG_TARGET_VENTILATION,
-                        "Could not calculated execution time: {e:?}."
-                    );
-                    0 // provide default value
-                }
-            };
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
 
-            let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= CYCLE_TIME_VENTILATION_MILLIS {
+            if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
                     warn!(target: LOG_TARGET_VENTILATION,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration_millis,
+                        execution_duration.as_millis(),
                         CYCLE_TIME_VENTILATION_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
                 }
-                remaining_sleep_time_millis = 0;
             } else {
-                remaining_sleep_time_millis =
-                    CYCLE_TIME_VENTILATION_MILLIS - execution_duration_millis;
+                let remaining_sleep_time = cycle_time_duration - execution_duration;
+                // sleep time does not need to be split up because cycle time is 500 milliseconds only
+                spin_sleeper.sleep(remaining_sleep_time);
                 lock_warn_cycle_time_exceeded = false;
             }
             mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
-            let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
-            spin_sleeper.sleep(sleep_duration);
-
-            start_time = SystemTime::now(); // start time for the next cycle
+            start_time = Instant::now(); // start time for the next cycle
         }
 
         if self.config.switch_on_when_terminating {
@@ -1111,7 +1099,6 @@ pub mod tests {
                 let second_last_actuation_duration = second_last_actuation_event
                     .time
                     .duration_since(third_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1127,7 +1114,6 @@ pub mod tests {
                 let third_last_actuation_duration = third_last_actuation_event
                     .time
                     .duration_since(fourth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1143,7 +1129,6 @@ pub mod tests {
                 let fourth_last_actuation_duration = fourth_last_actuation_event
                     .time
                     .duration_since(fifth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1159,7 +1144,6 @@ pub mod tests {
                 let fifth_last_actuation_duration = fifth_last_actuation_event
                     .time
                     .duration_since(sixth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1175,7 +1159,6 @@ pub mod tests {
                 let sixth_last_actuation_duration = sixth_last_actuation_event
                     .time
                     .duration_since(seventh_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(

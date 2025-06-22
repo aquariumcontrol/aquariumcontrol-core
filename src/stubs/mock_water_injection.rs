@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use std::sync::mpsc::Sender;
     use std::sync::{Arc, Mutex};
-    use std::time::SystemTime;
+    use std::time::{Instant};
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -22,7 +22,7 @@ pub mod tests {
     pub struct MockWaterInjection {
         tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
 
-        pub injection_recorder: Vec<SystemTime>,
+        pub injection_recorder: Vec<Instant>,
 
         stimuli_refill_errors: RefillErrors,
     }
@@ -71,7 +71,7 @@ pub mod tests {
                 let _ = tx_water_injection_to_test_environment
                     .send(TestCommand::InformWaterInjectionEvent);
             }
-            self.injection_recorder.push(SystemTime::now());
+            self.injection_recorder.push(Instant::now());
             false // simulate that no Quit command has been received
         }
     }

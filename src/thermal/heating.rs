@@ -24,7 +24,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 const LOG_TARGET_HEATING: &str = "heating";
 
@@ -422,6 +422,7 @@ impl Heating {
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let mut mutex_was_blocked_during_actuation: bool = false;
+        let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
 
         let mut heating_stats_opt = match self
             .sql_interface_heating
@@ -439,7 +440,7 @@ impl Heating {
             }
         };
 
-        let mut start_time = SystemTime::now();
+        let mut start_time = Instant::now();
         loop {
             let (
                 quit_command_received,  // the request to end the application has been received
@@ -757,36 +758,25 @@ impl Heating {
                 loop_counter = 0;
             }
 
-            let stop_time = SystemTime::now();
-            let execution_duration_millis = match stop_time.duration_since(start_time) {
-                Ok(c) => c.as_millis() as u64,
-                Err(e) => {
-                    warn!(
-                        target: LOG_TARGET_HEATING,
-                        "Could not calculated execution time: {e:?}."
-                    );
-                    0 // provide default value
-                }
-            };
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
 
-            let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= CYCLE_TIME_HEATING_MILLIS {
+            if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
                     warn!(target: LOG_TARGET_HEATING,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration_millis,
+                        execution_duration.as_millis(),
                         CYCLE_TIME_HEATING_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
                 }
-                remaining_sleep_time_millis = 0;
             } else {
-                remaining_sleep_time_millis = CYCLE_TIME_HEATING_MILLIS - execution_duration_millis;
                 lock_warn_cycle_time_exceeded = false;
             }
             mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
-            let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
-            spin_sleeper.sleep(sleep_duration);
+            let remaining_sleep_time = cycle_time_duration - execution_duration;
+            // sleep time does not need to be split up because cycle time is 500 milliseconds only
+            spin_sleeper.sleep(remaining_sleep_time);
 
             // Check for how long ago the last database ping happened.
             if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
@@ -794,7 +784,7 @@ impl Heating {
                 self.last_ping_instant = Instant::now();
             }
 
-            start_time = SystemTime::now(); // start time for the next cycle
+            start_time = Instant::now(); // start time for the next cycle
         }
 
         // switch off the heater if not already off
@@ -885,7 +875,7 @@ pub mod tests {
     use spin_sleep::SpinSleeper;
     use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, Instant};
 
     use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
@@ -1472,7 +1462,6 @@ pub mod tests {
                 let second_last_actuation_duration = second_last_actuation_event
                     .time
                     .duration_since(third_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1488,7 +1477,6 @@ pub mod tests {
                 let third_last_actuation_duration = third_last_actuation_event
                     .time
                     .duration_since(fourth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1504,7 +1492,6 @@ pub mod tests {
                 let fourth_last_actuation_duration = fourth_last_actuation_event
                     .time
                     .duration_since(fifth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1520,7 +1507,6 @@ pub mod tests {
                 let fifth_last_actuation_duration = fifth_last_actuation_event
                     .time
                     .duration_since(sixth_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1536,7 +1522,6 @@ pub mod tests {
                 let sixth_last_actuation_duration = sixth_last_actuation_event
                     .time
                     .duration_since(seventh_last_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 (min_actuation_duration, max_actuation_duration) =
                     update_min_max_actuation_duration(
@@ -1687,7 +1672,7 @@ pub mod tests {
         let (tx_schedule_check_to_heating, rx_heating_from_schedule_check) = mpsc::channel();
         let (tx_heating_to_schedule_check, rx_schedule_check_from_heating) = mpsc::channel();
 
-        let start_time = SystemTime::now();
+        let start_time = Instant::now();
 
         // Mutex for tank level switch signals
         let mutex_tank_level_switch_signals =
@@ -1787,8 +1772,8 @@ pub mod tests {
                 // check if heater actuation has taken place
                 let mutex_data = mutex_device_scheduler_heating.lock().unwrap();
                 assert_eq!(*mutex_data, 1);
-            let finish_time = SystemTime::now();
-            let execution_duration = finish_time.duration_since(start_time).unwrap();
+            let finish_time = Instant::now();
+            let execution_duration = finish_time.duration_since(start_time);
             assert_le!(execution_duration.as_millis(), 650);
             println!(
                 "* [Heating] checking heating execution with pending quit/terminate command (time limit) succeeded."

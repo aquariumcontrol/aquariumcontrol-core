@@ -18,7 +18,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -728,6 +728,7 @@ impl Refill {
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
     ) {
+        let cycle_time_duration = Duration::from_millis(self.config.check_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();
@@ -795,7 +796,7 @@ impl Refill {
             .duration_since_last_refill
             .saturating_add(self.config.initial_wait_interval);
 
-        let mut start_time = SystemTime::now();
+        let mut start_time = Instant::now();
 
         // main control loop for refill
         loop {
@@ -925,29 +926,25 @@ impl Refill {
                 tank_level_switch_invalid
             );
 
-            let stop_time = SystemTime::now();
-            let execution_duration_millis =
-                stop_time.duration_since(start_time).unwrap().as_millis() as u64;
-            let cycle_time_refill_millis: u64 = self.config.check_interval * MILLIS_PER_SEC;
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
 
-            let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= cycle_time_refill_millis {
+            let mut remaining_sleep_time_millis: u64 = 0;
+            if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded {
                     warn!(target: LOG_TARGET_REFILL,
-                        "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration_millis,
-                        cycle_time_refill_millis
+                        "execution duration of {} ms exceeds cycle time of {} ms",
+                        execution_duration.as_millis(),
+                        cycle_time_duration.as_millis()
                     );
                     lock_warn_cycle_time_exceeded = true;
-                } else {
-                    lock_warn_cycle_time_exceeded = false;
                 }
-                remaining_sleep_time_millis = 0;
                 cycle_time_exceeded = true;
             } else {
                 // Execution duration is smaller than cycle time in this branch.
                 // No risk of underflow
-                remaining_sleep_time_millis = cycle_time_refill_millis - execution_duration_millis;
+                let remaining_sleep_time_duration = cycle_time_duration - execution_duration;
+                remaining_sleep_time_millis = remaining_sleep_time_duration.as_millis() as u64;
                 cycle_time_exceeded = false;
                 lock_warn_cycle_time_exceeded = false;
             }
@@ -1005,7 +1002,7 @@ impl Refill {
                 }
             }
 
-            start_time = SystemTime::now();
+            start_time = Instant::now();
 
             refill_stats_data.duration_since_last_refill = refill_stats_data
                 .duration_since_last_refill
@@ -1079,7 +1076,7 @@ pub mod tests {
     use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, Instant};
 
     use crate::database::{sql_interface::SqlInterface, sql_interface_refill::SqlInterfaceRefill};
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -1353,16 +1350,16 @@ pub mod tests {
                     mutex_tank_level_switch_signals.tank_level_switch_position = true;
                 }
 
-                let start_time = SystemTime::now();
+                let start_time = Instant::now();
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-                let finish_time = SystemTime::now();
+                let finish_time = Instant::now();
                 let finalization_duration_millis =
-                    finish_time.duration_since(start_time).unwrap().as_millis();
+                    finish_time.duration_since(start_time).as_millis();
 
                 assert_ge!(finalization_duration_millis, 2000u128);
                 assert_le!(finalization_duration_millis, 2150u128);
@@ -1495,16 +1492,16 @@ pub mod tests {
                     .recv()
                     .unwrap();
 
-                let start_time = SystemTime::now();
+                let start_time = Instant::now();
                 spin_sleeper.sleep(sleep_duration_two_secs);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-                let finish_time = SystemTime::now();
+                let finish_time = Instant::now();
                 let finalization_duration_millis =
-                    finish_time.duration_since(start_time).unwrap().as_millis();
+                    finish_time.duration_since(start_time).as_millis();
 
                 println!(
                     "finalization_duration_millis = {}",
@@ -1632,7 +1629,7 @@ pub mod tests {
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let start_time = SystemTime::now();
+                let start_time = Instant::now();
 
                 // wait for the test object to trigger water injection
                 let _ = rx_test_environment_from_mock_water_injection
@@ -1640,21 +1637,19 @@ pub mod tests {
                     .unwrap();
 
                 // record time after the test object triggered water injection
-                let initial_waiting_time_passed = SystemTime::now();
+                let initial_waiting_time_passed = Instant::now();
 
                 // now we can send the quit command
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
-                let finish_time = SystemTime::now();
+                let finish_time = Instant::now();
                 let initial_wait_duration_millis = initial_waiting_time_passed
                     .duration_since(start_time)
-                    .unwrap()
                     .as_millis();
                 let finalization_duration_millis = finish_time
                     .duration_since(initial_waiting_time_passed)
-                    .unwrap()
                     .as_millis();
 
                 assert_le!(

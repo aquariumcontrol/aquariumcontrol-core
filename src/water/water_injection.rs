@@ -395,7 +395,6 @@ pub mod tests {
                 let actuation_duration = last_actuation_event
                     .time
                     .duration_since(first_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 4000);
@@ -468,7 +467,6 @@ pub mod tests {
                 let actuation_duration = last_actuation_event
                     .time
                     .duration_since(first_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 0);
@@ -696,7 +694,6 @@ pub mod tests {
                 let actuation_duration = last_actuation_event
                     .time
                     .duration_since(first_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 5890);
@@ -806,7 +803,6 @@ pub mod tests {
                 let actuation_duration = last_actuation_event
                     .time
                     .duration_since(first_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 40000);
@@ -909,7 +905,6 @@ pub mod tests {
                 let actuation_duration = last_actuation_event
                     .time
                     .duration_since(first_actuation_event.time)
-                    .unwrap()
                     .as_millis();
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 1900);

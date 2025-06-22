@@ -10,12 +10,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use std::fmt::{Display, Formatter};
-    use std::time::SystemTime;
+    use std::time::Instant;
 
     use crate::watchmen::petting::PettingTrait;
 
     pub struct MockPetting {
-        pub petting_recorder: Vec<SystemTime>,
+        pub petting_recorder: Vec<Instant>,
         pub signal_recorder: Vec<String>,
     }
 
@@ -58,7 +58,7 @@ pub mod tests {
 
     impl PettingTrait for MockPetting {
         fn pet(&mut self, _: &str, s: &str) {
-            let time = SystemTime::now();
+            let time = Instant::now();
             self.petting_recorder.push(time);
             self.signal_recorder.push(s.to_string());
             // println!("Petting: {:?}", time);

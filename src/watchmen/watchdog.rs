@@ -51,7 +51,7 @@ impl Watchdog {
     /// configuration. It performs critical **validation checks** on the configuration
     /// parameters to ensure the watchdog can operate correctly and safely.
     ///
-    /// **Validation Checks Performed:**
+    /// **Validation checks performed: **
     /// - `heartbeat_duration_millis` must be greater than zero.
     /// - `watchdog_filename` cannot be an empty string.
     /// - `watchdog_heartbeat` message cannot be an empty string.
@@ -179,7 +179,7 @@ impl Watchdog {
             }
         }
 
-        // Application received the request to terminate, that is why the loop was left.
+        // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match tx_to_signal_handler.send(true) {
             Ok(()) => {}
@@ -318,7 +318,7 @@ pub mod tests {
                 for i in 1..mock_petting.petting_recorder.len() {
                     let previous_ts = mock_petting.petting_recorder[i - 1];
                     let current_ts = mock_petting.petting_recorder[i];
-                    let delta_duration = current_ts.duration_since(previous_ts).unwrap();
+                    let delta_duration = current_ts.duration_since(previous_ts);
 
                     // Assert that the delta is within the allowed range
                     assert!(

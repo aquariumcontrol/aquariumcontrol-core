@@ -13,7 +13,7 @@ pub mod tests {
 
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
-    use std::time::{Duration, SystemTime};
+    use std::time::Duration;
 
     use crate::stubs::actuation_event::tests::ActuationEvent;
     use crate::utilities::channel_content::InternalCommand;
@@ -36,8 +36,7 @@ pub mod tests {
                         }
                         _ => {
                             // println!("mock_relay_manager: Received command {}", command);
-                            // store tuple of SystemTime and command in vector
-                            result.push(ActuationEvent::new(SystemTime::now(), command));
+                            result.push(ActuationEvent::new(command));
                         }
                     }
                 }

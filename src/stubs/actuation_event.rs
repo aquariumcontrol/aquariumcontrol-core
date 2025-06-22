@@ -9,21 +9,20 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::{DateTime, Utc};
     use std::fmt;
-    use std::time::SystemTime;
+    use std::time::Instant;
 
     use crate::utilities::channel_content::InternalCommand;
 
     #[derive(Clone)]
     pub struct ActuationEvent {
-        pub time: SystemTime,
+        pub time: Instant,
         pub command: InternalCommand,
     }
 
     impl ActuationEvent {
-        pub fn new(time: SystemTime, command: InternalCommand) -> ActuationEvent {
-            ActuationEvent { time, command }
+        pub fn new(command: InternalCommand) -> ActuationEvent {
+            ActuationEvent { time: Instant::now(), command }
         }
     }
 
@@ -32,8 +31,7 @@ pub mod tests {
         /// # Arguments
         /// * `f` - configuration for formatting
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let datetime: DateTime<Utc> = self.time.into();
-            write!(f, "{}: {}", datetime.format("%d/%m/%Y %T"), self.command)
+            write!(f, "{}", self.command)
         }
     }
 }

@@ -14,7 +14,7 @@ use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -383,6 +383,7 @@ impl TankLevelSwitch {
     ) {
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
+        let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!(
@@ -391,7 +392,7 @@ impl TankLevelSwitch {
             );
         }
 
-        let mut start_time = SystemTime::now();
+        let mut start_time = Instant::now();
 
         loop {
             let (
@@ -423,38 +424,26 @@ impl TankLevelSwitch {
                 }
             }
 
-            let stop_time = SystemTime::now();
-            let execution_duration_millis = match stop_time.duration_since(start_time) {
-                Ok(c) => c.as_millis() as u64,
-                Err(e) => {
-                    warn!(
-                        target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                        "Could not calculate execution time: {e:?}."
-                    );
-                    0 // provide default value
-                }
-            };
-
-            let remaining_sleep_time_millis: u64;
-            if execution_duration_millis >= CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS {
+            let stop_time = Instant::now();
+            let execution_duration = stop_time.duration_since(start_time);
+            if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded {
                     warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
-                        execution_duration_millis,
+                        cycle_time_duration.as_millis(),
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
                 }
-                remaining_sleep_time_millis = 0;
-            } else {
-                remaining_sleep_time_millis =
-                    CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS - execution_duration_millis;
-                lock_warn_cycle_time_exceeded = false;
             }
-            // sleep time does not need to be split up because cycle time is 100 milliseconds only
-            let sleep_duration = Duration::from_millis(remaining_sleep_time_millis);
-            spin_sleeper.sleep(sleep_duration);
+            else {
+                let remaining_sleep_time =
+                    cycle_time_duration - execution_duration;
+                lock_warn_cycle_time_exceeded = false;
+                // sleep time does not need to be split up because cycle time is 100 milliseconds only
+                spin_sleeper.sleep(remaining_sleep_time);
+            }
 
-            start_time = SystemTime::now();
+            start_time = Instant::now();
         }
 
         match tx_to_signal_handler.send(true) {
