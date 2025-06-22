@@ -249,6 +249,7 @@ impl TankLevelSwitch {
             lock_error_channel_receive_termination: false,
             lock_error_input_pin_none: false,
             input_pin_opt: Some(tank_level_pin.into_input_pullup()),
+            lock_warn_max_mutex_access_duration: false,
         }
     }
 
