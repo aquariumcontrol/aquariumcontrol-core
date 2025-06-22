@@ -728,7 +728,8 @@ impl Refill {
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
     ) {
-        let cycle_time_duration = Duration::from_millis(self.config.check_interval * MILLIS_PER_SEC);
+        let cycle_time_duration =
+            Duration::from_millis(self.config.check_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let mut i = 0;
         let spin_sleeper = SpinSleeper::default();

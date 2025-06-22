@@ -950,7 +950,8 @@ impl DataLogger {
         data_logger_channels: DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
-        let cycle_time_duration = Duration::from_millis(self.config.logging_interval * MILLIS_PER_SEC);
+        let cycle_time_duration =
+            Duration::from_millis(self.config.logging_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut i;
@@ -1095,7 +1096,7 @@ impl DataLogger {
                 cycle_time_exceeded = true;
             } else {
                 // underflow cannot happen because the else statement requires that the first operand is higher than the second
-                let remaining_sleep_time_duration =  cycle_time_duration - execution_duration;
+                let remaining_sleep_time_duration = cycle_time_duration - execution_duration;
                 remaining_sleep_time_millis = remaining_sleep_time_duration.as_millis() as u64;
                 cycle_time_exceeded = false;
             }

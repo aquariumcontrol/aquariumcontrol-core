@@ -70,7 +70,10 @@ mod sensor_manager_constants {
     pub const SIMULATOR_MEASUREMENT_INTERVAL_MILLIS: u64 = 500;
 
     // time interval for updating measurement data
-    pub const HW_MEASUREMENT_INTERVAL_MILLIS: u64 = 30000;
+    pub const HW_MEASUREMENT_INTERVAL_MILLIS: u64 = 500;
+
+    /// allow max. 10 milliseconds for mutex to be blocked by any other thread
+    pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 
 pub struct SensorManagerChannels<'a> {
@@ -213,6 +216,13 @@ pub struct SensorManager {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to acquire lock on mutex for ambient temperature from Ds18b20 sensor
     lock_error_ds18b20_ambient_temperature_mutex: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
+    lock_warn_max_mutex_access_duration: bool,
+
+    // for testing purposes: record when mutex access time is exceeded without resetting it
+    #[cfg(test)]
+    mutex_access_duration_exceeded: bool,
 }
 
 impl ProcessExternalRequestTrait for SensorManager {}
@@ -295,6 +305,9 @@ impl SensorManager {
             lock_error_atlas_scientific_conductivity_mutex: false,
             lock_error_ds18b20_water_temperature_mutex: false,
             lock_error_ds18b20_ambient_temperature_mutex: false,
+            lock_warn_max_mutex_access_duration: false,
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
         }
     }
 
@@ -384,6 +397,8 @@ impl SensorManager {
         sensor_manager_channels: SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
+        let max_mutex_access_duration =
+            Duration::from_millis(sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         if (self.config.use_simulator)
             && (sensor_manager_channels
                 .tx_sensor_manager_to_tcp_opt
@@ -439,7 +454,7 @@ impl SensorManager {
                             Ok(ds18b20_water_temperature_result) => {
                                 match &*ds18b20_water_temperature_result {
                                     Ok(ds18b20_water_temperature_result_data) => {
-                                        self.ambient_temperature =
+                                        self.water_temperature =
                                             ds18b20_water_temperature_result_data.value;
                                     }
                                     Err(_) => {
@@ -571,10 +586,14 @@ impl SensorManager {
                         }
                     }
 
+                    let instant_before_locking_mutex = Instant::now();
+                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+                    
                     // write the measurement result to Mutex
                     {
                         match mutexes.mutex_sensor_manager_signals.lock() {
                             Ok(mut sensor_manager_signals) => {
+                                instant_after_locking_mutex = Instant::now();
                                 sensor_manager_signals.ambient_humidity = self.ambient_humidity;
                                 sensor_manager_signals.ambient_temperature =
                                     self.ambient_temperature;
@@ -588,12 +607,33 @@ impl SensorManager {
                             }
                         }
                     }
+
+                    // check if access to mutex took too long
+                    let measured_mutex_access_duration =
+                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                    if measured_mutex_access_duration > max_mutex_access_duration {
+                        if !self.lock_warn_max_mutex_access_duration {
+                            self.lock_warn_max_mutex_access_duration = true;
+                            warn!(target: LOG_TARGET_SENSOR_MANAGER,
+                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                                max_mutex_access_duration.as_millis(),
+                                measured_mutex_access_duration.as_millis(),
+                            );
+                            // record for testing purposes only
+                            cfg_if::cfg_if! {
+                                if #[cfg(test)] {
+                                    self.mutex_access_duration_exceeded = true;
+                                }
+                            }
+                        }
+                    } else {
+                        self.lock_warn_max_mutex_access_duration = false;
+                    }
                 }
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
-        //println!("{}: finished loop. Shutting down.", LOG_TARGET_SENSOR_MANAGER);
         match sensor_manager_channels
             .tx_sensor_manager_to_signal_handler
             .send(true)
@@ -686,11 +726,28 @@ pub mod tests {
     fn mock_signal_handler_for_sensor_manager(
         tx_signal_handler_to_sensor_manager: Sender<InternalCommand>,
         rx_signal_handler_from_sensor_manager: Receiver<bool>,
+        mutex_sensor_manager_opt: Option<Arc<Mutex<SensorManagerSignals>>>,
     ) {
-        // mock signal handler
-        let sleep_duration_8_seconds = Duration::from_millis(8000);
         let spin_sleeper = SpinSleeper::default();
-        spin_sleeper.sleep(sleep_duration_8_seconds);
+        // mock signal handler
+        if mutex_sensor_manager_opt.is_none() {
+            let sleep_duration_8_seconds = Duration::from_millis(8000);
+            spin_sleeper.sleep(sleep_duration_8_seconds);
+        } else {
+            let mutex_sensor_manager = mutex_sensor_manager_opt.unwrap();
+            let sleep_duration_1_second = Duration::from_millis(1000);
+            for i in 0..8 {
+                if i % 2 > 0 {
+                    {
+                        // block the mutex on purpose
+                        let _unused = mutex_sensor_manager.lock().unwrap();
+                        spin_sleeper.sleep(sleep_duration_1_second);
+                    }
+                } else {
+                    spin_sleeper.sleep(sleep_duration_1_second);
+                }
+            }
+        }
         let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Quit);
         rx_signal_handler_from_sensor_manager.recv().unwrap();
         let _ = tx_signal_handler_to_sensor_manager.send(InternalCommand::Terminate);
@@ -703,6 +760,7 @@ pub mod tests {
         mutexes: SensorManagerMutexes,
         target_value_water_temperature: f32,
         target_value_ambient_temperature: f32,
+        reference_mutex_access_time_exceeded: bool,
     ) {
         let sensor_manager_channels = SensorManagerChannels {
             tx_sensor_manager_to_tcp_opt: &None,
@@ -734,12 +792,17 @@ pub mod tests {
                 panic!("Could not lock mutex: {e:?}")
             }
         };
+
+        assert_eq!(
+            sensor_manager.mutex_access_duration_exceeded,
+            reference_mutex_access_time_exceeded
+        );
     }
 
     #[test]
     // Test case verifies if the test object is processing the interfaces correctly using input
     // from Ds18b20 sensors.
-    pub fn test_sensor_manager_interfaces_using_ds18b20_as_input() {
+    pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_without_mutex_blocked() {
         // channels for communication with the test environment
         let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
             mpsc::channel();
@@ -795,6 +858,7 @@ pub mod tests {
                 mock_signal_handler_for_sensor_manager(
                     tx_signal_handler_to_sensor_manager,
                     rx_signal_handler_from_sensor_manager,
+                    None,
                 );
             });
 
@@ -806,6 +870,7 @@ pub mod tests {
                     mutexes,
                     target_value_water_temperature,
                     target_value_ambient_temperature,
+                    false, // no mutex blocking in this test case
                 );
             });
         });
@@ -870,6 +935,7 @@ pub mod tests {
                 mock_signal_handler_for_sensor_manager(
                     tx_signal_handler_to_sensor_manager,
                     rx_signal_handler_from_sensor_manager,
+                    None,
                 );
             });
 
@@ -881,6 +947,87 @@ pub mod tests {
                     mutexes,
                     target_value_water_temperature,
                     target_value_ambient_temperature,
+                    false, // no mutex blocking in this test case
+                );
+            });
+        });
+    }
+
+    #[test]
+    // Test case verifies if the test object is processing the interfaces correctly using input
+    // from Ds18b20 sensors while having mutex blocked
+    pub fn test_sensor_manager_interfaces_using_ds18b20_as_input_with_mutex_blocked() {
+        // channels for communication with the test environment
+        let (tx_signal_handler_to_sensor_manager, rx_sensor_manager_from_signal_handler) =
+            mpsc::channel();
+        let (tx_sensor_manager_to_signal_handler, rx_signal_handler_from_sensor_manager) =
+            mpsc::channel();
+
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.sensor_manager.use_simulator = false;
+        config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
+        config.sensor_manager.source_water_temperature = "ds18b20".to_string();
+
+        let target_value_water_temperature =
+            config.sensor_manager.replacement_value_water_temperature;
+        let target_value_ambient_temperature =
+            config.sensor_manager.replacement_value_ambient_temperature;
+
+        let mutex_ds18b20_water_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+            target_value_water_temperature,
+        ))));
+        let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+            target_value_ambient_temperature,
+        ))));
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(target_value_water_temperature + 1.0),
+        )));
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
+        )));
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+            config.sensor_manager.replacement_value_ph,
+        ))));
+        let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
+            &config.sensor_manager,
+        )));
+        let mutex_sensor_manager_signals_clone_for_test_environment =
+            mutex_sensor_manager_signals.clone();
+
+        let dht_result = Ok((target_value_ambient_temperature + 1.0, 2.0));
+        let mutex_dht = Arc::new(Mutex::new(dht_result));
+
+        let sensor_manager = SensorManager::new(config.sensor_manager);
+
+        let mutexes = SensorManagerMutexes {
+            mutex_ds18b20_ambient_temperature,
+            mutex_ds18b20_water_temperature,
+            mutex_dht,
+            mutex_atlas_scientific_temperature,
+            mutex_atlas_scientific_ph,
+            mutex_atlas_scientific_conductivity,
+            mutex_sensor_manager_signals,
+        };
+
+        scope(|scope| {
+            scope.spawn(move || {
+                mock_signal_handler_for_sensor_manager(
+                    tx_signal_handler_to_sensor_manager,
+                    rx_signal_handler_from_sensor_manager,
+                    Some(mutex_sensor_manager_signals_clone_for_test_environment),
+                );
+            });
+
+            scope.spawn(move || {
+                execute_and_assert_sensor_manager(
+                    tx_sensor_manager_to_signal_handler,
+                    rx_sensor_manager_from_signal_handler,
+                    sensor_manager,
+                    mutexes,
+                    target_value_water_temperature,
+                    target_value_ambient_temperature,
+                    true, // mutex blocking in this test case
                 );
             });
         });

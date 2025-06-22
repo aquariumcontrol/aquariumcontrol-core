@@ -22,7 +22,10 @@ pub mod tests {
 
     impl ActuationEvent {
         pub fn new(command: InternalCommand) -> ActuationEvent {
-            ActuationEvent { time: Instant::now(), command }
+            ActuationEvent {
+                time: Instant::now(),
+                command,
+            }
         }
     }
 

@@ -44,6 +44,9 @@ const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
 /// sleep time is adjusted accordingly to run at fixed execution time
 const CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS: u64 = 100;
 
+/// allow max. 10 milliseconds for mutex to be blocked by any other thread
+const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
+
 /// Contains all signal information from the tank level switch relevant for other threads:
 /// - measured tank level switch position
 /// - stabilized tank level switch position
@@ -128,6 +131,13 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
     lock_error_channel_receive_termination: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
+    lock_warn_max_mutex_access_duration: bool,
+
+    // for testing purposes: record when mutex access time is exceeded without resetting it
+    #[cfg(test)]
+    mutex_access_duration_exceeded: bool,
+
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     lock_error_input_pin_none: bool,
@@ -172,6 +182,9 @@ impl TankLevelSwitch {
             tank_level_switch_position_low_stabilization_counter: 0,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
+            lock_warn_max_mutex_access_duration: false,
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
         }
     }
 
@@ -381,6 +394,7 @@ impl TankLevelSwitch {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) {
+        let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
@@ -409,10 +423,14 @@ impl TankLevelSwitch {
 
             self.calc_tank_level_switch_position_stabilized();
 
+            let instant_before_locking_mutex = Instant::now();
+            let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+
             // Write calculated signals to mutex
             {
                 match mutex_tank_level_switch_signals.lock() {
                     Ok(mut c) => {
+                        instant_after_locking_mutex = Instant::now();
                         c.tank_level_switch_position_stabilized =
                             self.tank_level_switch_position_stabilized;
                         c.tank_level_switch_invalid = self.tank_level_switch_invalid;
@@ -422,6 +440,29 @@ impl TankLevelSwitch {
                         // Do nothing
                     }
                 }
+            }
+
+            // check if access to mutex took too long
+            let measured_mutex_access_duration =
+                instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+            if measured_mutex_access_duration > max_mutex_access_duration {
+                if !self.lock_warn_max_mutex_access_duration {
+                    self.lock_warn_max_mutex_access_duration = true;
+                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                        "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                        max_mutex_access_duration.as_millis(),
+                        measured_mutex_access_duration.as_millis(),
+                    );
+
+                    // record for testing purposes only
+                    cfg_if::cfg_if! {
+                        if #[cfg(test)] {
+                            self.mutex_access_duration_exceeded = true;
+                        }
+                    }
+                }
+            } else {
+                self.lock_warn_max_mutex_access_duration = false;
             }
 
             let stop_time = Instant::now();
@@ -434,10 +475,8 @@ impl TankLevelSwitch {
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
                     lock_warn_cycle_time_exceeded = true;
                 }
-            }
-            else {
-                let remaining_sleep_time =
-                    cycle_time_duration - execution_duration;
+            } else {
+                let remaining_sleep_time = cycle_time_duration - execution_duration;
                 lock_warn_cycle_time_exceeded = false;
                 // sleep time does not need to be split up because cycle time is 100 milliseconds only
                 spin_sleeper.sleep(remaining_sleep_time);
@@ -1073,5 +1112,119 @@ pub mod tests {
         join_handle_test_environment
             .join()
             .expect("Test environment thread did not finish.");
+    }
+    #[test]
+    pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true_with_mutex_blocked_too_long(
+    ) {
+        // test if mutex access duration is measured and monitored
+        let (tx_tank_level_switch_to_tcp, rx_tcp_from_tank_level_switch) = mpsc::channel();
+        let (tx_tcp_to_tank_level_switch, rx_tank_level_switch_from_tcp) = mpsc::channel();
+        let (tx_tank_level_switch_to_signal_handler, rx_signal_handler_from_tank_level_switch) =
+            mpsc::channel();
+        let (tx_signal_handler_to_tank_level_switch, rx_tank_level_switch_from_signal_handler) =
+            mpsc::channel();
+        let (tx_signal_handler_to_refill, _rx_refill_from_signal_handler) = mpsc::channel();
+        let (tx_signal_handler_to_heating, _rx_heating_from_signal_handler) = mpsc::channel();
+        let (tx_test_environment_to_tcp, rx_tcp_from_test_environment) = mpsc::channel();
+
+        let mut config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+        config.refill.initial_wait_interval = 2;
+        config.refill.check_interval = 60;
+
+        let duration_test_case_part_1: u64 = 3; // three seconds with level switch in low position
+        let duration_test_case_part_2: u64 = 2; // two seconds with level switch in high position
+
+        #[cfg(all(target_os = "linux", feature = "target_hw"))]
+        let mut tank_level_switch = TankLevelSwitch::new(
+            config.tank_level_switch,
+            false,
+            None,
+            config.gpio_handler.tank_level_switch,
+        );
+        #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
+        let mutex_tank_level_switch_signals =
+            Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
+        let mutex_tank_level_switch_signals_clone_for_test_environment =
+            mutex_tank_level_switch_signals.clone();
+
+        // thread for mock tcp
+        let join_handle_mock_tcp = thread::Builder::new()
+            .name("mock_tcp".to_string())
+            .spawn(move || {
+                mock_tcp_for_tank_level_switch(
+                    &tx_tcp_to_tank_level_switch,
+                    &rx_tcp_from_tank_level_switch,
+                    Some(&rx_tcp_from_test_environment),
+                    false,
+                    false,
+                );
+            })
+            .unwrap();
+
+        let tx_test_environment_to_tcp_for_test_case_finish = tx_tank_level_switch_to_tcp.clone();
+
+        // thread for controlling duration of test run
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_duration_part_1 = Duration::from_secs(duration_test_case_part_1.into());
+                let sleep_duration_part_2 = Duration::from_secs(duration_test_case_part_2.into());
+                let sleep_duration_thread_processing = Duration::from_millis(50);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_duration_part_1);
+                let _ = tx_test_environment_to_tcp.send(TestCommand::UpdateSignal(
+                    MockSignal::TankLevelSwitchPosition(true),
+                ));
+                {
+                    // block the mutex on purpose
+                    let _unused = mutex_tank_level_switch_signals_clone_for_test_environment.lock();
+                    spin_sleeper.sleep(sleep_duration_part_2);
+                }
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
+                spin_sleeper.sleep(sleep_duration_thread_processing);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Quit);
+                rx_signal_handler_from_tank_level_switch.recv().unwrap();
+                let _ = tx_signal_handler_to_heating.send(InternalCommand::Terminate);
+                let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
+                let _ = tx_test_environment_to_tcp_for_test_case_finish.send(InternalCommand::Quit);
+                let _ = tx_signal_handler_to_tank_level_switch.send(InternalCommand::Terminate);
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
+                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
+
+                tank_level_switch.execute(
+                    &tx_tank_level_switch_to_tcp_opt,
+                    &rx_tank_level_switch_from_tcp_opt,
+                    &tx_tank_level_switch_to_signal_handler,
+                    &rx_tank_level_switch_from_signal_handler,
+                    mutex_tank_level_switch_signals,
+                );
+
+                // check if monitoring recorded excessive mutex blocking time
+                assert_eq!(tank_level_switch.mutex_access_duration_exceeded, true);
+            })
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object thread did not finish.");
+        join_handle_mock_tcp
+            .join()
+            .expect("Mock TCP thread did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment thread did not finish.");
+
+        println!("* [TankLevelSwitch] testing immediate change false -> true for stabilized tank level position when invalid bit is false succeeded while having mutex blocked");
     }
 }

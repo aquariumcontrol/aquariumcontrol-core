@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use std::sync::mpsc::Sender;
     use std::sync::{Arc, Mutex};
-    use std::time::{Instant};
+    use std::time::Instant;
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
