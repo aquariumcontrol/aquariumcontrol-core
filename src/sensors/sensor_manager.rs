@@ -588,7 +588,7 @@ impl SensorManager {
 
                     let instant_before_locking_mutex = Instant::now();
                     let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
-                    
+
                     // write the measurement result to Mutex
                     {
                         match mutexes.mutex_sensor_manager_signals.lock() {

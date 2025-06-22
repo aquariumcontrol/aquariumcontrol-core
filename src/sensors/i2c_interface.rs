@@ -104,7 +104,7 @@ pub struct I2cResponse {
     /// sequence received from the bus participant
     pub read_buf: Vec<u8>,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
     #[allow(unused)]
     /// length of a message as informed by i2c::read
     pub length: usize,

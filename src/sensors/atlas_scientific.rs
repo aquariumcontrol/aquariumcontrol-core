@@ -87,7 +87,7 @@ pub struct AtlasScientificConfig {
 
 /// error codes for evaluation of sensor unit response
 #[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AtlasScientificError {
     /// The first character in the message sent from the sensor does not match the required magic number.
     FirstCharacterNotMagic,
@@ -108,6 +108,7 @@ pub enum AtlasScientificError {
     IncorrectBufferLength,
 }
 
+#[derive(Clone)]
 pub struct AtlasScientificResultData {
     pub value: f32,
 
@@ -168,6 +169,9 @@ mod atlas_scientific_constants {
 
     /// magic number at finish position inside the message which identifies valid response from sensor unit
     pub const MESSAGE_FINISH_MAGIC: u8 = 0;
+
+    /// allow max. 10 milliseconds for mutex to be blocked by any other thread
+    pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 
 /// Struct collects the channels for the communication between AtlasScientific and other components.
@@ -215,6 +219,23 @@ pub struct AtlasScientific {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive via the channel from I2cInterface thread
     lock_error_channel_receive_i2c_interface: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
+    lock_warn_max_mutex_access_duration_temperature: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for pH
+    lock_warn_max_mutex_access_duration_ph: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for conductivity
+    lock_warn_max_mutex_access_duration_conductivity: bool,
+
+    // for testing purposes: record when mutex access time is exceeded without resetting it
+    #[cfg(test)]
+    mutex_temperature_access_duration_exceeded: bool,
+    #[cfg(test)]
+    mutex_ph_access_duration_exceeded: bool,
+    #[cfg(test)]
+    mutex_conductivity_access_duration_exceeded: bool,
+
     pub last_measurement_instant: Instant,
 
     pub measurement_interval: Duration,
@@ -246,6 +267,19 @@ impl AtlasScientific {
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_send_i2c_interface: false,
             lock_error_channel_receive_i2c_interface: false,
+            lock_warn_max_mutex_access_duration_temperature: false,
+            lock_warn_max_mutex_access_duration_ph: false,
+            lock_warn_max_mutex_access_duration_conductivity: false,
+
+            #[cfg(test)]
+            mutex_temperature_access_duration_exceeded: false,
+
+            #[cfg(test)]
+            mutex_ph_access_duration_exceeded: false,
+
+            #[cfg(test)]
+            mutex_conductivity_access_duration_exceeded: false,
+
             last_measurement_instant: Instant::now(),
             measurement_interval,
         }
@@ -460,6 +494,8 @@ impl AtlasScientific {
         mutex_ph: &Arc<Mutex<AtlasScientificResult>>,
         mutex_conductivity: &Arc<Mutex<AtlasScientificResult>>,
     ) -> bool {
+        let max_mutex_access_duration =
+            Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let is_ph = matches!(signal, AquariumSignal::pH);
 
         match rx_atlas_scientific_from_i2c_interface.try_recv() {
@@ -489,29 +525,114 @@ impl AtlasScientific {
                         }
                     };
 
+                    let instant_before_locking_mutex = Instant::now();
+                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+
                     match signal {
                         AquariumSignal::WaterTemperature => match mutex_water_temperature.lock() {
-                            Ok(mut water_temperature) => *water_temperature = result,
+                            Ok(mut water_temperature) => {
+                                instant_after_locking_mutex = Instant::now();
+                                *water_temperature = result
+                            }
                             Err(_) => {
-                                error!("Could not lock mutex_conductivity.");
+                                error!("Could not lock mutex_water_temperature.");
                                 return false;
                             }
                         },
                         AquariumSignal::pH => match mutex_ph.lock() {
-                            Ok(mut ph) => *ph = result,
+                            Ok(mut ph) => {
+                                instant_after_locking_mutex = Instant::now();
+                                *ph = result
+                            }
                             Err(_) => {
                                 error!("Could not lock mutex_ph.");
                                 return false;
                             }
                         },
                         AquariumSignal::Conductivity => match mutex_conductivity.lock() {
-                            Ok(mut conductivity) => *conductivity = result,
+                            Ok(mut conductivity) => {
+                                instant_after_locking_mutex = Instant::now();
+                                *conductivity = result
+                            }
                             Err(_) => {
                                 error!("Could not lock mutex_conductivity.");
                                 return false;
                             }
                         },
                         _ => { /* do nothing */ }
+                    }
+
+                    // check if access to mutex took too long
+                    let measured_mutex_access_duration =
+                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                    if measured_mutex_access_duration > max_mutex_access_duration {
+                        match signal {
+                            AquariumSignal::WaterTemperature => {
+                                if !self.lock_warn_max_mutex_access_duration_temperature {
+                                    self.lock_warn_max_mutex_access_duration_temperature = true;
+                                    warn!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
+                                        max_mutex_access_duration.as_millis(),
+                                        measured_mutex_access_duration.as_millis(),
+                                    );
+                                    // record for testing purposes only
+                                    cfg_if::cfg_if! {
+                                        if #[cfg(test)] {
+                                            self.mutex_temperature_access_duration_exceeded = true;
+                                        }
+                                    }
+                                }
+                            }
+                            AquariumSignal::pH => {
+                                if !self.lock_warn_max_mutex_access_duration_ph {
+                                    self.lock_warn_max_mutex_access_duration_ph = true;
+                                    warn!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
+                                        max_mutex_access_duration.as_millis(),
+                                        measured_mutex_access_duration.as_millis(),
+                                    );
+                                    // record for testing purposes only
+                                    cfg_if::cfg_if! {
+                                        if #[cfg(test)] {
+                                            self.mutex_ph_access_duration_exceeded = true;
+                                        }
+                                    }
+                                }
+                            }
+                            AquariumSignal::Conductivity => {
+                                if !self.lock_warn_max_mutex_access_duration_conductivity {
+                                    self.lock_warn_max_mutex_access_duration_conductivity = true;
+                                    warn!(
+                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
+                                        max_mutex_access_duration.as_millis(),
+                                        measured_mutex_access_duration.as_millis(),
+                                    );
+                                    // record for testing purposes only
+                                    cfg_if::cfg_if! {
+                                        if #[cfg(test)] {
+                                            self.mutex_conductivity_access_duration_exceeded = true;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => { /* do nothing */ }
+                        }
+                    } else {
+                        match signal {
+                            AquariumSignal::WaterTemperature => {
+                                self.lock_warn_max_mutex_access_duration_temperature = false;
+                            }
+                            AquariumSignal::Conductivity => {
+                                self.lock_warn_max_mutex_access_duration_conductivity = false;
+                            }
+                            AquariumSignal::pH => {
+                                self.lock_warn_max_mutex_access_duration_ph = false;
+                            }
+                            _ => { /* do nothing */ }
+                        }
                     }
 
                     false // allow for the next request to be sent
@@ -692,13 +813,14 @@ impl AtlasScientific {
 pub mod tests {
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificError,
+        AtlasScientificResultData,
     };
-    use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse};
+    use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse, I2cResult};
     use crate::utilities::channel_content::AquariumSignal;
     use crate::utilities::config::{read_config_file, ConfigData};
     use assert_float_eq::*;
-    use std::sync::mpsc;
     use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::{mpsc, Arc, Mutex};
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -872,6 +994,147 @@ pub mod tests {
         );
 
         assert_eq!(result, false);
+    }
+
+    #[test]
+    // Test function receive_response_from_i2c_interface
+    pub fn test_receive_response_from_i2c_interface() {
+        let stimuli_array_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '2' as u8,
+            '3' as u8,
+            atlas_scientific_constants::DECIMAL_POINT,
+            '1' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_temperature = I2cResponse {
+            read_buf: stimuli_array_temperature.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let stimuli_array_conductivity: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '4' as u8,
+            '8' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_conductivity = I2cResponse {
+            read_buf: stimuli_array_conductivity.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let stimuli_array_ph: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '7' as u8,
+            atlas_scientific_constants::DECIMAL_POINT,
+            '2' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_ph = I2cResponse {
+            read_buf: stimuli_array_ph.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (_tx_atlas_scientific_to_i2c_interface, _rx_i2c_interface_from_atlas_scientific): (
+            Sender<I2cRequest>,
+            Receiver<I2cRequest>,
+        ) = mpsc::channel();
+
+        let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
+            Sender<I2cResult>,
+            Receiver<I2cResult>,
+        ) = mpsc::channel();
+
+        // Mutexes for Atlas Scientific signals
+        let mutex_atlas_scientific_temperature =
+            Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+                config.sensor_manager.replacement_value_water_temperature,
+            ))));
+
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+            config.sensor_manager.replacement_value_ph,
+        ))));
+
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
+        )));
+
+        // Sending stimuli for water temperature before triggering try_recv from the test object
+        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_temperature));
+
+        atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &rx_atlas_scientific_from_i2c_interface,
+            &mutex_atlas_scientific_temperature,
+            &mutex_atlas_scientific_ph,
+            &mutex_atlas_scientific_conductivity,
+        );
+
+        match mutex_atlas_scientific_temperature.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 23.1);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e);
+            }
+        };
+
+        // Sending stimuli for pH before triggering try_recv from the test object
+        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_ph));
+
+        atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx_atlas_scientific_from_i2c_interface,
+            &mutex_atlas_scientific_temperature,
+            &mutex_atlas_scientific_ph,
+            &mutex_atlas_scientific_conductivity,
+        );
+
+        match mutex_atlas_scientific_ph.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 7.2);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_ph lock poisoned: {:?}", e);
+            }
+        };
+
+        // Sending stimuli for conductivity before triggering try_recv from the test object
+        _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_conductivity));
+
+        atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::Conductivity,
+            &rx_atlas_scientific_from_i2c_interface,
+            &mutex_atlas_scientific_temperature,
+            &mutex_atlas_scientific_ph,
+            &mutex_atlas_scientific_conductivity,
+        );
+
+        match mutex_atlas_scientific_conductivity.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 48000.0);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
+            }
+        };
     }
 
     #[test]
