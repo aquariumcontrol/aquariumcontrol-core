@@ -446,9 +446,11 @@ fn main() {
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
 
     // instantiate driver for RGB LED
-    let mut ws2812b = Ws2812B::new(config.ws2812b);
-    ws2812b.set_color(RgbLedColor::Red);
-
+    if config.ws2812b.active {
+        let mut ws2812b = Ws2812B::new(config.ws2812b);
+        ws2812b.set_color(RgbLedColor::Red);
+    }
+    
     // connect to SQL database, subsequently set up component-specific interfaces
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,

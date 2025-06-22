@@ -37,8 +37,14 @@ pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
 
 #[derive(Deserialize)]
 pub struct Ws2812BConfig {
+    /// SPI device name
     pub device_name: String,
+    
+    /// number of LEDs to be switched on/off
     pub number_leds: usize,
+
+    /// switch for enabling functionality
+    pub active: bool,
 }
 
 pub struct Ws2812B {
