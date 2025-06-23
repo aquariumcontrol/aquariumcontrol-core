@@ -6,14 +6,19 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use log::warn;
-use serde_derive::Deserialize;
-use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
-use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
-use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
-
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use serde_derive::Deserialize;
+        use log::warn;
+        use ws2818_rgb_led_spi_driver::adapter_gen::WS28xxAdapter;
+        use ws2818_rgb_led_spi_driver::adapter_spi::WS28xxSpiAdapter;
+        use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
+    }
+}
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 const LOG_TAG_WS2812B: &str = "WS2812B";
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub enum RgbLedColor {
     #[allow(unused)]
     Red,
@@ -25,6 +30,7 @@ pub enum RgbLedColor {
     Blue,
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
     match color {
         // WS2812B is commonly GRB: Green, Red, Blue
@@ -36,6 +42,7 @@ pub fn get_ws2812b_color_bytes(color: RgbLedColor) -> &'static [u8; 3] {
 }
 
 #[derive(Deserialize)]
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812BConfig {
     /// SPI device name
     pub device_name: String,
@@ -47,8 +54,9 @@ pub struct Ws2812BConfig {
     pub active: bool,
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812B {
-    #[allow(unused)]
+
     /// SPI-based driver interface
     adapter: WS28xxSpiAdapter,
 
@@ -56,19 +64,22 @@ pub struct Ws2812B {
     config: Ws2812BConfig,
 }
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl Ws2812B {
     pub fn new(config: Ws2812BConfig) -> Ws2812B {
-        let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
-            Ok(adapter) => adapter,
-            Err(e) => panic!(
-                "{}: Could not instantiate adapter for RGB LED {e:?}",
-                LOG_TAG_WS2812B
-            ),
-        };
-
-        Ws2812B { adapter, config }
+        cfg_if::cfg_if! {
+            let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
+                Ok(adapter) => adapter,
+                Err(e) => panic!(
+                    "{}: Could not instantiate adapter for RGB LED {e:?}",
+                    LOG_TAG_WS2812B
+                ),
+            };
+            Ws2812B { adapter, config }
+        }
     }
 
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub fn set_color(&mut self, color: RgbLedColor) {
         let raw_color_bytes = get_ws2812b_color_bytes(color); // This is [G, R, B]
 
@@ -84,7 +95,7 @@ impl Ws2812B {
                 raw_color_bytes[2], // Blue component
             ));
         }
-
+        
         match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
             Ok(_) => {}
             Err(e) => {
@@ -95,18 +106,14 @@ impl Ws2812B {
 }
 
 #[cfg(test)]
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub mod tests {
-    cfg_if::cfg_if! {
-        if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-            use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
-            use crate::utilities::config::{read_config_file, ConfigData};
-            use spin_sleep::SpinSleeper;
-            use std::time::Duration;
-        }
-    }
+    use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
+    use crate::utilities::config::{read_config_file, ConfigData};
+    use spin_sleep::SpinSleeper;
+    use std::time::Duration;
 
     #[test]
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[ignore]
     pub fn test_ws2821b_set_colors() {
         let config: ConfigData =

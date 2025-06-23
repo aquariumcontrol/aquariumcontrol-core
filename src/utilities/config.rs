@@ -13,7 +13,10 @@ use log::info;
 use serde_derive::Deserialize;
 use std::fs;
 
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::beacon::ws2812b::Ws2812BConfig;
+
 use crate::food::feed::FeedConfig;
 use crate::mineral::balling::BallingConfig;
 use crate::recorder::data_logger::DataLoggerConfig;
@@ -120,6 +123,7 @@ pub struct ConfigData {
     pub ds18b20: Ds18b20Config,
 
     /// configuration of WS2812B RGB LED
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub ws2812b: Ws2812BConfig,
 }
 

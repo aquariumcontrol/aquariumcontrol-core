@@ -74,7 +74,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
-
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
@@ -93,10 +92,14 @@ use crate::sensors::sensor_manager::{
     SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
 };
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::sensors::gpio_handler::GpioHandler;
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use crate::sensors::gpio_handler::GpioHandler;
+        use crate::beacon::ws2812b::RgbLedColor;
+        use crate::beacon::ws2812b::Ws2812B;
+    }
+}
 
-use crate::beacon::ws2812b::{RgbLedColor, Ws2812B};
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::{Messaging, MessagingChannels};
 use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
@@ -446,6 +449,7 @@ fn main() {
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
 
     // instantiate driver for RGB LED
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     if config.ws2812b.active {
         let mut ws2812b = Ws2812B::new(config.ws2812b);
         ws2812b.set_color(RgbLedColor::Red);
@@ -751,6 +755,13 @@ fn main() {
     ) = mpsc::channel();
     // *******************************
 
+    // *** refill => monitors ***
+    let (tx_refill_to_monitors, _rx_monitors_from_refill): (
+        Sender<bool>,
+        Receiver<bool>,
+    ) = mpsc::channel();
+    //********************************
+    
     // *** signal handler <=> refill ***
     let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
         Sender<InternalCommand>,
@@ -1233,6 +1244,7 @@ fn main() {
         rx_refill_from_signal_handler,
         tx_refill_to_schedule_check,
         rx_refill_from_schedule_check,
+        tx_refill_to_monitors,
         rx_refill_from_messaging_opt,
     };
 
