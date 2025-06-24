@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::str;
+use std::{fmt, str};
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -68,7 +68,7 @@ pub enum I2cError {
 pub struct I2cRequest {
     #[allow(unused)]
     /// I2C address of the bus participant
-    i2c_address: u16,
+    pub i2c_address: u16,
 
     #[allow(unused)]
     /// input sequence to be sent to the bus participant
@@ -99,7 +99,7 @@ impl I2cRequest {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct I2cResponse {
     /// sequence received from the bus participant
     pub read_buf: Vec<u8>,
@@ -108,6 +108,37 @@ pub struct I2cResponse {
     #[allow(unused)]
     /// length of a message as informed by i2c::read
     pub length: usize,
+}
+
+impl fmt::Display for I2cResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // descriptive prefix
+        write!(f, "I2cResponse [")?;
+
+        // Format the read_buf content
+        // Iterate over the bytes and format each as two-digit hexadecimal
+        for (i, &byte) in self.read_buf.iter().enumerate() {
+            write!(f, "{:02x}", byte)?; // :02x ensures two hexadecimal digits, padding with leading zero if necessary
+            if i < self.read_buf.len() - 1 {
+                write!(f, " ")?; // Add a space between bytes for readability
+            }
+        }
+
+        // Conditionally include the length field if it's compiled in
+        #[cfg(any(test, all(target_os = "linux", feature = "target_hw")))]
+        {
+            // Only show length if it's different from the actual buffer length,
+            // or if it's explicitly useful. In many cases, length == read_buf.len().
+            write!(f, "] (length: {})", self.length)?;
+        }
+
+        #[cfg(not(any(test, all(target_os = "linux", feature = "target_hw"))))]
+        {
+            write!(f, "]")?; // Close the bracket if length field is not present
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
