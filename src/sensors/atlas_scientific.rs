@@ -1369,6 +1369,245 @@ pub mod tests {
     }
 
     #[test]
+    // Test function receive_response_from_i2c_interface
+    pub fn test_atlas_scientific_interfaces_with_blocking_mutexes() {
+        let stimuli_array_temperature: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '2' as u8,
+            '3' as u8,
+            atlas_scientific_constants::DECIMAL_POINT,
+            '1' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_temperature = I2cResponse {
+            read_buf: stimuli_array_temperature.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let stimuli_array_conductivity: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '4' as u8,
+            '8' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_conductivity = I2cResponse {
+            read_buf: stimuli_array_conductivity.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let stimuli_array_ph: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            '7' as u8,
+            atlas_scientific_constants::DECIMAL_POINT,
+            '2' as u8,
+            '0' as u8,
+            '0' as u8,
+            '0' as u8,
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
+        let stimuli_i2c_response_ph = I2cResponse {
+            read_buf: stimuli_array_ph.into(),
+            length: atlas_scientific_constants::MESSAGE_SIZE,
+        };
+
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+
+        let measurement_interval_millis_for_test_environment =
+            config.atlas_scientific.measurement_interval_millis;
+
+        let mut mock_i2c_interface = MockI2cInterface::new(
+            &config.atlas_scientific,
+            stimuli_i2c_response_temperature.clone(),
+            stimuli_i2c_response_ph.clone(),
+            stimuli_i2c_response_conductivity.clone(),
+        );
+
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx_atlas_scientific_to_i2c_interface, rx_i2c_interface_from_atlas_scientific): (
+            Sender<I2cRequest>,
+            Receiver<I2cRequest>,
+        ) = mpsc::channel();
+
+        let (tx_i2c_interface_to_atlas_scientific, rx_atlas_scientific_from_i2c_interface): (
+            Sender<I2cResult>,
+            Receiver<I2cResult>,
+        ) = mpsc::channel();
+
+        let (tx_i2c_interface_to_signal_handler, _rx_signal_handler_from_i2c_interface): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+
+        let (tx_signal_handler_to_i2c_interface, rx_i2c_interface_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        let (tx_atlas_scientific_to_signal_handler, _rx_signal_handler_from_atlas_scientific): (
+            Sender<bool>,
+            Receiver<bool>,
+        ) = mpsc::channel();
+
+        let (tx_signal_handler_to_atlas_scientific, rx_atlas_scientific_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        let atlas_scientific_channels = AtlasScientificChannels {
+            tx_atlas_scientific_to_i2c_interface,
+            rx_atlas_scientific_from_i2c_interface,
+            tx_atlas_scientific_to_signal_handler,
+            rx_atlas_scientific_from_signal_handler,
+        };
+
+        // Mutexes for Atlas Scientific signals
+        let mutex_atlas_scientific_temperature =
+            Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+                config.sensor_manager.replacement_value_water_temperature,
+            ))));
+        let mutex_atlas_scientific_temperature_clone_for_asserts =
+            mutex_atlas_scientific_temperature.clone();
+        let mutex_atlas_scientific_temperature_clone_for_test_environment = mutex_atlas_scientific_temperature.clone();
+        
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+            config.sensor_manager.replacement_value_ph,
+        ))));
+        let mutex_atlas_scientific_ph_clone_for_asserts = mutex_atlas_scientific_ph.clone();
+        let mutex_atlas_scientific_ph_clone_for_test_environment = mutex_atlas_scientific_ph.clone();
+        
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+            AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
+        )));
+        let mutex_atlas_scientific_conductivity_clone_for_asserts =
+            mutex_atlas_scientific_conductivity.clone();
+        let mutex_atlas_scientific_conductivity_clone_for_test_environment = mutex_atlas_scientific_conductivity.clone();
+        
+        // thread for test environment (incl. signal handler)
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                let sleep_time = Duration::from_millis(
+                    measurement_interval_millis_for_test_environment + 1000,
+                );
+                let spin_sleeper = SpinSleeper::default();
+
+                // lock the mutexes and wait for triggering the detection
+                match mutex_atlas_scientific_temperature_clone_for_test_environment.lock() {
+                    Ok(_) => {
+                        spin_sleeper.sleep(sleep_time);        
+                    }
+                    Err(e) => {
+                        panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e);
+                    }
+                };
+                match mutex_atlas_scientific_ph_clone_for_test_environment.lock() {
+                    Ok(_) => {
+                        spin_sleeper.sleep(sleep_time);
+                    }
+                    Err(e) => {
+                        panic!("mutex_atlas_scientific_ph lock poisoned: {:?}", e);
+                    }
+                };
+                match mutex_atlas_scientific_conductivity_clone_for_test_environment.lock() {
+                    Ok(_) => {
+                        spin_sleeper.sleep(sleep_time);
+                    }
+                    Err(e) => {
+                        panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
+                    }
+                };
+                
+                tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Quit)
+                    .unwrap();
+                tx_signal_handler_to_i2c_interface
+                    .send(InternalCommand::Quit)
+                    .unwrap();
+                tx_signal_handler_to_atlas_scientific
+                    .send(InternalCommand::Terminate)
+                    .unwrap();
+            })
+            .unwrap();
+
+        // thread for mock i2c interface
+        let join_handle_mock_i2c_interface = thread::Builder::new()
+            .name("i2c_interface".to_string())
+            .spawn(move || {
+                mock_i2c_interface.execute(
+                    tx_i2c_interface_to_atlas_scientific,
+                    rx_i2c_interface_from_atlas_scientific,
+                    tx_i2c_interface_to_signal_handler,
+                    rx_i2c_interface_from_signal_handler,
+                );
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                atlas_scientific.execute(
+                    atlas_scientific_channels,
+                    mutex_atlas_scientific_temperature,
+                    mutex_atlas_scientific_ph,
+                    mutex_atlas_scientific_conductivity,
+                );
+                assert_eq!(atlas_scientific.mutex_temperature_access_duration_exceeded, true);
+                assert_eq!(atlas_scientific.mutex_ph_access_duration_exceeded, true);
+                assert_eq!(atlas_scientific.mutex_conductivity_access_duration_exceeded, true);
+            })
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object did not finish.");
+        join_handle_mock_i2c_interface
+            .join()
+            .expect("Mock i2c interface did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment did not finish.");
+
+        match mutex_atlas_scientific_temperature_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 23.1);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e);
+            }
+        };
+
+        match mutex_atlas_scientific_ph_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 7.2);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_ph lock poisoned: {:?}", e);
+            }
+        };
+
+        match mutex_atlas_scientific_conductivity_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 48000.0);
+            }
+            Err(e) => {
+                panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
+            }
+        };
+    }
+
+    #[test]
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[ignore]
     // read from real Atlas Scientific hardware combined in one test case to avoid race conditions:
