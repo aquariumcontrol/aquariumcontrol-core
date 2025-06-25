@@ -570,6 +570,7 @@ impl AtlasScientific {
                             AquariumSignal::WaterTemperature => {
                                 if !self.lock_warn_max_mutex_access_duration_temperature {
                                     self.lock_warn_max_mutex_access_duration_temperature = true;
+                                    #[cfg(not(test))]
                                     warn!(
                                         target: LOG_TARGET_ATLAS_SCIENTIFIC,
                                         "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
@@ -1475,34 +1476,36 @@ pub mod tests {
             ))));
         let mutex_atlas_scientific_temperature_clone_for_asserts =
             mutex_atlas_scientific_temperature.clone();
-        let mutex_atlas_scientific_temperature_clone_for_test_environment = mutex_atlas_scientific_temperature.clone();
-        
+        let mutex_atlas_scientific_temperature_clone_for_test_environment =
+            mutex_atlas_scientific_temperature.clone();
+
         let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
             config.sensor_manager.replacement_value_ph,
         ))));
         let mutex_atlas_scientific_ph_clone_for_asserts = mutex_atlas_scientific_ph.clone();
-        let mutex_atlas_scientific_ph_clone_for_test_environment = mutex_atlas_scientific_ph.clone();
-        
+        let mutex_atlas_scientific_ph_clone_for_test_environment =
+            mutex_atlas_scientific_ph.clone();
+
         let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
             AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
         )));
         let mutex_atlas_scientific_conductivity_clone_for_asserts =
             mutex_atlas_scientific_conductivity.clone();
-        let mutex_atlas_scientific_conductivity_clone_for_test_environment = mutex_atlas_scientific_conductivity.clone();
-        
+        let mutex_atlas_scientific_conductivity_clone_for_test_environment =
+            mutex_atlas_scientific_conductivity.clone();
+
         // thread for test environment (incl. signal handler)
         let join_handle_test_environment = thread::Builder::new()
             .name("test_environment".to_string())
             .spawn(move || {
-                let sleep_time = Duration::from_millis(
-                    measurement_interval_millis_for_test_environment + 1000,
-                );
+                let sleep_time =
+                    Duration::from_millis(measurement_interval_millis_for_test_environment + 1000);
                 let spin_sleeper = SpinSleeper::default();
 
                 // lock the mutexes and wait for triggering the detection
                 match mutex_atlas_scientific_temperature_clone_for_test_environment.lock() {
                     Ok(_) => {
-                        spin_sleeper.sleep(sleep_time);        
+                        spin_sleeper.sleep(sleep_time);
                     }
                     Err(e) => {
                         panic!("mutex_atlas_scientific_temperature lock poisoned: {:?}", e);
@@ -1524,7 +1527,7 @@ pub mod tests {
                         panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
                     }
                 };
-                
+
                 tx_signal_handler_to_atlas_scientific
                     .send(InternalCommand::Quit)
                     .unwrap();
@@ -1560,9 +1563,15 @@ pub mod tests {
                     mutex_atlas_scientific_ph,
                     mutex_atlas_scientific_conductivity,
                 );
-                assert_eq!(atlas_scientific.mutex_temperature_access_duration_exceeded, true);
+                assert_eq!(
+                    atlas_scientific.mutex_temperature_access_duration_exceeded,
+                    true
+                );
                 assert_eq!(atlas_scientific.mutex_ph_access_duration_exceeded, true);
-                assert_eq!(atlas_scientific.mutex_conductivity_access_duration_exceeded, true);
+                assert_eq!(
+                    atlas_scientific.mutex_conductivity_access_duration_exceeded,
+                    true
+                );
             })
             .unwrap();
 

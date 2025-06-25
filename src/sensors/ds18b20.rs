@@ -26,9 +26,14 @@ use log::debug;
 use log::warn;
 
 mod ds18b20_constants {
-    pub(crate) const MIN_TEMPERATURE: f32 = 0.0; // minimum viable temperature
+    /// minimum viable temperature used for health check of sensor signal
+    pub const MIN_TEMPERATURE: f32 = 0.0;
 
-    pub(crate) const MAX_TEMPERATURE: f32 = 100.0; // maximum viable temperature
+    /// maximum viable temperature used for health check of sensor signal
+    pub const MAX_TEMPERATURE: f32 = 100.0;
+
+    /// allow max. 10 milliseconds for mutex to be blocked by any other thread
+    pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 /// Holds the configuration data for DS18B20 sensor communication.
 /// The configuration is loaded from the .toml configuration file.
@@ -65,7 +70,7 @@ pub struct Ds18b20Config {
     pub ambient_temperature_sensor_id: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Ds18b20Error {
     SensorIdNotFound(String),
 
@@ -99,6 +104,7 @@ impl fmt::Display for Ds18b20Error {
     }
 }
 
+#[derive(Clone)]
 pub struct Ds18b20ResultData {
     pub value: f32,
 
@@ -124,6 +130,13 @@ pub struct Ds18b20 {
     #[allow(unused)]
     /// configuration for communication with Ds18b20 sensor
     config: Ds18b20Config,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
+    lock_warn_max_mutex_access_duration: bool,
+
+    // for testing purposes: record when mutex access time is exceeded without resetting it
+    #[cfg(test)]
+    mutex_access_duration_exceeded: bool,
 }
 
 impl ProcessExternalRequestTrait for Ds18b20 {}
@@ -174,12 +187,18 @@ impl Ds18b20 {
         if config.active
             && config.water_temperature_sensor_id == config.ambient_temperature_sensor_id
         {
+            #[cfg(not(test))]
             warn!(
                 target: LOG_TARGET_DS18B20,
                 "Ambient and water temperature sensor IDs are identical."
             );
         }
-        Ds18b20 { config }
+        Ds18b20 {
+            config,
+            lock_warn_max_mutex_access_duration: false,
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
+        }
     }
 
     #[allow(unused)]
@@ -203,6 +222,9 @@ impl Ds18b20 {
     /// - `Ok(f32)`: The temperature in degree Celsius if successfully read and parsed.
     /// - `Err(Ds18b20Error)`: Description of the error which occurred during reading.
     pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
+        #[cfg(test)]
+        println!("{}: reading from {}", LOG_TARGET_DS18B20, sensor_id);
+
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
             base_dir.join(self.config.system_driver_sensor_path_prefix.to_string() + sensor_id);
@@ -285,6 +307,8 @@ impl Ds18b20 {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
+        let max_mutex_access_duration =
+            Duration::from_millis(ds18b20_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
 
         // initialize countdown
         let mut measurement_countdown: i32 = 0;
@@ -294,33 +318,50 @@ impl Ds18b20 {
                 // count down to zero
                 measurement_countdown = measurement_countdown.saturating_sub(100);
             } else {
+                let instant_before_locking_mutex = Instant::now();
+                let instant_after_locking_mutex: Instant;
+
                 // count down has reached zero - initiate the measurement
                 {
                     // life-time limitation of open mutex
                     let mut water_temperature = mutex_water_temperature.lock().unwrap();
                     let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
+                    instant_after_locking_mutex = Instant::now();
 
-                    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-                    {
-                        if !self.config.ambient_temperature_sensor_id.is_empty() {
-                            *ambient_temperature =
-                                self.read(self.config.ambient_temperature_sensor_id.as_str());
-                        }
-                        if !self.config.water_temperature_sensor_id.is_empty() {
-                            *water_temperature =
-                                self.read(self.config.water_temperature_sensor_id.as_str());
-                        }
+                    if !self.config.ambient_temperature_sensor_id.is_empty() {
+                        *ambient_temperature =
+                            self.read(self.config.ambient_temperature_sensor_id.as_str());
+                    }
+                    if !self.config.water_temperature_sensor_id.is_empty() {
+                        *water_temperature =
+                            self.read(self.config.water_temperature_sensor_id.as_str());
                     }
 
                     // restart the countdown
                     measurement_countdown = self.config.measurement_pause_duration_millis as i32;
+                }
 
-                    // avoid compiler warning - write default values for mutex
-                    #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
-                    {
-                        *ambient_temperature = Ok(Ds18b20ResultData::new(22.0));
-                        *water_temperature = Ok(Ds18b20ResultData::new(25.0));
+                // check if access to mutex took too long
+                let measured_mutex_access_duration =
+                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                if measured_mutex_access_duration > max_mutex_access_duration {
+                    if !self.lock_warn_max_mutex_access_duration {
+                        self.lock_warn_max_mutex_access_duration = true;
+                        warn!(target: LOG_TARGET_DS18B20,
+                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                            max_mutex_access_duration.as_millis(),
+                            measured_mutex_access_duration.as_millis(),
+                        );
+
+                        // record for testing purposes only
+                        cfg_if::cfg_if! {
+                            if #[cfg(test)] {
+                                self.mutex_access_duration_exceeded = true;
+                            }
+                        }
                     }
+                } else {
+                    self.lock_warn_max_mutex_access_duration = false;
                 }
             }
 
@@ -331,11 +372,13 @@ impl Ds18b20 {
             ) = self.process_external_request(&rx_from_signal_handler, None);
 
             if quit_command_received {
+                #[cfg(test)]
                 println!("Quitting Ds18b20");
+
                 break;
             }
 
-            // sleep for an incremental duration - before checking status from the signal handler
+            // sleep for a defined period
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
     }
@@ -343,11 +386,15 @@ impl Ds18b20 {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::sensors::ds18b20::LOG_TARGET_DS18B20;
-    use std::env;
-
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
+    use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData, LOG_TARGET_DS18B20};
+    use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
+    use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender};
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+    use std::{env, thread};
 
     #[test]
     #[ignore]
@@ -635,5 +682,197 @@ pub mod tests {
             ),
             true
         );
+    }
+
+    #[test]
+    fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+        config.ds18b20.ambient_temperature_sensor_id = "0114540015ab".to_string();
+
+        // Mutexes for DS18B20 signals
+        let mutex_ds18b20_water_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
+            Ds18b20ResultData::new(config.sensor_manager.replacement_value_water_temperature),
+        )));
+        let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> =
+            Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+                config.sensor_manager.replacement_value_ambient_temperature,
+            ))));
+        //let mutex_ds18b20_water_temperature_clone_for_test_environment =
+        //    mutex_ds18b20_water_temperature.clone();
+        //let mutex_ds18b20_ambient_temperature_clone_for_test_environment =
+        //    mutex_ds18b20_ambient_temperature.clone();
+        let mutex_ds18b20_water_temperature_clone_for_asserts =
+            mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_ambient_temperature_clone_for_asserts =
+            mutex_ds18b20_ambient_temperature.clone();
+
+        let mut ds18b20 = Ds18b20::new(config.ds18b20);
+
+        // *** signal handler => ds18b20 ***
+        let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        // thread for test environment (incl. signal handler)
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                // let test run a bit longer than the measurement interval
+                let sleep_time = Duration::from_millis(1000);
+                let spin_sleeper = SpinSleeper::default();
+                spin_sleeper.sleep(sleep_time);
+                tx_signal_handler_to_ds18b20
+                    .send(InternalCommand::Quit)
+                    .unwrap();
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                ds18b20.execute(
+                    rx_ds18b20_from_signal_handler,
+                    mutex_ds18b20_water_temperature,
+                    mutex_ds18b20_ambient_temperature,
+                );
+                assert_eq!(ds18b20.mutex_access_duration_exceeded, false);
+            })
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment did not finish.");
+
+        match mutex_ds18b20_water_temperature_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 24.437);
+            }
+            Err(e) => {
+                panic!("mutex_ds18b20_water_temperature lock poisoned: {:?}", e);
+            }
+        };
+        match mutex_ds18b20_ambient_temperature_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 24.637);
+            }
+            Err(e) => {
+                panic!("mutex_ds18b20_ambient_temperature lock poisoned: {:?}", e);
+            }
+        };
+    }
+
+    #[test]
+    fn test_dsb18b20_channel_mutexes_with_locking_mutexes() {
+        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+
+        let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
+            panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
+        });
+
+        config.ds18b20.system_driver_base_path = out_dir + "/tests/fixtures";
+        config.ds18b20.ambient_temperature_sensor_id = "0114540015ab".to_string();
+        config.ds18b20.measurement_pause_duration_millis = 500;
+
+        // Mutexes for DS18B20 signals
+        let mutex_ds18b20_water_temperature: Arc<Mutex<Ds18b20Result>> = Arc::new(Mutex::new(Ok(
+            Ds18b20ResultData::new(config.sensor_manager.replacement_value_water_temperature),
+        )));
+        let mutex_ds18b20_ambient_temperature: Arc<Mutex<Ds18b20Result>> =
+            Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
+                config.sensor_manager.replacement_value_ambient_temperature,
+            ))));
+        let mutex_ds18b20_water_temperature_clone_for_test_environment =
+            mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_water_temperature_clone_for_asserts =
+            mutex_ds18b20_water_temperature.clone();
+        let mutex_ds18b20_ambient_temperature_clone_for_asserts =
+            mutex_ds18b20_ambient_temperature.clone();
+
+        let mut ds18b20 = Ds18b20::new(config.ds18b20);
+
+        // *** signal handler => ds18b20 ***
+        let (tx_signal_handler_to_ds18b20, rx_ds18b20_from_signal_handler): (
+            Sender<InternalCommand>,
+            Receiver<InternalCommand>,
+        ) = mpsc::channel();
+
+        // thread for test environment (incl. signal handler)
+        let join_handle_test_environment = thread::Builder::new()
+            .name("test_environment".to_string())
+            .spawn(move || {
+                // let test run a bit longer than the measurement interval
+                let sleep_time = Duration::from_millis(2000);
+                let spin_sleeper = SpinSleeper::default();
+
+                {
+                    // lock the mutexes and wait for triggering the detection
+                    match mutex_ds18b20_water_temperature_clone_for_test_environment.lock() {
+                        Ok(_) => {
+                            spin_sleeper.sleep(sleep_time);
+                        }
+                        Err(e) => {
+                            panic!("mutex_ds18b20_water_temperature lock poisoned: {:?}", e);
+                        }
+                    };
+                }
+
+                tx_signal_handler_to_ds18b20
+                    .send(InternalCommand::Quit)
+                    .unwrap();
+                spin_sleeper.sleep(sleep_time);
+            })
+            .unwrap();
+
+        // thread for the test object
+        let join_handle_test_object = thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                ds18b20.execute(
+                    rx_ds18b20_from_signal_handler,
+                    mutex_ds18b20_water_temperature,
+                    mutex_ds18b20_ambient_temperature,
+                );
+                assert_eq!(ds18b20.mutex_access_duration_exceeded, true);
+            })
+            .unwrap();
+
+        join_handle_test_object
+            .join()
+            .expect("Test object did not finish.");
+        join_handle_test_environment
+            .join()
+            .expect("Test environment did not finish.");
+
+        match mutex_ds18b20_water_temperature_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 24.437);
+            }
+            Err(e) => {
+                panic!("mutex_ds18b20_water_temperature lock poisoned: {:?}", e);
+            }
+        };
+        match mutex_ds18b20_ambient_temperature_clone_for_asserts.lock() {
+            Ok(result) => {
+                let result_data = result.clone().unwrap();
+                assert_eq!(result_data.value, 24.637);
+            }
+            Err(e) => {
+                panic!("mutex_ds18b20_ambient_temperature lock poisoned: {:?}", e);
+            }
+        };
     }
 }
