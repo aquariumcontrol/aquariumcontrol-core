@@ -8,6 +8,10 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use log::error;
+
+#[cfg(not(test))]
+use log::warn;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -135,6 +139,10 @@ pub mod dht22_constants {
     // maximum number of allowed retries to get valid data
     #[allow(unused)]
     pub const DHT22_MAX_RETRIES: u64 = 5;
+
+    /// allow max. 10 milliseconds for mutex to be blocked by any other thread
+    #[allow(unused)]
+    pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 }
 
 #[derive(Debug, PartialEq)]
@@ -243,6 +251,13 @@ pub struct Dht {
 
     /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
     lock_error_max_retries: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
+    lock_warn_max_mutex_access_duration: bool,
+
+    // for testing purposes: record when mutex access time is exceeded without resetting it
+    #[cfg(test)]
+    mutex_access_duration_exceeded: bool,
 }
 
 impl Dht {
@@ -275,6 +290,10 @@ impl Dht {
             instant_last_measurement: Instant::now(),
             lock_error_mutex: false,
             lock_error_max_retries: false,
+            lock_warn_max_mutex_access_duration: false,
+            
+            #[cfg(test)]
+            mutex_access_duration_exceeded: false,
         }
     }
 
@@ -810,6 +829,7 @@ impl Dht {
         mutex_dht: Arc<Mutex<DhtResult>>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
+        let max_mutex_access_duration = Duration::from_millis(dht22_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let mut lock_error_invalid_command: bool = false;
         let mut lock_error_receive: bool = false;
         let spin_sleeper = SpinSleeper::default();
@@ -866,11 +886,15 @@ impl Dht {
                     > self.config.measurement_interval_millis.into()
                 {
                     let result = self.get_data();
+                    
+                    let instant_before_locking_mutex = Instant::now();
+                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
                     {
                         // internal scope to limit lifetime of mutex lock
                         match mutex_dht.lock() {
                             Ok(mut c) => {
+                                instant_after_locking_mutex = Instant::now();
                                 *c = result;
                                 self.lock_error_mutex = false;
                             }
@@ -881,6 +905,29 @@ impl Dht {
                                 }
                             }
                         };
+                    }
+                    // check if access to mutex took too long
+                    let measured_mutex_access_duration =
+                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                    if measured_mutex_access_duration > max_mutex_access_duration {
+                        if !self.lock_warn_max_mutex_access_duration {
+                            self.lock_warn_max_mutex_access_duration = true;
+                            #[cfg(not(test))]
+                            warn!(target: LOG_TARGET_DHT,
+                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                                max_mutex_access_duration.as_millis(),
+                                measured_mutex_access_duration.as_millis(),
+                            );
+                            
+                            // record for testing purposes only
+                            cfg_if::cfg_if! {
+                                if #[cfg(test)] {
+                                    self.mutex_access_duration_exceeded = true;
+                                }
+                            }
+                        }
+                    } else {
+                        self.lock_warn_max_mutex_access_duration = false;
                     }
 
                     self.instant_last_measurement = current_instant;
