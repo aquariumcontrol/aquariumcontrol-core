@@ -102,6 +102,9 @@ pub struct RefillChannels {
 
     /// Receiver part of the channel for communication from the messaging
     pub rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>,
+    
+    /// Sender part of the channel for communication to the monitors
+    pub tx_refill_to_monitors: Sender<bool>,
 }
 
 /// Struct contains the status of the refill control for communication to the data logger.
@@ -1289,6 +1292,10 @@ pub mod tests {
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_for_refill = mutex_tank_level_switch_signals.clone();
@@ -1389,6 +1396,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -1433,6 +1441,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
@@ -1536,6 +1548,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -1581,6 +1594,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
@@ -1683,6 +1700,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -1736,6 +1754,10 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
         ) = mpsc::channel();
         let refill_status = RefillStatus {
             refill_in_progress_live: false,
@@ -1861,6 +1883,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -1910,6 +1933,10 @@ pub mod tests {
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (
@@ -2009,6 +2036,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -2071,6 +2099,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
 
         let (
@@ -2167,6 +2199,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -2219,6 +2252,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
@@ -2315,6 +2352,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -2366,6 +2404,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
+        ) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
         let (
             tx_mock_water_injection_to_test_environment,
@@ -2506,6 +2548,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
+                    tx_refill_to_monitors
                 };
 
                 refill.execute(
@@ -2562,6 +2605,10 @@ pub mod tests {
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
+        ) = mpsc::channel();
+        let (
+            tx_refill_to_monitors,
+            rx_monitors_from_refill,
         ) = mpsc::channel();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
@@ -2648,6 +2695,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(

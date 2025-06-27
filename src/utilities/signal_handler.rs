@@ -286,19 +286,13 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         "received termination signal from operating system",
     );
 
-    // phase 1: shut down highest level controls: data_logger and monitors
+    // phase 1: shut down highest level controls: data_logger
     // data logger initiates communication to heating, refill, atlas_scientific, ambient
     send_command(
         InternalCommand::Quit,
         Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
         Some(&signal_handler_channels.rx_signal_handler_from_data_logger),
         "data_logger",
-    );
-    send_command(
-        InternalCommand::Quit,
-        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
-        Some(&signal_handler_channels.rx_signal_handler_from_monitors),
-        "monitors",
     );
     send_command(
         InternalCommand::Quit,
@@ -415,6 +409,12 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             .as_ref(),
         "tcp",
     );
+    send_command(
+        InternalCommand::Quit,
+        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
+        Some(&signal_handler_channels.rx_signal_handler_from_monitors),
+        "monitors",
+    );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
         target: LOG_TARGET_SIGNAL_HANDLER,
@@ -427,12 +427,6 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
         Some(&signal_handler_channels.tx_signal_handler_to_data_logger),
         None,
         "data_logger",
-    );
-    send_command(
-        InternalCommand::Terminate,
-        Some(&signal_handler_channels.tx_signal_handler_to_monitors),
-        None,
-        "monitors",
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(

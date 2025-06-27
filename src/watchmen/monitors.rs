@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, info, warn};
+use log::{error, info};
 
 #[cfg(test)]
 use log::debug;
@@ -50,6 +50,9 @@ pub struct Monitors {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
     lock_warn_inapplicable_command: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about monitors being inhibited
+    lock_info_monitors_inhibited: bool,
 }
 
 impl ProcessExternalRequestTrait for Monitors {}
@@ -75,6 +78,7 @@ impl Monitors {
             config,
             lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
+            lock_info_monitors_inhibited: false,
         }
     }
 
@@ -112,20 +116,20 @@ impl Monitors {
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
-        let mut loop_counter = 0;
         let mut quit_command_received: bool;
         let mut start_command_received: bool;
         let mut stop_command_received: bool;
         let mut monitors_inhibited: bool = false;
 
         loop {
-            if self.config.active && (loop_counter % 100 == 0) {
-                if monitors_inhibited {
+            if self.config.active {
+                if monitors_inhibited && !self.lock_info_monitors_inhibited {
                     info!(
                         target: Self::LOG_TARGET_MONITORS,
                         "monitors are inhibited after receiving stop command via message.");
+                    self.lock_info_monitors_inhibited = true;
                 } else {
-                    // run monitors every 10 seconds
+                    self.lock_info_monitors_inhibited = false;
                     #[cfg(test)]
                     debug!(
                         target: Self::LOG_TARGET_MONITORS,
@@ -158,13 +162,6 @@ impl Monitors {
             }
 
             spin_sleeper.sleep(sleep_duration_hundred_millis);
-
-            loop_counter += 1;
-
-            // avoid overflow
-            if loop_counter == 1_000_000 {
-                loop_counter = 0;
-            }
         }
 
         // application received request to terminate, that is why the loop was left.
@@ -178,43 +175,5 @@ impl Monitors {
                 );
             }
         };
-
-        // This thread has channel connections to underlying threads (relay manager).
-        // Those threads have to stop receiving commands from this thread.
-        // The shutdown sequence is handled by the signal_handler module.
-        let mut termination_command_received = false;
-        while !termination_command_received {
-            termination_command_received = match rx_from_signal_handler.recv() {
-                Ok(c) => {
-                    self.lock_error_channel_receive_termination_signal = false;
-
-                    match c {
-                        InternalCommand::Terminate => true,
-                        _ => {
-                            if !self.lock_warn_inapplicable_command {
-                                warn!(
-                                    target: Self::LOG_TARGET_MONITORS,
-                                    "ignoring inapplicable command {} from signal handler.",
-                                    c
-                                );
-                                self.lock_warn_inapplicable_command = true;
-                            }
-                            false
-                        }
-                    }
-                }
-                Err(e) => {
-                    if !self.lock_error_channel_receive_termination_signal {
-                        error!(
-                            target: Self::LOG_TARGET_MONITORS,
-                            "receiving termination signal failed ({e:?})"
-                        );
-                        self.lock_error_channel_receive_termination_signal = true;
-                    }
-                    false
-                }
-            };
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
-        }
     }
 }
