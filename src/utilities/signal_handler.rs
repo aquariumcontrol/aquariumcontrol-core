@@ -557,7 +557,7 @@ pub mod tests {
             Receiver<bool>,
         ) = mpsc::channel();
         // ***********************************
-
+        
         // *** signal handler <=> heating ***
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler): (
             Sender<InternalCommand>,
@@ -801,12 +801,6 @@ pub mod tests {
         _ = tx_data_logger_to_signal_handler.send(true);
 
         assert_eq!(
-            rx_monitors_from_signal_handler.recv().unwrap(),
-            InternalCommand::Quit
-        );
-        _ = tx_monitors_to_signal_handler.send(true);
-
-        assert_eq!(
             rx_messaging_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
@@ -857,13 +851,11 @@ pub mod tests {
             InternalCommand::Quit
         );
         _ = tx_sensor_manager_to_signal_handler.send(true);
-
         assert_eq!(
             rx_schedule_check_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
         );
         _ = tx_schedule_check_to_signal_handler.send(true);
-
         assert_eq!(
             rx_i2c_interface_from_signal_handler.recv().unwrap(),
             InternalCommand::Quit
@@ -889,13 +881,13 @@ pub mod tests {
         _ = tx_tcp_to_signal_handler.send(true);
 
         assert_eq!(
-            rx_data_logger_from_signal_handler.recv().unwrap(),
-            InternalCommand::Terminate
-        );
-        // no response to termination request
-
-        assert_eq!(
             rx_monitors_from_signal_handler.recv().unwrap(),
+            InternalCommand::Quit
+        );
+        _ = tx_monitors_to_signal_handler.send(true);
+        
+        assert_eq!(
+            rx_data_logger_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
         );
         // no response to termination request

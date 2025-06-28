@@ -45,9 +45,6 @@ pub struct Monitors {
     /// configuration data for monitors
     config: MonitorsConfig,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
-    lock_error_channel_receive_termination_signal: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
     lock_warn_inapplicable_command: bool,
 
@@ -76,7 +73,6 @@ impl Monitors {
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self {
             config,
-            lock_error_channel_receive_termination_signal: false,
             lock_warn_inapplicable_command: false,
             lock_info_monitors_inhibited: false,
         }
@@ -164,8 +160,8 @@ impl Monitors {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match tx_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
