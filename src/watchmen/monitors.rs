@@ -14,12 +14,14 @@ use log::debug;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
+use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::water::refill::RefillMonitorView;
 
 /// Holds the configuration data for the monitors.
 /// The configuration is loaded from the .toml configuration file.
@@ -28,6 +30,29 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 pub struct MonitorsConfig {
     /// monitors will only be active when the flag is set to true
     active: bool,
+}
+
+/// Struct collects the channels for the communication between the monitors and the other components.
+pub struct MonitorsChannels {
+    /// sender part of the channel for communication to the relay manager
+    #[allow(unused)]
+    pub tx_monitors_to_relay_manager: Sender<InternalCommand>,
+    
+    /// receiver part of the channel for communication from the relay manager
+    #[allow(unused)]
+    pub rx_monitors_from_relay_manager: Receiver<bool>,
+    
+    /// receiver part of the channel for communication from the refill control
+    pub rx_monitors_from_refill: Receiver<RefillMonitorView>,
+    
+    /// sender part of the channel for communication to the signal handler
+    pub tx_monitors_to_signal_handler: Sender<bool>,
+    
+    /// receiver part of the channel for communication from the signal handler 
+    pub rx_monitors_from_signal_handler: Receiver<InternalCommand>,
+    
+    /// receiver part of the channel for communication from the messaging component
+    pub rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -45,11 +70,11 @@ pub struct Monitors {
     /// configuration data for monitors
     config: MonitorsConfig,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command via the channel
-    lock_warn_inapplicable_command: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about monitors being inhibited
     lock_info_monitors_inhibited: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from refill
+    lock_error_receive_refill: bool,
 }
 
 impl ProcessExternalRequestTrait for Monitors {}
@@ -73,8 +98,8 @@ impl Monitors {
     pub fn new(config: MonitorsConfig) -> Monitors {
         Self {
             config,
-            lock_warn_inapplicable_command: false,
             lock_info_monitors_inhibited: false,
+            lock_error_receive_refill: false,
         }
     }
 
@@ -104,11 +129,7 @@ impl Monitors {
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        _tx_to_relay_manager: Sender<InternalCommand>,
-        _rx_from_relay_manager: Receiver<bool>,
-        tx_to_signal_handler: Sender<bool>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-        rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
+        monitors_channels: MonitorsChannels
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -116,6 +137,7 @@ impl Monitors {
         let mut start_command_received: bool;
         let mut stop_command_received: bool;
         let mut monitors_inhibited: bool = false;
+        let mut old_refill_view_opt: Option<RefillMonitorView> = None;
 
         loop {
             if self.config.active {
@@ -132,44 +154,74 @@ impl Monitors {
                         "executing monitors"
                     );
                 }
-            }
-            (
-                quit_command_received,
-                start_command_received,
-                stop_command_received,
-            ) = self
-                .process_external_request(&rx_from_signal_handler, rx_from_messaging_opt.as_ref());
-            if quit_command_received {
-                break;
-            }
-            if stop_command_received {
-                info!(
-                    target: Self::LOG_TARGET_MONITORS,
-                    "received Stop command. Inhibiting monitoring."
+
+                (
+                    quit_command_received,
+                    start_command_received,
+                    stop_command_received,
+                ) = self.process_external_request(
+                    &monitors_channels.rx_monitors_from_signal_handler,
+                    monitors_channels.rx_monitors_from_messaging_opt.as_ref(),
                 );
-                monitors_inhibited = true;
-            }
-            if start_command_received {
-                info!(
-                    target: Self::LOG_TARGET_MONITORS,
-                    "received Start command. Restarting monitoring."
-                );
-                monitors_inhibited = false;
+                if quit_command_received {
+                    break;
+                }
+                if stop_command_received {
+                    info!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "received Stop command. Inhibiting monitoring."
+                    );
+                    monitors_inhibited = true;
+                }
+                if start_command_received {
+                    info!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "received Start command. Restarting monitoring."
+                    );
+                    monitors_inhibited = false;
+                }
+
+                match monitors_channels.rx_monitors_from_refill.try_recv() {
+                    Ok(new_refill_view) => {
+                        match old_refill_view_opt {
+                            Some(ref old_refill_view) => {
+                                if &new_refill_view != old_refill_view {
+                                    // @todo: trigger reporting to outside
+                                    old_refill_view_opt = Some(new_refill_view);
+                                }
+                            }
+                            None => {
+                                // @todo: trigger reporting to outside
+                                old_refill_view_opt = Some(new_refill_view);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* empty buffer - no action required */ }
+                            TryRecvError::Disconnected => {
+                                if !self.lock_error_receive_refill {
+                                    error!(target: Self::LOG_TARGET_MONITORS, "Error when trying to receive from refill: {}", e);
+                                    self.lock_error_receive_refill = true;
+                                }
+                            }
+                        }
+                    }
+                };
+                spin_sleeper.sleep(sleep_duration_hundred_millis);
             }
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+            // The application received request to terminate. That is why the loop was left.
+            // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
+            match monitors_channels.tx_monitors_to_signal_handler.send(true) {
+                Ok(()) => {}
+                Err(e) => {
+                    error!(
+                        target: Self::LOG_TARGET_MONITORS,
+                        "sending quit confirmation back to signal handler failed ({e:?})"
+                    );
+                }
+            };
         }
-
-        // The application received request to terminate. That is why the loop was left.
-        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
-        match tx_to_signal_handler.send(true) {
-            Ok(()) => {}
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_MONITORS,
-                    "sending quit confirmation back to signal handler failed ({e:?})"
-                );
-            }
-        };
     }
 }

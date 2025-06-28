@@ -13,7 +13,6 @@ use log::info;
 use serde_derive::Deserialize;
 use std::fs;
 
-
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::beacon::ws2812b::Ws2812BConfig;
 

@@ -56,7 +56,6 @@ pub struct Ws2812BConfig {
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub struct Ws2812B {
-
     /// SPI-based driver interface
     adapter: WS28xxSpiAdapter,
 
@@ -95,7 +94,7 @@ impl Ws2812B {
                 raw_color_bytes[2], // Blue component
             ));
         }
-        
+
         match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
             Ok(_) => {}
             Err(e) => {

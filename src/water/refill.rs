@@ -14,12 +14,6 @@ use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
 
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
@@ -27,6 +21,11 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill_errors::RefillErrors;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -80,6 +79,26 @@ const LOG_TARGET_REFILL: &str = "refill";
 
 const MILLIS_PER_SEC: u64 = 1000;
 
+/// Struct collects the information for the reporting to the monitor
+/// The information represents no execution error, but critical states of the control object.
+/// In this case, the monitor view informs about excessive triggering of refill operation
+/// which may be caused by a defective sensor or leakage of the main tank.
+#[derive(PartialEq, Debug)]
+pub struct RefillMonitorView {
+    /// refill volume within the last 24h exceeded the threshold
+    pub refill_check_volume_last_24h: bool,
+
+    /// refill count within the last 24h exceeded the threshold
+    pub refill_check_count_last_24h: bool,
+
+    /// refill volume within the last hour exceeded the threshold
+    pub refill_check_volume_last_hour: bool,
+
+    /// refill count within the last hour exceeded the threshold
+    pub refill_check_count_last_hour: bool,
+    pub refill_check_interval_last_refill: bool,
+}
+
 /// Struct collects the channels for the communication between the refill control and the other components.
 pub struct RefillChannels {
     /// Sender part of the channel for communication to relay manager
@@ -102,9 +121,9 @@ pub struct RefillChannels {
 
     /// Receiver part of the channel for communication from the messaging
     pub rx_refill_from_messaging_opt: Option<Receiver<InternalCommand>>,
-    
+
     /// Sender part of the channel for communication to the monitors
-    pub tx_refill_to_monitors: Sender<bool>,
+    pub tx_refill_to_monitors: Sender<RefillMonitorView>,
 }
 
 /// Struct contains the status of the refill control for communication to the data logger.
@@ -211,6 +230,9 @@ pub struct Refill {
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from schedule check via the channel
     lock_error_channel_receive_schedule_check: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to send view to monitor
+    lock_error_channel_send_monitors: bool,
+
     /// inhibition flag to avoid flooding the log file with repeated messages about having received not applicable command from the signal handler
     lock_warn_not_applicable_command: bool,
 
@@ -272,6 +294,7 @@ impl Refill {
             lock_error_read_refill_count_last_hour: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
+            lock_error_channel_send_monitors: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
             last_ping_instant: Instant::now(),
@@ -321,6 +344,7 @@ impl Refill {
             lock_error_read_refill_count_last_hour: false,
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
+            lock_error_channel_send_monitors: false,
             lock_warn_not_applicable_command: false,
             lock_error_channel_receive_termination_command: false,
             last_ping_instant: Instant::now(),
@@ -542,10 +566,15 @@ impl Refill {
     /// # Arguments
     /// * `sql_refill_data` - A reference to a `RefillStatsData` struct containing the historic
     ///   refill data retrieved from the SQL database.
+    /// * `tx_refill_to_monitors` - The sender part of the channel for communication to the monitors.
     ///
     /// # Returns
     /// `true` if **any** of the configured volume, count, or time limits are exceeded; `false` otherwise.
-    fn check_volume_count_time_limits(&mut self, sql_refill_data: &RefillStatsData) -> bool {
+    fn check_volume_count_time_limits(
+        &mut self,
+        sql_refill_data: &RefillStatsData,
+        tx_refill_to_monitors: &Sender<RefillMonitorView>,
+    ) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
             target: LOG_TARGET_REFILL,
@@ -636,6 +665,27 @@ impl Refill {
         } else {
             self.lock_info_refill_check_interval_last_refill = false;
         }
+
+        let refill_monitor_view = RefillMonitorView {
+            refill_check_volume_last_24h,
+            refill_check_count_last_24h,
+            refill_check_volume_last_hour,
+            refill_check_count_last_hour,
+            refill_check_interval_last_refill,
+        };
+
+        match tx_refill_to_monitors.send(refill_monitor_view) {
+            Ok(_) => {
+                self.lock_error_channel_send_monitors = false;
+            }
+            Err(e) => {
+                if !self.lock_error_channel_send_monitors {
+                    error!(target:  LOG_TARGET_REFILL, "sending view to monitor failed ({})", e);
+                    self.lock_error_channel_send_monitors = true;
+                }
+            }
+        }
+
         refill_check_volume_last_24h
             | refill_check_count_last_24h
             | refill_check_volume_last_hour
@@ -834,8 +884,10 @@ impl Refill {
                     self.get_refill_stats_data(&mut refill_stats_data);
 
                     // execute checks before initiating refill
-                    if !self.check_volume_count_time_limits(&refill_stats_data)
-                        && !self.refill_errors.error_switch_stuck_low
+                    if !self.check_volume_count_time_limits(
+                        &refill_stats_data,
+                        &refill_channels.tx_refill_to_monitors,
+                    ) && !self.refill_errors.error_switch_stuck_low
                         && !self.refill_errors.error_sql_update_failed
                         && !self.refill_errors.error_sql_get_historic_data_failed
                     {
@@ -1091,8 +1143,8 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::{Refill, RefillChannels, RefillErrors, RefillStatus};
 
+    use crate::stubs::mock_monitors::tests::mock_monitors;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-
     use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
     use crate::stubs::mock_water_injection::tests::MockWaterInjection;
     use crate::stubs::test_command::tests::TestCommand;
@@ -1292,10 +1344,10 @@ pub mod tests {
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
+
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
         let mutex_tank_level_switch_signals_for_refill = mutex_tank_level_switch_signals.clone();
@@ -1325,6 +1377,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1364,6 +1424,7 @@ pub mod tests {
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
 
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
                 let finalization_duration_millis =
@@ -1396,7 +1457,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -1413,6 +1474,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -1441,10 +1505,9 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
@@ -1481,6 +1544,14 @@ pub mod tests {
             },
         );
 
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
+
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
@@ -1510,6 +1581,7 @@ pub mod tests {
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
@@ -1548,7 +1620,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -1565,6 +1637,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -1595,13 +1670,12 @@ pub mod tests {
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
-        let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1630,6 +1704,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1660,6 +1742,8 @@ pub mod tests {
                 // now we can send the quit command
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
                 let finish_time = Instant::now();
@@ -1700,7 +1784,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -1717,6 +1801,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -1755,10 +1842,10 @@ pub mod tests {
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
+
         let refill_status = RefillStatus {
             refill_in_progress_live: false,
             refill_in_progress_for_database: false,
@@ -1789,6 +1876,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -1856,6 +1951,7 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -1883,7 +1979,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -1903,6 +1999,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -1933,16 +2032,15 @@ pub mod tests {
             mpsc::channel::<InternalCommand>();
         let (tx_refill_to_signal_handler, rx_signal_handler_from_refill) = mpsc::channel::<bool>();
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -1971,6 +2069,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2006,6 +2112,7 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -2036,7 +2143,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -2058,6 +2165,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -2099,11 +2209,10 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         let (
             tx_mock_water_injection_to_test_environment,
@@ -2138,6 +2247,14 @@ pub mod tests {
             },
         );
 
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
+
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
@@ -2166,6 +2283,7 @@ pub mod tests {
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -2199,7 +2317,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -2223,6 +2341,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -2252,14 +2373,13 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -2288,6 +2408,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2322,6 +2450,7 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -2352,7 +2481,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: None,
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -2374,6 +2503,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -2404,15 +2536,14 @@ pub mod tests {
         let (tx_schedule_check_to_refill, rx_refill_from_schedule_check) = mpsc::channel::<bool>();
         let (tx_refill_to_schedule_check, rx_schedule_check_from_refill) =
             mpsc::channel::<InternalCommand>();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel::<InternalCommand>();
         let (
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -2443,6 +2574,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2518,6 +2657,7 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -2548,7 +2688,7 @@ pub mod tests {
                     tx_refill_to_schedule_check,
                     rx_refill_from_schedule_check,
                     rx_refill_from_messaging_opt: Some(rx_refill_from_messaging),
-                    tx_refill_to_monitors
+                    tx_refill_to_monitors,
                 };
 
                 refill.execute(
@@ -2570,6 +2710,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");
@@ -2606,10 +2749,9 @@ pub mod tests {
             tx_mock_water_injection_to_test_environment,
             rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
-        let (
-            tx_refill_to_monitors,
-            _rx_monitors_from_refill,
-        ) = mpsc::channel();
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
 
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
@@ -2630,6 +2772,14 @@ pub mod tests {
                 error_sql_get_historic_data_failed: false,
             },
         );
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+            })
+            .unwrap();
 
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
@@ -2665,6 +2815,7 @@ pub mod tests {
                 println!("sending quit signal to test object...");
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Quit);
                 rx_signal_handler_from_refill.recv().unwrap();
+                let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
 
                 let _ = tx_signal_handler_to_refill.send(InternalCommand::Terminate);
 
@@ -2717,6 +2868,9 @@ pub mod tests {
             })
             .unwrap();
 
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
         join_handle_mock_schedule_check
             .join()
             .expect("Mock schedule check did not finish.");

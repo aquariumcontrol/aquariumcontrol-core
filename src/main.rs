@@ -70,15 +70,15 @@ use log::debug;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
 
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
@@ -131,10 +131,10 @@ use crate::thermal::ventilation::{Ventilation, VentilationChannels};
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 use crate::utilities::version_information::VersionInformation;
-use crate::watchmen::monitors::Monitors;
+use crate::watchmen::monitors::{Monitors, MonitorsChannels};
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
-use crate::water::refill::{Refill, RefillChannels, RefillStatus};
+use crate::water::refill::{Refill, RefillChannels, RefillMonitorView, RefillStatus};
 use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
@@ -756,12 +756,12 @@ fn main() {
     // *******************************
 
     // *** refill => monitors ***
-    let (tx_refill_to_monitors, _rx_monitors_from_refill): (
-        Sender<bool>,
-        Receiver<bool>,
+    let (tx_refill_to_monitors, rx_monitors_from_refill): (
+        Sender<RefillMonitorView>,
+        Receiver<RefillMonitorView>,
     ) = mpsc::channel();
     //********************************
-    
+
     // *** signal handler <=> refill ***
     let (tx_signal_handler_to_refill, rx_refill_from_signal_handler): (
         Sender<InternalCommand>,
@@ -1345,6 +1345,15 @@ fn main() {
         tx_signal_handler_to_ds18b20,
     };
 
+    let monitors_channels = MonitorsChannels {
+        tx_monitors_to_relay_manager,
+        rx_monitors_from_relay_manager,
+        rx_monitors_from_refill,
+        tx_monitors_to_signal_handler,
+        rx_monitors_from_signal_handler,
+        rx_monitors_from_messaging_opt,
+    };
+    
     #[cfg(target_os = "linux")]
     let messaging_channels = MessagingChannels {
         tx_to_signal_handler: tx_messaging_to_signal_handler,
@@ -1594,11 +1603,7 @@ fn main() {
         scope.spawn(move || {
             monitors.execute(
                 mutex_device_scheduler_monitors,
-                tx_monitors_to_relay_manager,
-                rx_monitors_from_relay_manager,
-                tx_monitors_to_signal_handler,
-                rx_monitors_from_signal_handler,
-                rx_monitors_from_messaging_opt,
+                monitors_channels
             );
 
             #[cfg(feature = "debug_main")]

@@ -16,6 +16,7 @@ pub mod mock_heating;
 pub mod mock_i2c_interface;
 pub mod mock_message_command_receiver;
 pub mod mock_mineral_injection;
+pub mod mock_monitors;
 pub mod mock_petting;
 pub mod mock_relay_manager;
 pub mod mock_schedule_check;

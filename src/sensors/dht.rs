@@ -291,7 +291,7 @@ impl Dht {
             lock_error_mutex: false,
             lock_error_max_retries: false,
             lock_warn_max_mutex_access_duration: false,
-            
+
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
         }
@@ -829,7 +829,8 @@ impl Dht {
         mutex_dht: Arc<Mutex<DhtResult>>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        let max_mutex_access_duration = Duration::from_millis(dht22_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
+        let max_mutex_access_duration =
+            Duration::from_millis(dht22_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let mut lock_error_invalid_command: bool = false;
         let mut lock_error_receive: bool = false;
         let spin_sleeper = SpinSleeper::default();
@@ -886,7 +887,7 @@ impl Dht {
                     > self.config.measurement_interval_millis.into()
                 {
                     let result = self.get_data();
-                    
+
                     let instant_before_locking_mutex = Instant::now();
                     let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
@@ -918,7 +919,7 @@ impl Dht {
                                 max_mutex_access_duration.as_millis(),
                                 measured_mutex_access_duration.as_millis(),
                             );
-                            
+
                             // record for testing purposes only
                             cfg_if::cfg_if! {
                                 if #[cfg(test)] {

@@ -327,7 +327,7 @@ impl Heating {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_warn_max_mutex_access_duration: false,
-            
+
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
         }
@@ -752,7 +752,7 @@ impl Heating {
 
             let instant_before_locking_mutex = Instant::now();
             let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
-            
+
             // Write signal to mutex
             {
                 match heating_mutexes.mutex_heating_status.lock() {
@@ -769,7 +769,7 @@ impl Heating {
                     }
                 }
             }
-            
+
             // check if access to mutex took too long
             let measured_mutex_access_duration =
                 instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
@@ -816,11 +816,10 @@ impl Heating {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;
                 // sleep time does not need to be split up because cycle time is 500 milliseconds only
                 spin_sleeper.sleep(remaining_sleep_time);
-                
+
                 lock_warn_cycle_time_exceeded = false;
             }
             mutex_was_blocked_during_actuation = false; // reset for the next cycle
-
 
             // Check for how long ago the last database ping happened.
             if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
@@ -3070,7 +3069,7 @@ pub mod tests {
         let mutex_device_scheduler_heating = Arc::new(Mutex::new(0));
         let mutex_heating_status = Arc::new(Mutex::new(false));
         let mutex_heating_status_clone_for_test_environment = mutex_heating_status.clone();
-        
+
         // thread for mock relay manager - includes assertions
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
@@ -3102,8 +3101,7 @@ pub mod tests {
                 for i in 0..10 {
                     if i % 2 == 0 {
                         spin_sleeper.sleep(sleep_duration_one_second);
-                    }
-                    else {
+                    } else {
                         // block mutex on purpose
                         {
                             match mutex_heating_status_clone_for_test_environment.lock() {
@@ -3174,7 +3172,7 @@ pub mod tests {
                     tx_heating_to_relay_manager_for_test_case_finish.send(InternalCommand::Quit);
 
                 assert_eq!(heating.mutex_access_duration_exceeded, true);
-                
+
                 println!("* [Heating] checking reaction to low temperature with mutex blocked succeeded.");
             })
             .unwrap();

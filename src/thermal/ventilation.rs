@@ -260,7 +260,7 @@ impl Ventilation {
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_warn_max_mutex_access_duration: false,
-            
+
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
         }
@@ -569,7 +569,7 @@ impl Ventilation {
                     }
                 }
             }
-            
+
             // check if access to mutex took too long
             let measured_mutex_access_duration =
                 instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
@@ -762,7 +762,7 @@ pub mod tests {
         duration_seconds: u64,
         tx_signal_handler_to_ventilation: Sender<InternalCommand>,
         rx_signal_handler_from_ventilation: Receiver<bool>,
-        mutex_ventilation_status_opt: Option<Arc<Mutex<bool>>>
+        mutex_ventilation_status_opt: Option<Arc<Mutex<bool>>>,
     ) -> thread::JoinHandle<()> {
         thread::Builder::new()
             .name("test_environment".to_string())
@@ -775,8 +775,7 @@ pub mod tests {
                     for i in 0..10 {
                         if i % 2 == 0 {
                             spin_sleeper.sleep(sleep_duration_one_second);
-                        }
-                        else {
+                        } else {
                             // block mutex on purpose
                             {
                                 match mutex_ventilation_status.lock() {
@@ -790,8 +789,7 @@ pub mod tests {
                             }
                         }
                     }
-                }
-                else {
+                } else {
                     let sleep_duration_ten_seconds = Duration::from_secs(duration_seconds);
                     let spin_sleeper = SpinSleeper::default();
                     spin_sleeper.sleep(sleep_duration_ten_seconds);
@@ -893,7 +891,7 @@ pub mod tests {
                     mutex_sensor_manager_signals,
                     Arc::new(Mutex::new(false)),
                 );
-                
+
                 assert_eq!(ventilation.mutex_access_duration_exceeded, false);
 
                 // send Quit signal to mock threads because the test object has terminated
@@ -1837,7 +1835,7 @@ pub mod tests {
             })
             .unwrap()
     }
-    
+
     // Check if the ventilation is switched on when the temperature is high.
     // Also, implicitly test if the execute function terminates after receiving Quit and Terminate commands.
     #[test]
@@ -1863,8 +1861,8 @@ pub mod tests {
             mpsc::channel();
 
         let mutex_ventilation_status = Arc::new(Mutex::new(false));
-        let mutex_ventilation_status_clone_for_test_environment =  mutex_ventilation_status.clone();
-        
+        let mutex_ventilation_status_clone_for_test_environment = mutex_ventilation_status.clone();
+
         // thread for mock schedule check
         let join_handle_mock_schedule_check = thread::Builder::new()
             .name("mock_schedule_check".to_string())
@@ -1886,7 +1884,7 @@ pub mod tests {
         let mutex_device_scheduler_ventilation = Arc::new(Mutex::new(0));
 
         // thread for mock relay manager - includes assertions
-        let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on (
+        let join_handle_mock_relay_manager = create_mock_relay_manager_for_ventilation_on(
             tx_relay_manager_to_ventilation,
             rx_relay_manager_from_ventilation,
         );
@@ -1933,7 +1931,7 @@ pub mod tests {
                 );
 
                 assert_eq!(ventilation.mutex_access_duration_exceeded, true);
-                
+
                 // send Quit signal to mock threads because the test object has terminated
                 let _ = tx_ventilation_to_schedule_check_for_test_case_finish
                     .send(InternalCommand::Quit);

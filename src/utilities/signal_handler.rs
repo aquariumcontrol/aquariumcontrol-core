@@ -557,7 +557,7 @@ pub mod tests {
             Receiver<bool>,
         ) = mpsc::channel();
         // ***********************************
-        
+
         // *** signal handler <=> heating ***
         let (tx_signal_handler_to_heating, rx_heating_from_signal_handler): (
             Sender<InternalCommand>,
@@ -885,7 +885,7 @@ pub mod tests {
             InternalCommand::Quit
         );
         _ = tx_monitors_to_signal_handler.send(true);
-        
+
         assert_eq!(
             rx_data_logger_from_signal_handler.recv().unwrap(),
             InternalCommand::Terminate
