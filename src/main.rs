@@ -134,7 +134,8 @@ use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::{Monitors, MonitorsChannels};
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
-use crate::water::refill::{Refill, RefillChannels, RefillMonitorView, RefillStatus};
+use crate::water::refill::{Refill, RefillChannels, RefillStatus};
+use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::water_injection::WaterInjection;
 
 cfg_if::cfg_if! {
@@ -1353,7 +1354,7 @@ fn main() {
         rx_monitors_from_signal_handler,
         rx_monitors_from_messaging_opt,
     };
-    
+
     #[cfg(target_os = "linux")]
     let messaging_channels = MessagingChannels {
         tx_to_signal_handler: tx_messaging_to_signal_handler,
@@ -1601,10 +1602,7 @@ fn main() {
         let mutex_device_scheduler_monitors = Arc::clone(&mutex_device_scheduler);
 
         scope.spawn(move || {
-            monitors.execute(
-                mutex_device_scheduler_monitors,
-                monitors_channels
-            );
+            monitors.execute(mutex_device_scheduler_monitors, monitors_channels);
 
             #[cfg(feature = "debug_main")]
             debug!(target: LOG_TARGET_MAIN, "Monitors terminated.");

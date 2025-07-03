@@ -124,7 +124,8 @@ dosing_interval_pump4 = 150                             # inject Balling mineral
 pump_switch_delay_millis = 250                          # waiting period between usage of different pumps
 
 [monitors]
-active = true
+active = true                                           # allows deactivation of monitors
+max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
 
 [sensor_manager]
 use_simulator = true                                    # if true, then do not use real HW

@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::water::refill::RefillMonitorView;
+use crate::water::refill_monitor_view::RefillMonitorView;
 
 /// Holds the configuration data for the monitors.
 /// The configuration is loaded from the .toml configuration file.
@@ -30,6 +30,9 @@ use crate::water::refill::RefillMonitorView;
 pub struct MonitorsConfig {
     /// monitors will only be active when the flag is set to true
     active: bool,
+
+    /// Maximum number of monitoring entries for refill
+    max_length_refill_monitor_views: usize,
 }
 
 /// Struct collects the channels for the communication between the monitors and the other components.
@@ -37,20 +40,20 @@ pub struct MonitorsChannels {
     /// sender part of the channel for communication to the relay manager
     #[allow(unused)]
     pub tx_monitors_to_relay_manager: Sender<InternalCommand>,
-    
+
     /// receiver part of the channel for communication from the relay manager
     #[allow(unused)]
     pub rx_monitors_from_relay_manager: Receiver<bool>,
-    
+
     /// receiver part of the channel for communication from the refill control
     pub rx_monitors_from_refill: Receiver<RefillMonitorView>,
-    
+
     /// sender part of the channel for communication to the signal handler
     pub tx_monitors_to_signal_handler: Sender<bool>,
-    
-    /// receiver part of the channel for communication from the signal handler 
+
+    /// receiver part of the channel for communication from the signal handler
     pub rx_monitors_from_signal_handler: Receiver<InternalCommand>,
-    
+
     /// receiver part of the channel for communication from the messaging component
     pub rx_monitors_from_messaging_opt: Option<Receiver<InternalCommand>>,
 }
@@ -75,6 +78,9 @@ pub struct Monitors {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive from refill
     lock_error_receive_refill: bool,
+
+    /// storage of refill monitor views
+    refill_monitor_views: Vec<RefillMonitorView>,
 }
 
 impl ProcessExternalRequestTrait for Monitors {}
@@ -100,7 +106,27 @@ impl Monitors {
             config,
             lock_info_monitors_inhibited: false,
             lock_error_receive_refill: false,
+            refill_monitor_views: vec![],
         }
+    }
+    /// Manages a vector of `RefillMonitorView` structs, ensuring it does not exceed
+    /// a specified maximum length.
+    ///
+    /// If the vector has reached its maximum capacity, the oldest element (at index 0)
+    /// is removed before the new `refill_monitor_view` is appended.
+    /// Otherwise, the new `refill_monitor_view` is simply appended.
+    ///
+    /// # Arguments
+    /// * `refill_monitor_view` - The new `RefillMonitorView` struct to be added to the vector.
+    pub fn append_refill_monitor_view(&mut self, refill_monitor_view: RefillMonitorView) {
+        // Check if the vector has reached or exceeded its maximum allowed length.
+        if self.refill_monitor_views.len() >= self.config.max_length_refill_monitor_views {
+            // If it has, remove the oldest element (at index 0).
+            // This shifts all further elements to the left.
+            self.refill_monitor_views.remove(0);
+        }
+        // Append the new RefillMonitorView struct to the end of the vector.
+        self.refill_monitor_views.push(refill_monitor_view);
     }
 
     /// Executes the main control loop for the monitor module.
@@ -129,7 +155,7 @@ impl Monitors {
     pub fn execute(
         &mut self,
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
-        monitors_channels: MonitorsChannels
+        monitors_channels: MonitorsChannels,
     ) {
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
@@ -182,20 +208,18 @@ impl Monitors {
                 }
 
                 match monitors_channels.rx_monitors_from_refill.try_recv() {
-                    Ok(new_refill_view) => {
-                        match old_refill_view_opt {
-                            Some(ref old_refill_view) => {
-                                if &new_refill_view != old_refill_view {
-                                    // @todo: trigger reporting to outside
-                                    old_refill_view_opt = Some(new_refill_view);
-                                }
-                            }
-                            None => {
-                                // @todo: trigger reporting to outside
+                    Ok(new_refill_view) => match old_refill_view_opt {
+                        Some(ref old_refill_view) => {
+                            if &new_refill_view != old_refill_view {
+                                self.append_refill_monitor_view(new_refill_view.clone());
                                 old_refill_view_opt = Some(new_refill_view);
                             }
                         }
-                    }
+                        None => {
+                            self.append_refill_monitor_view(new_refill_view.clone());
+                            old_refill_view_opt = Some(new_refill_view);
+                        }
+                    },
                     Err(e) => {
                         match e {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }

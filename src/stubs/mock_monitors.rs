@@ -11,31 +11,94 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::utilities::channel_content::InternalCommand;
-    use crate::water::refill::RefillMonitorView;
+    use crate::water::refill_monitor_view::RefillMonitorView;
     use spin_sleep::SpinSleeper;
+    use std::fmt;
     use std::sync::mpsc::Receiver;
-    use std::time::Duration;
+    use std::sync::mpsc::TryRecvError;
+    use std::time::{Duration, Instant};
 
     const LOG_TARGET_MOCK_MONITOR: &str = "mock_monitors";
 
-    pub fn mock_monitors(
-        rx_from_refill: Receiver<RefillMonitorView>,
-        rx_from_signal_handler: Receiver<InternalCommand>,
-    ) {
-        let sleep_duration_hundred_millis = Duration::from_millis(100);
-        let spin_sleeper = SpinSleeper::default();
+    const MOCK_MONITORS_MAX_VEC_LEN: usize = 4096;
 
-        loop {
-            if mock_common_receive_from_signal_handler(
-                &rx_from_signal_handler,
-                LOG_TARGET_MOCK_MONITOR,
-            ) {
-                break;
+    // Simplified version of Monitors for testing refill
+    pub struct MockMonitors {
+        // storage of refill monitor views
+        pub refill_monitor_views: Vec<(Instant, RefillMonitorView)>,
+    }
+
+    // Implement the Display trait for MockMonitors.
+    impl fmt::Display for MockMonitors {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            if self.refill_monitor_views.is_empty() {
+                write!(f, "MockMonitors contains no refill monitor views.")
+            } else {
+                writeln!(
+                    f,
+                    "MockMonitors contains {} views:",
+                    self.refill_monitor_views.len()
+                )?;
+                for (i, (instant, view)) in self.refill_monitor_views.iter().enumerate() {
+                    // Instant does not implement Display, so we use the Debug format {:?}
+                    writeln!(f, "- View {}: (at Instant {:?}) {}", i + 1, instant, view)?;
+                }
+                Ok(())
             }
+        }
+    }
 
-            _ = rx_from_refill.try_recv();
+    impl MockMonitors {
+        pub fn new() -> MockMonitors {
+            MockMonitors {
+                refill_monitor_views: vec![],
+            }
+        }
 
-            spin_sleeper.sleep(sleep_duration_hundred_millis);
+        pub fn append_refill_monitor_view(&mut self, refill_monitor_view: RefillMonitorView) {
+            // Check if the vector has reached or exceeded its maximum allowed length.
+            if self.refill_monitor_views.len() >= MOCK_MONITORS_MAX_VEC_LEN {
+                // If it has, remove the oldest element (at index 0).
+                // This shifts all further elements to the left.
+                self.refill_monitor_views.remove(0);
+            }
+            // Append the new RefillMonitorView struct to the end of the vector.
+            self.refill_monitor_views
+                .push((Instant::now(), refill_monitor_view));
+        }
+
+        pub fn execute(
+            &mut self,
+            rx_from_refill: Receiver<RefillMonitorView>,
+            rx_from_signal_handler: Receiver<InternalCommand>,
+        ) {
+            let sleep_duration_hundred_millis = Duration::from_millis(100);
+            let spin_sleeper = SpinSleeper::default();
+
+            loop {
+                if mock_common_receive_from_signal_handler(
+                    &rx_from_signal_handler,
+                    LOG_TARGET_MOCK_MONITOR,
+                ) {
+                    break;
+                }
+
+                match rx_from_refill.try_recv() {
+                    Ok(refill_monitor_view) => {
+                        self.append_refill_monitor_view(refill_monitor_view);
+                    }
+                    Err(e) => {
+                        match e {
+                            TryRecvError::Empty => { /* do nothing */ }
+                            TryRecvError::Disconnected => {
+                                panic!("{}: channel disconnected", LOG_TARGET_MOCK_MONITOR);
+                            }
+                        }
+                    }
+                }
+
+                spin_sleeper.sleep(sleep_duration_hundred_millis);
+            }
         }
     }
 }

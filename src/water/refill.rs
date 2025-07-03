@@ -19,6 +19,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill_errors::RefillErrors;
+use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 use serde_derive::Deserialize;
@@ -78,26 +79,6 @@ pub struct RefillConfig {
 const LOG_TARGET_REFILL: &str = "refill";
 
 const MILLIS_PER_SEC: u64 = 1000;
-
-/// Struct collects the information for the reporting to the monitor
-/// The information represents no execution error, but critical states of the control object.
-/// In this case, the monitor view informs about excessive triggering of refill operation
-/// which may be caused by a defective sensor or leakage of the main tank.
-#[derive(PartialEq, Debug)]
-pub struct RefillMonitorView {
-    /// refill volume within the last 24h exceeded the threshold
-    pub refill_check_volume_last_24h: bool,
-
-    /// refill count within the last 24h exceeded the threshold
-    pub refill_check_count_last_24h: bool,
-
-    /// refill volume within the last hour exceeded the threshold
-    pub refill_check_volume_last_hour: bool,
-
-    /// refill count within the last hour exceeded the threshold
-    pub refill_check_count_last_hour: bool,
-    pub refill_check_interval_last_refill: bool,
-}
 
 /// Struct collects the channels for the communication between the refill control and the other components.
 pub struct RefillChannels {
@@ -1143,7 +1124,7 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::{Refill, RefillChannels, RefillErrors, RefillStatus};
 
-    use crate::stubs::mock_monitors::tests::mock_monitors;
+    use crate::stubs::mock_monitors::tests::MockMonitors;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
     use crate::stubs::mock_water_injection::tests::MockWaterInjection;
@@ -1152,6 +1133,7 @@ pub mod tests {
     use crate::water::refill::LOG_TARGET_REFILL;
 
     use crate::utilities::logger::setup_logger;
+    use crate::water::refill_stats_data::RefillStatsData;
 
     // Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
     //
@@ -1357,6 +1339,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
             Ok(_) => {}
@@ -1382,7 +1366,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -1533,6 +1517,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -1548,7 +1534,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -1694,6 +1680,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -1709,7 +1697,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -1866,6 +1854,8 @@ pub mod tests {
         let mutex_tank_level_switch_signals_clone_for_test_environment =
             mutex_tank_level_switch_signals.clone();
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -1881,7 +1871,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2059,6 +2049,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -2074,7 +2066,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2219,6 +2211,8 @@ pub mod tests {
             _rx_test_environment_from_mock_water_injection,
         ) = mpsc::channel();
 
+        let mut mock_monitors = MockMonitors::new();
+
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
             Ok(_) => {}
@@ -2251,7 +2245,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2398,6 +2392,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -2413,7 +2409,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2553,6 +2549,8 @@ pub mod tests {
             }
         }
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mutex_device_scheduler = Arc::new(Mutex::new(0));
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, false)));
@@ -2579,7 +2577,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2762,6 +2760,8 @@ pub mod tests {
         };
         let mutex_refill_status = Arc::new(Mutex::new(refill_status));
 
+        let mut mock_monitors = MockMonitors::new();
+
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
             RefillErrors {
@@ -2777,7 +2777,7 @@ pub mod tests {
         let join_handle_mock_monitors = thread::Builder::new()
             .name("mock_monitor".to_string())
             .spawn(move || {
-                mock_monitors(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
             })
             .unwrap();
 
@@ -2880,5 +2880,129 @@ pub mod tests {
         join_handle_test_object
             .join()
             .expect("Test object thread did not finish.");
+    }
+
+    #[test]
+    // This test case executes the check_volume_count_time_limits function of refill.
+    // It also instantiates Monitor to capture the monitor view sent via the channel.
+    pub fn test_refill_check_volume_count_time_limits() {
+        let mut mock_monitors = MockMonitors::new();
+        let sleep_duration_200_millis = Duration::from_millis(200);
+        let spin_sleeper = SpinSleeper::default();
+
+        let (tx_refill_to_monitors, rx_monitors_from_refill) = mpsc::channel();
+        let (tx_test_environment_to_monitors, rx_monitors_from_test_environment) =
+            mpsc::channel::<InternalCommand>();
+
+        // thread for mock monitors
+        let join_handle_mock_monitors = thread::Builder::new()
+            .name("mock_monitor".to_string())
+            .spawn(move || {
+                mock_monitors.execute(rx_monitors_from_refill, rx_monitors_from_test_environment);
+                println!("{}", mock_monitors);
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, false, false, false, false);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, false, false, false, true);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, false, true, false, false);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(true, false, false, false, false);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, false, false, true, false);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, true, false, false, false);
+                
+                let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
+                refill_monitor_view.assert_refill_monitor_view(false, false, false, false, false);
+            })
+            .unwrap();
+
+        let (config, mut refill) =
+            prepare_refill_tests_with_mock_database_interface(None, 1, 1, 27);
+        // this test case does not use the SQL database, so no conflict arises
+        // when concurrently executing other test cases on the same DB.
+
+        let mut sql_refill_stats_data = RefillStatsData::new();
+        sql_refill_stats_data.duration_since_last_refill =
+            config.refill.min_interval_last_refill + 1;
+
+        // first execution without any errors
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            false
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // induce errors before executing again
+        sql_refill_stats_data.refill_count_last_24h = config.refill.max_refill_count_24h + 1;
+
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            true
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // reset the previous error and induce other error before executing again
+        sql_refill_stats_data.refill_count_last_24h = 0;
+        sql_refill_stats_data.refill_count_last_hour = config.refill.max_refill_count_hour + 1;
+
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            true
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // reset the previous error and induce other error before executing again
+        sql_refill_stats_data.refill_count_last_hour = 0;
+        sql_refill_stats_data.refill_volume_last_24h = config.refill.max_refill_volume_24h + 1.0;
+
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            true
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // reset the previous error and induce other error before executing again
+        sql_refill_stats_data.refill_volume_last_24h = 0.0;
+        sql_refill_stats_data.refill_volume_last_hour = config.refill.max_refill_volume_hour + 1.0;
+
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            true
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // reset the previous error and induce other error before executing again
+        sql_refill_stats_data.refill_volume_last_hour = 0.0;
+        sql_refill_stats_data.duration_since_last_refill =
+            config.refill.min_interval_last_refill - 1;
+
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            true
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        // reset the previous error and do not induce any further error
+        sql_refill_stats_data.duration_since_last_refill = config.refill.min_interval_last_refill + 1;
+        assert_eq!(
+            refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
+            false
+        );
+        spin_sleeper.sleep(sleep_duration_200_millis);
+        
+        let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
+        // give thread time to finish
+        spin_sleeper.sleep(sleep_duration_200_millis);
+
+        join_handle_mock_monitors
+            .join()
+            .expect("Mock monitor check did not finish.");
     }
 }

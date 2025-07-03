@@ -111,7 +111,8 @@ dosing_interval_pump4 = 3600                            # inject Balling mineral
 pump_switch_delay_millis = 500                          # waiting period between usage of different pumps
 
 [monitors]
-active = false
+active = false                                          # allows deactivation of monitors
+max_length_refill_monitor_views = 4096                  # maximum number of monitoring entries
 
 [heating]
 active = true
