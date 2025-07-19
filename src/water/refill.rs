@@ -2902,22 +2902,22 @@ pub mod tests {
                 println!("{}", mock_monitors);
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, false, false, false);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, false, false, true);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, true, false, false);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(true, false, false, false, false);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, false, true, false);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, true, false, false, false);
-                
+
                 let (_, refill_monitor_view) = mock_monitors.refill_monitor_views.pop().unwrap();
                 refill_monitor_view.assert_refill_monitor_view(false, false, false, false, false);
             })
@@ -2990,13 +2990,14 @@ pub mod tests {
         spin_sleeper.sleep(sleep_duration_200_millis);
 
         // reset the previous error and do not induce any further error
-        sql_refill_stats_data.duration_since_last_refill = config.refill.min_interval_last_refill + 1;
+        sql_refill_stats_data.duration_since_last_refill =
+            config.refill.min_interval_last_refill + 1;
         assert_eq!(
             refill.check_volume_count_time_limits(&sql_refill_stats_data, &tx_refill_to_monitors),
             false
         );
         spin_sleeper.sleep(sleep_duration_200_millis);
-        
+
         let _ = tx_test_environment_to_monitors.send(InternalCommand::Quit);
         // give thread time to finish
         spin_sleeper.sleep(sleep_duration_200_millis);

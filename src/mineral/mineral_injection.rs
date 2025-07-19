@@ -134,18 +134,22 @@ impl MineralInjectionTrait for MineralInjection {
 
             spin_sleeper.sleep(sleep_duration);
 
-            dosing_counter = match Instant::now().duration_since(instant_start_of_injection).as_millis().try_into() as Result<u32, _> {
+            dosing_counter = match Instant::now()
+                .duration_since(instant_start_of_injection)
+                .as_millis()
+                .try_into() as Result<u32, _>
+            {
                 Ok(val) => val,
                 Err(e) => {
                     error!(
                         target: LOG_TARGET_MINERAL_INJECTION, "Error converting u128 to u32: {}", e
                     );
                     break; // abort dosing - dosing counter keeps current value
-                },
+                }
             };
 
             // check if target dosing duration has been reached
-            if dosing_counter > dosing_duration_millis.into() {
+            if dosing_counter > dosing_duration_millis {
                 break; // stop dosing
             }
         }
@@ -282,8 +286,14 @@ pub mod tests {
                         target_dosing_duration_millis,
                     );
                 assert_eq!(quit_command_received, false);
-                assert_ge!(actual_dosing_duration_millis, target_dosing_duration_millis - 5);
-                assert_le!(actual_dosing_duration_millis, target_dosing_duration_millis + 5);
+                assert_ge!(
+                    actual_dosing_duration_millis,
+                    target_dosing_duration_millis - 5
+                );
+                assert_le!(
+                    actual_dosing_duration_millis,
+                    target_dosing_duration_millis + 5
+                );
             });
         });
     }

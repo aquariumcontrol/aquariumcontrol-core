@@ -475,17 +475,18 @@ impl TankLevelSwitch {
             let execution_duration = stop_time.duration_since(start_time);
             if execution_duration > cycle_time_duration {
                 let delta_duration = execution_duration - cycle_time_duration;
-                if delta_duration.as_millis() > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS {
-                    if !lock_warn_cycle_time_exceeded {
-                        #[cfg(not(test))]
-                        warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                            "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",
-                            execution_duration.as_millis(),
-                            CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS,
-                            delta_duration.as_millis(),
-                        );
-                        lock_warn_cycle_time_exceeded = true;
-                    }
+                if delta_duration.as_millis()
+                    > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS
+                    && !lock_warn_cycle_time_exceeded
+                {
+                    #[cfg(not(test))]
+                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                        "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",
+                        execution_duration.as_millis(),
+                        CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS,
+                        delta_duration.as_millis(),
+                    );
+                    lock_warn_cycle_time_exceeded = true;
                 }
             } else {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;

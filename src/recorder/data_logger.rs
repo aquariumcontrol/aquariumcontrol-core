@@ -1000,7 +1000,11 @@ impl DataLogger {
         );
 
         let initial_sleep_time_start = Instant::now();
-        while Instant::now().duration_since(initial_sleep_time_start).as_millis() < self.config.initial_sleep_time_millis.into() {
+        while Instant::now()
+            .duration_since(initial_sleep_time_start)
+            .as_millis()
+            < self.config.initial_sleep_time_millis.into()
+        {
             spin_sleeper.sleep(sleep_duration_hundred_millis);
             (quit_command_received, _, _) =
                 self.process_external_request(data_logger_channels.rx_from_signal_handler, None);
@@ -1613,21 +1617,21 @@ pub mod tests {
                 let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #6");
                 data_frame.assert(
-                    Some(29.0),      // target_water_temperature
+                    Some(29.0),     // target_water_temperature
                     Some(28.40625), // target_water_temperature_filtered
-                    Some(7.0),       // target_water_ph
+                    Some(7.0),      // target_water_ph
                     Some(7.125),    // target_water_ph_filtered
-                    Some(50_000.0),  // target_water_conductivity
-                    Some(46875.75),  // target_water_conductivity_filtered
-                    None,            // target_water_conductivity_compensated
-                    Some(false),     // target_refill_in_progress
-                    Some(true),      // target_tank_level_switch_position
-                    Some(true),      // target_tank_level_switch_position_stabilized
-                    Some(false),     // target_tank_level_switch_invalid
-                    Some(true),      // target_surface_ventilation_status
-                    Some(35.0),      // target_ambient_temperature
-                    Some(66.0),      // target_ambient_humidity
-                    Some(true),      // target_heater_status
+                    Some(50_000.0), // target_water_conductivity
+                    Some(46875.75), // target_water_conductivity_filtered
+                    None,           // target_water_conductivity_compensated
+                    Some(false),    // target_refill_in_progress
+                    Some(true),     // target_tank_level_switch_position
+                    Some(true),     // target_tank_level_switch_position_stabilized
+                    Some(false),    // target_tank_level_switch_invalid
+                    Some(true),     // target_surface_ventilation_status
+                    Some(35.0),     // target_ambient_temperature
+                    Some(66.0),     // target_ambient_humidity
+                    Some(true),     // target_heater_status
                 );
 
                 // Dataframe #5
@@ -1738,22 +1742,22 @@ pub mod tests {
                 */
 
                 assert_output_file_contents(
-                    &config2.data_logger,                      // data_logger_config,
+                    &config2.data_logger, // data_logger_config,
                     29.0,                 // target_water_temperature
-                    28.4,           // target_water_temperature_filtered
-                    7.0,                         // target_water_ph
-                    7.12,                  // target_water_ph_filtered
+                    28.4,                 // target_water_temperature_filtered
+                    7.0,                  // target_water_ph
+                    7.12,                 // target_water_ph_filtered
                     50_000.0,             // target_water_conductivity
-                    46876.0,        // target_water_conductivity_filtered
-                    0.0,       // target_water_conductivity_compensated
-                    false,                  // target_refill_in_progress
-                    true,            // target_tank_level_switch_position
-                    false,            // target_tank_level_switch_invalid
-                    true,    // target_tank_level_switch_position_stabilized
-                    true,            // target_surface_ventilation_status
-                    35.0,                // target_ambient_temperature
-                    66.0,                  // target_ambient_humidity
-                    true,                     // target_heater_status
+                    46876.0,              // target_water_conductivity_filtered
+                    0.0,                  // target_water_conductivity_compensated
+                    false,                // target_refill_in_progress
+                    true,                 // target_tank_level_switch_position
+                    false,                // target_tank_level_switch_invalid
+                    true,                 // target_tank_level_switch_position_stabilized
+                    true,                 // target_surface_ventilation_status
+                    35.0,                 // target_ambient_temperature
+                    66.0,                 // target_ambient_humidity
+                    true,                 // target_heater_status
                 );
             })
             .unwrap();
