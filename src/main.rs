@@ -127,6 +127,7 @@ use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::{TcpCommunication, TcpCommunicationChannels};
+use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
 use crate::thermal::ventilation::{Ventilation, VentilationChannels};
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
@@ -423,7 +424,7 @@ fn main() {
 
     // read the configuration file for operating the control system
     let config = read_config_file(config_file_name);
-
+    
     // publish the PID to a file so that the client application can communicate with this application
     let publish_pid = PublishPid::new(config.publish_pid);
     let publish_pid_clone = publish_pid.clone();
@@ -445,6 +446,11 @@ fn main() {
             );
         }
     }));
+    
+    // check if the control parameters of heating and ventilation are valid
+    if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
+        panic!("Configuration of temperature ranges for heating and ventilation control is not valid.");
+    }
 
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);

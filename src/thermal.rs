@@ -10,5 +10,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Contains functionality to control the heater
 pub mod heating;
 
+/// Contains one function to check the validity of heating and ventilation configuration
+pub mod distinct_interval_check;
+
 /// Contains functionality to control the ventilation
 pub mod ventilation;

@@ -53,7 +53,7 @@ pub trait HeatingStatsDataTransferTrait {
 #[derive(Deserialize, Clone)]
 pub struct HeatingConfig {
     /// Control will only be active when the flag is set to true.
-    active: bool,
+    pub active: bool,
 
     /// The temperature at which the heater is switched on for 100% of the time.
     /// This temperature must be lower than switch_off_temperature.
@@ -63,7 +63,7 @@ pub struct HeatingConfig {
     /// The temperature at which the heater is switched off for 100% of the time.
     /// This temperature must be higher than switch_on_temperature.
     /// It is overwritten with valid database values once obtained.
-    switch_off_temperature: f32,
+    pub switch_off_temperature: f32,
 
     /// Flag to determine behavior in case the refill control has a problem
     /// and the water level stays low for longer periods of time.

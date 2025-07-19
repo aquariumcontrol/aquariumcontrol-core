@@ -38,7 +38,7 @@ const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct VentilationConfig {
-    active: bool,
+    pub active: bool,
     /// The temperature at which the ventilation is switched on for 100% of the time.
     /// This temperature must be higher than switch_off_temperature.
     /// It is overwritten with valid database values once obtained.
@@ -47,7 +47,7 @@ pub struct VentilationConfig {
     /// The temperature at which the ventilation is switched off for 100% of the time.
     /// This temperature must be lower than switch_on_temperature.
     /// It is overwritten with valid database values once obtained.
-    switch_off_temperature: f32,
+    pub switch_off_temperature: f32,
 
     /// A flag to determine the behavior of the control when the application is terminating
     /// If this flag is true, the application will switch on the ventilation when exiting.    
