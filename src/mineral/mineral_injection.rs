@@ -10,7 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -99,7 +99,6 @@ impl MineralInjectionTrait for MineralInjection {
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
         let mut quit_command_received: bool;
-        let mut dosing_counter = 0;
 
         match tx_to_relay_manager.send(InternalCommand::SwitchOn(mineral_pump.clone())) {
             Ok(_) => {
@@ -122,6 +121,9 @@ impl MineralInjectionTrait for MineralInjection {
             }
         }
 
+        let instant_start_of_injection = Instant::now();
+        let mut dosing_counter: u32 = 0;
+
         loop {
             // check if there is a quit request
             (quit_command_received, _, _) =
@@ -132,10 +134,19 @@ impl MineralInjectionTrait for MineralInjection {
 
             spin_sleeper.sleep(sleep_duration);
 
-            if dosing_counter >= dosing_duration_millis {
+            dosing_counter = match Instant::now().duration_since(instant_start_of_injection).as_millis().try_into() as Result<u32, _> {
+                Ok(val) => val,
+                Err(e) => {
+                    error!(
+                        target: LOG_TARGET_MINERAL_INJECTION, "Error converting u128 to u32: {}", e
+                    );
+                    break; // abort dosing - dosing counter keeps current value
+                },
+            };
+
+            // check if target dosing duration has been reached
+            if dosing_counter > dosing_duration_millis.into() {
                 break; // stop dosing
-            } else {
-                dosing_counter = dosing_counter.saturating_add(sleep_interval_millis);
             }
         }
 
@@ -271,7 +282,8 @@ pub mod tests {
                         target_dosing_duration_millis,
                     );
                 assert_eq!(quit_command_received, false);
-                assert_eq!(actual_dosing_duration_millis, target_dosing_duration_millis);
+                assert_ge!(actual_dosing_duration_millis, target_dosing_duration_millis - 5);
+                assert_le!(actual_dosing_duration_millis, target_dosing_duration_millis + 5);
             });
         });
     }
@@ -330,7 +342,7 @@ pub mod tests {
                 let lower_bound: u32 = lower_bound_float.round() as u32;
 
                 assert_ge!(actual_dosing_duration_millis, lower_bound);
-                assert_le!(actual_dosing_duration_millis, sleep_interval_millis);
+                assert_le!(actual_dosing_duration_millis, sleep_interval_millis + 10);
                 assert_eq!(quit_command_received, true);
             });
         });

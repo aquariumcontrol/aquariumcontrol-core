@@ -381,7 +381,7 @@ impl Ventilation {
         let mut ventilation_inhibited = false; // state of ventilation control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded = false;
         let mut start_time = Instant::now();
-        let mut mutex_was_blocked_during_actuation: bool = false;
+        let mut actuation_mutex_was_blocked_during_actuation: bool = false;
 
         loop {
             let (quit_command_received, start_command_received, stop_command_received) = self
@@ -486,7 +486,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &ventilation_channels.tx_ventilation_to_relay_manager,
                                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
+                                    &mut actuation_mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -497,7 +497,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &ventilation_channels.tx_ventilation_to_relay_manager,
                                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
+                                    &mut actuation_mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -511,7 +511,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &ventilation_channels.tx_ventilation_to_relay_manager,
                                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
+                                    &mut actuation_mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::On;
                             }
@@ -523,7 +523,7 @@ impl Ventilation {
                                     &mutex_device_scheduler_ventilation,
                                     &ventilation_channels.tx_ventilation_to_relay_manager,
                                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                                    &mut mutex_was_blocked_during_actuation,
+                                    &mut actuation_mutex_was_blocked_during_actuation,
                                 );
                                 ventilation_state = ActuatorState::Off;
                             }
@@ -536,7 +536,7 @@ impl Ventilation {
                         &mut ventilation_state,
                         &mutex_device_scheduler_ventilation,
                         &ventilation_channels,
-                        &mut mutex_was_blocked_during_actuation,
+                        &mut actuation_mutex_was_blocked_during_actuation,
                     );
                 } else {
                     // schedule check requires stop of ventilation control
@@ -545,7 +545,7 @@ impl Ventilation {
                         &mut ventilation_state,
                         &mutex_device_scheduler_ventilation,
                         &ventilation_channels,
-                        &mut mutex_was_blocked_during_actuation,
+                        &mut actuation_mutex_was_blocked_during_actuation,
                     );
                 }
             }
@@ -599,8 +599,9 @@ impl Ventilation {
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
 
-            if execution_duration >= cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
+            if execution_duration > cycle_time_duration {
+                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
+                    #[cfg(not(test))]
                     warn!(target: LOG_TARGET_VENTILATION,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),
@@ -613,7 +614,7 @@ impl Ventilation {
                 spin_sleeper.sleep(remaining_sleep_time);
                 lock_warn_cycle_time_exceeded = false;
             }
-            mutex_was_blocked_during_actuation = false; // reset for the next cycle
+            actuation_mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
             start_time = Instant::now(); // start time for the next cycle
         }
@@ -625,7 +626,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &ventilation_channels.tx_ventilation_to_relay_manager,
                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                    &mut mutex_was_blocked_during_actuation,
+                    &mut actuation_mutex_was_blocked_during_actuation,
                 );
             }
         } else {
@@ -635,7 +636,7 @@ impl Ventilation {
                     &mutex_device_scheduler_ventilation,
                     &ventilation_channels.tx_ventilation_to_relay_manager,
                     &ventilation_channels.rx_ventilation_from_relay_manager,
-                    &mut mutex_was_blocked_during_actuation,
+                    &mut actuation_mutex_was_blocked_during_actuation,
                 );
             }
         }

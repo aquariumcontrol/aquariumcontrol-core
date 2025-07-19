@@ -23,6 +23,7 @@ const LOG_TARGET_DS18B20: &str = "ds18b20";
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 
+#[cfg(not(test))]
 use log::warn;
 
 mod ds18b20_constants {
@@ -347,6 +348,7 @@ impl Ds18b20 {
                 if measured_mutex_access_duration > max_mutex_access_duration {
                     if !self.lock_warn_max_mutex_access_duration {
                         self.lock_warn_max_mutex_access_duration = true;
+                        #[cfg(not(test))]
                         warn!(target: LOG_TARGET_DS18B20,
                             "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                             max_mutex_access_duration.as_millis(),

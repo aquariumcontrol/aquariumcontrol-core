@@ -7,7 +7,9 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::{error, warn};
+use log::{error};
+#[cfg(not(test))]
+use log::warn;
 
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
@@ -255,12 +257,17 @@ impl RelayManager {
             match actuator.actuate(command) {
                 Ok(()) => {
                     if attempts > 0 {
+                        #[cfg(not(test))]
                         warn!(
                             target: LOG_TARGET_RELAY_MANAGER,
                             "{}: actuation succeeded after {} retries.",
                             actuation_name,
                             attempts
                         );
+                        #[cfg(test)] // to avoid warning when compiling for test
+                        if actuation_name == "not existing name" {
+                            println!("Actuation with strange name: {}", actuation_name);
+                        }
                     }
                     break;
                 }
@@ -271,6 +278,7 @@ impl RelayManager {
 
                     // Log error only after the final attempt
                     if attempts == max_attempts - 1 {
+                        #[cfg(not(test))]
                         error!(
                             target: LOG_TARGET_RELAY_MANAGER,
                             "{}: actuation failed (attempt {}/{}) with error: {:?}",

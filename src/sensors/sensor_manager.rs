@@ -614,6 +614,7 @@ impl SensorManager {
                     if measured_mutex_access_duration > max_mutex_access_duration {
                         if !self.lock_warn_max_mutex_access_duration {
                             self.lock_warn_max_mutex_access_duration = true;
+                            #[cfg(not(test))]
                             warn!(target: LOG_TARGET_SENSOR_MANAGER,
                                 "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                                 max_mutex_access_duration.as_millis(),

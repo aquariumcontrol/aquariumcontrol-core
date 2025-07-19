@@ -436,7 +436,7 @@ impl Heating {
         let mut energy_increment: f64 = 0.0;
         let mut heating_inhibited: bool = false; // state of heating control determined by if the start/stop command has been received
         let mut lock_warn_cycle_time_exceeded: bool = false;
-        let mut mutex_was_blocked_during_actuation: bool = false;
+        let mut actuation_mutex_was_blocked_during_actuation: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_HEATING_MILLIS);
 
         let mut heating_stats_opt = match self
@@ -578,7 +578,7 @@ impl Heating {
                             &mutex_device_scheduler_heating,
                             &heating_channels.tx_heating_to_relay_manager,
                             &heating_channels.rx_heating_from_relay_manager,
-                            &mut mutex_was_blocked_during_actuation,
+                            &mut actuation_mutex_was_blocked_during_actuation,
                         );
                         heater_state = ActuatorState::Off;
                     }
@@ -602,7 +602,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -613,7 +613,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -627,7 +627,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -639,7 +639,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -655,7 +655,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -667,7 +667,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -683,7 +683,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::On;
                                 }
@@ -695,7 +695,7 @@ impl Heating {
                                         &mutex_device_scheduler_heating,
                                         &heating_channels.tx_heating_to_relay_manager,
                                         &heating_channels.rx_heating_from_relay_manager,
-                                        &mut mutex_was_blocked_during_actuation,
+                                        &mut actuation_mutex_was_blocked_during_actuation,
                                     );
                                     heater_state = ActuatorState::Off;
                                 }
@@ -778,7 +778,7 @@ impl Heating {
                     self.lock_warn_max_mutex_access_duration = true;
                     #[cfg(not(test))]
                     warn!(target: LOG_TARGET_HEATING,
-                        "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                        "Access to mutex for heating status took too long. Allowed={}ms, Measured={}ms",
                         max_mutex_access_duration.as_millis(),
                         measured_mutex_access_duration.as_millis(),
                     );
@@ -804,8 +804,9 @@ impl Heating {
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
 
-            if execution_duration >= cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded && !mutex_was_blocked_during_actuation {
+            if execution_duration > cycle_time_duration {
+                if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
+                    #[cfg(not(test))]
                     warn!(target: LOG_TARGET_HEATING,
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),
@@ -819,7 +820,7 @@ impl Heating {
 
                 lock_warn_cycle_time_exceeded = false;
             }
-            mutex_was_blocked_during_actuation = false; // reset for the next cycle
+            actuation_mutex_was_blocked_during_actuation = false; // reset for the next cycle
 
             // Check for how long ago the last database ping happened.
             if Instant::now().duration_since(self.last_ping_instant) > self.database_ping_interval {
@@ -836,7 +837,7 @@ impl Heating {
                 &mutex_device_scheduler_heating,
                 &heating_channels.tx_heating_to_relay_manager,
                 &heating_channels.rx_heating_from_relay_manager,
-                &mut mutex_was_blocked_during_actuation,
+                &mut actuation_mutex_was_blocked_during_actuation,
             );
         }
 

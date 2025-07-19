@@ -44,6 +44,10 @@ const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
 /// sleep time is adjusted accordingly to run at fixed execution time
 const CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS: u64 = 100;
 
+/// application is adapting the sleep time to achieve constant execution rate of 100 milliseconds.
+/// this is the threshold from which on the cycle time monitoring alerts.
+const PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS: u128 = 5;
+
 /// allow max. 10 milliseconds for mutex to be blocked by any other thread
 const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
 
@@ -469,13 +473,19 @@ impl TankLevelSwitch {
 
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
-            if execution_duration >= cycle_time_duration {
-                if !lock_warn_cycle_time_exceeded {
-                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
-                        "execution duration of {} milliseconds exceeds cycle time of {}",
-                        cycle_time_duration.as_millis(),
-                        CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
-                    lock_warn_cycle_time_exceeded = true;
+            if execution_duration > cycle_time_duration {
+                let delta_duration = execution_duration - cycle_time_duration;
+                if delta_duration.as_millis() > PERMISSIBLE_CYCLE_TIME_DEVIATION_TANK_LEVEL_SWITCH_MILLIS {
+                    if !lock_warn_cycle_time_exceeded {
+                        #[cfg(not(test))]
+                        warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                            "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",
+                            execution_duration.as_millis(),
+                            CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS,
+                            delta_duration.as_millis(),
+                        );
+                        lock_warn_cycle_time_exceeded = true;
+                    }
                 }
             } else {
                 let remaining_sleep_time = cycle_time_duration - execution_duration;

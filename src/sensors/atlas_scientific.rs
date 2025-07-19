@@ -433,6 +433,7 @@ impl AtlasScientific {
                 self.config.sleep_time_millis_temperature,
             ),
             _ => {
+                #[cfg(not(test))]
                 warn!(
                     target: LOG_TARGET_ATLAS_SCIENTIFIC,
                     "ignoring invalid signal request ({})",
@@ -588,6 +589,7 @@ impl AtlasScientific {
                             AquariumSignal::pH => {
                                 if !self.lock_warn_max_mutex_access_duration_ph {
                                     self.lock_warn_max_mutex_access_duration_ph = true;
+                                    #[cfg(not(test))]
                                     warn!(
                                         target: LOG_TARGET_ATLAS_SCIENTIFIC,
                                         "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
@@ -605,6 +607,7 @@ impl AtlasScientific {
                             AquariumSignal::Conductivity => {
                                 if !self.lock_warn_max_mutex_access_duration_conductivity {
                                     self.lock_warn_max_mutex_access_duration_conductivity = true;
+                                    #[cfg(not(test))]
                                     warn!(
                                         target: LOG_TARGET_ATLAS_SCIENTIFIC,
                                         "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
