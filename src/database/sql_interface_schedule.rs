@@ -132,9 +132,7 @@ impl ScheduleEntry {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::ScheduleTypeConversionFailure(
-                    "ScheduleEntry: Error in conversion of SQL database result to enum."
-                        .to_string()
-                        + &sql_schedule_entry.schedule_type,
+                    sql_schedule_entry.schedule_type,
                 ));
             }
         };
@@ -144,8 +142,7 @@ impl ScheduleEntry {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::ScheduleStartTimeConversionFailure(
-                        "Could not convert start time string read from SQL database: ".to_string()
-                            + &sql_schedule_entry.start_time,
+                            sql_schedule_entry.start_time,
                     ));
                 }
             };
@@ -155,8 +152,7 @@ impl ScheduleEntry {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::ScheduleStopTimeConversionFailure(
-                        "Could not convert stop time string read from SQL database.".to_string()
-                            + &sql_schedule_entry.stop_time,
+                        sql_schedule_entry.stop_time,
                     ));
                 }
             };
@@ -251,8 +247,7 @@ impl SqlInterfaceSchedule {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::ScheduleRequestFailure(
-                    "Could not get schedule entries from SQL database using query:".to_string()
-                        + sql_query_strings::SQL_QUERY_READ_SCHEDULE,
+                    sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string()
                 ));
             }
         };
@@ -293,9 +288,7 @@ impl SqlInterfaceSchedule {
                 return Ok(schedule);
             }
         }
-        Err(SqlInterfaceError::ScheduleTypeNotFound(
-            schedule_type.to_string(),
-        ))
+        Err(SqlInterfaceError::ScheduleTypeNotFound(schedule_type.to_string()))
     }
 
     /// Execute a ping to the database to avoid timeout.

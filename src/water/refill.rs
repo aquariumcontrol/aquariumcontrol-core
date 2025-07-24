@@ -18,7 +18,7 @@ use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use crate::water::refill_errors::RefillErrors;
+use crate::water::refill_errors::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
@@ -164,7 +164,7 @@ pub struct Refill {
     pub sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
 
     /// struct of type RefillErrors which includes flags for different kind of errors
-    pub refill_errors: RefillErrors,
+    pub refill_errors: RefillErrorStates,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about stop command being received
     lock_info_stop_command_received: bool,
@@ -253,7 +253,7 @@ impl Refill {
         Self {
             config,
             sql_interface_refill,
-            refill_errors: RefillErrors {
+            refill_errors: RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -304,7 +304,7 @@ impl Refill {
     pub fn new_with_errors(
         config: RefillConfig,
         sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
-        refill_errors: RefillErrors,
+        refill_errors: RefillErrorStates,
     ) -> Refill {
         Self {
             config,
@@ -1122,7 +1122,7 @@ pub mod tests {
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-    use crate::water::refill::{Refill, RefillChannels, RefillErrors, RefillStatus};
+    use crate::water::refill::{Refill, RefillChannels, RefillErrorStates, RefillStatus};
 
     use crate::stubs::mock_monitors::tests::MockMonitors;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
@@ -1165,7 +1165,7 @@ pub mod tests {
     // - It fails to connect to the SQL database.
     // - It fails to get a connection from the SQL pool for `SqlInterfaceRefill` initialization.
     pub fn prepare_refill_tests(
-        refill_errors: Option<RefillErrors>,
+        refill_errors: Option<RefillErrorStates>,
         initial_wait_interval: u64,
         check_interval: u64,
         test_db_number_opt: Option<u32>,
@@ -1239,7 +1239,7 @@ pub mod tests {
     /// - `read_config_file_with_test_database` fails (e.g., the configuration file is not found or the `test_db_number` is invalid).
     /// - There are issues during the initialization of the `Refill` struct (e.g., due to an invalid `refill_config`).
     pub fn prepare_refill_tests_with_mock_database_interface(
-        refill_errors: Option<RefillErrors>,
+        refill_errors: Option<RefillErrorStates>,
         initial_wait_interval: u64,
         check_interval: u64,
         test_db_number: u32,
@@ -1277,7 +1277,7 @@ pub mod tests {
     // Test case checks the implementation of ProcessExternalRequestTrait.
     // The test case uses test database #46.
     pub fn test_refill_process_external_request_empty_channel() {
-        let refill_errors = RefillErrors {
+        let refill_errors = RefillErrorStates {
             error_switch_stuck_high: false,
             error_switch_stuck_low: false,
             error_receive_tank_level_switch_position: false,
@@ -1353,7 +1353,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -1521,7 +1521,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: true,
                 error_receive_tank_level_switch_position: false,
@@ -1684,7 +1684,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -1858,7 +1858,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -2053,7 +2053,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -2178,7 +2178,7 @@ pub mod tests {
     // Test case uses test database #24.
     pub fn test_refill_process_external_request_reset_all_errors_command() {
         // set the errors
-        let refill_errors = RefillErrors {
+        let refill_errors = RefillErrorStates {
             error_switch_stuck_high: true,
             error_switch_stuck_low: true,
             error_receive_tank_level_switch_position: true,
@@ -2232,7 +2232,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -2396,7 +2396,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -2564,7 +2564,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,
@@ -2764,7 +2764,7 @@ pub mod tests {
 
         let mut mock_water_injection = MockWaterInjection::new(
             Some(tx_mock_water_injection_to_test_environment),
-            RefillErrors {
+            RefillErrorStates {
                 error_switch_stuck_high: false,
                 error_switch_stuck_low: false,
                 error_receive_tank_level_switch_position: false,

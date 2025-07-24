@@ -184,9 +184,7 @@ impl SqlInterfaceBalling {
                     target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
                     "could not insert Balling dosing event into database ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertBallingEventFailure(
-                    "Error when inserting Balling dosing event into database.".to_string(),
-                ))
+                Err(SqlInterfaceError::InsertBallingEventFailure)
             }
         }
     }
@@ -227,28 +225,18 @@ impl SqlInterfaceBalling {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
-                    "Could not get single Balling set value from the database using query:"
-                        .to_string()
-                        + &sql_query_string,
-                ));
+                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(sql_query_string));
             }
         };
 
         // check the error case if there is no response
         if single_balling_setval_array.is_empty() {
-            return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
-                "SQL database responded with empty response to query: ".to_string()
-                    + &sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(sql_query_string));
         }
 
         // check the error case if there is more than one response
         if single_balling_setval_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + &sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(sql_query_string));
         }
         Ok(single_balling_setval_array.remove(0))
     }
@@ -279,6 +267,7 @@ impl SqlInterfaceBalling {
         label: String,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_PUMP_CONFIGURATION.to_owned();
+        let sql_query_string_for_error = sql_query_string.clone();
         match self.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
@@ -294,9 +283,7 @@ impl SqlInterfaceBalling {
                     target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
                     "could not insert Balling pump configuration into database ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(
-                    "Error when inserting Balling pump configuration into database.".to_string(),
-                ))
+                Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(sql_query_string_for_error))
             }
         }
     }
@@ -449,9 +436,8 @@ pub mod tests {
             Err(e) => {
                 assert_eq!(
                     e,
-                    SqlInterfaceError::SingleBallingSetValRequestFailure(
-                        "SQL database responded with empty response to query: \
-                        SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals \
+                    SqlInterfaceError::SingleBallingSetValEmptyResponse(
+                        "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals \
                         WHERE pumpid=1;"
                             .to_string()
                     )

@@ -200,9 +200,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                     target: LOG_TARGET_SQL_INTERFACE_FEED,
                     "could not insert feed event into database ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertFeedEventFailure(
-                    "Error when inserting refill event into database.".to_string(),
-                ))
+                Err(SqlInterfaceError::InsertFeedEventFailure)
             }
         }
     }
@@ -311,11 +309,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             target: LOG_TARGET_SQL_INTERFACE_FEED,
                             "could not calculate update of feed schedule entry ({e:?})"
                         );
-                        result = Err(
-                            SqlInterfaceError::FeedScheduleUpdateFailure(
-                                "Error calculating update of feed schedule entry which shall be repeated.".to_string(),
-                            )
-                        );
+                        result = Err(SqlInterfaceError::FeedScheduleUpdateFailure);
                         continue;
                     }
                 };
@@ -337,9 +331,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             target: LOG_TARGET_SQL_INTERFACE_FEED,
                             "could not update feed schedule entry ({e:?})"
                         );
-                        result = Err(SqlInterfaceError::FeedScheduleUpdateFailure(
-                            "Error updating feed schedule of entry which shall be repeated.".to_string(),
-                        ));
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure);
                     }
                 };
             } else {
@@ -358,12 +350,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                             target: LOG_TARGET_SQL_INTERFACE_FEED,
                             "could not delete feed schedule entry ({e:?})"
                         );
-                        result = Err(
-                            SqlInterfaceError::FeedScheduleUpdateFailure(
-                                "Error when deleting refill entry which shall be not repeated."
-                                    .to_string(),
-                            ),
-                        );
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure);
                     }
                 };
             }
@@ -420,9 +407,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                     target: LOG_TARGET_SQL_INTERFACE_FEED,
                     "could not insert feed schedule entry ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertFeedEventFailure(
-                    "Error when inserting feed event into database.".to_string(),
-                ))
+                Err(SqlInterfaceError::InsertFeedEventFailure)
             }
         }
     }
@@ -503,10 +488,7 @@ impl SqlInterfaceFeed {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
-                    "Could not get feed schedule entry from the database with query:".to_string()
-                        + sql_query,
-                ));
+                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(sql_query.to_string()));
             }
         };
 
@@ -527,9 +509,7 @@ impl SqlInterfaceFeed {
         }
 
         if feedschedule_entries.is_empty() {
-            Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
-                "Could not convert any feedschedule entry timestamp string read from the database".to_string(),
-            ))
+            Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)
         } else {
             Ok(Some(feedschedule_entries))
         }
@@ -620,28 +600,20 @@ impl SqlInterfaceFeed {
                 }) {
                 Ok(c) => c,
                 Err(_) => {
-                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                        "Could not get feed pattern header from the database with query:"
-                            .to_string()
-                            + sql_query.as_str(),
-                    ));
+                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(sql_query.as_str().to_string()));
                 }
             };
 
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(sql_query));
         }
+        
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query.as_str(),
-            ));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(sql_query));
         }
+        
         let feedpattern_header = &single_feedpattern_entry_array[0];
 
         Ok(feedpattern_header.clone())
@@ -708,27 +680,20 @@ impl SqlInterfaceFeed {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                    "Could not get feed pattern phase from the database with query: ".to_string()
-                        + sql_query.as_str(),
-                ));
+                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(sql_query));
             }
         };
 
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(sql_query));
         }
+        
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query: ".to_string()
-                    + sql_query.as_str(),
-            ));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(sql_query));
         }
+        
         let feed_phase = &single_feedpattern_entry_array[0];
 
         Ok(feed_phase.clone())
@@ -831,9 +796,8 @@ pub mod tests {
             Err(e) => {
                 assert_eq!(
                     e,
-                    SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
-                        "SQL database responded with empty response to query: \
-                        SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=1;"
+                    SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
+                        "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=1;"
                             .to_string()
                     )
                 );

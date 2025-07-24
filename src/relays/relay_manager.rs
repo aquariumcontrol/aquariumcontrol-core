@@ -14,13 +14,13 @@ use log::warn;
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
 
-use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+use crate::utilities::channel_content::{InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
-use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
+use crate::relays::relay_error::RelayError;
 
 const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 
@@ -36,45 +36,6 @@ pub trait RelayActuationTrait {
     fn flush_buffer(&mut self);
 }
 
-/// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
-#[derive(PartialEq, Clone)]
-pub enum RelayError {
-    IrrelevantCommand(InternalCommand),
-    FailureCommandMessageCreation,
-    WriteError,
-    ReadError,
-    IncorrectChecksum,
-    PulseNotAllowedForDevice(AquariumDevice),
-}
-
-impl fmt::Debug for RelayError {
-    /// Formats the `RelayError` enum into a human-readable string representation for debugging.
-    ///
-    /// This implementation allows `RelayError` variants to be displayed directly using
-    /// `println!` or `format!`, providing concise and informative error messages.
-    /// For variants that contain associated data (like `IrrelevantCommand` or `PulseNotAllowedForDevice`),
-    /// that data is included in the output for better diagnostic context.
-    ///
-    /// # Arguments
-    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
-    ///
-    /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RelayError::IrrelevantCommand(c) => write!(f, "Irrelevant command {}", c),
-            RelayError::FailureCommandMessageCreation => {
-                write!(f, "Failure command message creation")
-            }
-            RelayError::WriteError => write!(f, "Write Error"),
-            RelayError::ReadError => write!(f, "Read Error"),
-            RelayError::IncorrectChecksum => write!(f, "Incorrect Checksum"),
-            RelayError::PulseNotAllowedForDevice(c) => {
-                write!(f, "Pulse command not allowed for device {}", c)
-            }
-        }
-    }
-}
 /// Holds the configuration data for the relay manager.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -642,6 +603,7 @@ pub mod tests {
     use std::sync::mpsc;
     use std::thread::scope;
     use std::time::Duration;
+
 
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {

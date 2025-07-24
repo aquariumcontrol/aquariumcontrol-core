@@ -56,11 +56,7 @@ impl FeedScheduleEntry {
                     target: LOG_TARGET_FEED_SCHEDULE_ENTRY,
                     "could not get feed schedule entry from database ({e:?})"
                 );
-                return Err(
-                    SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure(
-                        "Could not convert timestamp string read from SQL database".to_string(),
-                    ),
-                );
+                return Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure);
             }
         };
 

@@ -28,13 +28,13 @@ pub mod tests {
 
     impl DatabaseInterfaceFeedTrait for MockSqlInterfaceFeed {
         fn get_current_timestamp(&mut self) -> Result<NaiveDateTime, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_past_feedschedule_entries_from_database(
             &mut self,
         ) -> Result<Option<Vec<FeedScheduleEntry>>, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn insert_feed_event(
@@ -44,21 +44,21 @@ pub mod tests {
             _profile_name: String,
             _profile_id: i32,
         ) -> Result<(), SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_single_feedpattern_from_database(
             &mut self,
             _profile_id: i32,
         ) -> Result<Feedpattern, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn update_feedschedule_entries_in_database(
             &mut self,
             _feedschedule_entry: &mut Vec<FeedScheduleEntry>,
         ) -> Result<(), SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn ping(&mut self) {
@@ -74,7 +74,7 @@ pub mod tests {
             _is_weekly: bool,
             _is_daily: bool,
         ) -> Result<(), SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
     }
 }

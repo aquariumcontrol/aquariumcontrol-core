@@ -22,3 +22,4 @@ pub mod device_relay_logic;
 /// Contains the trait implementation for the relay actuation via GPIO
 pub mod actuate_gpio;
 mod controllino_message;
+pub mod relay_error;

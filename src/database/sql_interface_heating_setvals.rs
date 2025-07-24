@@ -126,9 +126,8 @@ impl SqlInterfaceHeatingSetVals {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::HeatingSetValsReadError(
-                    "Could not get heating set values from the database with query:".to_string()
-                        + sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS,
+                return Err(SqlInterfaceError::HeatingSetValsRequestFailure(
+                        sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string()
                 ));
             }
         };
@@ -140,8 +139,8 @@ impl SqlInterfaceHeatingSetVals {
 
         // return error if the query result contains more than one entry
         if sql_heating_setvals_array.len() > 1 {
-            return Err(SqlInterfaceError::HeatingSetValsReadError(
-                "The database returned more than one heating set value entry.".to_string(),
+            return Err(SqlInterfaceError::HeatingSetValsNoSingleResponse(
+                sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string()
             ));
         }
 
@@ -152,8 +151,9 @@ impl SqlInterfaceHeatingSetVals {
         if heating_set_vals.heating_switch_on_temperature
             > heating_set_vals.heating_switch_off_temperature
         {
-            return Err(SqlInterfaceError::HeatingSetValsReadError(
-                "The heating switch on temperature is higher than the heating switch off temperature.".to_string(),
+            return Err(SqlInterfaceError::HeatingSetValsInvalid(
+                heating_set_vals.heating_switch_on_temperature,
+                heating_set_vals.heating_switch_off_temperature,
             ));
         }
 
@@ -179,9 +179,7 @@ impl SqlInterfaceHeatingSetVals {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertHeatingSetValuesFailure(
-                    "Error when inserting heating set values into database using query: "
-                        .to_string()
-                        + sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS,
+                        sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string()
                 ))
             }
         }
@@ -318,10 +316,9 @@ pub mod tests {
         // check if reading an invalid value combination returns an error
         assert_eq!(
             sql_interface_heating_setvals.get_heating_set_values(),
-            Err(SqlInterfaceError::HeatingSetValsReadError(
-                "The heating switch on temperature is higher \
-                       than the heating switch off temperature."
-                    .to_string()
+            Err(SqlInterfaceError::HeatingSetValsInvalid(
+                invalid_heating_set_vals.heating_switch_on_temperature,
+                invalid_heating_set_vals.heating_switch_off_temperature
             ))
         );
         println!("* reading  invalid heating set values (FAIL) succeeded.");

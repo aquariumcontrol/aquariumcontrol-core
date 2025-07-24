@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::{fmt, str};
+pub(crate) use crate::sensors::i2c_error::I2cError;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -39,30 +40,6 @@ pub struct I2cInterfaceConfig {
     /// timeout for transactions in milliseconds
     #[allow(unused)]
     timeout_transaction: u32,
-}
-
-/// communication error codes
-#[derive(Debug, PartialEq)]
-pub enum I2cError {
-    /// the message could not be sent
-    #[allow(unused)]
-    WriteFailure,
-
-    /// command could not be sent completely to the sensor unit
-    #[allow(unused)]
-    InsufficientWrite,
-
-    /// response from the sensor unit could not be received completely
-    #[allow(unused)]
-    InsufficientRead,
-
-    /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
-    #[allow(unused)]
-    SetAddressError(u16),
-
-    /// Response length from bus participant does not match the expected value
-    #[allow(unused)]
-    IncorrectResponseLength(usize),
 }
 
 pub struct I2cRequest {

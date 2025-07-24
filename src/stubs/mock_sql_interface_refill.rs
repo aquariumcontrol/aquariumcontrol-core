@@ -18,34 +18,34 @@ pub mod tests {
 
     impl DatabaseInterfaceRefillTrait for MockSqlInterfaceRefill {
         fn get_duration_since_last_refill(&mut self) -> Result<u64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_positive_integer_value_from_database(
             &mut self,
             _sql_query_string: &str,
         ) -> Result<u64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn check_empty(&mut self) -> Result<u64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_refill_volume_of_last_24h(&mut self) -> Result<f64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn get_refill_volume_of_last_hour(&mut self) -> Result<f64, SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn insert_refill_event(
@@ -55,7 +55,7 @@ pub mod tests {
             _volume: f64,
             _error_code: i32,
         ) -> Result<(), SqlInterfaceError> {
-            Err(SqlInterfaceError::MockError)
+            Err(SqlInterfaceError::MockError(module_path!().to_string()))
         }
 
         fn ping(&mut self) {

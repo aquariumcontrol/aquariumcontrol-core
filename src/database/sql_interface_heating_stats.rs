@@ -321,7 +321,7 @@ impl SqlInterfaceHeating {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleHeatingStatsRequestFailure(
-                    "Could not get single heating stats entry from SQL database.".to_string(),
+                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string()
                 ));
             }
         };
@@ -329,9 +329,8 @@ impl SqlInterfaceHeating {
         // check the error case if there is no response
         if single_heating_stats_entry_array.is_empty() {
             return Err(
-                SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
-                    "SQL database responded with empty response to query: ".to_string()
-                        + sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
+                SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
+                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
                 ),
             );
         }
@@ -339,9 +338,7 @@ impl SqlInterfaceHeating {
         if single_heating_stats_entry_array.len() > 1 {
             return Err(
                 SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
-                    "SQL database responded with multiple responses to request to query: "
-                        .to_string()
-                        + sql_query_strings::SQL_QUERY_READ_HEATING_STATS,
+                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
                 ),
             );
         }
@@ -355,8 +352,7 @@ impl SqlInterfaceHeating {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::TimestampConversionFailure(
-                    "Error when converting timestamp: ".to_string()
-                        + &single_heating_stats_string_entry.date,
+                    single_heating_stats_string_entry.date.clone()
                 ));
             }
         };
@@ -467,9 +463,7 @@ impl SqlInterfaceHeating {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
-                Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(
-                    "Error when inserting heating stats into database using query: ".to_string() + sql_query_string.as_str(),
-                ))
+                Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(sql_query_string))
             }
         }
     }
@@ -537,10 +531,8 @@ pub mod tests {
             Err(e) => {
                 assert_eq!(
                     e,
-                    SqlInterfaceError::SingleHeatingStatsRequestNoSingleResponse(
-                        "SQL database responded with empty response to query: \
-                    SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();"
-                            .to_string()
+                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
+                        "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();".to_string()
                     )
                 );
             }

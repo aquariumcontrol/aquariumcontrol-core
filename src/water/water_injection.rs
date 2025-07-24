@@ -19,7 +19,7 @@ use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillConfig;
-use crate::water::refill_errors::RefillErrors;
+use crate::water::refill_errors::RefillErrorStates;
 
 const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
 
@@ -50,7 +50,7 @@ pub trait WaterInjectionTrait {
     fn inject_water(
         &mut self,
         water_injection_channels: WaterInjectionChannels,
-        refill_errors: &mut RefillErrors,
+        refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> bool;
@@ -139,7 +139,7 @@ impl WaterInjectionTrait for WaterInjection {
     fn inject_water(
         &mut self,
         water_injection_channels: WaterInjectionChannels,
-        refill_errors: &mut RefillErrors,
+        refill_errors: &mut RefillErrorStates,
         sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
         mutex_tank_level_switch_signals: &Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> bool {

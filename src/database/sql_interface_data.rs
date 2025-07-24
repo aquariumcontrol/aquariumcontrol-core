@@ -246,10 +246,7 @@ impl SqlInterfaceData {
                     target: Self::LOG_TARGET_SQL_INTERFACE_DATA,
                     "could not insert data frame into database ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertDataFrameFailure(
-                    "Error when inserting data frame into database using query: ".to_string()
-                        + sql_query_string.as_str(),
-                ))
+                Err(SqlInterfaceError::InsertDataFrameFailure(sql_query_string))
             }
         }
     }
@@ -413,15 +410,15 @@ pub mod tests {
 
         // check the error case if there is no response
         if (data_frame_1_array.len() == 0) || (data_frame_2_array.len() == 0) {
-            return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
-                "SQL database responded with empty response to query.".to_string(),
-            ));
+            return Err(SqlInterfaceError::SingleDataFrameRequestEmptyResponse(
+                sql_query_string_1, sql_query_string_2)
+            );
         }
         // check the error case if there is more than one response
         if (data_frame_2_array.len() > 1) || (data_frame_2_array.len() > 1) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query: ".to_string(),
-            ));
+                sql_query_string_1, sql_query_string_2)
+            );
         }
         let data_frame_1 = &data_frame_1_array[0];
         let data_frame_2 = &data_frame_2_array[0];

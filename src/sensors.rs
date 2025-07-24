@@ -27,3 +27,14 @@ pub mod ds18b20;
 
 /// Contains the functionality for reading and postprocessing tank level switch position by reading GPIO pin state
 pub mod tank_level_switch;
+
+/// Contains error definition for Atlas Scientific sensor communication
+pub mod atlas_scientific_error;
+
+/// Contains error definition for DHT sensor communication
+pub mod dht_error;
+
+/// Contains error definition for DS18B20 sensor communication
+pub mod ds18b20_error;
+
+pub mod i2c_error;

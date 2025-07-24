@@ -70,19 +70,19 @@ use log::debug;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
 
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{error::Error, env, panic, path::Path, thread::scope, time::Duration};
+
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
 use crate::food::feed::{Feed, FeedChannels};
 use crate::food::food_injection::FoodInjection;
 use crate::mineral::balling::{Balling, BallingChannels};
 use crate::recorder::data_injection::DataInjection;
 use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, fmt, panic, path::Path, thread::scope, time::Duration};
-
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
-
+use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::relays::actuate_simulator::ActuateSimulator;
 use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
 use crate::sensors::atlas_scientific::{
@@ -91,23 +91,13 @@ use crate::sensors::atlas_scientific::{
 use crate::sensors::sensor_manager::{
     SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
 };
-
-cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
-        use crate::sensors::gpio_handler::GpioHandler;
-        use crate::beacon::ws2812b::RgbLedColor;
-        use crate::beacon::ws2812b::Ws2812B;
-    }
-}
-
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging::{Messaging, MessagingChannels};
 use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::logger::setup_logger;
-use database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
-
+use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -131,6 +121,7 @@ use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_c
 use crate::thermal::ventilation::{Ventilation, VentilationChannels};
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
+use crate::utilities::startup_error::StartupError;
 use crate::utilities::version_information::VersionInformation;
 use crate::watchmen::monitors::{Monitors, MonitorsChannels};
 use crate::watchmen::petting::Petting;
@@ -138,7 +129,13 @@ use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::{Refill, RefillChannels, RefillStatus};
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::water_injection::WaterInjection;
-
+cfg_if::cfg_if! {
+    if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
+        use crate::sensors::gpio_handler::GpioHandler;
+        use crate::beacon::ws2812b::RgbLedColor;
+        use crate::beacon::ws2812b::Ws2812B;
+    }
+}
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "target_hw", target_os = "linux"))] {
         use crate::sensors::i2c_interface::I2cInterface;
@@ -146,34 +143,6 @@ cfg_if::cfg_if! {
 }
 
 const LOG_TARGET_MAIN: &str = "main";
-
-enum ConfigFileDefinitionError {
-    PathDoesNotExist(String),
-    IsNotAFile(String),
-    FileNameHasNoSuffix(String),
-    SuffixIsNotToml(String),
-}
-
-impl fmt::Display for ConfigFileDefinitionError {
-    /// Formats `ConfigFileDefinitionError` enum variants into human-readable error messages.
-    ///
-    /// This implementation allows these errors to be displayed directly, providing
-    /// informative messages about issues with the user-provided configuration file path.
-    ///
-    /// # Arguments
-    /// * `f` - A mutable reference to the formatter, as required by the `fmt::Display` trait.
-    ///
-    /// # Returns
-    /// A `fmt::Result` indicating whether the formatting operation was successful.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfigFileDefinitionError::PathDoesNotExist(c) => write!(f, "{}", c),
-            ConfigFileDefinitionError::IsNotAFile(c) => write!(f, "{}", c),
-            ConfigFileDefinitionError::FileNameHasNoSuffix(c) => write!(f, "{}", c),
-            ConfigFileDefinitionError::SuffixIsNotToml(c) => write!(f, "{}", c),
-        }
-    }
-}
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -223,19 +192,14 @@ fn check_argument_for_valid_config_file_name(
 ) -> Result<String, ConfigFileDefinitionError> {
     let path = Path::new(&user_selected_config_file_name);
 
+    let desired_config_file_name = user_selected_config_file_name.to_string();
+
     if !path.exists() {
-        return Err(ConfigFileDefinitionError::PathDoesNotExist(
-            "The configuration file (".to_string()
-                + user_selected_config_file_name
-                + ") is not an existing file system entry.",
-        ));
+        return Err(ConfigFileDefinitionError::PathDoesNotExist(desired_config_file_name));
     }
 
     if !path.is_file() {
-        return Err(ConfigFileDefinitionError::IsNotAFile(
-            "The provided argument for the configuration file is not pointing to a file."
-                .to_string(),
-        ));
+        return Err(ConfigFileDefinitionError::IsNotAFile(desired_config_file_name));
     }
 
     match path.extension() {
@@ -243,16 +207,10 @@ fn check_argument_for_valid_config_file_name(
             if extension == "toml" {
                 Ok(String::from(user_selected_config_file_name))
             } else {
-                Err(ConfigFileDefinitionError::SuffixIsNotToml(
-                    "The provided argument for the configuration file does not have extension '.toml'."
-                    .to_string()
-                ))
+                Err(ConfigFileDefinitionError::SuffixIsNotToml(desired_config_file_name))
             }
         }
-        None => Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
-            "The provided argument for the configuration file does not have any extension."
-                .to_string(),
-        )),
+        None => Err(ConfigFileDefinitionError::FileNameHasNoSuffix(desired_config_file_name)),
     }
 }
 
@@ -374,7 +332,7 @@ fn is_running_as_root() -> bool {
 ///     messaging --> monitors
 ///     messaging --> watchdog
 /// ```
-fn main() {
+fn run() -> Result<(), StartupError> {
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
@@ -392,18 +350,18 @@ fn main() {
         // If the first argument contains a path and file name, then let's use that.
         config_file_name = match check_argument_for_valid_config_file_name(&args[1]) {
             Ok(valid_file_name) => valid_file_name, // The file is valid. Start operation.
-            Err(error_message) => {
+            Err(config_file_definition_error) => {
                 let mut user_arg_identified = false;
                 // Iterate through the command line parameters and check if they are valid.
                 for user_arg in args[1..].iter() {
                     user_arg_identified = check_is_command(user_arg)
                 }
-                if !user_arg_identified {
+                return if !user_arg_identified {
                     // If the user provided an invalid filename and no valid command, output error message and abort.
-                    panic!("{}: {}", LOG_TARGET_MAIN, error_message);
+                    Err(StartupError::Config(config_file_definition_error))
                 } else {
                     // At least one valid user command was provided. Graceful exit.
-                    return;
+                    Ok(())
                 }
             }
         }
@@ -419,7 +377,7 @@ fn main() {
     // check if the user has root privileges - disabled when developing on the Windows platform
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     if !is_running_as_root() {
-        panic!("{}: This application must be run as root.", LOG_TARGET_MAIN);
+        return Err(StartupError::NotRoot);
     }
 
     // read the configuration file for operating the control system
@@ -437,7 +395,6 @@ fn main() {
         publish_pid_clone.erase_pid();
         error!("Panic occurred: {}", panic_info);
 
-        // Optionally, you can include more details like:
         if let Some(location) = panic_info.location() {
             error!(
                 "Panic occurred in file '{}' at line {}",
@@ -449,7 +406,7 @@ fn main() {
     
     // check if the control parameters of heating and ventilation are valid
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
-        panic!("Configuration of temperature ranges for heating and ventilation control is not valid.");
+        return Err(StartupError::InvalidThermalConfig);
     }
 
     // instantiate the duration for the database ping
@@ -466,10 +423,7 @@ fn main() {
     let mut sql_interface = match SqlInterface::new(config.sql_interface) {
         Ok(c) => c,
         Err(e) => {
-            panic!(
-                "{}: could not connect to SQL database: {e:?}",
-                LOG_TARGET_MAIN
-            );
+            return Err(StartupError::DatabaseConnection { source: e });
         }
     };
 
@@ -496,10 +450,7 @@ fn main() {
     let tables = match sql_interface.get_tables() {
         Ok(c) => c,
         Err(e) => {
-            panic!(
-                "{} Could not read list of tables from SQL database: {e:?}",
-                LOG_TARGET_MAIN
-            );
+            return Err(StartupError::DatabaseQuery { source: e });
         }
     };
 
@@ -517,15 +468,12 @@ fn main() {
             }
         }
         Err(e) => {
-            if e == SqlInterfaceError::SingleVersionRequestMultipleResults {
+            if matches!(e, SqlInterfaceError::SingleVersionRequestMultipleResults(_)) {
                 warn!(
                     target: LOG_TARGET_MAIN,
                     "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
-                panic!(
-                    "{}: Could not find version information in database: {e:?}",
-                    LOG_TARGET_MAIN
-                );
+                return Err(StartupError::DatabaseVersion {source: e});
             }
         }
     }
@@ -533,7 +481,7 @@ fn main() {
     let database = match sql_interface.get_database() {
         Ok(c) => c,
         Err(e) => {
-            panic!("{}: Could not get database name ({e:?})", LOG_TARGET_MAIN);
+            return Err(StartupError::DatabaseName { source: e});
         }
     };
     info!(
@@ -546,7 +494,7 @@ fn main() {
                 target: LOG_TARGET_MAIN,
                 "required tables are existing in database.")
         }
-        Err(e) => panic!("{e:?}"),
+        Err(e) => return Err(StartupError::MissingTable{ source: e}),
     }
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -1089,7 +1037,7 @@ fn main() {
             }
             else if gpio_handler_opt.is_none() {
                     // defensive programming - this case should not occur
-                    panic!("{}: Configuration error: GPIO handler not initialized.", LOG_TARGET_MAIN);
+                    return Err(StartupError::GpioHandlerMissing);
             }
             else {
                 let gpio_handler = gpio_handler_opt.unwrap();
@@ -1377,15 +1325,10 @@ fn main() {
     scope(|scope| {
         // open tcp connection only if configuration requires use of simulator instead of HW
         if use_simulator {
-            let mut tcp_communication = match TcpCommunication::new(&config.tcp_connection) {
-                Ok(c) => c,
-                Err(e) => {
-                    panic!(
-                        "{}: Error occurred when trying to open TCP connection to test server ({e:?}).",
-                        LOG_TARGET_MAIN,
-                    )
-                }
-            };
+            // src/main.rs
+            let mut tcp_communication = TcpCommunication::new(&config.tcp_connection)
+                .map_err(|e| StartupError::TcpConnection { source: e })?;
+
             scope.spawn(move || {
                 tcp_communication.execute(tcp_communication_channels);
             });
@@ -1675,5 +1618,21 @@ fn main() {
                 mutex_ds18b20_ambient_temperature,
             );
         });
-    });
+        
+        Ok(())
+    })
+}
+
+/// The main function is a simple error handler.
+/// The main entry point for the application is within the run() function.
+fn main() {
+    if let Err(e) = run() {
+        error!("Application failed to start: {}", e);
+        // Use a loop to walk the chain of source errors
+        let mut source = e.source();
+        while let Some(cause) = source {
+            error!("  Caused by: {}", cause);
+            source = cause.source();
+        }        std::process::exit(1);
+    }
 }

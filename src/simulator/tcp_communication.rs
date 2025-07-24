@@ -17,6 +17,7 @@ use std::{
     net::TcpStream,
     time::Duration,
 };
+use thiserror::Error;
 
 use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -35,12 +36,17 @@ pub struct TcpConnectionConfig {
 }
 
 /// Contains the error values for unsuccessful attempts of opening a TCP channel.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum TcpCommunicationError {
     /// value indicates that an error has occurred during TCP communication
     #[allow(unused)]
-    ConnectionFailed(io::Error),
-    //ReadMessageFailed(io::Error),
+    #[error("Failed to connect to simulator at {ip_address}:{port}")]
+    ConnectionFailed {
+        ip_address: String,
+        port: u16,
+        #[source]
+        source: io::Error,
+    },
 }
 
 /// Struct collects the channels for communication with other threads.
@@ -188,7 +194,11 @@ impl TcpCommunication {
                     "connection to {} via port {} failed ({e:?})",
                     tcp_connection.ip_address, tcp_connection.port
                 );
-                return Err(TcpCommunicationError::ConnectionFailed(e));
+                return Err(TcpCommunicationError::ConnectionFailed {
+                    ip_address: tcp_connection.ip_address.clone(),
+                    port: tcp_connection.port,
+                    source: e,
+                });
             }
         };
         Ok(TcpCommunication {

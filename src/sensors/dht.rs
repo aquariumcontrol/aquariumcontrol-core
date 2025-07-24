@@ -17,6 +17,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::sensors::dht_error::DhtError;
 
 const LOG_TARGET_DHT: &str = "dht";
 
@@ -143,57 +144,6 @@ pub mod dht22_constants {
     /// allow max. 10 milliseconds for mutex to be blocked by any other thread
     #[allow(unused)]
     pub const MAX_MUTEX_ACCESS_DURATION_MILLIS: u64 = 10;
-}
-
-#[derive(Debug, PartialEq)]
-/// Enum codifies the errors the program may encounter in communication with DHT sensor.
-pub enum DhtError {
-    /// Vcc pin acquisition failed
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    VccPinAcquisitionFailed,
-
-    /// Data pin acquisition for output failed
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    DataPinOutputAcquisitionFailed,
-
-    /// Data pin acquisition for input failed
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    DataPinInputAcquisitionFailed,
-
-    /// Could not set interrupt
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    CouldNotSetInterrupt,
-
-    /// Could not clear the interrupt
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    CouldNotClearInterrupt,
-
-    // execution of interrupt failed
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    InterruptFailed,
-
-    // transmission yields a wrong number of valid bits
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    WrongNumberOfValidTicks,
-
-    /// the error occurred during the calculation of the checksum
-    ChecksumCalculationError,
-
-    /// calculated checksum does not match the received value
-    ChecksumError,
-
-    /// timeout during transmission of data
-    #[allow(unused)]
-    Timeout,
-
-    /// the temperature value is out of range
-    TemperatureOutOfRange,
-
-    /// humidity value is out of range
-    HumidityOutOfRange,
-
-    /// reported from low-level reading when called without gpio lib handle available
-    IncorrectPlatform,
 }
 
 /// Represents a Digital Humidity and Temperature (DHT) sensor module, typically a DHT22,

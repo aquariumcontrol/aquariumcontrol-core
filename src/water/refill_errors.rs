@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use std::fmt;
 
 /// Contains the error flags for the refill component.
-pub struct RefillErrors {
+pub struct RefillErrorStates {
     pub error_switch_stuck_high: bool,
     pub error_switch_stuck_low: bool,
     pub error_receive_tank_level_switch_position: bool,
@@ -17,7 +17,7 @@ pub struct RefillErrors {
     pub error_sql_get_historic_data_failed: bool,
 }
 
-impl RefillErrors {
+impl RefillErrorStates {
     /// Resets all internal error flags to `false`.
     ///
     /// This method clears all error conditions within the `RefillErrors` struct,
@@ -50,7 +50,7 @@ impl RefillErrors {
     }
 }
 
-impl fmt::Display for RefillErrors {
+impl fmt::Display for RefillErrorStates {
     /// Formats the `RefillErrors` struct into a concise, single-line string for development purposes.
     ///
     /// This implementation is designed for quick inspection of the refill control's

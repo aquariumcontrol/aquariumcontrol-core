@@ -32,7 +32,7 @@ db_password = "4w4umx7AzdAwCXi7"
 db_host = "127.0.0.1"
 db_port = 3306
 db_name = "aquarium"
-db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users", "ventilationsetvals", "heatingsetvals" ]
+db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users", "ventilationsetvals", "heatingsetvals", "version" ]
 db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. use a value of 0 to deactivate the check.
 db_ping_interval = 3600                                 # database-ping interval in seconds
 

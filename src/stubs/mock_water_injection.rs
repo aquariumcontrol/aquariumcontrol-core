@@ -16,7 +16,7 @@ pub mod tests {
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::test_command::tests::TestCommand;
-    use crate::water::refill_errors::RefillErrors;
+    use crate::water::refill_errors::RefillErrorStates;
     use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 
     pub struct MockWaterInjection {
@@ -24,13 +24,13 @@ pub mod tests {
 
         pub injection_recorder: Vec<Instant>,
 
-        stimuli_refill_errors: RefillErrors,
+        stimuli_refill_errors: RefillErrorStates,
     }
 
     impl MockWaterInjection {
         pub fn new(
             tx_water_injection_to_test_environment_opt: Option<Sender<TestCommand>>,
-            refill_errors: RefillErrors,
+            refill_errors: RefillErrorStates,
         ) -> MockWaterInjection {
             MockWaterInjection {
                 tx_water_injection_to_test_environment_opt,
@@ -44,7 +44,7 @@ pub mod tests {
         fn inject_water(
             &mut self,
             _water_injection_channels: WaterInjectionChannels,
-            refill_errors: &mut RefillErrors,
+            refill_errors: &mut RefillErrorStates,
             _sql_interface_refill: &mut Box<dyn DatabaseInterfaceRefillTrait + Sync + Send>,
             _mutex_tank_level_switch: &Arc<Mutex<TankLevelSwitchSignals>>,
         ) -> bool {

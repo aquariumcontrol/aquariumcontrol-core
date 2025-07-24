@@ -116,8 +116,7 @@ impl SqlInterface {
             Ok(c) => c,
             Err(e) => {
                 return Err(SqlInterfaceError::ConnectionPoolFailure(
-                    "Could not establish connection pool with ".to_owned()
-                        + &url
+                        url
                         + ": "
                         + &e.to_string(),
                 ));
@@ -186,10 +185,7 @@ impl SqlInterface {
             Ok(c) => Ok(c),
             Err(e) => {
                 error!(target: Self::LOG_TARGET_SQL_INTERFACE, "SQL database query failed: {}", e);
-                Err(SqlInterfaceError::SingleStringRequestFailure(
-                    "Could not get string array from the database using query:".to_string()
-                        + sql_query_string,
-                ))
+                Err(SqlInterfaceError::SingleStringRequestFailure(sql_query_string.to_string()))
             }
         }
     }
@@ -207,8 +203,10 @@ impl SqlInterface {
     /// # Returns
     /// A `Result` which is:
     /// - `Ok(String)` containing the single string value retrieved from the database.
+    /// - `Err(SqlInterfaceError::SingleStringRequestEmptyResponse)` if the query
+    ///   returns zero rows
     /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)` if the query
-    ///   returns zero rows or more than one row.
+    ///   returns more than one row
     /// - `Err(SqlInterfaceError::SingleStringRequestFailure)` if the underlying
     ///   database query execution fails.
     fn get_single_string_from_database(
@@ -220,18 +218,12 @@ impl SqlInterface {
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleStringRequestEmptyResponse(sql_query_string.to_string()));
         }
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(sql_query_string.to_string()));
         }
         Ok(single_string_array[0].single_string.clone())
     }
@@ -269,10 +261,7 @@ impl SqlInterface {
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(sql_query_string.to_string()));
         }
         Ok(Some(single_string_array[0].single_string.clone()))
     }
@@ -323,29 +312,23 @@ impl SqlInterface {
             }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleVersionRequestFailure(
-                    "Could not get single string from the database using query:".to_string()
-                        + &sql_query_string,
-                ));
+                return Err(SqlInterfaceError::SingleVersionRequestFailure(sql_query_string));
             }
         };
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
-            return Err(SqlInterfaceError::SingleVersionRequestNotListed(
-                "SQL database responded with empty response to query: ".to_owned()
-                    + &sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleVersionRequestNotListed(sql_query_string));
         }
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            error!(
-                target: Self::LOG_TARGET_SQL_INTERFACE,
+            let error_message = format!(
                 "SQL database responded with multiple responses to request to query ({})",
                 sql_query_string
             );
-            Err(SqlInterfaceError::SingleVersionRequestMultipleResults)
+            error!(target: Self::LOG_TARGET_SQL_INTERFACE, "{}", error_message);
+            Err(SqlInterfaceError::SingleVersionRequestMultipleResults(error_message))
         } else {
             Ok(single_string_array[0].single_string.clone())
         }
@@ -380,19 +363,16 @@ impl SqlInterface {
                 }) {
                 Ok(c) => c,
                 Err(_) => {
-                    return Err(SqlInterfaceError::SingleStringRequestFailure(
-                        "Could not get multiple strings from the database using query:".to_string()
-                            + sql_query_string,
-                    ));
+                    return Err(SqlInterfaceError::SingleStringRequestFailure(sql_query_string.to_string()));
                 }
             };
 
         // check if there is no response or only one row
-        if single_string_array.len() <= 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
-                "SQL database responded with empty or single row response to query: ".to_string()
-                    + sql_query_string,
-            ));
+        if single_string_array.is_empty() {
+            return Err(SqlInterfaceError::MultipleStringRequestEmptyResponse(sql_query_string.to_string()));
+        }
+        else if single_string_array.len() == 1 {
+            return Err(SqlInterfaceError::MultipleStringRequestSingleResponse(sql_query_string.to_string()));
         }
 
         let mut response_array: Vec<String> = Vec::new();
@@ -430,27 +410,18 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleIntegerRequestFailure(
-                    "Could not get single integer from the database using query:".to_string()
-                        + sql_query_string,
-                ));
+                return Err(SqlInterfaceError::SingleIntegerRequestFailure(sql_query_string.to_string()));
             }
         };
 
         // check the error case if there is no response
         if single_integer_array.is_empty() {
-            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(sql_query_string.to_string()));
         }
 
         // check the error case if there is more than one response
         if single_integer_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(sql_query_string.to_string()));
         }
         Ok(single_integer_array[0].single_integer)
     }
@@ -482,27 +453,18 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleFloatRequestFailure(
-                    "Could not get single float value from the database using query:".to_string()
-                        + sql_query_string,
-                ));
+                return Err(SqlInterfaceError::SingleFloatRequestFailure(sql_query_string.to_string()));
             }
         };
 
         // check the error case if there is no response
         if single_float_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
-                "SQL database responded with empty response to query: ".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleFloatRequestEmptyResponse(sql_query_string.to_string()));
         }
 
         // check the error case if there is more than one response
         if single_float_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
-                "SQL database responded with multiple responses to request to query:".to_string()
-                    + sql_query_string,
-            ));
+            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(sql_query_string.to_string()));
         }
         Ok(single_float_array[0].single_float)
     }
@@ -571,9 +533,7 @@ impl SqlInterface {
         // convert data type
         match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S") {
             Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
-                "Error when converting timestamp: ".to_string() + &timestamp_string,
-            )),
+            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(timestamp_string)),
         }
     }
 
@@ -719,9 +679,7 @@ impl SqlInterface {
                     "Error converting timestamp_string={} to date ({e:?})",
                     timestamp_string
                 );
-                Err(SqlInterfaceError::TimestampConversionFailure(
-                    "Error when converting timestamp: ".to_string() + &timestamp_string,
-                ))
+                Err(SqlInterfaceError::TimestampConversionFailure(timestamp_string))
             }
         }
     }
@@ -770,15 +728,10 @@ impl SqlInterface {
     /// - `Ok(Vec<String>)`: A vector containing the names of all tables found in the database.
     /// - `Err(SqlInterfaceError::ShowTablesWithoutProperResult)`: If the database
     ///   query for table names fails or returns an unexpected number of results (e.g., zero or one).
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)`: If an underlying issue
-    ///   occurs during the fetching of string results.
     pub fn get_tables(&mut self) -> Result<Vec<String>, SqlInterfaceError> {
         match self.get_multiple_strings_from_database(sql_query_strings::SQL_QUERY_READ_TABLES) {
             Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::ShowTablesWithoutProperResult(
-                "Error when reading tables from the database, expected more than one result."
-                    .to_string(),
-            )),
+            Err(_) => Err(SqlInterfaceError::ShowTablesWithoutProperResult),
         }
     }
 
@@ -828,17 +781,9 @@ impl SqlInterface {
             self.config.db_tables.clone(),
             existing_tables.clone(),
         ) {
-            #[cfg(not(test))]
-            {
-                let required_tables_string = &self.config.db_tables.join(",");
-                let existing_tables_string = &existing_tables.join(",");
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE,
-                    "Required tables ({}) are not existing in database ({}).",
-                    required_tables_string, existing_tables_string
-                );
-            }
-            Err(SqlInterfaceError::RequiredTablesNotExisting)
+            let required_tables_string = self.config.db_tables.join(",");
+            let existing_tables_string = existing_tables.join(",");
+            Err(SqlInterfaceError::RequiredTablesNotExisting(required_tables_string, existing_tables_string))
         } else {
             Ok(())
         }
@@ -846,7 +791,7 @@ impl SqlInterface {
 
     #[cfg(test)]
     // This helper function **empties the specified database table** using a TRUNCATE command.
-    // Function is only used in test environments across different crates to ensure a clean state
+    // The function is only used in test environments across different crates to ensure a clean state
     // before running tests.
     //
     // Arguments:
@@ -868,9 +813,7 @@ impl SqlInterface {
             Ok(_) => Ok(()),
             Err(e) => {
                 println!("{e:?}");
-                Err(SqlInterfaceError::TruncateTableFailure(
-                    "Error when truncating table: ".to_string() + &sql_table_name,
-                ))
+                Err(SqlInterfaceError::TruncateTableFailure(sql_table_name))
             }
         }
     }
@@ -1063,15 +1006,17 @@ pub mod tests {
         // **************************************************************************************
 
         // *** check if required tables are existing - FAIL *************************************
-        sql_interface.config.db_tables.push("dummy".to_string());
+        let dummy_table = "dummy".to_string();
+        sql_interface.config.db_tables.push(dummy_table.clone());
         assert_eq!(
-            sql_interface.check_required_tables_existing(),
-            Err(SqlInterfaceError::RequiredTablesNotExisting)
+            matches!(sql_interface.check_required_tables_existing(),
+                    Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))),
+            true
         );
         println!("* checking required tables (FAIL) succeeded.");
         // **************************************************************************************
 
-        // *** check if current date is local date - PASS ***************************************
+        // *** check if the current date is local date - PASS ***********************************
         let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from the database."),
@@ -1100,7 +1045,7 @@ pub mod tests {
     // This test case checks
     // - error response when querying empty table
     // - error response when version information does not match entry in database
-    // - check error response when hash is incorrect
+    // - check error response when the hash is incorrect
     // Test case uses test database #29.
     pub fn test_sql_interface_version() {
         let config: ConfigData = read_config_file_with_test_database(
@@ -1125,15 +1070,14 @@ pub mod tests {
                 assert_eq!(
                     e,
                     SqlInterfaceError::SingleVersionRequestNotListed(
-                        "SQL database responded with empty response to query: \
-                    SELECT hash FROM version WHERE major="
+                            "SELECT hash FROM version WHERE major="
                             .to_string()
                             + &version_information.major.to_string()
-                            + &" AND minor=".to_string()
+                            + " AND minor="
                             + &version_information.minor.to_string()
-                            + &" AND build=".to_string()
+                            + " AND build="
                             + &version_information.build.to_string()
-                            + &";".to_string()
+                            + ";"
                     )
                 );
             }
@@ -1170,9 +1114,7 @@ pub mod tests {
                 assert_eq!(
                     e,
                     SqlInterfaceError::SingleVersionRequestNotListed(
-                        "SQL database responded with empty response to query: \
-                    SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;"
-                            .to_string()
+                        "SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;".to_string()
                     )
                 );
             }

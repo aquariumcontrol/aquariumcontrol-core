@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use std::path::PathBuf;
 use std::thread::sleep;
-use std::{fmt, fs};
+use std::{fs};
 
 const LOG_TARGET_DS18B20: &str = "ds18b20";
 
@@ -25,6 +25,7 @@ use log::debug;
 
 #[cfg(not(test))]
 use log::warn;
+use crate::sensors::ds18b20_error::Ds18b20Error;
 
 mod ds18b20_constants {
     /// minimum viable temperature used for health check of sensor signal
@@ -69,40 +70,6 @@ pub struct Ds18b20Config {
 
     /// unique 64-bit ID of ambient temperature sensor
     pub ambient_temperature_sensor_id: String,
-}
-
-#[derive(Debug, Clone)]
-pub enum Ds18b20Error {
-    SensorIdNotFound(String),
-
-    ReadToStringFailure,
-
-    InsufficientLinesInFile,
-
-    Line0NotEndingWithYes,
-
-    TemperatureEntryNotFound,
-
-    UnidentifiedError,
-
-    TemperatureParseError,
-
-    TemperatureOutOfRange,
-}
-
-impl fmt::Display for Ds18b20Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Ds18b20Error::SensorIdNotFound(id) => write!(f, "DS18B20 sensor with ID '{}' not found.", id),
-            Ds18b20Error::ReadToStringFailure => write!(f, "Failed to read content from the device file."),
-            Ds18b20Error::InsufficientLinesInFile => write!(f, "Device file contains insufficient lines (expected at least 2)."),
-            Ds18b20Error::Line0NotEndingWithYes => write!(f, "The first line of the device file does not end with ' YES', indicating a CRC error or incomplete reading."),
-            Ds18b20Error::TemperatureEntryNotFound => write!(f, "Temperature entry (t=) not found in the second line of the device file."),
-            Ds18b20Error::UnidentifiedError => write!(f, "An unidentified error occurred."),
-            Ds18b20Error::TemperatureParseError => write!(f, "Failed to parse temperature value as a floating-point number."),
-            Ds18b20Error::TemperatureOutOfRange => write!(f, "Read temperature value is outside the expected range."),
-        }
-    }
 }
 
 #[derive(Clone)]

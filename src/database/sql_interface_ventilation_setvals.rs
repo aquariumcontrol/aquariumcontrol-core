@@ -126,10 +126,8 @@ impl SqlInterfaceVentilationSetVals {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::VentilationSetValsReadError(
-                    "Could not get ventilation set values from the database with query:"
-                        .to_string()
-                        + sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS,
+                return Err(SqlInterfaceError::VentilationSetValsRequestFailure(
+                        sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
                 ));
             }
         };
@@ -141,8 +139,8 @@ impl SqlInterfaceVentilationSetVals {
 
         // return error if the query result contains more than one entry
         if sql_ventilation_setvals_array.len() > 1 {
-            return Err(SqlInterfaceError::VentilationSetValsReadError(
-                "The database returned more than one ventilation set value entry.".to_string(),
+            return Err(SqlInterfaceError::VentilationSetValsNoSingleResponse(
+                sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
             ));
         }
 
@@ -153,8 +151,9 @@ impl SqlInterfaceVentilationSetVals {
         if ventilation_set_vals.ventilation_switch_on_temperature
             < ventilation_set_vals.ventilation_switch_off_temperature
         {
-            return Err(SqlInterfaceError::VentilationSetValsReadError(
-                "The ventilation switch on temperature is lower than the ventilation switch off temperature.".to_string(),
+            return Err(SqlInterfaceError::VentilationSetValsInvalid(
+                ventilation_set_vals.ventilation_switch_on_temperature,
+                ventilation_set_vals.ventilation_switch_off_temperature
             ));
         }
 
@@ -181,8 +180,7 @@ impl SqlInterfaceVentilationSetVals {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertVentilationSetValuesFailure(
-                    "Error when inserting ventilation set values into database using query: ".to_string() +
-                        sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS,
+                        sql_query_strings::SQL_QUERY_WRITE_VENTILATION_SETVALS.to_string()
                 ))
             }
         }
@@ -325,10 +323,9 @@ pub mod tests {
         // check if reading an invalid value combination returns an error
         assert_eq!(
             sql_interface_ventilation_setvals.get_ventilation_set_values(),
-            Err(SqlInterfaceError::VentilationSetValsReadError(
-                "The ventilation switch on temperature is lower \
-                       than the ventilation switch off temperature."
-                    .to_string()
+            Err(SqlInterfaceError::VentilationSetValsInvalid(
+                invalid_ventilation_set_vals.ventilation_switch_on_temperature,
+                invalid_ventilation_set_vals.ventilation_switch_off_temperature
             ))
         );
         println!("* reading  invalid ventilation set values (FAIL) succeeded.");

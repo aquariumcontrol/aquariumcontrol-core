@@ -14,7 +14,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
+use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -83,29 +83,6 @@ pub struct AtlasScientificConfig {
 
     /// measurement interval in milliseconds
     measurement_interval_millis: u64,
-}
-
-/// error codes for evaluation of sensor unit response
-#[allow(dead_code)]
-#[derive(Debug, PartialEq, Clone)]
-pub enum AtlasScientificError {
-    /// The first character in the message sent from the sensor does not match the required magic number.
-    FirstCharacterNotMagic,
-
-    /// The last character in the message sent from the sensor does not match the required magic number.
-    LastCharacterNotMagic,
-
-    /// The message sent from the sensor unit contains non-numeric characters in the data section
-    ContainsInvalidCharacter(u8),
-
-    /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
-    InvalidUtf8Sequence,
-
-    /// Conversion from String to f32 failed.
-    ConversionFailure,
-
-    /// Incorrect buffer length
-    IncorrectBufferLength,
 }
 
 #[derive(Clone)]
@@ -358,16 +335,20 @@ impl AtlasScientific {
         is_ph: bool,
     ) -> Result<f32, AtlasScientificError> {
         // first check: first character not magic
-        if buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER]
-            != atlas_scientific_constants::MESSAGE_START_MAGIC
+        let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER]; 
+        if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC
         {
-            return Err(AtlasScientificError::FirstCharacterNotMagic);
+            return Err(AtlasScientificError::FirstCharacterNotMagic(
+                atlas_scientific_constants::MESSAGE_START_MAGIC, first_character
+            ));
         }
         // second check: last character not magic
-        if buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER]
-            != atlas_scientific_constants::MESSAGE_FINISH_MAGIC
+        let last_character = buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER]; 
+        if last_character != atlas_scientific_constants::MESSAGE_FINISH_MAGIC
         {
-            return Err(AtlasScientificError::LastCharacterNotMagic);
+            return Err(AtlasScientificError::LastCharacterNotMagic(
+                atlas_scientific_constants::MESSAGE_FINISH_MAGIC, last_character
+            ));
         }
 
         // get a slice of the array
@@ -957,7 +938,9 @@ pub mod tests {
         ];
         assert_eq!(
             AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::FirstCharacterNotMagic)
+            Err(AtlasScientificError::FirstCharacterNotMagic(
+                atlas_scientific_constants::MESSAGE_START_MAGIC, stimuli[0]
+            ))
         );
     }
 
@@ -976,7 +959,9 @@ pub mod tests {
         ];
         assert_eq!(
             AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::LastCharacterNotMagic)
+            Err(AtlasScientificError::LastCharacterNotMagic(
+                atlas_scientific_constants::MESSAGE_FINISH_MAGIC, stimuli[0]    
+            ))
         );
     }
 

@@ -17,3 +17,5 @@ pub mod publish_pid;
 pub mod sawtooth_profile;
 pub mod signal_handler;
 pub mod version_information;
+pub mod config_file_definition_error;
+pub mod startup_error;
