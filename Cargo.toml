@@ -26,11 +26,9 @@ aquamarine = "0.5.0"
 serialport = "4.3.0"
 log = "0.4"
 fern = "0.7.1"
-humantime = "2.1.0"
 cfg-if = "1.0.0"
-loc = "0.5.0"
 nix = "0.26.4"
-thiserror = "2.0.12"
+thiserror = "1.0"
 [target.'cfg(all(target_os = "linux"))'.dependencies]
 nix = { version = "0.27.0", features = ["user"] }
 ws2818-rgb-led-spi-driver = "=2.0.0"

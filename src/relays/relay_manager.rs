@@ -14,13 +14,13 @@ use log::warn;
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
 
-use crate::utilities::channel_content::{InternalCommand};
+use crate::relays::relay_error::RelayError;
+use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
-use crate::relays::relay_error::RelayError;
 
 const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
 
@@ -604,7 +604,6 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-
     // Contains mock trait implementation for unit testing purposes.
     pub struct ActuateVoid {
         // execution counter for testing purposes
@@ -669,7 +668,7 @@ pub mod tests {
     // It also checks the heartbeat communication.
     pub fn test_relay_manager_channel_communication() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
 
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_secs(2);
@@ -955,7 +954,7 @@ pub mod tests {
     // actuator returns the IncorrectChecksum error.
     pub fn test_relay_manager_flush() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
 
         let mut relay_manager = RelayManager::new(config.relay_manager);
 
@@ -1039,7 +1038,7 @@ pub mod tests {
     // in case actuator returns an error.
     pub fn test_relay_manager_repeat() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_simulator.toml".to_string());
+            read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
 
         let target_repeat_times = config.relay_manager.actuation_retries;
 

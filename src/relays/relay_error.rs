@@ -14,7 +14,7 @@ use thiserror::Error;
 pub enum RelayError {
     #[error("Received an irrelevant command {0}")]
     IrrelevantCommand(InternalCommand),
-    
+
     #[error("Failure occurred in command message creation")]
     FailureCommandMessageCreation,
 

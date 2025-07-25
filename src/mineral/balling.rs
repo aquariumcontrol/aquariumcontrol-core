@@ -104,7 +104,7 @@ pub struct BallingChannels {
 ///     messaging[Messaging] --> balling
 /// ```
 /// Communication channel to and from the relay manager is forwarded to implementation of MineralInjectionTrait.
-/// Signal handler is communicating both directly with balling as well with implementation of MineralInjectionTrait.
+/// Signal handler is communicating both directly with balling and with the implementation of MineralInjectionTrait.
 pub struct Balling {
     /// configuration data for Balling dosing control
     config: BallingConfig,
@@ -112,7 +112,7 @@ pub struct Balling {
     /// SQL database interface for Balling dosing control
     sql_interface_balling: SqlInterfaceBalling,
 
-    /// Count down in seconds until next Balling dosing for pump 1
+    /// Count down in seconds until the next Balling dosing for pump 1
     countdown_dosing_pump1: u32,
 
     /// Count down in seconds until next Balling dosing for pump 2
@@ -121,7 +121,7 @@ pub struct Balling {
     /// Count down in seconds until next Balling dosing for pump 3
     countdown_dosing_pump3: u32,
 
-    /// Count down in seconds until next Balling dosing for pump 4
+    /// Count down in seconds until the next Balling dosing for pump 4
     countdown_dosing_pump4: u32,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
@@ -321,7 +321,7 @@ impl Balling {
     ///
     /// This private helper function determines how many seconds are left until a pump's
     /// next dosing event. It first retrieves the target dosing interval from the configuration
-    /// for the given `pump_id`. Then, it fetches the duration since the last dosing event
+    /// for the given `pump_id`. Next, it fetches the duration since the last dosing event
     /// from the database. The countdown is calculated by subtracting this elapsed duration
     /// from the target interval, saturating at zero to ensure no negative results.
     ///
@@ -457,11 +457,11 @@ impl Balling {
     /// Orchestrates the dosing process for a specific peristaltic pump.
     ///
     /// This function performs the complete cycle of a dosing event:
-    /// 1. Retrieves the pump's set values (e.g., flow rate, target volume) from the database.
+    /// 1. Retrieve the pump's set values (e.g., flow rate, target volume) from the database.
     /// 2. Calculates the required dosing duration.
     /// 3. Invokes the `mineral_injection` trait method to physically actuate the pump for the calculated duration.
-    /// 4. Calculates the actual volume dosed based on the actual run time.
-    /// 5. Logs the completed Balling dosing event, including the actual volume, back to the database.
+    /// 4. Calculate the actual volume dosed based on the actual run time.
+    /// 5. Log the completed Balling dosing event, including the actual volume, back to the database.
     ///
     /// The function also monitors for a `Quit` command from the signal handler during the injection process.
     ///
@@ -547,7 +547,7 @@ impl Balling {
     /// # Returns
     /// An `Option<(u32, AquariumDevice)>`:
     /// - `Some((u32, AquariumDevice))`: If the `pump_id` matches one of the known peristaltic pumps,
-    ///   returning its `u32` ID and the corresponding `AquariumDevice` variant.
+    ///   it will return its `u32` ID and the corresponding `AquariumDevice` variant.
     /// - `None`: If the provided `pump_id` does not correspond to a known peristaltic pump.
     pub fn get_pump_from_id(pump_id: i32) -> Option<(u32, AquariumDevice)> {
         match pump_id {
@@ -851,7 +851,7 @@ impl Balling {
                 self.last_ping_instant = Instant::now();
             }
         }
-        // Application received the request to terminate, that is why the loop was left.
+        // The application received the request to terminate. That is why the loop was left.
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         match balling_channels.tx_balling_to_signal_handler.send(true) {
             Ok(()) => {}
@@ -923,7 +923,7 @@ pub mod tests {
     use std::time::Duration;
 
     fn read_balling_config() -> ConfigData {
-        read_config_file("/config/aquarium_control_test_generic.toml".to_string())
+        read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap()
     }
 
     fn read_balling_config_with_database(db_number: u32) -> ConfigData {
@@ -1268,7 +1268,7 @@ pub mod tests {
                 )
             });
 
-            // thread for rest of test environment
+            // thread for the rest of test environment
             scope.spawn(move || {
                 let execution_count: i32;
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);
@@ -1867,7 +1867,7 @@ pub mod tests {
                 )
             });
 
-            // thread for rest of test environment
+            // thread for the rest of test environment
             scope.spawn(move || {
                 let execution_count1: i32;
                 spin_sleeper_test_environment.sleep(sleep_duration_test_environment);

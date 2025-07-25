@@ -42,6 +42,7 @@ use crate::permission::schedule_check::ScheduleCheckConfig;
 use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
+use crate::utilities::config_error::ConfigError;
 use crate::utilities::publish_pid::PublishPidConfig;
 use crate::watchmen::monitors::MonitorsConfig;
 use crate::watchmen::watchdog::WatchdogConfig;
@@ -144,40 +145,18 @@ pub struct ConfigData {
 /// This function will panic in the following scenarios:
 /// - If the specified file cannot be read (e.g., file not found, permission denied).
 /// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
-pub fn read_config_file(filename: String) -> ConfigData {
+pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
+    #[cfg(not(test))]
     info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
 
-    // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
-    // Read the contents of the file using a `match` block
-    // to return the `data: Ok(c)` as a `String`
-    // or handle any `errors: Err(_)`.
-    let contents = match fs::read_to_string(filename.clone()) {
-        // If successful, return the file's text as `contents`.
-        // `c` is a local variable.
-        Ok(c) => c,
-        // Handle the `error` case.
-        Err(_) => {
-            // Write `msg` to `stderr`.
-            panic!("Could not read file `{}`", filename);
-        }
-    };
+    // Read the contents of the file and return error in case of failure.
+    let contents = fs::read_to_string(filename.clone())
+        .map_err(|e| ConfigError::FileRead(filename.clone(), e))?;
 
-    // Use a `match` block to return the
-    // file `contents` as a `Data struct: Ok(d)`
-    // or handle any `errors: Err(_)`.
-    match toml::from_str(&contents) {
-        // If successful, return data as `Data` struct.
-        // `d` is a local variable.
-        Ok(d) => d,
-        // Handle the `error` case.
-        Err(e) => {
-            // Write `msg` to `stderr`.
-            panic!(
-                "{}: unable to load data from `{filename}` ({e})",
-                LOG_TARGET_CONFIG
-            );
-        }
-    }
+    // Parse the configuration data and return error in case of failure.
+    let data = toml::from_str(&contents).map_err(|e| ConfigError::TomlParse(filename, e))?;
+
+    Ok(data)
 }
 
 #[cfg(test)]
@@ -200,12 +179,11 @@ pub fn read_config_file(filename: String) -> ConfigData {
 // - If the `CARGO_MANIFEST_DIR` environment variable is not set.
 // - If the specified file cannot be read (e.g., the file is not found, permissions issues).
 // - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
-pub fn read_config_file(filename: String) -> ConfigData {
-    let filename_test = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
-        panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
-    }) + "/"
-        + filename.as_str();
+pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
+    let pathname_test =
+        env::var("CARGO_MANIFEST_DIR").map_err(|_| ConfigError::CargoManifestDir)?;
 
+    let filename_test = pathname_test + "/" + filename.as_str();
     // inspired by https://codingpackets.com/blog/rust-load-a-toml-file/
     // Read the contents of the file using a `match` block
     // to return the `data: Ok(c)` as a `String`
@@ -224,7 +202,7 @@ pub fn read_config_file(filename: String) -> ConfigData {
     // Use a `match` block to return the
     // file `contents` as a `Data struct: Ok(d)`
     // or handle any `errors: Err(_)`.
-    match toml::from_str(&contents) {
+    let result = match toml::from_str(&contents) {
         // If successful, return data as `Data` struct.
         // `d` is a local variable.
         Ok(d) => d,
@@ -236,10 +214,10 @@ pub fn read_config_file(filename: String) -> ConfigData {
                 LOG_TARGET_CONFIG
             );
         }
-    }
+    };
+    Ok(result)
 }
 
-#[cfg(test)]
 #[cfg(test)]
 // Loads configuration data from a `.toml` file and overrides the database name for testing.
 //
@@ -275,7 +253,7 @@ pub fn read_config_file_with_test_database(
     // assemble the test database name with prefix and index.
     let test_db_name: String = "aquarium_test_".to_string() + &format!("{:02}", test_db_number);
 
-    let mut config = read_config_file(relative_path);
+    let mut config = read_config_file(relative_path).unwrap();
 
     // replace the database name from the configuration file with the test database name
     // required by the test case

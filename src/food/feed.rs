@@ -214,61 +214,87 @@ impl Feed {
         rx_feed_from_relay_manager: &Receiver<bool>,
         rx_feed_from_signal_handler: &Receiver<InternalCommand>,
     ) -> (Result<(), ()>, bool) {
-        let mut quit_command_received: bool = false;
-        // load the feed pattern from the database
-        #[allow(unused_variables)]
-        let result = match self
+        // First, load the feed pattern from the database.
+        let feed_pattern = match self
             .sql_interface_feed
             .get_single_feedpattern_from_database(profile_id)
         {
-            Ok(feed_pattern) => {
-                //*** execute feed pattern ***
-                quit_command_received = food_injection.inject_food(
-                    tx_feed_to_relay_manager,
-                    rx_feed_from_relay_manager,
-                    rx_feed_from_signal_handler,
-                    &feed_pattern,
-                );
-
-                let current_timestamp = match self.sql_interface_feed.get_current_timestamp() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_FEED,
-                            "could not get current timestamp from database ({e:?})"
-                        );
-                        return (Err(()), quit_command_received);
-                    }
-                };
-
-                //*** insert feed event in log ***
-                match self.sql_interface_feed.insert_feed_event(
-                    current_timestamp,
-                    feed_pattern.calc_feeder_runtime(),
-                    feed_pattern.profile_name,
-                    profile_id,
-                ) {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_FEED,
-                            "could not insert feed event into database ({e:?})"
-                        );
-                        Err(())
-                    }
-                }
-            }
+            Ok(pattern) => pattern,
             Err(e) => {
-                #[cfg(not(test))]
                 error!(
                     target: LOG_TARGET_FEED,
-                    "Error when reading feed pattern from database: {e:?}"
+                    "Error occurred when trying to read feed pattern {} from database: {:?}",
+                    profile_id, e
                 );
+                return (Err(()), false); // Return failure, no quit command received yet.
+            }
+        };
 
+        // *** Execute the feed pattern and destructure the returned tuple ***
+        // 1. `quit_during_injection`: A bool indicating if a quit command was received.
+        // 2. `injection_result`: A Result indicating if the injection itself succeeded.
+        let (quit_during_injection, injection_result) = food_injection.inject_food(
+            tx_feed_to_relay_manager,
+            rx_feed_from_relay_manager,
+            rx_feed_from_signal_handler,
+            &feed_pattern,
+        );
+        // *** Handle the Result part of the tuple independently ***
+        // If errors occurred during injection, log each one.
+        if let Err(errors) = &injection_result {
+            for error in errors {
+                error!(target: LOG_TARGET_FEED, "Food injection failed: {}", error);
+            }
+        }
+
+        // Get the current timestamp to log the event, regardless of success/failure.
+        let current_timestamp = match self.sql_interface_feed.get_current_timestamp() {
+            Ok(c) => c,
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_FEED,
+                    "could not get current timestamp from database ({:?})",
+                    e
+                );
+                // If we can't get a timestamp, we can't log the event.
+                // Return the original injection failure status and the quit status.
+                let overall_result = if injection_result.is_err() {
+                    Err(())
+                } else {
+                    Ok(())
+                };
+                return (overall_result, quit_during_injection);
+            }
+        };
+
+        //*** Insert the feed event into the log ***
+        let log_result = match self.sql_interface_feed.insert_feed_event(
+            current_timestamp,
+            feed_pattern.calc_feeder_runtime(),
+            feed_pattern.profile_name,
+            profile_id,
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET_FEED,
+                    "could not insert feed event into database ({:?})",
+                    e
+                );
                 Err(())
             }
         };
-        (result, quit_command_received)
+
+        // Determine the final result. If either the injection or the logging failed,
+        // the overall result is a failure.
+        let final_result = if injection_result.is_err() || log_result.is_err() {
+            Err(())
+        } else {
+            Ok(())
+        };
+
+        // Return the final result and the independent quit status.
+        (final_result, quit_during_injection)
     }
 
     /// Selects a specific feed schedule entry for execution based on the configured strategy.
@@ -614,8 +640,8 @@ impl Feed {
             }
         }
 
-        // application received request to terminate, that is why the loop was left.
-        // answer to the thread which sent the request for termination, so that shutdown can proceed further.
+        // The application received request to terminate. That is why the loop was left.
+        // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         #[cfg(all(feature = "debug_signal_handler", not(test)))]
         debug!(
             target: LOG_TARGET_FEED,
@@ -697,6 +723,7 @@ pub mod tests {
     use crate::utilities::logger::setup_logger;
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
+    use crate::food::food_injection_error::FoodInjectionError;
     use crate::stubs::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
     pub struct MockFoodInjection {
@@ -746,9 +773,9 @@ pub mod tests {
         // The channel arguments are ignored in this mock implementation.
         //
         // # Arguments
-        // * `_tx_feed_to_relay_manager` - (Ignored) Sender channel for sending commands to the relay manager.
-        // * `_rx_feed_from_relay_manager` - (Ignored) Receiver channel for acknowledgments from the relay manager.
-        // * `_rx_feed_from_signal_handler` - (Ignored) Receiver channel for listening to signals from the signal handler.
+        // * `_tx_feed_to_relay_manager` - (Ignored) the sender channel for sending commands to the relay manager.
+        // * `_rx_feed_from_relay_manager` - (Ignored) the receiver channel for acknowledgments from the relay manager.
+        // * `_rx_feed_from_signal_handler` - (Ignored) the receiver channel for listening to signals from the signal handler.
         // * `feed_pattern` - The `Feedpattern` that contains the profile ID to be recorded.
         //
         // # Returns
@@ -759,14 +786,14 @@ pub mod tests {
             _rx_feed_from_relay_manager: &Receiver<bool>,
             _rx_feed_from_signal_handler: &Receiver<InternalCommand>,
             feed_pattern: &Feedpattern,
-        ) -> bool {
+        ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
             // do nothing except for logging the profile id of the feed pattern
             self.profile_ids_executed.push(feed_pattern.profile_id);
             println!(
                 "inject_food (mock): logging profile id {}",
                 feed_pattern.profile_id
             );
-            false
+            (false, Ok(()))
         }
     }
 
@@ -1148,7 +1175,7 @@ pub mod tests {
         setup_logger();
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         // mock interface will be used in operation of the test object
         let mock_sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
@@ -1261,7 +1288,7 @@ pub mod tests {
     pub fn test_select_feed_schedule_entry_for_execution_none() {
         setup_logger();
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
 
         // mock interface will be used in operation of the test object
@@ -1291,7 +1318,7 @@ pub mod tests {
     pub fn test_select_feed_schedule_entry_for_execution_first() {
         setup_logger();
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
 
         // mock interface will be used in operation of the test object
@@ -1323,7 +1350,7 @@ pub mod tests {
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
         setup_logger();
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
 
         // mock interface will be used in operation of the test object
@@ -1354,7 +1381,7 @@ pub mod tests {
     // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_last() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = 99;
 
         // mock interface will be used in operation of the test object

@@ -142,7 +142,7 @@ impl ScheduleEntry {
                 Ok(c) => c,
                 Err(_) => {
                     return Err(SqlInterfaceError::ScheduleStartTimeConversionFailure(
-                            sql_schedule_entry.start_time,
+                        sql_schedule_entry.start_time,
                     ));
                 }
             };
@@ -247,7 +247,7 @@ impl SqlInterfaceSchedule {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::ScheduleRequestFailure(
-                    sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string()
+                    sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string(),
                 ));
             }
         };
@@ -288,7 +288,9 @@ impl SqlInterfaceSchedule {
                 return Ok(schedule);
             }
         }
-        Err(SqlInterfaceError::ScheduleTypeNotFound(schedule_type.to_string()))
+        Err(SqlInterfaceError::ScheduleTypeNotFound(
+            schedule_type.to_string(),
+        ))
     }
 
     /// Execute a ping to the database to avoid timeout.

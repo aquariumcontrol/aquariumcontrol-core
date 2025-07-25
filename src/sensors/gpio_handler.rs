@@ -254,7 +254,7 @@ pub mod tests {
     #[test]
     pub fn test_valid_gpio_config() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let _gpio_handler = GpioHandler::new(config.gpio_handler);
     }
 
@@ -262,7 +262,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_invalid_gpio_config_low() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.gpio_handler.dht22_io = 3;
 
@@ -272,7 +272,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_invalid_gpio_config_duplicate() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.gpio_handler.dht22_io = 5;
         config.gpio_handler.tank_level_switch = 5;

@@ -214,7 +214,7 @@ pub mod tests {
     // an empty string for watchdog filename
     pub fn test_watchdog_init_watchdog_file_empty() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_filename = "".to_string();
 
         let _ = Watchdog::new(config.watchdog);
@@ -226,7 +226,7 @@ pub mod tests {
     // empty string for heartbeat signal
     pub fn test_watchdog_init_heartbeat_empty() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_heartbeat = "".to_string();
 
         let _ = Watchdog::new(config.watchdog);
@@ -238,7 +238,7 @@ pub mod tests {
     // empty string for deactivation signal
     pub fn test_watchdog_init_deactivation_empty() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_deactivation = "".to_string();
 
         let _ = Watchdog::new(config.watchdog);
@@ -250,7 +250,7 @@ pub mod tests {
     // identical strings for heartbeat and deactivation
     pub fn test_watchdog_init_heartbeat_deactivation_identical() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.watchdog_deactivation = "T".to_string();
         config.watchdog.watchdog_heartbeat = "T".to_string();
 
@@ -263,7 +263,7 @@ pub mod tests {
     // zero value for duration of pause between two heartbeats
     pub fn test_watchdog_init_heartbeat_duration_zero() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.watchdog.heartbeat_duration_millis = 0;
 
         let _ = Watchdog::new(config.watchdog);
@@ -273,7 +273,7 @@ pub mod tests {
     // test if the watchdog is executing the petting in time
     pub fn test_watchdog_execute_petting() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();
         let (tx_signal_handler_to_watchdog, rx_watchdog_from_signal_handler) = mpsc::channel();
 
@@ -358,7 +358,7 @@ pub mod tests {
     // test if the watchdog is writing the right heartbeat messages to the watchdog file
     pub fn test_watchdog_check_heartbeat_message() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.watchdog.watchdog_filename = "/var/log/watchdog.log".to_string();
         let (tx_watchdog_to_signal_handler, rx_signal_handler_from_watchdog) = mpsc::channel();

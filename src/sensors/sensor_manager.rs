@@ -710,7 +710,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_sensor_manager_panics_when_water_temperature_source_is_invalid() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.source_water_temperature = "invalid".to_string();
         let _ = SensorManager::new(config.sensor_manager);
     }
@@ -719,7 +719,7 @@ pub mod tests {
     #[should_panic]
     pub fn test_sensor_manager_panics_when_ambient_temperature_source_is_invalid() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.source_ambient_temperature = "invalid".to_string();
         let _ = SensorManager::new(config.sensor_manager);
     }
@@ -811,7 +811,7 @@ pub mod tests {
             mpsc::channel();
 
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.use_simulator = false;
         config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
         config.sensor_manager.source_water_temperature = "ds18b20".to_string();
@@ -888,7 +888,7 @@ pub mod tests {
             mpsc::channel();
 
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.use_simulator = false;
         config.sensor_manager.source_ambient_temperature = "dht".to_string();
         config.sensor_manager.source_water_temperature = "atlas_scientific".to_string();
@@ -965,7 +965,7 @@ pub mod tests {
             mpsc::channel();
 
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.sensor_manager.use_simulator = false;
         config.sensor_manager.source_ambient_temperature = "ds18b20".to_string();
         config.sensor_manager.source_water_temperature = "ds18b20".to_string();

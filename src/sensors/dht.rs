@@ -12,12 +12,12 @@ use log::error;
 #[cfg(not(test))]
 use log::warn;
 
+use crate::sensors::dht_error::DhtError;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::sensors::dht_error::DhtError;
 
 const LOG_TARGET_DHT: &str = "dht";
 

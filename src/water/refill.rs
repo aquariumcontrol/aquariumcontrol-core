@@ -1177,7 +1177,7 @@ pub mod tests {
             Some(test_db_number) => {
                 read_config_file_with_test_database(config_file_name.to_string(), test_db_number)
             }
-            None => read_config_file(config_file_name.to_string()),
+            None => read_config_file(config_file_name.to_string()).unwrap(),
         };
 
         config.refill.initial_wait_interval = initial_wait_interval;

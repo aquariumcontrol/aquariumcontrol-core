@@ -12,6 +12,17 @@ use thiserror::Error;
 #[derive(PartialEq, Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
+    #[error(
+        "Could not get a connection from the pool. The database may be down or the pool exhausted."
+    )]
+    ConnectionFromPool,
+
+    #[error("The database wait_timeout ({0}s) is less than the required minimum ({1}s).")]
+    WaitTimeoutTooLow(u64, u64),
+
+    #[error("Could not parse wait_timeout value from database: {0}")]
+    WaitTimeoutInvalid(i64),
+
     #[error("Could not establish connection pool with {0}")]
     ConnectionPoolFailure(String),
 
@@ -182,5 +193,5 @@ pub enum SqlInterfaceError {
 
     #[cfg(test)]
     #[error("Database responded with multiple responses to queries: {0} {1}")]
-    SingleDataFrameRequestNoSingleResponse(String, String)
+    SingleDataFrameRequestNoSingleResponse(String, String),
 }

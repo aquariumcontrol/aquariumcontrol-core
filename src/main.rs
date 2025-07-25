@@ -73,31 +73,8 @@ use nix::unistd;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{error::Error, env, panic, path::Path, thread::scope, time::Duration};
+use std::{env, error::Error, panic, path::Path, thread::scope, time::Duration};
 
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
-use crate::food::feed::{Feed, FeedChannels};
-use crate::food::food_injection::FoodInjection;
-use crate::mineral::balling::{Balling, BallingChannels};
-use crate::recorder::data_injection::DataInjection;
-use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
-use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-use crate::relays::actuate_simulator::ActuateSimulator;
-use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
-use crate::sensors::atlas_scientific::{
-    AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
-};
-use crate::sensors::sensor_manager::{
-    SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
-};
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging::{Messaging, MessagingChannels};
-use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::config::read_config_file;
-use crate::utilities::logger::setup_logger;
-use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -105,20 +82,43 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
 use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
 use crate::database::sql_interface_heating_stats::SqlInterfaceHeating;
+use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
 use crate::database::sql_interface_schedule::SqlInterfaceSchedule;
 use crate::database::sql_interface_ventilation_setvals::SqlInterfaceVentilationSetVals;
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging::{Messaging, MessagingChannels};
+use crate::food::feed::{Feed, FeedChannels};
+use crate::food::food_injection::FoodInjection;
+use crate::mineral::balling::{Balling, BallingChannels};
 use crate::mineral::mineral_injection::MineralInjection;
 use crate::permission::schedule_check::{ScheduleCheck, ScheduleCheckChannels};
+use crate::recorder::data_injection::DataInjection;
+use crate::recorder::data_logger::{DataLogger, DataLoggerChannels, DataLoggerMutexes};
 use crate::relays::actuate_controllino::ActuateControllino;
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use crate::relays::actuate_gpio::{ActuateGpio, ActuateGpioConfig};
+use crate::relays::actuate_simulator::ActuateSimulator;
+use crate::relays::relay_manager::{RelayManager, RelayManagerChannels};
+use crate::sensors::atlas_scientific::{
+    AtlasScientific, AtlasScientificChannels, AtlasScientificResultData,
+};
 use crate::sensors::dht::{Dht, DhtResult};
 use crate::sensors::ds18b20::{Ds18b20, Ds18b20ResultData};
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
+use crate::sensors::sensor_manager::{
+    SensorManager, SensorManagerChannels, SensorManagerMutexes, SensorManagerSignals,
+};
 use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
 use crate::simulator::tcp_communication::{TcpCommunication, TcpCommunicationChannels};
 use crate::thermal::distinct_interval_check::distinct_thermal_control_interval_check;
+use crate::thermal::heating::{Heating, HeatingChannels, HeatingMutexes};
 use crate::thermal::ventilation::{Ventilation, VentilationChannels};
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::config::read_config_file;
+use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
+use crate::utilities::logger::setup_logger;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 use crate::utilities::startup_error::StartupError;
@@ -195,11 +195,15 @@ fn check_argument_for_valid_config_file_name(
     let desired_config_file_name = user_selected_config_file_name.to_string();
 
     if !path.exists() {
-        return Err(ConfigFileDefinitionError::PathDoesNotExist(desired_config_file_name));
+        return Err(ConfigFileDefinitionError::PathDoesNotExist(
+            desired_config_file_name,
+        ));
     }
 
     if !path.is_file() {
-        return Err(ConfigFileDefinitionError::IsNotAFile(desired_config_file_name));
+        return Err(ConfigFileDefinitionError::IsNotAFile(
+            desired_config_file_name,
+        ));
     }
 
     match path.extension() {
@@ -207,10 +211,14 @@ fn check_argument_for_valid_config_file_name(
             if extension == "toml" {
                 Ok(String::from(user_selected_config_file_name))
             } else {
-                Err(ConfigFileDefinitionError::SuffixIsNotToml(desired_config_file_name))
+                Err(ConfigFileDefinitionError::SuffixIsNotToml(
+                    desired_config_file_name,
+                ))
             }
         }
-        None => Err(ConfigFileDefinitionError::FileNameHasNoSuffix(desired_config_file_name)),
+        None => Err(ConfigFileDefinitionError::FileNameHasNoSuffix(
+            desired_config_file_name,
+        )),
     }
 }
 
@@ -362,7 +370,7 @@ fn run() -> Result<(), StartupError> {
                 } else {
                     // At least one valid user command was provided. Graceful exit.
                     Ok(())
-                }
+                };
             }
         }
     }
@@ -381,8 +389,8 @@ fn run() -> Result<(), StartupError> {
     }
 
     // read the configuration file for operating the control system
-    let config = read_config_file(config_file_name);
-    
+    let config = read_config_file(config_file_name)?;
+
     // publish the PID to a file so that the client application can communicate with this application
     let publish_pid = PublishPid::new(config.publish_pid);
     let publish_pid_clone = publish_pid.clone();
@@ -403,7 +411,7 @@ fn run() -> Result<(), StartupError> {
             );
         }
     }));
-    
+
     // check if the control parameters of heating and ventilation are valid
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {
         return Err(StartupError::InvalidThermalConfig);
@@ -420,12 +428,7 @@ fn run() -> Result<(), StartupError> {
     }
 
     // connect to SQL database, subsequently set up component-specific interfaces
-    let mut sql_interface = match SqlInterface::new(config.sql_interface) {
-        Ok(c) => c,
-        Err(e) => {
-            return Err(StartupError::DatabaseConnection { source: e });
-        }
-    };
+    let mut sql_interface = SqlInterface::new(config.sql_interface)?;
 
     let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
 
@@ -447,12 +450,7 @@ fn run() -> Result<(), StartupError> {
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
-    let tables = match sql_interface.get_tables() {
-        Ok(c) => c,
-        Err(e) => {
-            return Err(StartupError::DatabaseQuery { source: e });
-        }
-    };
+    let tables = sql_interface.get_tables()?;
 
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
@@ -473,29 +471,16 @@ fn run() -> Result<(), StartupError> {
                     target: LOG_TARGET_MAIN,
                     "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
-                return Err(StartupError::DatabaseVersion {source: e});
+                return Err(e.into());
             }
         }
     }
 
-    let database = match sql_interface.get_database() {
-        Ok(c) => c,
-        Err(e) => {
-            return Err(StartupError::DatabaseName { source: e});
-        }
-    };
-    info!(
-        target: LOG_TARGET_MAIN,
-        "current database name is {}", database);
+    let database = sql_interface.get_database()?;
+    info!(target: LOG_TARGET_MAIN, "current database name is {}", database);
 
-    match sql_interface.check_required_tables_existing() {
-        Ok(_) => {
-            info!(
-                target: LOG_TARGET_MAIN,
-                "required tables are existing in database.")
-        }
-        Err(e) => return Err(StartupError::MissingTable{ source: e}),
-    }
+    sql_interface.check_required_tables_existing()?;
+    info!(target: LOG_TARGET_MAIN, "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
     for table in tables {
@@ -1618,7 +1603,7 @@ fn run() -> Result<(), StartupError> {
                 mutex_ds18b20_ambient_temperature,
             );
         });
-        
+
         Ok(())
     })
 }
@@ -1633,6 +1618,7 @@ fn main() {
         while let Some(cause) = source {
             error!("  Caused by: {}", cause);
             source = cause.source();
-        }        std::process::exit(1);
+        }
+        std::process::exit(1);
     }
 }

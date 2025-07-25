@@ -11,6 +11,8 @@ pub enum ConfigFileDefinitionError {
     #[error("The provided argument for the configuration file ({0}) does not have any extension.")]
     FileNameHasNoSuffix(String),
 
-    #[error("The provided argument for the configuration file ({0}) does not have extension '.toml'.")]
+    #[error(
+        "The provided argument for the configuration file ({0}) does not have extension '.toml'."
+    )]
     SuffixIsNotToml(String),
 }

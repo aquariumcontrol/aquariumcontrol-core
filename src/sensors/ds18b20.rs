@@ -14,18 +14,18 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
-use std::{fs};
 
 const LOG_TARGET_DS18B20: &str = "ds18b20";
 
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 
+use crate::sensors::ds18b20_error::Ds18b20Error;
 #[cfg(not(test))]
 use log::warn;
-use crate::sensors::ds18b20_error::Ds18b20Error;
 
 mod ds18b20_constants {
     /// minimum viable temperature used for health check of sensor signal
@@ -393,7 +393,8 @@ pub mod tests {
     #[test]
     // This test case read sensor data provided by a file.
     fn test_read_ds18b20_from_file() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
             panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
@@ -425,7 +426,8 @@ pub mod tests {
     #[should_panic]
     // Test case checks if invalid configuration of the system driver base path triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_base_path() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_base_path = "".to_string();
         let _ = Ds18b20::new(config.ds18b20);
     }
@@ -434,7 +436,8 @@ pub mod tests {
     #[should_panic]
     // Test case checks if invalid configuration of the system driver sensor path prefix triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_sensor_path_prefix() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_sensor_path_prefix = "".to_string();
         let _ = Ds18b20::new(config.ds18b20);
     }
@@ -443,7 +446,8 @@ pub mod tests {
     #[should_panic]
     // Test case checks if invalid configuration of the system driver sensor file name triggers a panic.
     fn test_dsb18b20_init_with_invalid_system_driver_file_name() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.system_driver_file_name = "".to_string();
         let _ = Ds18b20::new(config.ds18b20);
     }
@@ -452,7 +456,8 @@ pub mod tests {
     #[should_panic]
     // Test case checks if invalid configuration of the sensor ids triggers a panic.
     fn test_dsb18b20_init_with_invalid_sensor_ids() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.ds18b20.active = true;
         config.ds18b20.water_temperature_sensor_id = "".to_string();
         config.ds18b20.ambient_temperature_sensor_id = "".to_string();
@@ -462,7 +467,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error for an incorrect sensor id
     fn test_dsb18b20_read_from_invalid_sensor_id() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
             panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
@@ -488,7 +494,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when not being able to read from the device file
     fn test_dsb18b20_read_from_file_failed() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name = "xxx".to_string(); // invalidate file name
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -512,7 +519,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when the device file does not provide enough lines
     fn test_dsb18b20_file_with_one_line_only() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_one_line"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -536,7 +544,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when the first line of device file content does not match "YES"
     fn test_dsb18b20_file_with_line_not_ending_with_yes() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_no_yes"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -560,7 +569,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when file content does not contain temperature
     fn test_dsb18b20_file_without_temperature() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_no_temperature"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -584,7 +594,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when file content contains unparsable data
     fn test_dsb18b20_unparsable() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_unparsable"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -608,7 +619,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when the temperature is too hot
     fn test_dsb18b20_temperature_too_hot() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_too_hot"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -632,7 +644,8 @@ pub mod tests {
     #[test]
     // Test case checks if function returns error when the temperature is too cold
     fn test_dsb18b20_temperature_too_cold() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.ds18b20.system_driver_file_name += "_too_cold"; // file with only one line content
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
@@ -655,7 +668,8 @@ pub mod tests {
 
     #[test]
     fn test_dsb18b20_channel_mutexes_without_locking_mutexes() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
             panic!("Could not read environment variable CARGO_MANIFEST_DIR.");
@@ -745,7 +759,8 @@ pub mod tests {
 
     #[test]
     fn test_dsb18b20_channel_mutexes_with_locking_mutexes() {
-        let mut config = read_config_file("config/aquarium_control_test_generic.toml".to_string());
+        let mut config =
+            read_config_file("config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
             panic!("Could not read environment variable CARGO_MANIFEST_DIR.");

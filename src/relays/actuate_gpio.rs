@@ -11,7 +11,7 @@ use log::warn;
 
 use crate::relays::device_relay_logic::get_relay_command_gpio;
 use crate::relays::relay_error::RelayError;
-use crate::relays::relay_manager::{RelayActuationTrait};
+use crate::relays::relay_manager::RelayActuationTrait;
 use crate::utilities::channel_content::InternalCommand;
 
 cfg_if::cfg_if! {

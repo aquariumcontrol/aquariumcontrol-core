@@ -10,12 +10,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod channel_content;
 pub mod common;
 pub mod config;
+pub mod config_error;
+pub mod config_file_definition_error;
 pub mod iir_filter;
 pub mod logger;
 pub mod proc_ext_req;
 pub mod publish_pid;
 pub mod sawtooth_profile;
 pub mod signal_handler;
-pub mod version_information;
-pub mod config_file_definition_error;
 pub mod startup_error;
+pub mod version_information;

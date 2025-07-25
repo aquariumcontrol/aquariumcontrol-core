@@ -127,7 +127,7 @@ impl SqlInterfaceVentilationSetVals {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::VentilationSetValsRequestFailure(
-                        sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
+                    sql_query_strings::SQL_QUERY_READ_VENTILATION_SETVALS.to_string(),
                 ));
             }
         };
@@ -153,7 +153,7 @@ impl SqlInterfaceVentilationSetVals {
         {
             return Err(SqlInterfaceError::VentilationSetValsInvalid(
                 ventilation_set_vals.ventilation_switch_on_temperature,
-                ventilation_set_vals.ventilation_switch_off_temperature
+                ventilation_set_vals.ventilation_switch_off_temperature,
             ));
         }
 

@@ -7,11 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::error;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
+use crate::food::food_injection_error::FoodInjectionError;
 use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -40,7 +40,7 @@ pub trait FoodInjectionTrait {
         rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
-    ) -> bool;
+    ) -> (bool, Result<(), Vec<FoodInjectionError>>);
 }
 
 /// Struct collects the target actuator states for switch_skimmer_pumps_feeder
@@ -86,8 +86,6 @@ pub struct FoodInjection {
 }
 
 impl FoodInjection {
-    const LOG_TARGET_FOOD_INJECTION: &'static str = "food_injection";
-
     /// Creates a new `FoodInjection` instance.
     ///
     /// This constructor initializes the food injection control module. It sets
@@ -129,221 +127,234 @@ impl FoodInjection {
     ///   desired `ActuatorState` for each relevant device.
     /// * `tx_to_relay_manager` - The sender channel for communication with the relay manager.
     /// * `rx_from_relay_manager` - The receiver channel for acknowledgments from the relay manager.
+    ///
+    /// # Returns
+    /// * `Ok` - in case of success
+    /// * `FoodInjectionError` - in case of error
     fn switch_skimmer_pumps_feeder(
         &mut self,
         target_actuator_states: FoodInjectionTargetActuatorStates,
         tx_to_relay_manager: &Sender<InternalCommand>,
         rx_from_relay_manager: &Receiver<bool>,
-    ) {
+    ) -> Result<(), Vec<FoodInjectionError>> {
+        // Initialize a vector to collect any errors that occur.
+        let mut errors: Vec<FoodInjectionError> = Vec::new();
+
+        // --- Skimmer ---
         if self.skimmer_state != target_actuator_states.target_skimmer_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_skimmer_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Skimmer),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Skimmer),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for skimmer."
-                    );
-                    return;
+            let device = AquariumDevice::Skimmer;
+
+            match target_actuator_states.target_skimmer_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command =
+                        if target_actuator_states.target_skimmer_state == ActuatorState::On {
+                            InternalCommand::SwitchOn(device.clone())
+                        } else {
+                            InternalCommand::SwitchOff(device.clone())
+                        };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_skimmer_state,
+                            AquariumDevice::Skimmer
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        println!(
+                            "Encountered error when receiving command to relay manager: {e:?}"
+                        );
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        println!(
+                            "Successfully set skimmer state to {:?}",
+                            target_actuator_states.target_skimmer_state
+                        );
+                        self.skimmer_state = target_actuator_states.target_skimmer_state;
+                    }
                 }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.skimmer_state = target_actuator_states.target_skimmer_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on skimmer failed ({e:?})"
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on skimmer failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateSkimmer),
             }
         }
+
+        // --- Main pump 1 ---
         if self.main_pump1_state != target_actuator_states.target_main_pump1_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_main_pump1_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump1),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump1),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for main pump 1."
-                    );
-                    return;
+            let device = AquariumDevice::MainPump1;
+
+            match target_actuator_states.target_main_pump1_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command =
+                        if target_actuator_states.target_main_pump1_state == ActuatorState::On {
+                            InternalCommand::SwitchOn(device.clone())
+                        } else {
+                            InternalCommand::SwitchOff(device.clone())
+                        };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_main_pump1_state,
+                            AquariumDevice::MainPump1
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        self.main_pump1_state = target_actuator_states.target_main_pump1_state;
+                    }
                 }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.main_pump1_state = target_actuator_states.target_main_pump1_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on main pump 1 failed ({e:?})"
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on main pump 1 failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump1),
             }
         }
+
+        // --- Main pump 2 ---
         if self.main_pump2_state != target_actuator_states.target_main_pump2_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_main_pump2_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::MainPump2),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::MainPump2),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for main pump 2."
-                    );
-                    return;
+            let device = AquariumDevice::MainPump2;
+
+            match target_actuator_states.target_main_pump2_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command =
+                        if target_actuator_states.target_main_pump2_state == ActuatorState::On {
+                            InternalCommand::SwitchOn(device.clone())
+                        } else {
+                            InternalCommand::SwitchOff(device.clone())
+                        };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_main_pump2_state,
+                            AquariumDevice::MainPump2
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        self.main_pump2_state = target_actuator_states.target_main_pump2_state;
+                    }
                 }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.main_pump2_state = target_actuator_states.target_main_pump2_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on main pump 2 failed ({e:?})"
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on main pump 2 failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateMainPump2),
             }
         }
+
+        // --- Aux. pump 1 ---
         if self.aux_pump1_state != target_actuator_states.target_aux_pump1_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_aux_pump1_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump1),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump1),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for aux pump 1."
-                    );
-                    return;
+            let device = AquariumDevice::AuxPump1;
+
+            match target_actuator_states.target_aux_pump1_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command =
+                        if target_actuator_states.target_aux_pump1_state == ActuatorState::On {
+                            InternalCommand::SwitchOn(device.clone())
+                        } else {
+                            InternalCommand::SwitchOff(device.clone())
+                        };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_aux_pump1_state,
+                            AquariumDevice::AuxPump1
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        self.aux_pump1_state = target_actuator_states.target_aux_pump1_state;
+                    }
                 }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.aux_pump1_state = target_actuator_states.target_aux_pump1_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on aux pump 1 failed ({e:?})"
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on aux pump 1 failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump1),
             }
         }
+
+        // --- Aux. pump 2 ---
         if self.aux_pump2_state != target_actuator_states.target_aux_pump2_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_aux_pump2_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::AuxPump2),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::AuxPump2),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for aux pump 2."
-                    );
-                    return;
+            let device = AquariumDevice::AuxPump2;
+
+            match target_actuator_states.target_aux_pump2_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command =
+                        if target_actuator_states.target_aux_pump2_state == ActuatorState::On {
+                            InternalCommand::SwitchOn(device.clone())
+                        } else {
+                            InternalCommand::SwitchOff(device.clone())
+                        };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_aux_pump2_state,
+                            AquariumDevice::AuxPump2
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        self.aux_pump2_state = target_actuator_states.target_aux_pump2_state;
+                    }
                 }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.aux_pump2_state = target_actuator_states.target_aux_pump2_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on aux pump 2 failed ({e:?})"
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on aux pump 2 failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateAuxPump2),
             }
         }
+
+        // --- Feeder ---
         if self.feeder_state != target_actuator_states.target_feeder_state {
             self.spin_sleeper.sleep(self.sleep_duration_device_switch);
-            let command = match target_actuator_states.target_feeder_state {
-                ActuatorState::On => InternalCommand::SwitchOn(AquariumDevice::Feeder),
-                ActuatorState::Off => InternalCommand::SwitchOff(AquariumDevice::Feeder),
-                _ => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "received undefined state as target state for feeder."
-                    );
-                    return;
-                }
-            };
-            match tx_to_relay_manager.send(command) {
-                Ok(_) => {
-                    match rx_from_relay_manager.recv() {
-                        Ok(_) => {
-                            self.feeder_state = target_actuator_states.target_feeder_state;
-                        }
-                        Err(e) => {
-                            error!(
-                                target: Self::LOG_TARGET_FOOD_INJECTION,
-                                "receiving answer from relay manager when switching on feeder failed ({e:?})"
-                            );
-                        }
+            let device = AquariumDevice::Feeder;
+
+            match target_actuator_states.target_feeder_state {
+                ActuatorState::On | ActuatorState::Off => {
+                    // Command is defined
+                    let command = if target_actuator_states.target_feeder_state == ActuatorState::On
+                    {
+                        InternalCommand::SwitchOn(device.clone())
+                    } else {
+                        InternalCommand::SwitchOff(device.clone())
                     };
+                    if let Err(e) = tx_to_relay_manager.send(command) {
+                        #[cfg(test)]
+                        println!(
+                            "Encountered error when sending command {:?} for {} to relay manager: {e:?}",
+                            target_actuator_states.target_feeder_state,
+                            AquariumDevice::Feeder
+                        );
+                        errors.push(FoodInjectionError::RelayManagerSend(device.clone(), e));
+                    } else if let Err(e) = rx_from_relay_manager.recv() {
+                        errors.push(FoodInjectionError::RelayManagerReceive(device.clone(), e));
+                    } else {
+                        // Only update state on success
+                        self.feeder_state = target_actuator_states.target_feeder_state;
+                    }
                 }
-                Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_FOOD_INJECTION,
-                        "channel communication to relay manager when switching on feeder failed ({e:?})"
-                    );
-                }
+                // Handle undefined state by pushing a specific error.
+                _ => errors.push(FoodInjectionError::UndefinedTargetStateFeeder),
             }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
         }
     }
 }
@@ -355,7 +366,7 @@ impl FoodInjectionTrait for FoodInjection {
         rx_from_relay_manager: &Receiver<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         feedpattern: &Feedpattern,
-    ) -> bool {
+    ) -> (bool, Result<(), Vec<FoodInjectionError>>) {
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: i16 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
@@ -366,6 +377,7 @@ impl FoodInjectionTrait for FoodInjection {
         let mut target_aux_pump2_state: ActuatorState;
         let mut sleep_counter_millis: i16;
         let mut quit_command_received: bool = false;
+        let mut collected_errors_cumulated: Vec<FoodInjectionError> = vec![];
 
         for feedphase in &feedpattern.feedphases {
             // check if there is a quit request
@@ -397,18 +409,22 @@ impl FoodInjectionTrait for FoodInjection {
                     true => ActuatorState::On,
                     false => ActuatorState::Off,
                 };
-                self.switch_skimmer_pumps_feeder(
-                    FoodInjectionTargetActuatorStates {
-                        target_skimmer_state,
-                        target_main_pump1_state,
-                        target_main_pump2_state,
-                        target_aux_pump1_state,
-                        target_aux_pump2_state,
-                        target_feeder_state: ActuatorState::Off,
-                    },
+                let target_actuator_states = FoodInjectionTargetActuatorStates {
+                    target_skimmer_state,
+                    target_main_pump1_state,
+                    target_main_pump2_state,
+                    target_aux_pump1_state,
+                    target_aux_pump2_state,
+                    target_feeder_state: ActuatorState::Off,
+                };
+                if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
+                    target_actuator_states,
                     tx_to_relay_manager,
                     rx_from_relay_manager,
-                );
+                ) {
+                    collected_errors_cumulated.extend(collected_errors);
+                    break; // if any error occurs, abort the feed sequence
+                }
             }
 
             // wait for a determined period and check quit request in between
@@ -417,6 +433,8 @@ impl FoodInjectionTrait for FoodInjection {
                 (quit_command_received, _, _) =
                     self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
+                    #[cfg(test)]
+                    println!("Received quit command during pause phase of food injection");
                     break; // exit inner loop
                 }
                 sleep_counter_millis += sleep_interval_millis;
@@ -448,18 +466,22 @@ impl FoodInjectionTrait for FoodInjection {
                     true => ActuatorState::On,
                     false => ActuatorState::Off,
                 };
-                self.switch_skimmer_pumps_feeder(
-                    FoodInjectionTargetActuatorStates {
-                        target_skimmer_state,
-                        target_main_pump1_state,
-                        target_main_pump2_state,
-                        target_aux_pump1_state,
-                        target_aux_pump2_state,
-                        target_feeder_state: ActuatorState::On,
-                    },
+                let target_actuator_states = FoodInjectionTargetActuatorStates {
+                    target_skimmer_state,
+                    target_main_pump1_state,
+                    target_main_pump2_state,
+                    target_aux_pump1_state,
+                    target_aux_pump2_state,
+                    target_feeder_state: ActuatorState::On,
+                };
+                if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
+                    target_actuator_states,
                     tx_to_relay_manager,
                     rx_from_relay_manager,
-                );
+                ) {
+                    collected_errors_cumulated.extend(collected_errors);
+                    break; // if any error occurs, abort the feed sequence
+                }
             }
 
             // wait for a determined period and check quit request in between
@@ -468,6 +490,8 @@ impl FoodInjectionTrait for FoodInjection {
                 (quit_command_received, _, _) =
                     self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
+                    #[cfg(test)]
+                    println!("Received quit command during feed phase of food injection");
                     break; // exit inner loop
                 }
                 sleep_counter_millis += sleep_interval_millis;
@@ -478,7 +502,9 @@ impl FoodInjectionTrait for FoodInjection {
             }
         }
 
-        self.switch_skimmer_pumps_feeder(
+        // The feed sequence has finished or has been aborted.
+        // Switch on all pumps. Switch off feeder.
+        if let Err(collected_errors) = self.switch_skimmer_pumps_feeder(
             FoodInjectionTargetActuatorStates {
                 target_skimmer_state: ActuatorState::On,
                 target_main_pump1_state: ActuatorState::On,
@@ -489,9 +515,15 @@ impl FoodInjectionTrait for FoodInjection {
             },
             tx_to_relay_manager,
             rx_from_relay_manager,
-        );
+        ) {
+            collected_errors_cumulated.extend(collected_errors);
+        }
 
-        quit_command_received
+        if collected_errors_cumulated.is_empty() {
+            (quit_command_received, Ok(()))
+        } else {
+            (quit_command_received, Err(collected_errors_cumulated))
+        }
     }
 }
 
@@ -577,7 +609,7 @@ pub mod tests {
     // this test case executes the food injection without interruption from the signal handler
     pub fn test_food_injection_uninterrupted() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut food_injection = FoodInjection::new(&config.feed);
 
         let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
@@ -635,7 +667,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                food_injection.inject_food(
+                let result_tuple = food_injection.inject_food(
                     &tx_feed_to_relay_manager,
                     &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
@@ -650,6 +682,10 @@ pub mod tests {
                     execution_duration.as_millis()
                 );
 
+                let (interrupted, result) = result_tuple;
+                assert_eq!(interrupted, false);
+                assert!(result.is_ok());
+
                 assert_ge!(execution_duration.as_millis(), 22500);
                 assert_le!(execution_duration.as_millis(), 29700);
             });
@@ -660,7 +696,7 @@ pub mod tests {
     // this test case executes the food injection with interruption from the signal handler
     pub fn test_food_injection_interrupted() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut food_injection = FoodInjection::new(&config.feed);
 
         let (tx_feed_to_relay_manager, rx_relay_manager_from_feed) = mpsc::channel();
@@ -729,7 +765,7 @@ pub mod tests {
                 };
 
                 let start_time = Instant::now();
-                food_injection.inject_food(
+                let result_tuple = food_injection.inject_food(
                     &tx_feed_to_relay_manager,
                     &rx_feed_from_relay_manager,
                     &rx_feed_from_signal_handler,
@@ -738,12 +774,21 @@ pub mod tests {
                 let end_time = Instant::now();
 
                 let execution_duration = end_time - start_time;
+                let (interrupted, result) = result_tuple;
 
                 println!(
                     "execution_duration (milliseconds)= {}",
                     execution_duration.as_millis()
                 );
+                if let Err(error_vector) = result.clone() {
+                    println!("result contains error(s):",);
+                    for e in error_vector {
+                        println!("{:?}", e);
+                    }
+                }
 
+                assert_eq!(interrupted, true);
+                assert!(result.is_ok());
                 assert_ge!(execution_duration.as_millis(), 850);
                 assert_le!(execution_duration.as_millis(), 1085);
             });

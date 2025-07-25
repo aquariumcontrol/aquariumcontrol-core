@@ -8,17 +8,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use crate::sensors::atlas_scientific_error::AtlasScientificError;
+use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
+use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
+use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::{error, warn};
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::sensors::atlas_scientific_error::AtlasScientificError;
-use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
-use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
-use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
 
@@ -335,19 +335,19 @@ impl AtlasScientific {
         is_ph: bool,
     ) -> Result<f32, AtlasScientificError> {
         // first check: first character not magic
-        let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER]; 
-        if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC
-        {
+        let first_character = buffer[atlas_scientific_constants::INDEX_FIRST_CHARACTER];
+        if first_character != atlas_scientific_constants::MESSAGE_START_MAGIC {
             return Err(AtlasScientificError::FirstCharacterNotMagic(
-                atlas_scientific_constants::MESSAGE_START_MAGIC, first_character
+                atlas_scientific_constants::MESSAGE_START_MAGIC,
+                first_character,
             ));
         }
         // second check: last character not magic
-        let last_character = buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER]; 
-        if last_character != atlas_scientific_constants::MESSAGE_FINISH_MAGIC
-        {
+        let last_character = buffer[atlas_scientific_constants::INDEX_LAST_CHARACTER];
+        if last_character != atlas_scientific_constants::MESSAGE_FINISH_MAGIC {
             return Err(AtlasScientificError::LastCharacterNotMagic(
-                atlas_scientific_constants::MESSAGE_FINISH_MAGIC, last_character
+                atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+                last_character,
             ));
         }
 
@@ -939,7 +939,8 @@ pub mod tests {
         assert_eq!(
             AtlasScientific::check_response(stimuli, false),
             Err(AtlasScientificError::FirstCharacterNotMagic(
-                atlas_scientific_constants::MESSAGE_START_MAGIC, stimuli[0]
+                atlas_scientific_constants::MESSAGE_START_MAGIC,
+                stimuli[0]
             ))
         );
     }
@@ -960,7 +961,8 @@ pub mod tests {
         assert_eq!(
             AtlasScientific::check_response(stimuli, false),
             Err(AtlasScientificError::LastCharacterNotMagic(
-                atlas_scientific_constants::MESSAGE_FINISH_MAGIC, stimuli[0]    
+                atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+                stimuli[0]
             ))
         );
     }
@@ -988,7 +990,7 @@ pub mod tests {
     // Test the error response of get_response_from_i2c when requesting an invalid signal.
     pub fn test_atlas_scientific_error_response_to_invalid_signal_request() {
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
         // Atlas Scientific <=> i2c_interface
@@ -1057,7 +1059,7 @@ pub mod tests {
         };
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
 
@@ -1198,7 +1200,7 @@ pub mod tests {
         };
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let measurement_interval_millis_for_test_environment =
             config.atlas_scientific.measurement_interval_millis;
@@ -1406,7 +1408,7 @@ pub mod tests {
         };
 
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         let measurement_interval_millis_for_test_environment =
             config.atlas_scientific.measurement_interval_millis;

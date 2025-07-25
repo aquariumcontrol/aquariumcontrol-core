@@ -8,14 +8,14 @@ use crate::thermal::ventilation::VentilationConfig;
 /// # Arguments
 ///
 /// * `heating_config` - A reference to the `HeatingConfig` struct containing configuration
-/// data of the heating control.
+///   data of the heating control.
 /// * `ventilation_config` - A reference to the `VentilationConfig` struct containing configuration
-/// data of the ventilation control.
+///   data of the ventilation control.
 ///
 /// # Returns
 ///
 /// - `bool`: If the control intervals are distinct or one of the controls is deactivated, the
-/// function returns true, otherwise false.
+///   function returns true, otherwise false.
 pub fn distinct_thermal_control_interval_check(
     heating_config: &HeatingConfig,
     ventilation_config: &VentilationConfig,

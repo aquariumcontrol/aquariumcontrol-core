@@ -116,22 +116,18 @@ impl SqlInterface {
             Ok(c) => c,
             Err(e) => {
                 return Err(SqlInterfaceError::ConnectionPoolFailure(
-                        url
-                        + ": "
-                        + &e.to_string(),
+                    url + ": " + &e.to_string(),
                 ));
             }
         };
 
-        // Get connection for requests of the main thread
-        let mut conn = match pool.get_conn() {
-            Ok(c) => c,
-            Err(_) => {
-                panic!("Could not open SQL data base connection.");
-            }
-        };
+        // Get connection for requests of the main thread.
+        let mut conn = pool
+            .get_conn()
+            .map_err(|_| SqlInterfaceError::ConnectionFromPool)?;
 
-        Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout);
+        // Call the refactored check_wait_timeout
+        Self::check_wait_timeout(&mut conn, config.db_min_wait_timeout)?;
 
         Ok(SqlInterface { config, pool, conn })
     }
@@ -179,15 +175,10 @@ impl SqlInterface {
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Vec<SingleString>, SqlInterfaceError> {
-        match conn.query_map(sql_query_string, |single_string| SingleString {
+        conn.query_map(sql_query_string, |single_string| SingleString {
             single_string,
-        }) {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                error!(target: Self::LOG_TARGET_SQL_INTERFACE, "SQL database query failed: {}", e);
-                Err(SqlInterfaceError::SingleStringRequestFailure(sql_query_string.to_string()))
-            }
-        }
+        })
+        .map_err(|_| SqlInterfaceError::SingleStringRequestFailure(sql_query_string.to_string()))
     }
 
     /// Executes an SQL query and strictly expects a single string result.
@@ -218,12 +209,16 @@ impl SqlInterface {
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
-            return Err(SqlInterfaceError::SingleStringRequestEmptyResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleStringRequestEmptyResponse(
+                sql_query_string.to_string(),
+            ));
         }
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
         Ok(single_string_array[0].single_string.clone())
     }
@@ -261,7 +256,9 @@ impl SqlInterface {
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleStringRequestNoSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
         Ok(Some(single_string_array[0].single_string.clone()))
     }
@@ -312,13 +309,17 @@ impl SqlInterface {
             }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleVersionRequestFailure(sql_query_string));
+                return Err(SqlInterfaceError::SingleVersionRequestFailure(
+                    sql_query_string,
+                ));
             }
         };
 
         // check the error case if there is no response
         if single_string_array.is_empty() {
-            return Err(SqlInterfaceError::SingleVersionRequestNotListed(sql_query_string));
+            return Err(SqlInterfaceError::SingleVersionRequestNotListed(
+                sql_query_string,
+            ));
         }
 
         // check the error case if there is more than one response
@@ -328,7 +329,9 @@ impl SqlInterface {
                 sql_query_string
             );
             error!(target: Self::LOG_TARGET_SQL_INTERFACE, "{}", error_message);
-            Err(SqlInterfaceError::SingleVersionRequestMultipleResults(error_message))
+            Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
+                error_message,
+            ))
         } else {
             Ok(single_string_array[0].single_string.clone())
         }
@@ -363,16 +366,21 @@ impl SqlInterface {
                 }) {
                 Ok(c) => c,
                 Err(_) => {
-                    return Err(SqlInterfaceError::SingleStringRequestFailure(sql_query_string.to_string()));
+                    return Err(SqlInterfaceError::SingleStringRequestFailure(
+                        sql_query_string.to_string(),
+                    ));
                 }
             };
 
         // check if there is no response or only one row
         if single_string_array.is_empty() {
-            return Err(SqlInterfaceError::MultipleStringRequestEmptyResponse(sql_query_string.to_string()));
-        }
-        else if single_string_array.len() == 1 {
-            return Err(SqlInterfaceError::MultipleStringRequestSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::MultipleStringRequestEmptyResponse(
+                sql_query_string.to_string(),
+            ));
+        } else if single_string_array.len() == 1 {
+            return Err(SqlInterfaceError::MultipleStringRequestSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
 
         let mut response_array: Vec<String> = Vec::new();
@@ -410,18 +418,24 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleIntegerRequestFailure(sql_query_string.to_string()));
+                return Err(SqlInterfaceError::SingleIntegerRequestFailure(
+                    sql_query_string.to_string(),
+                ));
             }
         };
 
         // check the error case if there is no response
         if single_integer_array.is_empty() {
-            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
 
         // check the error case if there is more than one response
         if single_integer_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleIntegerRequestNoSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
         Ok(single_integer_array[0].single_integer)
     }
@@ -453,18 +467,24 @@ impl SqlInterface {
         }) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleFloatRequestFailure(sql_query_string.to_string()));
+                return Err(SqlInterfaceError::SingleFloatRequestFailure(
+                    sql_query_string.to_string(),
+                ));
             }
         };
 
         // check the error case if there is no response
         if single_float_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFloatRequestEmptyResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleFloatRequestEmptyResponse(
+                sql_query_string.to_string(),
+            ));
         }
 
         // check the error case if there is more than one response
         if single_float_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(sql_query_string.to_string()));
+            return Err(SqlInterfaceError::SingleFloatRequestNoSingleResponse(
+                sql_query_string.to_string(),
+            ));
         }
         Ok(single_float_array[0].single_float)
     }
@@ -533,7 +553,9 @@ impl SqlInterface {
         // convert data type
         match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S") {
             Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(timestamp_string)),
+            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
+                timestamp_string,
+            )),
         }
     }
 
@@ -679,7 +701,9 @@ impl SqlInterface {
                     "Error converting timestamp_string={} to date ({e:?})",
                     timestamp_string
                 );
-                Err(SqlInterfaceError::TimestampConversionFailure(timestamp_string))
+                Err(SqlInterfaceError::TimestampConversionFailure(
+                    timestamp_string,
+                ))
             }
         }
     }
@@ -783,7 +807,10 @@ impl SqlInterface {
         ) {
             let required_tables_string = self.config.db_tables.join(",");
             let existing_tables_string = existing_tables.join(",");
-            Err(SqlInterfaceError::RequiredTablesNotExisting(required_tables_string, existing_tables_string))
+            Err(SqlInterfaceError::RequiredTablesNotExisting(
+                required_tables_string,
+                existing_tables_string,
+            ))
         } else {
             Ok(())
         }
@@ -877,8 +904,6 @@ impl SqlInterface {
     /// It is primarily used to ensure that database connections do not time out
     /// prematurely from the server's perspective, which could lead to "Broken pipe" errors.
     /// The function is called in the initialization phase of the control application.
-    /// If the function panics, it will abort the initialization and the control application will
-    /// terminate before starting regular operation.
     ///
     /// # Arguments
     ///
@@ -889,39 +914,33 @@ impl SqlInterface {
     ///
     /// # Panics
     ///
-    /// This function will **panic** in the following scenarios:
+    /// This function will return an error in the following scenarios:
     /// - If it fails to retrieve the `wait_timeout` value from the database (e.g., due to
     ///   connection issues, query execution errors).
     /// - If the retrieved `wait_timeout` value from the database is not a valid unsigned 64-bit integer
     ///   (e.g., if the database returns a value that cannot be converted to `u64`). This indicates
     ///   an unexpected data type or format from the database.
     /// - If the `current_wait_timeout` read from the database is less than `min_wait_timeout`.
-    ///   In this case, the application will panic with a message indicating the discrepancy,
+    ///   In this case, the application will return an error with a message indicating the discrepancy,
     ///   as it considers an insufficient `wait_timeout` a critical configuration error.
-    pub fn check_wait_timeout(conn: &mut PooledConn, min_wait_timeout: u64) {
-        let current_wait_timeout: u64 =
-            match Self::get_single_integer_from_database(conn, SQL_QUERY_READ_TIMEOUT) {
-                Ok(c) => match c.try_into() {
-                    Ok(c) => c,
-                    Err(_) => {
-                        panic!(
-                            "Configuration file contains invalid value for wait_timeout: {}",
-                            c
-                        );
-                    }
-                },
-                Err(e) => {
-                    panic!("could not retrieve wait_timeout from the database ({e:?})");
-                }
-            };
+    pub fn check_wait_timeout(
+        conn: &mut PooledConn,
+        min_wait_timeout: u64,
+    ) -> Result<(), SqlInterfaceError> {
+        let current_wait_timeout_i64 =
+            Self::get_single_integer_from_database(conn, SQL_QUERY_READ_TIMEOUT)?;
 
-        if current_wait_timeout < min_wait_timeout {
-            panic!(
-                "SQL database has wait_timeout configured of {} seconds. \
-                Configuration of control application requires at least {} seconds.",
-                current_wait_timeout, min_wait_timeout
-            );
+        let current_wait_timeout: u64 = current_wait_timeout_i64
+            .try_into()
+            .map_err(|_| SqlInterfaceError::WaitTimeoutInvalid(current_wait_timeout_i64))?;
+
+        if current_wait_timeout < min_wait_timeout && min_wait_timeout != 0 {
+            return Err(SqlInterfaceError::WaitTimeoutTooLow(
+                current_wait_timeout,
+                min_wait_timeout,
+            ));
         }
+        Ok(())
     }
 
     /// Pings the database to check connection health and prevent timeouts.
@@ -1009,8 +1028,10 @@ pub mod tests {
         let dummy_table = "dummy".to_string();
         sql_interface.config.db_tables.push(dummy_table.clone());
         assert_eq!(
-            matches!(sql_interface.check_required_tables_existing(),
-                    Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))),
+            matches!(
+                sql_interface.check_required_tables_existing(),
+                Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))
+            ),
             true
         );
         println!("* checking required tables (FAIL) succeeded.");
@@ -1070,8 +1091,7 @@ pub mod tests {
                 assert_eq!(
                     e,
                     SqlInterfaceError::SingleVersionRequestNotListed(
-                            "SELECT hash FROM version WHERE major="
-                            .to_string()
+                        "SELECT hash FROM version WHERE major=".to_string()
                             + &version_information.major.to_string()
                             + " AND minor="
                             + &version_information.minor.to_string()
@@ -1114,7 +1134,8 @@ pub mod tests {
                 assert_eq!(
                     e,
                     SqlInterfaceError::SingleVersionRequestNotListed(
-                        "SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;".to_string()
+                        "SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;"
+                            .to_string()
                     )
                 );
             }

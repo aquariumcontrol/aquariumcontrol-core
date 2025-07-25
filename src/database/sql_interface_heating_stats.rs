@@ -321,18 +321,16 @@ impl SqlInterfaceHeating {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::SingleHeatingStatsRequestFailure(
-                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string()
+                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
                 ));
             }
         };
 
         // check the error case if there is no response
         if single_heating_stats_entry_array.is_empty() {
-            return Err(
-                SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
-                    sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
-                ),
-            );
+            return Err(SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
+                sql_query_strings::SQL_QUERY_READ_HEATING_STATS.to_string(),
+            ));
         }
         // check the error case if there is more than one response
         if single_heating_stats_entry_array.len() > 1 {
@@ -352,7 +350,7 @@ impl SqlInterfaceHeating {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::TimestampConversionFailure(
-                    single_heating_stats_string_entry.date.clone()
+                    single_heating_stats_string_entry.date.clone(),
                 ));
             }
         };

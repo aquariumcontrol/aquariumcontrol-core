@@ -300,19 +300,18 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 let sql_query_string =
                     sql_query_strings::SQL_QUERY_UPDATE_FEED_SCHEDULE_ENTRY.to_owned();
 
-                let timestamp_tomorrow_date_only = match SqlInterface::get_tomorrow_date(
-                    &mut self.conn,
-                ) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        error!(
-                            target: LOG_TARGET_SQL_INTERFACE_FEED,
-                            "could not calculate update of feed schedule entry ({e:?})"
-                        );
-                        result = Err(SqlInterfaceError::FeedScheduleUpdateFailure);
-                        continue;
-                    }
-                };
+                let timestamp_tomorrow_date_only =
+                    match SqlInterface::get_tomorrow_date(&mut self.conn) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            error!(
+                                target: LOG_TARGET_SQL_INTERFACE_FEED,
+                                "could not calculate update of feed schedule entry ({e:?})"
+                            );
+                            result = Err(SqlInterfaceError::FeedScheduleUpdateFailure);
+                            continue;
+                        }
+                    };
 
                 let timestamp_tomorrow = NaiveDateTime::new(
                     timestamp_tomorrow_date_only,
@@ -488,7 +487,9 @@ impl SqlInterfaceFeed {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(sql_query.to_string()));
+                return Err(SqlInterfaceError::FeedScheduleEntryRequestFailure(
+                    sql_query.to_string(),
+                ));
             }
         };
 
@@ -600,20 +601,26 @@ impl SqlInterfaceFeed {
                 }) {
                 Ok(c) => c,
                 Err(_) => {
-                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(sql_query.as_str().to_string()));
+                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
+                        sql_query.as_str().to_string(),
+                    ));
                 }
             };
 
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(sql_query));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
+                sql_query,
+            ));
         }
-        
+
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(sql_query));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                sql_query,
+            ));
         }
-        
+
         let feedpattern_header = &single_feedpattern_entry_array[0];
 
         Ok(feedpattern_header.clone())
@@ -680,20 +687,26 @@ impl SqlInterfaceFeed {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(sql_query));
+                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
+                    sql_query,
+                ));
             }
         };
 
         // check the error case if there is no response
         if single_feedpattern_entry_array.is_empty() {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(sql_query));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
+                sql_query,
+            ));
         }
-        
+
         // check the error case if there is more than one response
         if single_feedpattern_entry_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(sql_query));
+            return Err(SqlInterfaceError::SingleFeedpatternRequestNoSingleResponse(
+                sql_query,
+            ));
         }
-        
+
         let feed_phase = &single_feedpattern_entry_array[0];
 
         Ok(feed_phase.clone())

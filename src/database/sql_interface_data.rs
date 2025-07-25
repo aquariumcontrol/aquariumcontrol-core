@@ -411,14 +411,16 @@ pub mod tests {
         // check the error case if there is no response
         if (data_frame_1_array.len() == 0) || (data_frame_2_array.len() == 0) {
             return Err(SqlInterfaceError::SingleDataFrameRequestEmptyResponse(
-                sql_query_string_1, sql_query_string_2)
-            );
+                sql_query_string_1,
+                sql_query_string_2,
+            ));
         }
         // check the error case if there is more than one response
         if (data_frame_2_array.len() > 1) || (data_frame_2_array.len() > 1) {
             return Err(SqlInterfaceError::SingleDataFrameRequestNoSingleResponse(
-                sql_query_string_1, sql_query_string_2)
-            );
+                sql_query_string_1,
+                sql_query_string_2,
+            ));
         }
         let data_frame_1 = &data_frame_1_array[0];
         let data_frame_2 = &data_frame_2_array[0];

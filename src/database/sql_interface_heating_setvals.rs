@@ -127,7 +127,7 @@ impl SqlInterfaceHeatingSetVals {
             Ok(c) => c,
             Err(_) => {
                 return Err(SqlInterfaceError::HeatingSetValsRequestFailure(
-                        sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string()
+                    sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
                 ));
             }
         };
@@ -140,7 +140,7 @@ impl SqlInterfaceHeatingSetVals {
         // return error if the query result contains more than one entry
         if sql_heating_setvals_array.len() > 1 {
             return Err(SqlInterfaceError::HeatingSetValsNoSingleResponse(
-                sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string()
+                sql_query_strings::SQL_QUERY_READ_HEATING_SETVALS.to_string(),
             ));
         }
 
@@ -179,7 +179,7 @@ impl SqlInterfaceHeatingSetVals {
             Err(e) => {
                 println!("{e:?}");
                 Err(SqlInterfaceError::InsertHeatingSetValuesFailure(
-                        sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string()
+                    sql_query_strings::SQL_QUERY_WRITE_HEATING_SETVALS.to_string(),
                 ))
             }
         }

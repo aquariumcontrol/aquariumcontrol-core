@@ -126,7 +126,9 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         if delta_time.num_seconds() >= 0 {
             Ok(delta_time.num_seconds() as u64)
         } else {
-            Err(SqlInterfaceError::NegativeTimeDeltaSeconds(delta_time.num_seconds()))
+            Err(SqlInterfaceError::NegativeTimeDeltaSeconds(
+                delta_time.num_seconds(),
+            ))
         }
     }
 
@@ -361,7 +363,8 @@ pub mod tests {
         assert_eq!(
             sql_interface_refill.get_last_refill_timestamp(),
             Err(SqlInterfaceError::SingleStringRequestEmptyResponse(
-                "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;".to_string()
+                "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;"
+                    .to_string()
             ))
         );
         println!("* checking timestamp of last refill (FAIL) succeeded.");

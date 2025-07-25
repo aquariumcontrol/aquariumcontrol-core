@@ -225,18 +225,24 @@ impl SqlInterfaceBalling {
         ) {
             Ok(c) => c,
             Err(_) => {
-                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(sql_query_string));
+                return Err(SqlInterfaceError::SingleBallingSetValRequestFailure(
+                    sql_query_string,
+                ));
             }
         };
 
         // check the error case if there is no response
         if single_balling_setval_array.is_empty() {
-            return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(sql_query_string));
+            return Err(SqlInterfaceError::SingleBallingSetValEmptyResponse(
+                sql_query_string,
+            ));
         }
 
         // check the error case if there is more than one response
         if single_balling_setval_array.len() > 1 {
-            return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(sql_query_string));
+            return Err(SqlInterfaceError::SingleBallingSetValNoSingleResponse(
+                sql_query_string,
+            ));
         }
         Ok(single_balling_setval_array.remove(0))
     }
@@ -283,7 +289,9 @@ impl SqlInterfaceBalling {
                     target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
                     "could not insert Balling pump configuration into database ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(sql_query_string_for_error))
+                Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(
+                    sql_query_string_for_error,
+                ))
             }
         }
     }

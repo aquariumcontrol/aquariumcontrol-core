@@ -292,7 +292,7 @@ impl fmt::Display for InternalCommand {
 }
 
 /// Enum is used for representing the relay states.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ActuatorState {
     /// The actuator is on.
     On,

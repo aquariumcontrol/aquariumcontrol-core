@@ -730,9 +730,9 @@ pub mod tests {
     fn prepare_ventilation_tests() -> (ConfigData, Ventilation) {
         // prepare struct Ventilation for subsequent tests
         let config_for_ventilation: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         let config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         (config, Ventilation::new(config_for_ventilation.ventilation))
     }
 
@@ -1459,7 +1459,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_stops_starts_ventilation() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         // replacement value is used for initialization of mutex
         config.sensor_manager.replacement_value_water_temperature = 30.0;
