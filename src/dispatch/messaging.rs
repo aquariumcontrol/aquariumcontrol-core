@@ -254,9 +254,10 @@ impl Messaging {
     /// - If it fails to open the message queue with the specified `mq_filename`.
     /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
     pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
+        let mq_file_name_clone_for_error = config.mq_filename.clone();
         #[cfg(target_os = "linux")]
         let mq = PosixMq::open(&config.mq_filename)
-            .map_err(|e| MessagingError::PosixMessageQueueOpeningError {mq_name: config.mq_filename, source: e})?;
+            .map_err(|e| MessagingError::PosixMessageQueueOpeningError {mq_name: mq_file_name_clone_for_error, source: e})?;
 
         // identify maximum length of message queue
         let mq_max_msg_len = match mq.attributes() {
@@ -266,13 +267,13 @@ impl Messaging {
             }
         };
 
-        Messaging {
+        Ok(Messaging {
             config,
 
             #[cfg(target_os = "linux")]
             mq,
             mq_max_msg_len,
-        }
+        })
     }
 
     #[cfg(target_os = "linux")]

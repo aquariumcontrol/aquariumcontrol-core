@@ -987,7 +987,8 @@ fn run() -> Result<(), StartupError> {
     ) = mpsc::channel();
 
     #[cfg(target_os = "linux")]
-    let mut messaging = Messaging::new(config.messaging);
+    let mut messaging = Messaging::new(config.messaging)
+        .map_err(|e| StartupError::Messaging { source: e })?;
 
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();

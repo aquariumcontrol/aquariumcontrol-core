@@ -2,6 +2,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
+use crate::dispatch::messaging_error::MessagingError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,6 +37,13 @@ pub enum StartupError {
     TcpConnection {
         #[source]
         source: TcpCommunicationError,
+    },
+
+    /// Could not open POSIX message queue.
+    #[error("Could not establish connection to messaging system.")]
+    Messaging {
+        #[source]
+        source: MessagingError,
     },
 
     /// Configuration error: GPIO handler not initialized.

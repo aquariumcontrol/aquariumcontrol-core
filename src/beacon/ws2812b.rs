@@ -64,16 +64,14 @@ pub struct Ws2812B {
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 impl Ws2812B {
     pub fn new(config: Ws2812BConfig) -> Ws2812B {
-        cfg_if::cfg_if! {
-            let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
-                Ok(adapter) => adapter,
-                Err(e) => panic!(
-                    "{}: Could not instantiate adapter for RGB LED {e:?}",
-                    module_path!()
-                ),
-            };
-            Ws2812B { adapter, config }
-        }
+        let adapter = match WS28xxSpiAdapter::new(&config.device_name) {
+            Ok(adapter) => adapter,
+            Err(e) => panic!(
+                "{}: Could not instantiate adapter for RGB LED {e:?}",
+                module_path!()
+            ),
+        };
+        Ws2812B { adapter, config }
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
