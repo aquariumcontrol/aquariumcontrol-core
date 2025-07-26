@@ -10,7 +10,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
-pub enum MessagingErrors {
+pub enum MessagingError {
     /// Error occurred when trying to open POSIX message queue.
     #[error("Error occurred when trying to open POSIX message queue using message queue name {mq_name}.")]
     PosixMessageQueueOpeningError {
