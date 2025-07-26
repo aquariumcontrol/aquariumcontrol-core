@@ -23,7 +23,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Communicating with the SQL database includes preparing SQL queries, executing the queries and processing of query results.
 mod database;
 
-#[cfg(target_os = "linux")]
 /// Communication with the user via client application or webserver using POSIX message queues.
 mod dispatch;
 

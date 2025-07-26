@@ -16,18 +16,23 @@ cfg_if::cfg_if! {
 
         use log::{error, warn};
         use posixmq::PosixMq;
-        use std::sync::mpsc::{Receiver, Sender};
         use std::time::Duration;
         use spin_sleep::SpinSleeper;
     }
 }
 
 use serde_derive::Deserialize;
+#[cfg(target_os = "linux")]
 use std::fmt;
+#[cfg(target_os = "linux")]
 use std::io::ErrorKind;
-
+#[cfg(target_os = "linux")]
+use std::sync::mpsc::{Receiver, Sender};
+#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
+#[cfg(target_os = "linux")]
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+#[cfg(target_os = "linux")]
 use crate::InternalCommand;
 
 
@@ -56,9 +61,9 @@ pub mod messaging_domains {
     pub const WATCHDOG: i32 = 13;
 }
 
-#[cfg(target_os = "linux")]
 #[derive(PartialEq)]
 /// Identifies the addressee of the message
+#[cfg(target_os = "linux")]
 pub enum MessagingDomain {
     /// refill control
     Refill,
@@ -85,6 +90,7 @@ pub enum MessagingDomain {
     Unknown,
 }
 
+#[cfg(target_os = "linux")]
 impl fmt::Display for MessagingDomain {
     /// Formats the `MessagingDomain` enum into its human-readable string representation.
     ///
@@ -128,6 +134,7 @@ pub mod messaging_commands {
 }
 
 /// Stores the content of the message and provides functionality for testing.
+#[allow(unused)]
 pub struct Message {
     domain: i32,
     command: i32,
@@ -135,6 +142,7 @@ pub struct Message {
     command_param2: i32,
 }
 
+#[allow(unused)]
 impl Message {
     /// Creates a new `Message` instance with all its fields initialized to zero.
     ///
@@ -144,6 +152,7 @@ impl Message {
     /// # Returns
     /// A new `Message` struct with `domain`, `command`, `command_param1`,
     /// and `command_param2` all set to `0`.    
+
     pub fn new() -> Message {
         Message {
             domain: 0,
@@ -190,13 +199,16 @@ impl Message {
 #[derive(Deserialize)]
 pub struct MessagingConfig {
     /// filename used for generating the message queue identifier
+    #[allow(unused)]
     mq_filename: String,
 
     /// timeout for receiving messages in milliseconds
     /// after each timeout, the application checks if a shutdown has been requested
+    #[allow(unused)]
     timeout_millis: u64,
 }
 
+#[cfg(target_os = "linux")]
 pub struct MessagingChannels {
     pub tx_to_signal_handler: Sender<bool>,
     pub rx_from_signal_handler: Receiver<InternalCommand>,
@@ -223,15 +235,17 @@ pub struct MessagingChannels {
 ///     messaging --> monitors[Monitors]
 ///     messaging --> watchdog[Watchdog]
 /// ```
+#[cfg(target_os = "linux")]
 pub struct Messaging {
     config: MessagingConfig,
 
     // Message queue
-    #[cfg(target_os = "linux")]
+
     mq: PosixMq,
     mq_max_msg_len: usize,
 }
 
+#[cfg(target_os = "linux")]
 impl Messaging {
     /// Opens and initializes the POSIX message queue for inter-process communication.
     ///
@@ -253,30 +267,35 @@ impl Messaging {
     /// This function will panic in the following scenarios:
     /// - If it fails to open the message queue with the specified `mq_filename`.
     /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
+
     pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
+    
         let mq_file_name_clone_for_error = config.mq_filename.clone();
-        #[cfg(target_os = "linux")]
+    
         let mq = PosixMq::open(&config.mq_filename)
             .map_err(|e| MessagingError::PosixMessageQueueOpeningError {mq_name: mq_file_name_clone_for_error, source: e})?;
 
         // identify maximum length of message queue
+    
         let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
                 return Err(MessagingError::PosixMessageQueueAttributesError { source: e});
             }
         };
+        #[cfg(not(target_os = "linux"))]
+        let mq_max_msg_len = 0;
 
         Ok(Messaging {
             config,
 
-            #[cfg(target_os = "linux")]
+        
             mq,
             mq_max_msg_len,
         })
     }
 
-    #[cfg(target_os = "linux")]
+
     /// Continuously monitors the POSIX message queue for incoming commands and forwards them to the relevant modules.
     ///
     /// This function serves as the central message dispatching unit for the application on Linux systems.
@@ -494,6 +513,7 @@ impl Messaging {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 pub mod tests {
     use posixmq::PosixMq;
     use spin_sleep::SpinSleeper;
@@ -507,7 +527,6 @@ pub mod tests {
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 
-    #[cfg(target_os = "linux")]
     // Opens a POSIX message queue for test purposes.
     //
     // This helper function is exclusively used in test environments on Linux.
@@ -535,7 +554,6 @@ pub mod tests {
         }
     }
 
-    #[cfg(target_os = "linux")]
     // Creates a new thread to run the `Messaging` module's `execute` loop.
     //
     // This helper function is used in test environments on Linux to simulate the `Messaging`
@@ -591,7 +609,6 @@ pub mod tests {
             .unwrap()
     }
 
-    #[cfg(target_os = "linux")]
     // Creates a new thread to simulate external stimuli and commands for the `Messaging` module.
     //
     // This helper function is used in test environments on Linux. It simulates an
@@ -651,7 +668,6 @@ pub mod tests {
             .unwrap()
     }
 
-    #[cfg(target_os = "linux")]
     // Asserts that a specific sequence of "Stop" then "Start" commands was received.
     //
     // This helper function is used in test environments on Linux to validate the order
@@ -679,7 +695,6 @@ pub mod tests {
         assert_eq!(InternalCommand::Stop, commands_received.pop().unwrap());
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for ventilation control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_ventilation() {
@@ -753,7 +768,6 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for heating control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_heating() {
@@ -827,7 +841,6 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for refill control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_refill() {
@@ -919,7 +932,6 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for feed control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_feed() {
@@ -1011,7 +1023,6 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for Balling control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_balling() {
@@ -1087,7 +1098,6 @@ pub mod tests {
             .expect("Test object thread did not finish.");
     }
 
-    #[cfg(target_os = "linux")]
     // Test case checks if messages for Watchdog control are triggering the corresponding channel communication
     #[test]
     pub fn test_messaging_watchdog() {

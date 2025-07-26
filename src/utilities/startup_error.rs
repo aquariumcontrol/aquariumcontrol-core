@@ -2,6 +2,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
+#[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
 use thiserror::Error;
 
@@ -28,7 +29,7 @@ pub enum StartupError {
     /// A database error occurred.
     #[error("A database error occurred.")]
     Database {
-        #[from]
+        #[source]
         source: SqlInterfaceError,
     },
 
@@ -40,6 +41,7 @@ pub enum StartupError {
     },
 
     /// Could not open POSIX message queue.
+    #[cfg(target_os = "linux")]
     #[error("Could not establish connection to messaging system.")]
     Messaging {
         #[source]

@@ -12,6 +12,7 @@ use thiserror::Error;
 /// Enum codifies the errors which the program may encounter in communication with the Linux messaging system.
 pub enum MessagingError {
     /// Error occurred when trying to open POSIX message queue.
+    #[cfg(target_os = "linux")]
     #[error("Error occurred when trying to open POSIX message queue using message queue name {mq_name}.")]
     PosixMessageQueueOpeningError {
         mq_name: String,
@@ -20,6 +21,7 @@ pub enum MessagingError {
     },
     
     /// Error occurred when trying to access POSIX message queue attributes.
+    #[cfg(target_os = "linux")]
     #[error("Error occurred when trying to access POSIX message queue attributes.")]
     PosixMessageQueueAttributesError {
         #[source]
