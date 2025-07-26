@@ -26,6 +26,7 @@ use serde_derive::Deserialize;
 use std::fmt;
 use std::io::ErrorKind;
 
+use crate::dispatch::messaging_error::MessagingError;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
 
@@ -868,7 +869,7 @@ pub mod tests {
                 // assert the number of commands sent/received are identical
                 assert_eq!(3, commands_received.len());
 
-                // assert the content of last message sent from test environment:
+                // assert the content of the last message sent from test environment:
                 assert_eq!(InternalCommand::Start, commands_received.pop().unwrap());
 
                 // assert the content of the second message sent from the test environment:
