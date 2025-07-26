@@ -15,7 +15,6 @@ use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
 use crate::utilities::channel_content::InternalCommand;
 
-const LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR: &str = "controllino_actuate_simulator";
 
 /// Contains trait implementation for system testing purposes.
 pub struct ActuateSimulator {
@@ -73,7 +72,7 @@ impl RelayActuationTrait for ActuateSimulator {
             }
             _ => {
                 warn!(
-                    target: LOG_TARGET_CONTROLLINO_ACTUATE_SIMULATOR,
+                    target: module_path!(),
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );

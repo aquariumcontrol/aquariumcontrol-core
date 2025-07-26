@@ -21,8 +21,6 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillConfig;
 use crate::water::refill_errors::RefillErrorStates;
 
-const LOG_TARGET_WATER_INJECTION: &str = "water_injection";
-
 pub struct WaterInjectionChannels<'a> {
     /// Collects the communication channels required by the `WaterInjection` module.
     ///
@@ -159,7 +157,7 @@ impl WaterInjectionTrait for WaterInjection {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_WATER_INJECTION,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching on refill pump failed ({e:?})"
                         );
                     }
@@ -167,7 +165,7 @@ impl WaterInjectionTrait for WaterInjection {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_WATER_INJECTION,
+                    target: module_path!(),
                     "channel communication to relay manager when switching on refill pump failed ({e:?})"
                 );
             }
@@ -244,7 +242,7 @@ impl WaterInjectionTrait for WaterInjection {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_WATER_INJECTION,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching off refill pump failed ({e:?})"
                         );
                     }
@@ -252,7 +250,7 @@ impl WaterInjectionTrait for WaterInjection {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_WATER_INJECTION,
+                    target: module_path!(),
                     "channel communication to relay manager when switching off refill pump failed ({e:?})"
                 );
             }
@@ -268,7 +266,7 @@ impl WaterInjectionTrait for WaterInjection {
             Ok(_) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_WATER_INJECTION,
+                    target: module_path!(),
                     "writing refill operation data to SQL database failed ({e:?})"
                 );
                 refill_errors.error_sql_update_failed = true;

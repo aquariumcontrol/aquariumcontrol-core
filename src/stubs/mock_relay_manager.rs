@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_RELAY_MANAGER: &str = "mock_relay_manager";
-
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender};
     use std::time::Duration;
@@ -43,7 +41,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Error when receiving actuation command from test object: {e:?}",
-                        LOG_TARGET_MOCK_RELAY_MANAGER
+                        module_path!()
                     );
                 }
             }
@@ -54,7 +52,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Error when sending back actuation command confirmation to test object: {e:?}",
-                        LOG_TARGET_MOCK_RELAY_MANAGER
+                        module_path!()
                     );
                 }
             }

@@ -48,8 +48,6 @@ use crate::watchmen::monitors::MonitorsConfig;
 use crate::watchmen::watchdog::WatchdogConfig;
 use crate::water::refill::RefillConfig;
 
-const LOG_TARGET_CONFIG: &str = "config";
-
 /// Top level struct to hold the configuration data read from .toml file.
 /// It does not contain any implementation.
 #[derive(Deserialize)]
@@ -147,7 +145,7 @@ pub struct ConfigData {
 /// - If the file content is not valid TOML or cannot be deserialized into `ConfigData`.
 pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
     #[cfg(not(test))]
-    info!(target: LOG_TARGET_CONFIG, "reading configuration from {}", filename);
+    info!(target: module_path!(), "reading configuration from {}", filename);
 
     // Read the contents of the file and return error in case of failure.
     let contents = fs::read_to_string(filename.clone())
@@ -211,7 +209,7 @@ pub fn read_config_file(filename: String) -> Result<ConfigData, ConfigError> {
             // Write `msg` to `stderr`.
             panic!(
                 "{}: unable to load data from `{filename}` ({e})",
-                LOG_TARGET_CONFIG
+                module_path!()
             );
         }
     };
@@ -246,7 +244,7 @@ pub fn read_config_file_with_test_database(
     if test_db_number == 0 || test_db_number > 99 {
         panic!(
             "{}: number for test database ({}) is out of bounds.",
-            LOG_TARGET_CONFIG, test_db_number
+            module_path!(), test_db_number
         )
     }
 

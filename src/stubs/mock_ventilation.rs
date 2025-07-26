@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_VENTILATION: &str = "mock_ventilation";
-
     use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
@@ -33,7 +31,7 @@ pub mod tests {
         loop {
             if mock_common_receive_from_signal_handler(
                 rx_ventilation_from_signal_handler,
-                LOG_TARGET_MOCK_VENTILATION,
+                module_path!(),
             ) {
                 break;
             }
@@ -61,7 +59,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK_VENTILATION, test_signal
+                                                module_path!(), test_signal
                                             );
                                         }
                                     }
@@ -69,7 +67,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK_VENTILATION, test_command
+                                        module_path!(), test_command
                                     );
                                 }
                             }
@@ -80,7 +78,7 @@ pub mod tests {
                                 TryRecvError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
-                                        LOG_TARGET_MOCK_VENTILATION
+                                        module_path!()
                                     );
                                 }
                             }

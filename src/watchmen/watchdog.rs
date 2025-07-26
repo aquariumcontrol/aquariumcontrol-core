@@ -16,8 +16,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
-const LOG_TARGET_WATCHDOG: &str = "watchdog";
-
 /// Holds the configuration data for the watchdog communication.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -72,31 +70,31 @@ impl Watchdog {
         if config.heartbeat_duration_millis == 0 {
             panic!(
                 "{}: duration between two watchdog heartbeats is zero - please assign a value > 0",
-                LOG_TARGET_WATCHDOG
+                module_path!()
             );
         }
         if config.watchdog_filename.is_empty() {
             panic!(
                 "{}: watchdog filename is empty - please assign a value",
-                LOG_TARGET_WATCHDOG
+                module_path!()
             );
         }
         if config.watchdog_heartbeat.is_empty() {
             panic!(
                 "{}: watchdog heartbeat message is empty - please assign a value",
-                LOG_TARGET_WATCHDOG
+                module_path!()
             );
         }
         if config.watchdog_deactivation.is_empty() {
             panic!(
                 "{}: watchdog heartbeat message is empty - please assign a value",
-                LOG_TARGET_WATCHDOG
+                module_path!()
             );
         }
         if config.watchdog_deactivation == config.watchdog_heartbeat {
             panic!(
                 "{}: watchdog heartbeat and deactivation message are identical - please assign different values",
-                LOG_TARGET_WATCHDOG
+                module_path!()
             );
         }
 
@@ -185,7 +183,7 @@ impl Watchdog {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_WATCHDOG,
+                    target: module_path!(),
                     "Error in trying to send quit confirmation back to signal handler: {e:?}"
                 );
             }

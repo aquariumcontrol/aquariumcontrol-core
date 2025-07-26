@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_TCP: &str = "mock_tcp";
-
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
@@ -49,7 +47,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: unknown signal request to mock TCP",
-                                        LOG_TARGET_MOCK_TCP
+                                        module_path!()
                                     );
                                 }
                             }
@@ -60,7 +58,7 @@ pub mod tests {
                         _ => {
                             panic!(
                                 "{}: invalid command to mock TCP handler",
-                                LOG_TARGET_MOCK_TCP
+                                module_path!()
                             );
                         }
                     };
@@ -83,7 +81,7 @@ pub mod tests {
                         Err(e) => {
                             panic!(
                                 "{}: sending mock data from TCP to test object failed ({e:?})",
-                                LOG_TARGET_MOCK_TCP
+                                module_path!()
                             );
                         }
                     }
@@ -94,7 +92,7 @@ pub mod tests {
                         TryRecvError::Disconnected => {
                             panic!(
                                 "{}: receiving command from test object/test environment failed ({e:?})",
-                                LOG_TARGET_MOCK_TCP
+                                module_path!()
                             );
                         }
                     }
@@ -111,18 +109,18 @@ pub mod tests {
                                 MockSignal::TankLevelSwitchPositionStabilized(_) => {
                                     panic!(
                                         "{}: received invalid test command {}",
-                                        LOG_TARGET_MOCK_TCP, d
+                                        module_path!(), d
                                     );
                                 }
                                 _ => {
                                     panic!(
                                         "{}: Invalid test command {} received.",
-                                        LOG_TARGET_MOCK_TCP, d
+                                        module_path!(), d
                                     );
                                 }
                             },
                             _ => {
-                                panic!("{}: received invalid command {}", LOG_TARGET_MOCK_TCP, c);
+                                panic!("{}: received invalid command {}", module_path!(), c);
                             }
                         };
                     }
@@ -132,7 +130,7 @@ pub mod tests {
                             TryRecvError::Disconnected => {
                                 panic!(
                                     "{}: receiving command from test environment failed ({e:?})",
-                                    LOG_TARGET_MOCK_TCP
+                                    module_path!()
                                 );
                             }
                         }

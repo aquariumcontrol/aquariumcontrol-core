@@ -492,13 +492,20 @@ impl SqlInterfaceFeed {
                 Ok(c) => {
                     feedschedule_entries.push(c);
                 }
-                Err(_) => { /* do nothing */ }
+                Err(e) => { 
+                    // abort processing and return the error
+                    return Err(SqlInterfaceError::FeedScheduleEntryTimeStampProcessingFailure {
+                        number_entries: feedschedule_entries.len(),
+                        source: Box::new(e)
+                    });
+                }
             }
         }
 
         if feedschedule_entries.is_empty() {
-            Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure)
-        } else {
+            Ok(None)
+        }
+        else {
             Ok(Some(feedschedule_entries))
         }
     }

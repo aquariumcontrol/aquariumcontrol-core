@@ -20,8 +20,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
 
-const LOG_TARGET_SIGNAL_HANDLER: &str = "signal_handler";
-
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
 ///
 /// The signal handler uses this helper function to communicate termination
@@ -48,17 +46,17 @@ fn send_command(
             match tx_to_thread.send(command) {
                 Ok(_) => {
                     #[cfg(feature = "debug_signal_handler")]
-                    debug!(target: LOG_TARGET_SIGNAL_HANDLER, "QUIT sent to {}", thread_name);
+                    debug!(target: module_path!(), "QUIT sent to {}", thread_name);
 
                     match rx_from_thread_opt {
                         Some(rx_from_thread) => match rx_from_thread.recv() {
                             Ok(_) => {
                                 #[cfg(feature = "debug_signal_handler")]
-                                debug!(target: LOG_TARGET_SIGNAL_HANDLER, "received acknowledgement from {}", thread_name);
+                                debug!(target: module_path!(), "received acknowledgement from {}", thread_name);
                             }
                             Err(e) => {
                                 error!(
-                                    target: LOG_TARGET_SIGNAL_HANDLER,
+                                    target: module_path!(),
                                     "could not receive answer from {} thread {e:?}",
                                     thread_name
                                 );
@@ -69,7 +67,7 @@ fn send_command(
                 }
                 Err(e) => {
                     error!(
-                        target: LOG_TARGET_SIGNAL_HANDLER,
+                        target: module_path!(),
                         "channel communication to {} thread failed when sending Quit command ({e:?})",
                         thread_name
                     );
@@ -79,7 +77,7 @@ fn send_command(
         None => {
             /* do nothing */
             #[cfg(feature = "debug_signal_handler")]
-            debug!(target: LOG_TARGET_SIGNAL_HANDLER, "not sending QUIT to i2c_interface");
+            debug!(target: module_path!(), "not sending QUIT to i2c_interface");
         }
     }
 }
@@ -250,7 +248,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     {
         panic!(
             "{}: inconsistent channel parameters for TcpCommunication provided",
-            LOG_TARGET_SIGNAL_HANDLER
+            module_path!()
         );
     }
 
@@ -263,7 +261,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             Ok(_) => {
                 #[cfg(feature = "debug_signal_handler")]
                 info!(
-                    target: LOG_TARGET_SIGNAL_HANDLER,
+                    target: module_path!(),
                     "registered hook for signal {}",
                     signal
                 );
@@ -271,7 +269,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
             Err(e) => {
                 panic!(
                     "{}: Could not hook SIGTERM routine: {e:?}",
-                    LOG_TARGET_SIGNAL_HANDLER
+                    module_path!()
                 );
             }
         }
@@ -282,7 +280,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     }
     #[cfg(not(test))]
     info!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "received termination signal from operating system",
     );
 
@@ -306,7 +304,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 1 of termination concluded",
     );
 
@@ -344,7 +342,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 2 of termination concluded",
     );
 
@@ -376,7 +374,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 3 of termination concluded",
     );
 
@@ -417,7 +415,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 4 of termination concluded",
     );
 
@@ -430,7 +428,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 5 of termination concluded",
     );
 
@@ -467,7 +465,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 6 of termination concluded",
     );
 
@@ -498,7 +496,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
     );
     #[cfg(feature = "debug_signal_handler")]
     debug!(
-        target: LOG_TARGET_SIGNAL_HANDLER,
+        target: module_path!(),
         "phase 7 of termination concluded",
     );
 

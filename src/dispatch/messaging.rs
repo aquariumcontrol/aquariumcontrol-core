@@ -29,7 +29,6 @@ use std::io::ErrorKind;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::InternalCommand;
 
-const LOG_TARGET_MESSAGING: &str = "messaging";
 
 #[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
@@ -253,26 +252,16 @@ impl Messaging {
     /// This function will panic in the following scenarios:
     /// - If it fails to open the message queue with the specified `mq_filename`.
     /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
-    pub fn new(config: MessagingConfig) -> Messaging {
+    pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
         #[cfg(target_os = "linux")]
-        let mq = match PosixMq::open(&config.mq_filename) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: failure to open message queue using {} ({e:?})",
-                    LOG_TARGET_MESSAGING, &config.mq_filename
-                );
-            }
-        };
+        let mq = PosixMq::open(&config.mq_filename)
+            .map_err(|e| MessagingError::PosixMessageQueueOpeningError {mq_name: config.mq_filename, source: e})?;
 
         // identify maximum length of message queue
         let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
-                panic!(
-                    "{}: Failed to open attributes ({e:?})",
-                    LOG_TARGET_MESSAGING,
-                );
+                return Err(MessagingError::PosixMessageQueueAttributesError { source: e});
             }
         };
 
@@ -346,7 +335,7 @@ impl Messaging {
 
                         #[cfg(not(test))]
                         info!(
-                            target: LOG_TARGET_MESSAGING,
+                            target: module_path!(),
                             "received message: domain={}, cmd={}, param1={}, param2={}",
                             msg.domain,
                             msg.command,
@@ -365,7 +354,7 @@ impl Messaging {
                             messaging_domains::WATCHDOG => MessagingDomain::Watchdog,
                             _ => {
                                 warn!(
-                                    target: LOG_TARGET_MESSAGING,
+                                    target: module_path!(),
                                     "ignoring message for unknown domain {}",
                                     msg.domain
                                 );
@@ -383,7 +372,7 @@ impl Messaging {
                             }
                             _ => {
                                 warn!(
-                                    target: LOG_TARGET_MESSAGING,
+                                    target: module_path!(),
                                     "Messaging: ignoring message with unknown command {}",
                                     msg.command
                                 );
@@ -410,7 +399,7 @@ impl Messaging {
 
                             #[cfg(not(test))]
                             info!(
-                                target: LOG_TARGET_MESSAGING,
+                                target: module_path!(),
                                 "forwarding message to domain {}",
                                 domain
                             );
@@ -419,7 +408,7 @@ impl Messaging {
                                 Ok(_) => { /* do nothing */ }
                                 Err(e) => {
                                     error!(
-                                        target: LOG_TARGET_MESSAGING,
+                                        target: module_path!(),
                                         "channel communication to domain {} failed ({e:?})",
                                         domain
                                     );
@@ -428,7 +417,7 @@ impl Messaging {
                         }
                     } else {
                         error!(
-                            target: LOG_TARGET_MESSAGING,
+                            target: module_path!(),
                             "message has incorrect length ({}). ignoring it.",
                             msgbuf.len()
                         );
@@ -439,7 +428,7 @@ impl Messaging {
                         ErrorKind::TimedOut => { /* do nothing */ }
                         _ => {
                             error!(
-                                target: LOG_TARGET_MESSAGING,
+                                target: module_path!(),
                                 "timeout occurred when reading POSIX message ({e:?})"
                             );
                         }
@@ -451,7 +440,7 @@ impl Messaging {
             if quit_command_received {
                 #[cfg(feature = "debug_messaging")]
                 debug!(
-                    target: LOG_TARGET_MESSAGING,
+                    target: module_path!(),
                     "received QUIT command from signal handler"
                 );
 
@@ -459,7 +448,7 @@ impl Messaging {
                     Ok(_) => { /* do nothing */ }
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_MESSAGING,
+                            target: module_path!(),
                             "Error occurred when responding to Quit command from signal handler ({e:?})"
                         );
                     }
@@ -482,7 +471,7 @@ impl Messaging {
                     _ => {
                         if !lock_error_invalid_command {
                             error!(
-                                target: LOG_TARGET_MESSAGING,
+                                target: module_path!(),
                                 "Received invalid command {} when waiting for Terminate command",
                                 command
                             );
@@ -493,7 +482,7 @@ impl Messaging {
                 Err(e) => {
                     panic!(
                         "{}: Receiving Terminate command from signal handler failed ({e:?}).",
-                        LOG_TARGET_MESSAGING,
+                        module_path!(),
                     );
                 }
             }
@@ -511,7 +500,6 @@ pub mod tests {
 
     use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
-        LOG_TARGET_MESSAGING,
     };
     use crate::stubs::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
@@ -539,7 +527,7 @@ pub mod tests {
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    LOG_TARGET_MESSAGING, filename
+                    module_path!(), filename
                 );
             }
         }

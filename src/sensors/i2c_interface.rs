@@ -143,8 +143,6 @@ pub struct I2cInterface {
 }
 
 impl I2cInterface {
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    const LOG_TARGET_I2C_INTERFACE: &'static str = "i2c_interface";
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Creates a new **`I2cInterface`** instance, establishing and configuring the I2C bus for sensor communication.
@@ -170,7 +168,7 @@ impl I2cInterface {
                     Err(e) => {
                         panic!(
                             "{}: initialization of I2C interface failed ({e:?})",
-                            Self::LOG_TARGET_I2C_INTERFACE
+                            Self::module_path!()
                         );
                     }
                 };
@@ -179,7 +177,7 @@ impl I2cInterface {
                     Err(_) => {
                         panic!(
                             "{}: could not set timeout for transactions.",
-                            Self::LOG_TARGET_I2C_INTERFACE
+                            Self::module_path!()
                         );
                     }
                 }
@@ -222,7 +220,7 @@ impl I2cInterface {
             Ok(_) => { /* do nothing */ }
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    target: Self::module_path!(),
                     "could not set {} as address of device ({e:?})",
                     i2c_request.i2c_address
                 );
@@ -234,7 +232,7 @@ impl I2cInterface {
             Ok(realized_write_len) => {
                 if realized_write_len != i2c_request.send_buf.len() {
                     error!(
-                        target: Self::LOG_TARGET_I2C_INTERFACE,
+                        target: Self::module_path!(),
                         "could not write complete request to I2C (target: {}, realized: {})",
                         i2c_request.send_buf.len(),
                         realized_write_len
@@ -244,7 +242,7 @@ impl I2cInterface {
             }
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    target: Self::module_path!(),
                     "writing to I2C device failed {e:?}",
                 );
                 return Err(I2cError::WriteFailure);
@@ -260,7 +258,7 @@ impl I2cInterface {
             Ok(received_message_length) => {
                 if received_message_length != i2c_request.expected_response_length {
                     error!(
-                        target: Self::LOG_TARGET_I2C_INTERFACE,
+                        target: Self::module_path!(),
                         "did not receive full response from I2C bus participant. Expected {}, got {}",
                         i2c_request.expected_response_length,
                         received_message_length
@@ -272,7 +270,7 @@ impl I2cInterface {
             }
             Err(_) => {
                 error!(
-                    target: Self::LOG_TARGET_I2C_INTERFACE,
+                    target: Self::module_path!(),
                     "did not receive response from I2C bus participant",
                 );
                 Err(I2cError::InsufficientRead)
@@ -328,7 +326,7 @@ impl I2cInterface {
                         }
                         Err(e) => {
                             if !lock_error_send_atlas_scientific {
-                                error!(target: Self::LOG_TARGET_I2C_INTERFACE, "Error occurred when sending to atlas_scientific {:?}", e);
+                                error!(target: Self::module_path!(), "Error occurred when sending to atlas_scientific {:?}", e);
                                 lock_error_send_atlas_scientific = true;
                             }
                         }
@@ -339,7 +337,7 @@ impl I2cInterface {
                         TryRecvError::Empty => { /* empty buffer - no action required */ }
                         TryRecvError::Disconnected => {
                             if !lock_error_receive_atlas_scientific {
-                                error!(target: Self::LOG_TARGET_I2C_INTERFACE, "Error occurred when trying to receive from atlas_scientific {:?}", e);
+                                error!(target: Self::module_path!(), "Error occurred when trying to receive from atlas_scientific {:?}", e);
                                 lock_error_receive_atlas_scientific = true;
                             }
                         }

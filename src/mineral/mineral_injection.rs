@@ -94,7 +94,6 @@ impl MineralInjectionTrait for MineralInjection {
         mineral_pump: AquariumDevice,
         dosing_duration_millis: u32,
     ) -> (bool, u32) {
-        const LOG_TARGET_MINERAL_INJECTION: &str = "mineral_injection";
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis: u32 = 1;
         let sleep_duration = Duration::from_millis(sleep_interval_millis as u64);
@@ -107,7 +106,7 @@ impl MineralInjectionTrait for MineralInjection {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_MINERAL_INJECTION,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching on dosing pump failed ({e:?})"
                         );
                     }
@@ -115,7 +114,7 @@ impl MineralInjectionTrait for MineralInjection {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_MINERAL_INJECTION,
+                    target: module_path!(),
                     "channel communication to relay manager when switching on dosing pump failed ({e:?})"
                 );
             }
@@ -142,7 +141,7 @@ impl MineralInjectionTrait for MineralInjection {
                 Ok(val) => val,
                 Err(e) => {
                     error!(
-                        target: LOG_TARGET_MINERAL_INJECTION, "Error converting u128 to u32: {}", e
+                        target: module_path!(), "Error converting u128 to u32: {}", e
                     );
                     break; // abort dosing - dosing counter keeps current value
                 }
@@ -161,7 +160,7 @@ impl MineralInjectionTrait for MineralInjection {
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_MINERAL_INJECTION,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching off dosing pump failed ({e:?})"
                         );
                     }
@@ -169,7 +168,7 @@ impl MineralInjectionTrait for MineralInjection {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_MINERAL_INJECTION,
+                    target: module_path!(),
                     "channel communication to relay manager when switching off dosing pump failed ({e:?})"
                 );
             }

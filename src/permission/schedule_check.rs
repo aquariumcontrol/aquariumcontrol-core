@@ -137,7 +137,7 @@ pub struct ScheduleCheck {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
     lock_warn_inapplicable_command_heating: bool,
 
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from database
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from the database
     lock_error_database_read: bool,
     
     /// recording when the last database ping happened
@@ -148,7 +148,6 @@ pub struct ScheduleCheck {
 }
 
 impl ScheduleCheck {
-    const LOG_TARGET_SCHEDULE_CHECK: &'static str = "schedule_check";
 
     /// Creates a new `ScheduleCheck` instance.
     ///
@@ -240,7 +239,7 @@ impl ScheduleCheck {
                 _ => {
                     if !*lock_warn_inapplicable_command {
                         warn!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            target: module_path!(),
                             "ignoring not applicable command ({c:?}) from signal handler"
                         );
                         *lock_warn_inapplicable_command = true;
@@ -257,7 +256,7 @@ impl ScheduleCheck {
                     TryRecvError::Disconnected => {
                         if !*lock_error_channel_receive {
                             error!(
-                                target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                                target: module_path!(),
                                 "receiving command from signal handler failed ({e:?})"
                             );
                             *lock_error_channel_receive = true;
@@ -274,7 +273,7 @@ impl ScheduleCheck {
             Err(e) => {
                 if !*lock_error_channel_send {
                     error!(
-                        target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                        target: module_path!(),
                         "sending back message failed ({e:?})"
                     );
                     *lock_error_channel_send = true;
@@ -310,7 +309,6 @@ impl ScheduleCheck {
                     if !self.lock_error_database_read {
                         for e in errors {
                             error!(
-                                target: Self::LOG_TARGET_SCHEDULE_CHECK,
                                 "Reading schedule failed ({e:?})"
                             );
                         }
@@ -329,7 +327,7 @@ impl ScheduleCheck {
             if quit_command_received {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(
-                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    target: module_path!(),
                     "received QUIT command"
                 );
 
@@ -348,7 +346,7 @@ impl ScheduleCheck {
                 Err(e) => {
                     if !self.lock_error_find_ventilation_schedule {
                         error!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            target: module_path!(),
                             "could not find schedule for ventilation ({e:?})"
                         );
                         self.lock_error_find_ventilation_schedule = true;
@@ -379,7 +377,7 @@ impl ScheduleCheck {
                 Err(e) => {
                     if !self.lock_error_find_heating_schedule {
                         error!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            target: module_path!(),
                             "could not find schedule for heating ({e:?})"
                         );
                         self.lock_error_find_heating_schedule = true;
@@ -410,7 +408,7 @@ impl ScheduleCheck {
                 Err(e) => {
                     if !self.lock_error_find_refill_schedule {
                         error!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            target: module_path!(),
                             "could not find schedule for refill ({e:?})"
                         );
                         self.lock_error_find_refill_schedule = true;
@@ -441,7 +439,7 @@ impl ScheduleCheck {
                 Err(e) => {
                     if !self.lock_error_find_balling_schedule {
                         error!(
-                            target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                            target: module_path!(),
                             "could not find schedule for balling ({e:?})"
                         );
                         self.lock_error_find_balling_schedule = true;
@@ -485,13 +483,13 @@ impl ScheduleCheck {
             Ok(()) => {
                 #[cfg(feature = "debug_schedule_check")]
                 debug!(
-                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    target: module_path!(),
                     "sent back confirmation to schedule checker"
                 );
             }
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }

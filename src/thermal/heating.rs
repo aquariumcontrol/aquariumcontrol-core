@@ -27,8 +27,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use crate::database::sql_interface_error::SqlInterfaceError;
 
-const LOG_TARGET_HEATING: &str = "heating";
-
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
 const CYCLE_TIME_HEATING_DIVISOR: u64 = 1000 / CYCLE_TIME_HEATING_MILLIS;
@@ -133,7 +131,7 @@ fn switch_on_heater(
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_HEATING,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching on heater failed ({e:?})"
                         );
                     }
@@ -141,7 +139,7 @@ fn switch_on_heater(
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "channel communication to relay manager when switching on heater failed ({e:?})"
                 );
             }
@@ -186,7 +184,7 @@ fn switch_off_heater(
                     Ok(_) => {}
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_HEATING,
+                            target: module_path!(),
                             "receiving answer from relay manager when switching off the heater failed ({e:?})"
                         );
                     }
@@ -194,7 +192,7 @@ fn switch_off_heater(
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "channel communication to relay manager when switching off the heater failed ({e:?})"
                 );
             }
@@ -380,7 +378,7 @@ impl Heating {
             .get_duration_until_midnight()
             .unwrap_or_else(|e| {
                 error!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "could not get duration until midnight ({e:?})"
                 );
                 24 * 3600 // default value for time in seconds until midnight
@@ -452,7 +450,7 @@ impl Heating {
                 #[cfg(test)]
                 println!(
                     "{}: could not get existing heating stats entry for today from database - creating new one for today",
-                    LOG_TARGET_HEATING
+                    module_path!()
                 );
 
                 Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn))
@@ -475,7 +473,7 @@ impl Heating {
             if stop_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "received Stop command. inhibiting heating."
                 );
 
@@ -484,7 +482,7 @@ impl Heating {
             if start_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "received Start command. restarting heating."
                 );
 
@@ -546,7 +544,7 @@ impl Heating {
                                 Err(e) => {
                                     if !self.lock_error_channel_receive_schedule_check {
                                         error!(
-                                            target: LOG_TARGET_HEATING,
+                                            target: module_path!(),
                                             "receiving from schedule check failed ({e:?})"
                                         );
                                         self.lock_error_channel_receive_schedule_check = true;
@@ -558,7 +556,7 @@ impl Heating {
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
                             error!(
-                                target: LOG_TARGET_HEATING,
+                                target: module_path!(),
                                 "channel communication to schedule check failed ({e:?})"
                             );
                             self.lock_error_channel_send_schedule_check = true;
@@ -798,7 +796,7 @@ impl Heating {
                 if !self.lock_warn_max_mutex_access_duration {
                     self.lock_warn_max_mutex_access_duration = true;
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_HEATING,
+                    warn!(target: module_path!(),
                         "Access to mutex for heating status took too long. Allowed={}ms, Measured={}ms",
                         max_mutex_access_duration.as_millis(),
                         measured_mutex_access_duration.as_millis(),
@@ -828,7 +826,7 @@ impl Heating {
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_HEATING,
+                    warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),
                         CYCLE_TIME_HEATING_MILLIS);
@@ -880,12 +878,12 @@ impl Heating {
                 #[cfg(test)]
                 println!(
                     "{}: sent quit confirmation to signal handler.",
-                    LOG_TARGET_HEATING
+                    module_path!()
                 );
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_HEATING,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -908,7 +906,7 @@ impl Heating {
                             _ => {
                                 if !self.lock_warn_inapplicable_command {
                                     warn!(
-                                        target: LOG_TARGET_HEATING,
+                                        target: module_path!(),
                                         "ignoring not applicable command from signal handler (c)"
                                     );
                                     self.lock_warn_inapplicable_command = true;
@@ -920,7 +918,7 @@ impl Heating {
                     Err(e) => {
                         if !self.lock_error_channel_receive_termination_signal {
                             error!(
-                                target: LOG_TARGET_HEATING,
+                                target: module_path!(),
                                 "receiving termination signal from signal handler failed ({e:?})"
                             );
                             self.lock_error_channel_receive_termination_signal = true;
@@ -954,7 +952,7 @@ pub mod tests {
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::thermal::heating::{
-        Heating, HeatingChannels, HeatingMutexes, HeatingStatsDataTransferTrait, LOG_TARGET_HEATING,
+        Heating, HeatingChannels, HeatingMutexes, HeatingStatsDataTransferTrait,
     };
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
@@ -2743,7 +2741,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_HEATING
+                            module_path!()
                         );
                     }
                 }
@@ -2761,7 +2759,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending start command to test object ({e:?})",
-                            LOG_TARGET_HEATING
+                            module_path!()
                         );
                     }
                 }
@@ -2779,7 +2777,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_HEATING
+                            module_path!()
                         );
                     }
                 }

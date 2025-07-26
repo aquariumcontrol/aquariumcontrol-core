@@ -321,12 +321,8 @@ impl SqlInterface {
 
         // check the error case if there is more than one response
         if single_string_array.len() > 1 {
-            let error_message = format!(
-                "SQL database responded with multiple responses to request to query ({})",
-                sql_query_string
-            );
             Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
-                error_message,
+                sql_query_string,
             ))
         } else {
             Ok(single_string_array[0].single_string.clone())

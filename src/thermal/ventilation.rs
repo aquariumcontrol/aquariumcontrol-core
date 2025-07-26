@@ -24,8 +24,6 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_VENTILATION: &str = "ventilation";
-
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
 const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f32 / 1000.0;
@@ -104,7 +102,7 @@ fn switch_on_ventilation(
                 Ok(_) => {}
                 Err(e) => {
                     error!(
-                        target: LOG_TARGET_VENTILATION,
+                        target: module_path!(),
                         "receiving answer from relay manager when switching on ventilation failed ({e:?})"
                     );
                 }
@@ -112,7 +110,7 @@ fn switch_on_ventilation(
         }
         Err(e) => {
             error!(
-                target: LOG_TARGET_VENTILATION,
+                target: module_path!(),
                 "channel communication to relay manager when switching on ventilation ({e:?})"
             );
         }
@@ -156,7 +154,7 @@ fn switch_off_ventilation(
                 Ok(_) => {}
                 Err(e) => {
                     error!(
-                        target: LOG_TARGET_VENTILATION,
+                        target: module_path!(),
                         "receiving answer from relay manager when switching off ventilation failed ({e:?})"
                     );
                 }
@@ -164,7 +162,7 @@ fn switch_off_ventilation(
         }
         Err(e) => {
             error!(
-                target: LOG_TARGET_VENTILATION,
+                target: module_path!(),
                 "channel communication to relay manager when switching off ventilation failed ({e:?})"
             );
         }
@@ -399,7 +397,7 @@ impl Ventilation {
             if stop_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_VENTILATION,
+                    target: module_path!(),
                     "received Stop command. Inhibiting ventilation."
                 );
                 ventilation_inhibited = true;
@@ -407,7 +405,7 @@ impl Ventilation {
             if start_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_VENTILATION,
+                    target: module_path!(),
                     "received Start command. Restarting ventilation."
                 );
                 ventilation_inhibited = false;
@@ -467,7 +465,7 @@ impl Ventilation {
                             Err(e) => {
                                 if !self.lock_error_channel_receive_schedule_check {
                                     error!(
-                                        target: LOG_TARGET_VENTILATION,
+                                        target: module_path!(),
                                         "reading channel content for schedule check failed ({e:?})"
                                     );
                                     self.lock_error_channel_receive_schedule_check = true;
@@ -479,7 +477,7 @@ impl Ventilation {
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
                             error!(
-                                target: LOG_TARGET_VENTILATION,
+                                target: module_path!(),
                                 "channel communication to schedule check failed ({e:?})"
                             );
                             self.lock_error_channel_send_schedule_check = true;
@@ -594,7 +592,7 @@ impl Ventilation {
                 if !self.lock_warn_max_mutex_access_duration {
                     self.lock_warn_max_mutex_access_duration = true;
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_VENTILATION,
+                    warn!(target: module_path!(),
                         "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                         max_mutex_access_duration.as_millis(),
                         measured_mutex_access_duration.as_millis(),
@@ -619,7 +617,7 @@ impl Ventilation {
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded && !actuation_mutex_was_blocked_during_actuation {
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_VENTILATION,
+                    warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),
                         CYCLE_TIME_VENTILATION_MILLIS);
@@ -667,7 +665,7 @@ impl Ventilation {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_VENTILATION,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -692,7 +690,7 @@ impl Ventilation {
                         _ => {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
-                                    target: LOG_TARGET_VENTILATION,
+                                    target: module_path!(),
                                     "ignoring inapplicable command ({}) from signal handler.",
                                     c
                                 );
@@ -705,7 +703,7 @@ impl Ventilation {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
                         error!(
-                            target: LOG_TARGET_VENTILATION,
+                            target: module_path!(),
                             "receiving termination signal failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination_signal = true;
@@ -724,7 +722,7 @@ pub mod tests {
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::stubs::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
-    use crate::thermal::ventilation::{Ventilation, VentilationChannels, LOG_TARGET_VENTILATION};
+    use crate::thermal::ventilation::{Ventilation, VentilationChannels};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;
     use crate::utilities::config::{read_config_file, ConfigData};
@@ -1577,7 +1575,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_VENTILATION
+                            module_path!()
                         );
                     }
                 }
@@ -1595,7 +1593,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending start command to test object ({e:?})",
-                            LOG_TARGET_VENTILATION
+                            module_path!()
                         );
                     }
                 }
@@ -1613,7 +1611,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_VENTILATION
+                            module_path!()
                         );
                     }
                 }

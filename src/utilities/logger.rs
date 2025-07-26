@@ -7,8 +7,6 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-const LOG_TARGET_LOGGER: &str = "logger";
-
 /// Sets up and configures the application's logger using the `fern` crate.
 ///
 /// This function initializes a global logger that outputs messages to both
@@ -27,7 +25,7 @@ pub fn setup_logger() {
         Err(e) => {
             panic!(
                 "{}: Could not open output file for logging: {e:?}",
-                LOG_TARGET_LOGGER
+                module_path!()
             );
         }
     };

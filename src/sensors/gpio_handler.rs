@@ -18,8 +18,6 @@ cfg_if::cfg_if! {
     }
 }
 
-const LOG_TARGET_GPIO_HANDLER: &str = "gpio_handler";
-
 // create a stub version of the type to allow build on non-target platforms
 #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
 pub type Gpio = u64;
@@ -131,7 +129,7 @@ impl GpioHandler {
             if value <= 3 || value >= 28 {
                 #[cfg(not(test))]
                 error!(
-                    target: LOG_TARGET_GPIO_HANDLER,
+                    target: module_path!(),
                     "Not all GPIOs are inside permissible range. GPIO {} is not valid.",
                     value
                 );
@@ -142,7 +140,7 @@ impl GpioHandler {
             if !seen_values.insert(value) {
                 #[cfg(not(test))]
                 error!(
-                    target: LOG_TARGET_GPIO_HANDLER,
+                    target: module_path!(),
                     "Not all GPIOs are distinct - duplicate values found."
                 );
                 #[cfg(test)]
@@ -181,7 +179,7 @@ impl GpioHandler {
         if !Self::check_valid_gpio_pin_config(&config) {
             panic!(
                 "{}: GPIO pin configuration is invalid",
-                LOG_TARGET_GPIO_HANDLER,
+                module_path!(),
             );
         }
 
@@ -192,7 +190,7 @@ impl GpioHandler {
                 Err(e) => {
                     panic!(
                         "{}: could not open interface to GPIO ({e:?})",
-                        LOG_TARGET_GPIO_HANDLER,
+                        module_path!(),
                     );
                 }
             };
@@ -231,14 +229,14 @@ impl GpioHandler {
         if !config.use_simulator {
             panic!(
                 "{}: Usage of hardware not supported on this platform.",
-                LOG_TARGET_GPIO_HANDLER
+                module_path!()
             );
         }
 
         if !Self::check_valid_gpio_pin_config(&config) {
             panic!(
                 "{}: GPIO pin configuration is invalid",
-                LOG_TARGET_GPIO_HANDLER,
+                module_path!(),
             );
         }
         None

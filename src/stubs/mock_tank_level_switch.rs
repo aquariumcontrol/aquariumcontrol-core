@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_TANK_LEVEL_SWITCH: &str = "mock_tank_level_switch";
-
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
@@ -49,7 +47,7 @@ pub mod tests {
                             _ => {
                                 panic!(
                                     "{}: inapplicable signal request {}",
-                                    LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, d
+                                    module_path!(), d
                                 );
                             }
                         },
@@ -59,7 +57,7 @@ pub mod tests {
                         _ => {
                             panic!(
                                 "{}: Received invalid command.",
-                                LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                module_path!()
                             );
                         }
                     };
@@ -68,7 +66,7 @@ pub mod tests {
                         Err(e) => {
                             panic!(
                                 "{}: Error in trying to send response back data logger: {e:?}",
-                                LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                module_path!()
                             );
                         }
                     }
@@ -79,7 +77,7 @@ pub mod tests {
                         TryRecvError::Disconnected => {
                             panic!(
                                 "{}: Error in trying to receive command from test object or test environment: {e:?}",
-                                LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                module_path!()
                             );
                         }
                     }
@@ -107,7 +105,7 @@ pub mod tests {
                                             _ => {
                                                 panic!(
                                                     "{}: Invalid signal {} requested from DataLogger",
-                                                    LOG_TARGET_MOCK_TANK_LEVEL_SWITCH,
+                                                    module_path!(),
                                                     data_logger_signal_request
                                                 );
                                             }
@@ -121,7 +119,7 @@ pub mod tests {
                                                 Err(e) => {
                                                     panic!(
                                                         "{}: Could not send signal request to DataLogger ({e:?})",
-                                                        LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                                        module_path!()
                                                     );
                                                 }
                                             };
@@ -129,7 +127,7 @@ pub mod tests {
                                         None => {
                                             panic!(
                                                 "{}: invoked without Sender for channel communication to data logger",
-                                                LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                                module_path!()
                                             );
                                         }
                                     };
@@ -137,7 +135,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: Received invalid command {} from DataLogger",
-                                        LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, data_logger_request
+                                        module_path!(), data_logger_request
                                     );
                                 }
                             }
@@ -148,7 +146,7 @@ pub mod tests {
                                 TryRecvError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from DataLogger: {e:?}",
-                                        LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                        module_path!()
                                     );
                                 }
                             }
@@ -173,7 +171,7 @@ pub mod tests {
                                     _ => {
                                         panic!(
                                             "{}: Invalid test command {} received.",
-                                            LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, d
+                                            module_path!(), d
                                         );
                                     }
                                 }
@@ -181,7 +179,7 @@ pub mod tests {
                             _ => {
                                 panic!(
                                     "{}: received invalid command {}",
-                                    LOG_TARGET_MOCK_TANK_LEVEL_SWITCH, c
+                                    module_path!(), c
                                 );
                             }
                         },
@@ -191,7 +189,7 @@ pub mod tests {
                                 TryRecvError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
-                                        LOG_TARGET_MOCK_TANK_LEVEL_SWITCH
+                                        module_path!()
                                     );
                                 }
                             }

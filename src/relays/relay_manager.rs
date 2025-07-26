@@ -22,8 +22,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_RELAY_MANAGER: &str = "relay_manager";
-
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
 pub trait RelayActuationTrait {
@@ -220,7 +218,7 @@ impl RelayManager {
                     if attempts > 0 {
                         #[cfg(not(test))]
                         warn!(
-                            target: LOG_TARGET_RELAY_MANAGER,
+                            target: module_path!(),
                             "{}: actuation succeeded after {} retries.",
                             actuation_name,
                             attempts
@@ -241,7 +239,7 @@ impl RelayManager {
                     if attempts == max_attempts - 1 {
                         #[cfg(not(test))]
                         error!(
-                            target: LOG_TARGET_RELAY_MANAGER,
+                            target: module_path!(),
                             "{}: actuation failed (attempt {}/{}) with error: {:?}",
                             actuation_name,
                             attempts + 1,
@@ -292,7 +290,7 @@ impl RelayManager {
             if quit_command_received {
                 #[cfg(feature = "debug_relay_manager")]
                 debug!(
-                    target: LOG_TARGET_RELAY_MANAGER,
+                    target: module_path!(),
                     "received QUIT command"
                 );
 
@@ -322,7 +320,7 @@ impl RelayManager {
                         Err(e) => {
                             if !self.lock_error_channel_send_refill {
                                 error!(
-                                    target: LOG_TARGET_RELAY_MANAGER,
+                                    target: module_path!(),
                                     "responding to refill control ({e:?})"
                                 );
                                 self.lock_error_channel_send_refill = true;
@@ -340,7 +338,7 @@ impl RelayManager {
                             if !self.lock_error_channel_receive_refill {
                                 error!(
                                     "{}: error when trying to receive command from refill control ({e:?})",
-                                    LOG_TARGET_RELAY_MANAGER
+                                    module_path!()
                                 );
                                 self.lock_error_channel_receive_refill = true;
                             }
@@ -374,7 +372,7 @@ impl RelayManager {
                         Err(e) => {
                             if !self.lock_error_channel_send_heating {
                                 error!(
-                                    target: LOG_TARGET_RELAY_MANAGER,
+                                    target: module_path!(),
                                     "responding to heating control: {e:?}"
                                 );
                                 self.lock_error_channel_send_heating = true;
@@ -392,7 +390,7 @@ impl RelayManager {
                             if !self.lock_error_channel_receive_heating {
                                 error!(
                                     "{}: Error in trying to receive command from heating control {e:?}",
-                                    LOG_TARGET_RELAY_MANAGER
+                                    module_path!()
                                 );
                                 self.lock_error_channel_receive_heating = true;
                             }
@@ -426,7 +424,7 @@ impl RelayManager {
                         Err(e) => {
                             if !self.lock_error_channel_send_ventilation {
                                 error!(
-                                    target: LOG_TARGET_RELAY_MANAGER,
+                                    target: module_path!(),
                                     "responding to ventilation control ({e:?})"
                                 );
                                 self.lock_error_channel_send_ventilation = true;
@@ -444,7 +442,7 @@ impl RelayManager {
                             if !self.lock_error_channel_receive_ventilation {
                                 error!(
                                     "{}: Error in trying to receive command from ventilation control {e:?}",
-                                    LOG_TARGET_RELAY_MANAGER
+                                    module_path!()
                                 );
                                 self.lock_error_channel_receive_ventilation = true;
                             }
@@ -478,7 +476,7 @@ impl RelayManager {
                         Err(e) => {
                             if !self.lock_error_channel_send_balling {
                                 error!(
-                                    target: LOG_TARGET_RELAY_MANAGER,
+                                    target: module_path!(),
                                     "responding to Balling dosing control ({e:?})"
                                 );
                                 self.lock_error_channel_send_balling = true;
@@ -496,7 +494,7 @@ impl RelayManager {
                             if !self.lock_error_channel_receive_balling {
                                 error!(
                                     "{}: Error in trying to receive command from Balling dosing control ({e:?})", 
-                                    LOG_TARGET_RELAY_MANAGER
+                                    module_path!()
                                 );
                                 self.lock_error_channel_receive_balling = true;
                             }
@@ -524,7 +522,7 @@ impl RelayManager {
                         Err(e) => {
                             if !self.lock_error_channel_send_feed {
                                 error!(
-                                    target: LOG_TARGET_RELAY_MANAGER,
+                                    target: module_path!(),
                                     "responding to feed control ({e:?})"
                                 );
                                 self.lock_error_channel_send_feed = true;
@@ -542,7 +540,7 @@ impl RelayManager {
                             if !self.lock_error_channel_receive_feed {
                                 error!(
                                     "{}: Error in trying to receive command from feed control ({e:?})",
-                                    LOG_TARGET_RELAY_MANAGER
+                                    module_path!()
                                 );
                                 self.lock_error_channel_receive_feed = true;
                             }
@@ -566,7 +564,7 @@ impl RelayManager {
 
         #[cfg(feature = "debug_relay_manager")]
         debug!(
-            target: LOG_TARGET_RELAY_MANAGER,
+            target: module_path!(),
             "exited loop, sending back confirmation to signal handler"
         );
 
@@ -579,12 +577,12 @@ impl RelayManager {
             Ok(()) => {
                 #[cfg(feature = "debug_relay_manager")]
                 debug!(
-                    target: LOG_TARGET_RELAY_MANAGER,
+                    target: module_path!(),
                     "sent back confirmation to signal handler"
                 );
             }
             Err(e) => {
-                error!(target: LOG_TARGET_RELAY_MANAGER,
+                error!(target: module_path!(),
                     "sending confirmation to signal handler ({e:?})"
                 );
             }

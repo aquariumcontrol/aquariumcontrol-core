@@ -29,8 +29,6 @@ use crate::simulator::tcp_communication::TcpCommunication;
 use crate::watchmen::watchdog::Watchdog;
 use crate::water::{refill::Refill, water_injection::WaterInjection};
 
-const LOG_TARGET_PROC_EXT_REQ: &str = "proc_ext_req";
-
 /// This trait defines a common interface for processing external requests, such as
 /// commands received from a signal handler or a messaging system. It's designed
 /// to be implemented by various control modules in the system.
@@ -73,7 +71,7 @@ pub trait ProcessExternalRequestTrait {
                 InternalCommand::Quit => true,
                 _ => {
                     warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
+                        target: module_path!(),
                         "ProcessExternalRequestTrait: ignoring inapplicable command from signal handler."
                     );
                     false
@@ -85,7 +83,7 @@ pub trait ProcessExternalRequestTrait {
                     TryRecvError::Disconnected => {
                         #[cfg(all(not(test), not(feature = "debug_signal_handler")))]
                         error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
+                            target: module_path!(),
                             "receiving command from signal handler failed ({e:?})"
                         );
                     }
@@ -102,7 +100,7 @@ pub trait ProcessExternalRequestTrait {
                         InternalCommand::Stop => (false, true),
                         _ => {
                             warn!(
-                                target: LOG_TARGET_PROC_EXT_REQ,
+                                target: module_path!(),
                                 "ProcessExternalRequestTrait: ignoring inapplicable command from messaging."
                             );
                             (false, false)
@@ -114,7 +112,7 @@ pub trait ProcessExternalRequestTrait {
                             TryRecvError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "(standard) receiving command from messaging failed ({e:?})"
                                 );
                             }
@@ -163,7 +161,7 @@ impl ProcessExternalRequestTrait for Refill {
                 InternalCommand::Quit => true,
                 _ => {
                     warn!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
+                        target: module_path!(),
                         "ignoring inapplicable command from signal handler."
                     );
                     false
@@ -175,7 +173,7 @@ impl ProcessExternalRequestTrait for Refill {
                     TryRecvError::Disconnected => {
                         #[cfg(not(test))]
                         error!(
-                            target: LOG_TARGET_PROC_EXT_REQ,
+                            target: module_path!(),
                             "receiving command from signal handler failed ({e:?})"
                         );
                     }
@@ -193,7 +191,7 @@ impl ProcessExternalRequestTrait for Refill {
                         InternalCommand::ResetAllErrors => {
                             #[cfg(not(test))]
                             info!(
-                                target: LOG_TARGET_PROC_EXT_REQ,
+                                target: module_path!(),
                                 "Received reset command for errors of refill control."
                             );
                             self.refill_errors.reset_all_errors();
@@ -201,7 +199,7 @@ impl ProcessExternalRequestTrait for Refill {
                         }
                         _ => {
                             warn!(
-                                target: LOG_TARGET_PROC_EXT_REQ,
+                                target: module_path!(),
                                 "ignoring inapplicable command from messaging."
                             );
                             (false, false)
@@ -213,7 +211,7 @@ impl ProcessExternalRequestTrait for Refill {
                             TryRecvError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "(refill) receiving command from messaging failed ({e:?})"
                                 );
                             }
@@ -258,7 +256,7 @@ fn process_external_request_without_messaging(
             InternalCommand::Quit => true,
             _ => {
                 warn!(
-                    target: LOG_TARGET_PROC_EXT_REQ,
+                    target: module_path!(),
                     "ignoring inapplicable command from signal handler."
                 );
                 false
@@ -269,7 +267,7 @@ fn process_external_request_without_messaging(
                 TryRecvError::Empty => { /* empty buffer - no action required */ }
                 TryRecvError::Disconnected => {
                     error!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
+                        target: module_path!(),
                         "({}) receiving command from signal handler failed ({e:?})",
                         sender
                     );
@@ -579,7 +577,7 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
             InternalCommand::Quit => true,
             _ => {
                 warn!(
-                    target: LOG_TARGET_PROC_EXT_REQ,
+                    target: module_path!(),
                     "ignoring inapplicable command {} from signal handler.",
                     c
                 );
@@ -592,7 +590,7 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
                 TryRecvError::Disconnected => {
                     #[cfg(not(test))]
                     error!(
-                        target: LOG_TARGET_PROC_EXT_REQ,
+                        target: module_path!(),
                         "receiving command from signal handler failed ({e:?})"
                     );
                 }
@@ -641,7 +639,7 @@ impl ProcessExternalRequestTrait for Feed {
                             InternalCommand::ResetAllErrors => {
                                 #[cfg(not(test))]
                                 info!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "Received reset command for errors of feed control."
                                 );
                                 self.execution_blocked = false;
@@ -650,7 +648,7 @@ impl ProcessExternalRequestTrait for Feed {
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
                                 warn!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "ignoring inapplicable command {} from messaging.",
                                     c
                                 );
@@ -663,7 +661,7 @@ impl ProcessExternalRequestTrait for Feed {
                                 TryRecvError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(
-                                        target: LOG_TARGET_PROC_EXT_REQ,
+                                        target: module_path!(),
                                         "(feed) - receiving command from messaging failed ({e:?})"
                                     );
                                 }
@@ -725,7 +723,7 @@ impl ProcessExternalRequestTrait for Balling {
                             InternalCommand::Execute(c) => (false, false, true, c),
                             _ => {
                                 warn!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "ignoring inapplicable command {} from messaging.",
                                     c
                                 );
@@ -738,7 +736,7 @@ impl ProcessExternalRequestTrait for Balling {
                                 TryRecvError::Disconnected => {
                                     #[cfg(not(test))]
                                     error!(
-                                        target: LOG_TARGET_PROC_EXT_REQ,
+                                        target: module_path!(),
                                         "(balling) receiving command from messaging failed ({e:?})"
                                     );
                                 }
@@ -795,7 +793,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                         InternalCommand::Stop => (false, true),
                         _ => {
                             warn!(
-                                target: LOG_TARGET_PROC_EXT_REQ,
+                                target: module_path!(),
                                 "ignoring inapplicable command {} from messaging.",
                                 c
                             );
@@ -808,7 +806,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                             TryRecvError::Disconnected => {
                                 #[cfg(not(test))]
                                 error!(
-                                    target: LOG_TARGET_PROC_EXT_REQ,
+                                    target: module_path!(),
                                     "(watchdog) receiving command from messaging failed ({e:?})"
                                 );
                             }

@@ -7,15 +7,12 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use chrono::NaiveDateTime;
-use log::error;
 use mysql::*;
 use std::fmt;
 
 use crate::database::{
     sql_interface_error::SqlInterfaceError, sql_interface_feed::SqlFeedScheduleEntry,
 };
-
-const LOG_TARGET_FEED_SCHEDULE_ENTRY: &str = "feed_schedule_entry";
 
 /// Holds the data of a feed schedule entry derived from data read from the database.
 #[derive(Debug, PartialEq, Clone)]
@@ -46,19 +43,12 @@ impl FeedScheduleEntry {
     pub fn new(
         sql_feed_schedule_entry: &SqlFeedScheduleEntry,
     ) -> Result<FeedScheduleEntry, SqlInterfaceError> {
-        let timestamp = match NaiveDateTime::parse_from_str(
+        let timestamp = NaiveDateTime::parse_from_str(
             sql_feed_schedule_entry.timestamp.as_str(),
             "%Y-%m-%d %H:%M:%S",
-        ) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_FEED_SCHEDULE_ENTRY,
-                    "could not get feed schedule entry from database ({e:?})"
-                );
-                return Err(SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure);
-            }
-        };
+            ).map_err(|e|
+                SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure { source: e }
+            )?;
 
         Ok(FeedScheduleEntry {
             timestamp,

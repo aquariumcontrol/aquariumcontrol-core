@@ -30,8 +30,6 @@ use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
-const LOG_TARGET_FEED: &str = "feed";
-
 /// Holds the configuration data for the feed control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -222,7 +220,7 @@ impl Feed {
             Ok(pattern) => pattern,
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "Error occurred when trying to read feed pattern {} from database: {:?}",
                     profile_id, e
                 );
@@ -243,7 +241,7 @@ impl Feed {
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
             for error in errors {
-                error!(target: LOG_TARGET_FEED, "Food injection failed: {}", error);
+                error!(target: module_path!(), "Food injection failed: {}", error);
             }
         }
 
@@ -252,7 +250,7 @@ impl Feed {
             Ok(c) => c,
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "could not get current timestamp from database ({:?})",
                     e
                 );
@@ -277,7 +275,7 @@ impl Feed {
             Ok(_) => Ok(()),
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "Could not insert feed event into database ({:?})",
                     e
                 );
@@ -381,7 +379,7 @@ impl Feed {
     ) -> bool {
         #[cfg(all(feature = "debug_feed", not(test)))]
         debug!(
-            target: LOG_TARGET_FEED,
+            target: module_path!(),
             "executing feed profile id #{}",
             profile_id
         );
@@ -413,7 +411,7 @@ impl Feed {
             #[cfg(not(test))]
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "Updating feed schedule entry failed ({e:?})"
                 );
                 self.execution_blocked = true;
@@ -468,7 +466,7 @@ impl Feed {
             {
                 #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "Starting feed control cycle"
                 );
 
@@ -480,7 +478,7 @@ impl Feed {
                         Some(mut feed_schedule_entries) => {
                             #[cfg(all(feature = "debug_feed", not(test)))]
                             debug!(
-                                target: LOG_TARGET_FEED,
+                                target: module_path!(),
                                 "Discovered following feed schedule entries in the past: {}",
                                 Self::feedschedule_entries_to_string(feed_schedule_entries.clone())
                             );
@@ -492,7 +490,7 @@ impl Feed {
                                 Some(feed_schedule_entry) => {
                                     #[cfg(all(feature = "debug_feed", not(test)))]
                                     debug!(
-                                        target: LOG_TARGET_FEED,
+                                        target: module_path!(),
                                         "Selected following feed schedule entry for execution: {}",
                                         feed_schedule_entry
                                     );
@@ -529,7 +527,7 @@ impl Feed {
                         #[cfg(not(test))]
                         if !self.lock_error_get_feedschedule_entry {
                             error!(
-                                target: LOG_TARGET_FEED,
+                                target: module_path!(),
                                 "could not retrieve feed schedule information from database ({e:?})"
                             );
                             self.lock_error_get_feedschedule_entry = true;
@@ -561,13 +559,13 @@ impl Feed {
             if stop_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "received Stop command. Inhibiting feed."
                 );
 
                 #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "received Stop command."
                 );
 
@@ -576,13 +574,13 @@ impl Feed {
             if start_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "received Start command. Restarting feed."
                 );
 
                 #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "received Start command"
                 );
 
@@ -594,7 +592,7 @@ impl Feed {
             {
                 #[cfg(all(feature = "debug_feed", not(test)))]
                 debug!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "received execution command"
                 );
 
@@ -644,7 +642,7 @@ impl Feed {
         // Answer to the thread which sent the request for termination, so that shutdown can proceed further.
         #[cfg(all(feature = "debug_signal_handler", not(test)))]
         debug!(
-            target: LOG_TARGET_FEED,
+            target: module_path!(),
             "Sending Quit confirmation to signal handler."
         );
 
@@ -652,7 +650,7 @@ impl Feed {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_FEED,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -674,7 +672,7 @@ impl Feed {
                         _ => {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
-                                    target: LOG_TARGET_FEED,
+                                    target: module_path!(),
                                     "ignoring inapplicable command from signal handler ({})",
                                     c
                                 );
@@ -687,7 +685,7 @@ impl Feed {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
                         error!(
-                            target: LOG_TARGET_FEED,
+                            target: module_path!(),
                             "receiving termination signal failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination_signal = true;
@@ -712,7 +710,7 @@ pub mod tests {
 
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
-    use crate::food::feed::{Feed, FeedChannels, LOG_TARGET_FEED};
+    use crate::food::feed::{Feed, FeedChannels};
     use crate::food::feed_pattern::Feedpattern;
     use crate::food::feed_schedule_entry::FeedScheduleEntry;
     use crate::food::food_injection::FoodInjectionTrait;
@@ -1062,7 +1060,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_FEED
+                            module_path!()
                         );
                     }
                 }
@@ -1083,7 +1081,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending start command to test object ({e:?})",
-                            LOG_TARGET_FEED
+                            module_path!()
                         );
                     }
                 }
@@ -1105,7 +1103,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending execution command to test object ({e:?})",
-                            LOG_TARGET_FEED
+                            module_path!()
                         );
                     }
                 }

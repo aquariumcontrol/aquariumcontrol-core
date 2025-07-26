@@ -158,8 +158,6 @@ pub struct TcpCommunication {
 }
 
 impl TcpCommunication {
-    const LOG_TARGET_TCP_COMMUNICATION: &'static str = "tcp_communication";
-
     /// Creates a new `TcpCommunication` instance and establishes a TCP connection to a simulator.
     ///
     /// This constructor attempts to connect to a TCP server (acting as a simulator)
@@ -190,7 +188,7 @@ impl TcpCommunication {
             Ok(c) => c,
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                    target: module_path!(),
                     "connection to {} via port {} failed ({e:?})",
                     tcp_connection.ip_address, tcp_connection.port
                 );
@@ -264,7 +262,7 @@ impl TcpCommunication {
                 if amount_of_bytes_written != request.len() {
                     warn!(
                         "{}: Writing to TCP stream failed - (amount of bytes written ({}) differs from expected ({}))",
-                        Self::LOG_TARGET_TCP_COMMUNICATION,
+                        module_path!(),
                         amount_of_bytes_written,
                         request.len(),
                     );
@@ -273,7 +271,7 @@ impl TcpCommunication {
             Err(e) => {
                 panic!(
                     "{}: Writing to TCP stream failed ({e:?})",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    module_path!(),
                 );
             }
         };
@@ -298,7 +296,7 @@ impl TcpCommunication {
         let relay_id_string = relay_id.to_string();
         let request: String = if state {
             debug!(
-                target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                target: module_path!(),
                 "switching on relay #{}",
                 relay_id
             );
@@ -310,7 +308,7 @@ impl TcpCommunication {
                 + "\n"
         } else {
             debug!(
-                target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                target: module_path!(),
                 "switching off relay #{}",
                 relay_id
             );
@@ -330,7 +328,7 @@ impl TcpCommunication {
             Err(e) => {
                 panic!(
                     "{}: Reading from TCP stream failed ({e:?})",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    module_path!(),
                 );
             }
         };
@@ -369,7 +367,7 @@ impl TcpCommunication {
             _ => {
                 panic!(
                     "{}: Internal error - illegal signal request {} to simulator",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    module_path!(),
                     aquarium_signal
                 );
             }
@@ -385,7 +383,7 @@ impl TcpCommunication {
             _ => {
                 panic!(
                     "{}: Internal error - illegal signal request {} to simulator",
-                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                    module_path!(),
                     aquarium_signal
                 );
             }
@@ -402,7 +400,7 @@ impl TcpCommunication {
             Err(e) => {
                 panic!(
                     "{}: Reading from TCP stream failed ({e:?})",
-                    Self::LOG_TARGET_TCP_COMMUNICATION
+                    module_path!()
                 );
             }
         };
@@ -416,21 +414,21 @@ impl TcpCommunication {
                         Err(e) => {
                             panic!(
                                 "{}: Failed to convert response ({last_word}) to f32: ({e:?})",
-                                Self::LOG_TARGET_TCP_COMMUNICATION
+                                module_path!()
                             );
                         }
                     }
                 } else {
                     panic!(
                         "{}: Last word of response is empty.",
-                        Self::LOG_TARGET_TCP_COMMUNICATION
+                        module_path!()
                     );
                 }
             }
             None => {
                 panic!(
                     "{}: Response does not contain any words.",
-                    Self::LOG_TARGET_TCP_COMMUNICATION
+                    module_path!()
                 );
             }
         }
@@ -464,7 +462,7 @@ impl TcpCommunication {
                             Err(e) => {
                                 panic!(
                                     "{}: sending response value via channel failed ({e:?})",
-                                    Self::LOG_TARGET_TCP_COMMUNICATION,
+                                    module_path!(),
                                 );
                             }
                         }
@@ -478,7 +476,7 @@ impl TcpCommunication {
                     TryRecvError::Disconnected => {
                         panic!(
                             "{}: Error in trying to receive command from data logger: {e:?}",
-                            Self::LOG_TARGET_TCP_COMMUNICATION
+                            module_path!()
                         );
                     }
                 }
@@ -588,7 +586,7 @@ impl TcpCommunication {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: Self::LOG_TARGET_TCP_COMMUNICATION,
+                    target: module_path!(),
                     "sending confirmation back to signal handler failed ({e:?})"
                 );
             }

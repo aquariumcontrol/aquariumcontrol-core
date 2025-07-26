@@ -13,10 +13,6 @@ pub mod tests {
 
     #[cfg(target_os = "linux")]
     use crate::utilities::channel_content::InternalCommand;
-
-    #[cfg(target_os = "linux")]
-    const LOG_TARGET_MOCK_MESSAGE_RECEIVER: &str = "mock_message_receiver";
-
     #[cfg(target_os = "linux")]
     pub fn mock_message_command_receiver(
         rx_message_command: Receiver<InternalCommand>,
@@ -27,18 +23,18 @@ pub mod tests {
             match rx_message_command.recv() {
                 Ok(command) => match command {
                     InternalCommand::Quit => {
-                        // println!("{}: received quit command", LOG_TARGET_MOCK_MESSAGE_RECEIVER);
+                        // println!("{}: received quit command", module_path!());
                         break;
                     }
                     _ => {
-                        // println!("{}: received command {}", LOG_TARGET_MOCK_MESSAGE_RECEIVER, command);
+                        // println!("{}: received command {}", module_path!(), command);
                         commands_received.push(command);
                     }
                 },
                 Err(e) => {
                     panic!(
                         "{}: error occurred when receiving message from message thread via channel ({e:?}).",
-                        LOG_TARGET_MOCK_MESSAGE_RECEIVER
+                        module_path!()
                     );
                 }
             }

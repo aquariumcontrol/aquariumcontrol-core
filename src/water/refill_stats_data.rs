@@ -1,7 +1,5 @@
 use std::fmt;
 
-const LOG_TARGET_REFILL_STATS_DATA: &str = "RefillStatsData";
-
 /// Contains the data retrieved from the SQL database.
 /// It is also used to communicate data to be updated in the SQL database.
 pub struct RefillStatsData {
@@ -50,7 +48,7 @@ impl fmt::Display for RefillStatsData {
             " {}: Duration since last refill is {} seconds.\n \
             Refill: volume of last 24h is {} L.\n Refill: Count of last 24h is {}.\n \
             Refill: volume of last hour is {} L.\n Refill: Count of last hour is {}.",
-            LOG_TARGET_REFILL_STATS_DATA,
+            module_path!(),
             self.duration_since_last_refill,
             self.refill_volume_last_24h,
             self.refill_count_last_24h,

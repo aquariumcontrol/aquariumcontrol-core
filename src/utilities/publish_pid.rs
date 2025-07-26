@@ -30,8 +30,6 @@ pub struct PublishPid {
 }
 
 impl PublishPid {
-    const LOG_TARGET_PUBLISH_PID: &'static str = "publish_pid";
-
     /// Creates a new `PublishPid` instance and publishes the current process ID (PID) to a file.
     ///
     /// This constructor performs a critical step of publishing the application's PID to a
@@ -71,14 +69,14 @@ impl PublishPid {
                 Err(e) => {
                     #[cfg(not(test))]
                     info!(
-                        target: Self::LOG_TARGET_PUBLISH_PID,
+                        target: module_path!(),
                         "PID file ({}) contains invalid content: {e:?}",
                         config.pid_filename
                     );
 
                     panic!(
                         "{}: PID file ({}) contains invalid content: {e:?}",
-                        Self::LOG_TARGET_PUBLISH_PID,
+                        module_path!(),
                         config.pid_filename
                     );
                 }
@@ -86,14 +84,14 @@ impl PublishPid {
             if process_id_read > 0 {
                 #[cfg(not(test))]
                 info!(
-                    target: Self::LOG_TARGET_PUBLISH_PID,
+                    target: module_path!(),
                     "PID file ({}) already contains published PID.",
                     config.pid_filename
                 );
 
                 panic!(
                     "{}: PID file ({}) already contains published PID.",
-                    Self::LOG_TARGET_PUBLISH_PID,
+                    module_path!(),
                     config.pid_filename
                 );
             }

@@ -38,8 +38,6 @@ pub struct TankLevelSwitchConfig {
     tank_level_switch_position_low_stabilization_count: u32,
 }
 
-const LOG_TARGET_TANK_LEVEL_SWITCH: &str = "tank_level_switch";
-
 /// application is monitoring if execution duration can maintain this limit
 /// sleep time is adjusted accordingly to run at fixed execution time
 const CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS: u64 = 100;
@@ -225,7 +223,7 @@ impl TankLevelSwitch {
         if !config.use_simulator && gpio_lib_handle_opt.is_none() {
             panic!(
                 "{}: application shall use real HW, but GPIO lib interface not provided.",
-                LOG_TARGET_TANK_LEVEL_SWITCH
+                module_path!()
             );
         }
 
@@ -237,7 +235,7 @@ impl TankLevelSwitch {
             Err(e) => {
                 panic!(
                     "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
-                    LOG_TARGET_TANK_LEVEL_SWITCH,
+                    module_path!(),
                     gpio_tank_level
                 );
             }
@@ -281,13 +279,13 @@ impl TankLevelSwitch {
             let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
             let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
             self.tank_level_switch_position = Self::get_response_from_simulator(
-                LOG_TARGET_TANK_LEVEL_SWITCH.to_string(),
+                module_path!().to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchPosition),
             ) > 0.0;
             self.tank_level_switch_invalid = Self::get_response_from_simulator(
-                LOG_TARGET_TANK_LEVEL_SWITCH.to_string(),
+                module_path!().to_string(),
                 tx_to_tcp,
                 rx_from_tcp,
                 InternalCommand::RequestSignal(AquariumSignal::TankLevelSwitchInvalid),
@@ -304,7 +302,7 @@ impl TankLevelSwitch {
                     None => {
                         if !self.lock_error_input_pin_none {
                             error!(
-                                target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                target: module_path!(),
                                 "Input pin not provided"
                             );
                             self.lock_error_input_pin_none = true;
@@ -407,7 +405,7 @@ impl TankLevelSwitch {
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
-                LOG_TARGET_TANK_LEVEL_SWITCH
+                module_path!()
             );
         }
 
@@ -454,7 +452,7 @@ impl TankLevelSwitch {
                 if !self.lock_warn_max_mutex_access_duration {
                     self.lock_warn_max_mutex_access_duration = true;
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                    warn!(target: module_path!(),
                         "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                         max_mutex_access_duration.as_millis(),
                         measured_mutex_access_duration.as_millis(),
@@ -480,7 +478,7 @@ impl TankLevelSwitch {
                     && !lock_warn_cycle_time_exceeded
                 {
                     #[cfg(not(test))]
-                    warn!(target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                    warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {} (delta duration={})",
                         execution_duration.as_millis(),
                         CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS,
@@ -502,7 +500,7 @@ impl TankLevelSwitch {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -523,7 +521,7 @@ impl TankLevelSwitch {
                     _ => {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
-                                target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                                target: module_path!(),
                                 "ignoring inapplicable command from signal handler ({})",
                                 c
                             );
@@ -535,7 +533,7 @@ impl TankLevelSwitch {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination {
                         error!(
-                            target: LOG_TARGET_TANK_LEVEL_SWITCH,
+                            target: module_path!(),
                             "receiving termination signal from signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination = true;

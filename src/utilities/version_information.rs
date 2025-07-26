@@ -38,8 +38,6 @@ pub struct VersionInformation {
 }
 
 impl VersionInformation {
-    const LOG_TARGET_VERSION_INFORMATION: &'static str = "version_information";
-
     /// Creates a new `VersionInformation` instance, populating it with
     /// the application's compiled-in version numbers and an SHA-256 hash
     /// of its executable file.
@@ -63,7 +61,7 @@ impl VersionInformation {
             Ok(exe_path) => {
                 #[cfg(not(test))]
                 info!(
-                    target: Self::LOG_TARGET_VERSION_INFORMATION,
+                    target: module_path!(),
                     "path of this executable is: {}", exe_path.display()
                 );
 
@@ -71,8 +69,8 @@ impl VersionInformation {
             }
             Err(e) => {
                 panic!(
-                    "{}: failed to get current exe path: {e:?}",
-                    Self::LOG_TARGET_VERSION_INFORMATION,
+                    "{}: failed to get current executable path: {e:?}",
+                    module_path!(),
                 );
             }
         };

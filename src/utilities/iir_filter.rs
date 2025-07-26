@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::warn;
 use serde_derive::Deserialize;
 
-const LOG_TARGET_IIR_FILTER: &str = "iir_filter";
-
 trait FilterDefault {
     fn filter_default() -> Self;
 }
@@ -34,7 +32,7 @@ impl FilterDefault for f32 {
     fn filter_default() -> Self {
         panic!(
             "{}: initial value was required for filter",
-            LOG_TARGET_IIR_FILTER
+            module_path!()
         )
     }
 }
@@ -86,7 +84,7 @@ impl IIRFilter {
         if time_step == 0.0 {
             warn!(
                 "{}: filter initialized with invalid time step value ({}) - using fallback default of 1.0.",
-                LOG_TARGET_IIR_FILTER, time_step
+                module_path!(), time_step
             );
             time_step = 1.0;
         }

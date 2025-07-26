@@ -22,8 +22,6 @@ cfg_if::cfg_if! {
     }
 }
 
-const LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO: &str = "relay_manager_actuate_gpio";
-
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 /// Contains configuration for actuation of relays via GPIO
 pub struct ActuateGpioConfig {
@@ -156,7 +154,7 @@ pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> Output
         Err(e) => {
             panic!(
                 "{}: could not get pin {} from GPIO interface for {} ({e:?})",
-                LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO, gpio_number, device_name
+                module_path!(), gpio_number, device_name
             );
         }
     }
@@ -339,7 +337,7 @@ impl RelayActuationTrait for ActuateGpio {
             }
             _ => {
                 warn!(
-                    target: LOG_TARGET_RELAY_MANAGER_ACTUATE_GPIO,
+                    target: module_path!(),
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );

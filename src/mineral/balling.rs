@@ -24,8 +24,6 @@ use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
-const LOG_TARGET_BALLING: &str = "balling";
-
 /// Holds the configuration data for the balling dosing control.
 /// The configuration is loaded from the .toml configuration file.
 /// This struct does not contain any implementation.
@@ -178,7 +176,7 @@ impl Balling {
         if config.schedule_check_interval == 0 {
             panic!(
                 "{}: schedule check interval is zero - please assign a value > 0",
-                LOG_TARGET_BALLING
+                module_path!()
             );
         }
 
@@ -227,28 +225,28 @@ impl Balling {
             panic!(
                 "{}: Invalid dosing interval for pump #1 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING, config.dosing_interval_pump1, config.schedule_check_interval,
+                module_path!(), config.dosing_interval_pump1, config.schedule_check_interval,
             );
         }
         if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #2 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING, config.dosing_interval_pump2, config.schedule_check_interval,
+                module_path!(), config.dosing_interval_pump2, config.schedule_check_interval,
             );
         }
         if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #3 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING, config.dosing_interval_pump3, config.schedule_check_interval,
+                module_path!(), config.dosing_interval_pump3, config.schedule_check_interval,
             );
         }
         if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #4 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                LOG_TARGET_BALLING, config.dosing_interval_pump4, config.schedule_check_interval,
+                module_path!(), config.dosing_interval_pump4, config.schedule_check_interval,
             );
         }
     }
@@ -277,7 +275,7 @@ impl Balling {
                 Err(e) => {
                     panic!(
                         "{}: Could not get set values for pump 1 from database: {e:?}",
-                        LOG_TARGET_BALLING
+                        module_path!()
                     );
                 }
             }
@@ -288,7 +286,7 @@ impl Balling {
                 Err(e) => {
                     panic!(
                         "{}: Could not get set values for pump 2 from database: {e:?}",
-                        LOG_TARGET_BALLING
+                        module_path!()
                     );
                 }
             }
@@ -299,7 +297,7 @@ impl Balling {
                 Err(e) => {
                     panic!(
                         "{}: Could not get set values for pump 3 from database: {e:?}",
-                        LOG_TARGET_BALLING
+                        module_path!()
                     );
                 }
             }
@@ -310,7 +308,7 @@ impl Balling {
                 Err(e) => {
                     panic!(
                         "{}: Could not get set values for pump 4 from database: {e:?}",
-                        LOG_TARGET_BALLING
+                        module_path!()
                     );
                 }
             }
@@ -354,14 +352,14 @@ impl Balling {
                 // Panic is happening at the startup of the system.
                 panic!(
                     "{}: countdown calculation encountered invalid pump id = {}",
-                    LOG_TARGET_BALLING, pump_id
+                    module_path!(), pump_id
                 );
             }
         };
         if target_dosing_interval == 0 {
             panic!(
                 "{}: Invalid dosing interval for pump #{} in configuration.",
-                LOG_TARGET_BALLING, pump_id
+                module_path!(), pump_id
             );
         }
 
@@ -373,7 +371,7 @@ impl Balling {
                     Ok(c) => c,
                     Err(e) => {
                         error!("{}: Reading last dosing event duration for pump {} from database ({e:?})",
-                            LOG_TARGET_BALLING,
+                            module_path!(),
                             pump_id);
                         0
                     }
@@ -383,7 +381,7 @@ impl Balling {
             Err(e) => {
                 panic!(
                     "{}: Could not get duration since last Balling dosing event: {e:?}",
-                    LOG_TARGET_BALLING
+                    module_path!()
                 );
             }
         };
@@ -391,7 +389,7 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}, Duration since last dosing for pump {} is {} seconds.",
-            LOG_TARGET_BALLING, pump_id, duration_since_balling_dosing
+            module_path!(), pump_id, duration_since_balling_dosing
         );
 
         // limit subtraction to 0
@@ -400,7 +398,7 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}: Countdown for next dosing of pump {} is {} seconds.",
-            LOG_TARGET_BALLING, pump_id, countdown
+            module_path!(), pump_id, countdown
         );
 
         countdown
@@ -501,7 +499,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: Calculated target dosing duration of {} ms for pump #{}",
-                    LOG_TARGET_BALLING, dosing_duration_millis, pump_id
+                    module_path!(), dosing_duration_millis, pump_id
                 );
 
                 if dosing_duration_millis > 0 {
@@ -531,7 +529,7 @@ impl Balling {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_BALLING,
+                    target: module_path!(),
                     "encountered error when reading set values of pump #{}: {e:?}",
                     pump_id
                 );
@@ -625,7 +623,7 @@ impl Balling {
                             }
                             Err(e) => {
                                 if !self.lock_error_channel_receive_schedule_check {
-                                    error!(target: LOG_TARGET_BALLING,
+                                    error!(target: module_path!(),
                                         "Error when reading channel content for schedule check ({e:?})",
                                     );
                                     self.lock_error_channel_receive_schedule_check = true;
@@ -637,7 +635,7 @@ impl Balling {
                     }
                     Err(e) => {
                         if !self.lock_error_channel_send_schedule_check {
-                            error!(target: LOG_TARGET_BALLING,
+                            error!(target: module_path!(),
                                 "Error in channel communication to schedule check: {e:?}"
                             );
                             self.lock_error_channel_send_schedule_check = true;
@@ -650,7 +648,7 @@ impl Balling {
                 {
                     // output countdowns every 10 seconds
                     debug!(
-                        target: LOG_TARGET_BALLING,
+                        target: module_path!(),
                         "countdown 1 = {}, countdown 2 = {}, countdown 3 = {}, countdown 4 = {}",
                         self.countdown_dosing_pump1,
                         self.countdown_dosing_pump2,
@@ -789,7 +787,7 @@ impl Balling {
                     Some((pump_id, pump_device)) => {
                         #[cfg(not(test))] // reduce terminal output when testing
                         info!(
-                            target: LOG_TARGET_BALLING,
+                            target: module_path!(),
                             "executing external request for actuation of pump #{}",
                             self.pump_id_requested
                         );
@@ -809,7 +807,7 @@ impl Balling {
                     }
                     None => {
                         info!(
-                            target: LOG_TARGET_BALLING,
+                            target: module_path!(),
                             "ignoring external request for actuation of pump #{}",
                             self.pump_id_requested
                         );
@@ -819,7 +817,7 @@ impl Balling {
 
             if quit_command_received {
                 #[cfg(test)]
-                println!("{}: received Quit command. Exiting...", LOG_TARGET_BALLING);
+                println!("{}: received Quit command. Exiting...", module_path!());
 
                 break;
             }
@@ -827,7 +825,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: received Stop command. Inhibiting dosing.",
-                    LOG_TARGET_BALLING
+                    module_path!()
                 );
 
                 dosing_inhibited = true;
@@ -836,7 +834,7 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: received Start command. (Re-)starting dosing.",
-                    LOG_TARGET_BALLING
+                    module_path!()
                 );
 
                 dosing_inhibited = false;
@@ -862,7 +860,7 @@ impl Balling {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_BALLING,
+                    target: module_path!(),
                     "Error in trying to send quit confirmation back to signal handler: {e:?}"
                 );
             }
@@ -885,7 +883,7 @@ impl Balling {
                             _ => {
                                 if !self.lock_warn_inapplicable_command {
                                     warn!(
-                                    target: LOG_TARGET_BALLING,
+                                    target: module_path!(),
                                     "ignoring inapplicable command {} from signal handler.", c);
                                     self.lock_warn_inapplicable_command = true;
                                 }
@@ -895,7 +893,7 @@ impl Balling {
                     }
                     Err(e) => {
                         if !self.lock_error_channel_receive_termination_signal {
-                            error!(target: LOG_TARGET_BALLING,
+                            error!(target: module_path!(),
                             "error when trying to receive termination signal. ({e:?})");
                             self.lock_error_channel_receive_termination_signal = true;
                         }
@@ -911,7 +909,7 @@ impl Balling {
 pub mod tests {
     use crate::database::sql_interface::SqlInterface;
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
-    use crate::mineral::balling::{Balling, BallingChannels, LOG_TARGET_BALLING};
+    use crate::mineral::balling::{Balling, BallingChannels};
     use crate::stubs::mock_mineral_injection::tests::MockMineralInjection;
     use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
     use crate::utilities::channel_content::AquariumDevice::{
@@ -1145,7 +1143,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Could not insert pump 1 configuration ({e:?})",
-                        LOG_TARGET_BALLING,
+                        module_path!(),
                     );
                 }
             }
@@ -1157,7 +1155,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Could not insert pump 2 configuration ({e:?})",
-                        LOG_TARGET_BALLING,
+                        module_path!(),
                     );
                 }
             }
@@ -1169,7 +1167,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Could not insert pump 3 configuration ({e:?})",
-                        LOG_TARGET_BALLING,
+                        module_path!(),
                     );
                 }
             }
@@ -1181,7 +1179,7 @@ pub mod tests {
                 Err(e) => {
                     panic!(
                         "{}: Could not insert pump 4 configuration ({e:?})",
-                        LOG_TARGET_BALLING,
+                        module_path!(),
                     );
                 }
             }
@@ -1667,7 +1665,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending stop command to test object ({e:?})",
-                            LOG_TARGET_BALLING
+                            module_path!()
                         );
                     }
                 }
@@ -1688,7 +1686,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: error when sending start command to test object ({e:?})",
-                            LOG_TARGET_BALLING
+                            module_path!()
                         );
                     }
                 }

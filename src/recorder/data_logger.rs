@@ -33,7 +33,6 @@ use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillStatus;
 
-const LOG_TARGET_DATA_LOGGER: &str = "data_logger";
 const MILLIS_PER_SEC: u64 = 1000;
 
 /// Holds the configuration data for the regular data logging to SQL database.
@@ -265,7 +264,7 @@ impl DataLogger {
             {
                 panic!(
                     "{}: one of the output file names is empty.",
-                    LOG_TARGET_DATA_LOGGER
+                    module_path!()
                 );
             } else {
                 fs::write(config.output_file_name_timestamp.clone(), "")
@@ -377,7 +376,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: LOG_TARGET_DATA_LOGGER,
+                            target: module_path!(),
                             "output of value {} to {} failed: {e:?}",
                             signal_string, output_file_name
                         );
@@ -418,7 +417,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: LOG_TARGET_DATA_LOGGER,
+                            target: module_path!(),
                             "output of value {} to {} failed: {e:?}",
                             state_string, output_file_name
                         );
@@ -467,7 +466,7 @@ impl DataLogger {
                 Err(e) => {
                     if !inhibit_error_log {
                         error!(
-                            target: LOG_TARGET_DATA_LOGGER,
+                            target: module_path!(),
                             "output of value {} to {} failed: {e:?}",
                             timestamp,
                             output_file_name
@@ -521,7 +520,7 @@ impl DataLogger {
                 }
                 Err(_) => {
                     self.lock_error_output_state_refill_in_progress = true;
-                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for refill status");
+                    error!(target: module_path!(), "error locking mutex for refill status");
                 }
             };
         }
@@ -541,7 +540,7 @@ impl DataLogger {
                 }
                 Err(_) => {
                     self.lock_error_output_state_heating_is_on = true;
-                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for heating status");
+                    error!(target: module_path!(), "error locking mutex for heating status");
                     false
                 }
             };
@@ -562,7 +561,7 @@ impl DataLogger {
                 }
                 Err(_) => {
                     self.lock_error_output_state_ventilation_is_on = true;
-                    error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for ventilation status");
+                    error!(target: module_path!(), "error locking mutex for ventilation status");
                     false
                 }
             };
@@ -614,7 +613,7 @@ impl DataLogger {
                 Err(_) => {
                     if !self.lock_error_mutex_signal_manager {
                         self.lock_error_mutex_signal_manager = true;
-                        error!(target: LOG_TARGET_DATA_LOGGER, "error locking mutex for sensor manager");
+                        error!(target: module_path!(), "error locking mutex for sensor manager");
                     }
                     return;
                 }
@@ -829,7 +828,7 @@ impl DataLogger {
                 Err(e) => {
                     if !self.lock_error_get_timestamp {
                         error!(
-                            target: LOG_TARGET_DATA_LOGGER,
+                            target: module_path!(),
                             "could not retrieve timestamp from database: ({e:?}) - using application-generated timestamp."
                         );
                         self.lock_error_get_timestamp = true;
@@ -871,7 +870,7 @@ impl DataLogger {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_DATA_LOGGER,
+                    target: module_path!(),
                     "sending confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -891,7 +890,7 @@ impl DataLogger {
                     _ => {
                         if !self.lock_warn_inapplicable_command {
                             warn!(
-                                target: LOG_TARGET_DATA_LOGGER,
+                                target: module_path!(),
                                 "ignoring inapplicable command from signal handler ({})",
                                 c
                             );
@@ -903,7 +902,7 @@ impl DataLogger {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination {
                         error!(
-                            target: LOG_TARGET_DATA_LOGGER,
+                            target: module_path!(),
                             "receiving termination signal from signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination = true;
@@ -1089,7 +1088,7 @@ impl DataLogger {
             let remaining_sleep_time_millis: u64;
             if execution_duration > cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded {
-                    warn!(target: LOG_TARGET_DATA_LOGGER,
+                    warn!(target: module_path!(),
                         "execution duration of {} milliseconds exceeds cycle time of {}",
                         execution_duration.as_millis(),
                         cycle_time_duration.as_millis());
@@ -1108,7 +1107,7 @@ impl DataLogger {
 
             #[cfg(feature = "debug_data_logger")]
             debug!(
-                target: LOG_TARGET_DATA_LOGGER,
+                target: module_path!(),
                 "inserted data into database, now idling for {} milliseconds",
                 remaining_sleep_time_millis
             );
@@ -1123,7 +1122,7 @@ impl DataLogger {
                 if quit_command_received {
                     #[cfg(feature = "debug_data_logger")]
                     debug!(
-                        target: LOG_TARGET_DATA_LOGGER,
+                        target: module_path!(),
                         "received QUIT command from signal handler"
                     );
                     break;
@@ -1166,7 +1165,7 @@ impl DataLogger {
 
             #[cfg(feature = "debug_data_logger")]
             debug!(
-                target: LOG_TARGET_DATA_LOGGER,
+                target: module_path!(),
                 "finished idling restarting loop"
             );
 

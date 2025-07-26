@@ -26,8 +26,6 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_SENSOR_MANAGER: &str = "sensor_manager";
-
 #[derive(Deserialize, Debug)]
 /// Holds the configuration data for the measurement of ambient signals from DHT sensor
 /// The configuration is loaded from the .toml configuration file.
@@ -254,7 +252,7 @@ impl SensorManager {
                 "{}: invalid configuration of sensor manager for ambient temperature.\n \
                 source_ambient_temperature may only have values ({}, {})\n \
                 configured value is {}",
-                LOG_TARGET_SENSOR_MANAGER,
+                module_path!(),
                 sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DHT,
                 sensor_manager_constants::SOURCE_AMBIENT_TEMPERATURE_DS18B20,
                 config.source_ambient_temperature
@@ -271,7 +269,7 @@ impl SensorManager {
                 "{}: invalid configuration of sensor manager for water temperature.\n \
                 source_water_temperature may only have values ({}, {})\n \
                 configured value is {}",
-                LOG_TARGET_SENSOR_MANAGER,
+                module_path!(),
                 sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC,
                 sensor_manager_constants::SOURCE_WATER_TEMPERATURE_DS18B20,
                 config.source_water_temperature
@@ -338,31 +336,31 @@ impl SensorManager {
         let rx_sensor_manager_from_simulator = rx_sensor_manager_from_tcp_opt.as_ref().unwrap();
 
         self.ambient_temperature = Self::get_response_from_simulator(
-            LOG_TARGET_SENSOR_MANAGER.to_string(),
+            module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientTemperature),
         );
         self.ambient_humidity = Self::get_response_from_simulator(
-            LOG_TARGET_SENSOR_MANAGER.to_string(),
+            module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::AmbientHumidity),
         );
         self.water_temperature = Self::get_response_from_simulator(
-            LOG_TARGET_SENSOR_MANAGER.to_string(),
+            module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::WaterTemperature),
         );
         self.conductivity = Self::get_response_from_simulator(
-            LOG_TARGET_SENSOR_MANAGER.to_string(),
+            module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::Conductivity),
         );
         self.pH = Self::get_response_from_simulator(
-            LOG_TARGET_SENSOR_MANAGER.to_string(),
+            module_path!().to_string(),
             tx_sensor_manager_to_simulator,
             rx_sensor_manager_from_simulator,
             InternalCommand::RequestSignal(AquariumSignal::pH),
@@ -409,7 +407,7 @@ impl SensorManager {
         {
             panic!(
                 "{}: configured to run with simulator, but no channel to TCP thread provided.",
-                LOG_TARGET_SENSOR_MANAGER
+                module_path!()
             );
         }
 
@@ -465,7 +463,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_ds18b20_water_temperature_mutex {
                                     self.lock_error_ds18b20_water_temperature_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock Ds18b20 water temperature mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {}", e);
                                 }
                             }
                         }
@@ -488,7 +486,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_ds18b20_ambient_temperature_mutex {
                                     self.lock_error_ds18b20_ambient_temperature_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock Ds18b20 ambient temperature mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {}", e);
                                 }
                             }
                         }
@@ -513,7 +511,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_dht_mutex {
                                     self.lock_error_dht_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock Dht mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Dht mutex: {}", e);
                                 }
                             }
                         }
@@ -537,7 +535,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_temperature_mutex {
                                     self.lock_error_atlas_scientific_temperature_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
                                 }
                             }
                         }
@@ -558,7 +556,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_ph_mutex {
                                     self.lock_error_atlas_scientific_ph_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
                                 }
                             }
                         }
@@ -580,7 +578,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_conductivity_mutex {
                                     self.lock_error_atlas_scientific_conductivity_mutex = true;
-                                    error!(target: LOG_TARGET_SENSOR_MANAGER, "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
                                 }
                             }
                         }
@@ -615,7 +613,7 @@ impl SensorManager {
                         if !self.lock_warn_max_mutex_access_duration {
                             self.lock_warn_max_mutex_access_duration = true;
                             #[cfg(not(test))]
-                            warn!(target: LOG_TARGET_SENSOR_MANAGER,
+                            warn!(target: module_path!(),
                                 "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                                 max_mutex_access_duration.as_millis(),
                                 measured_mutex_access_duration.as_millis(),
@@ -642,7 +640,7 @@ impl SensorManager {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_SENSOR_MANAGER,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -665,7 +663,7 @@ impl SensorManager {
                     _ => {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
-                                target: LOG_TARGET_SENSOR_MANAGER,
+                                target: module_path!(),
                                 "ignoring inapplicable command from signal handler ({})",
                                 c
                             );
@@ -677,7 +675,7 @@ impl SensorManager {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination {
                         error!(
-                            target: LOG_TARGET_SENSOR_MANAGER,
+                            target: module_path!(),
                             "receiving termination signal from signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination = true;

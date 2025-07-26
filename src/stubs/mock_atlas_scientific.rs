@@ -10,8 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[allow(unused)]
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_ATLAS_SCIENTIFIC: &str = "mock_atlas_scientific";
-
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
@@ -45,7 +43,7 @@ pub mod tests {
                             _ => {
                                 panic!(
                                     "{}: inapplicable signal request {}",
-                                    LOG_TARGET_MOCK_ATLAS_SCIENTIFIC, d
+                                    module_path!(), d
                                 );
                             }
                         },
@@ -55,7 +53,7 @@ pub mod tests {
                         _ => {
                             panic!(
                                 "{}: Received invalid command.",
-                                LOG_TARGET_MOCK_ATLAS_SCIENTIFIC
+                                module_path!()
                             );
                         }
                     };
@@ -64,7 +62,7 @@ pub mod tests {
                         Err(e) => {
                             panic!(
                                 "{}: Error in trying to send response back data logger: {e:?}",
-                                LOG_TARGET_MOCK_ATLAS_SCIENTIFIC
+                                module_path!()
                             );
                         }
                     }
@@ -75,7 +73,7 @@ pub mod tests {
                         TryRecvError::Disconnected => {
                             panic!(
                                 "{}: Error in trying to receive command from data logger: {e:?}",
-                                LOG_TARGET_MOCK_ATLAS_SCIENTIFIC
+                                module_path!()
                             );
                         }
                     }
@@ -99,7 +97,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK_ATLAS_SCIENTIFIC, test_signal
+                                                module_path!(), test_signal
                                             );
                                         }
                                     }
@@ -107,7 +105,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK_ATLAS_SCIENTIFIC, test_command
+                                        module_path!(), test_command
                                     );
                                 }
                             }
@@ -118,7 +116,7 @@ pub mod tests {
                                 TryRecvError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
-                                        LOG_TARGET_MOCK_ATLAS_SCIENTIFIC
+                                        module_path!()
                                     );
                                 }
                             }

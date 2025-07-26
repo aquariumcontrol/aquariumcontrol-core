@@ -12,8 +12,6 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use crate::utilities::channel_content::InternalCommand;
 
-const LOG_TARGET_GET_RESP_SIM: &str = "get_resp_sim";
-
 /// The trait implements communication with the simulator instead of real HW.
 pub trait GetResponseFromSimulatorTrait {
     /// Requests a response from the simulator via TCP communication by sending
@@ -50,7 +48,7 @@ pub trait GetResponseFromSimulatorTrait {
                     Err(e) => {
                         panic!(
                                 "{}: Error occurred when trying to receive response from TCP thread for {} ({e:?})",
-                                LOG_TARGET_GET_RESP_SIM,
+                                module_path!(),
                                 requester
                         );
                     }
@@ -58,14 +56,14 @@ pub trait GetResponseFromSimulatorTrait {
                 Err(e) => {
                     panic!(
                         "{}: Error occurred when trying to send request from {} to TCP thread ({e:?})",
-                        LOG_TARGET_GET_RESP_SIM,
+                        module_path!(),
                         requester
                     );
                 }
             },
             _ => {
                 warn!(
-                    target: LOG_TARGET_GET_RESP_SIM,
+                    target: module_path!(),
                     "ignoring not applicable internal command ({}) from {}",
                     internal_command,
                     requester

@@ -12,21 +12,27 @@ use thiserror::Error;
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
 #[derive(Debug, PartialEq, Clone, Error)]
 pub enum RelayError {
+    /// Received an irrelevant command.
     #[error("Received an irrelevant command {0}")]
     IrrelevantCommand(InternalCommand),
 
+    /// Failure occurred in command message creation.
     #[error("Failure occurred in command message creation")]
     FailureCommandMessageCreation,
 
+    /// Error occurred when writing to relay.
     #[error("Error occurred when writing to relay")]
     WriteError,
 
+    /// Error occurred when reading relay state.
     #[error("Error occurred when reading relay state")]
     ReadError,
 
+    /// Encountered an incorrect checksum in communication with relay provider.
     #[error("Encountered an incorrect checksum in communication with relay provider")]
     IncorrectChecksum,
 
-    #[error("Pulse command not allowed for device {0}")]
+    /// The pulse-command is not allowed for the device.
+    #[error("The pulse-command is not allowed for the device {0}")]
     PulseNotAllowedForDevice(AquariumDevice),
 }

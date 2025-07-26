@@ -20,8 +20,6 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_ATLAS_SCIENTIFIC: &str = "atlas_scientific";
-
 // max loops for receiving when the quit command has been received
 pub const RECEIVE_COUNTER_MAX: u32 = 10;
 
@@ -416,7 +414,7 @@ impl AtlasScientific {
             _ => {
                 #[cfg(not(test))]
                 warn!(
-                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                    target: module_path!(),
                     "ignoring invalid signal request ({})",
                     signal
                 );
@@ -440,7 +438,7 @@ impl AtlasScientific {
             Err(e) => {
                 if !self.lock_error_channel_send_i2c_interface {
                     error!(
-                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                        target: module_path!(),
                         "sending request to I2cInterface thread failed. ({e:?})"
                     );
                     self.lock_error_channel_send_i2c_interface = true;
@@ -492,7 +490,7 @@ impl AtlasScientific {
                                 Ok(value) => Ok(AtlasScientificResultData::new(value)),
                                 Err(e) => {
                                     error!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        target: module_path!(),
                                         "error in sensor unit response for {}: {:?}",
                                         signal,
                                         e
@@ -502,7 +500,7 @@ impl AtlasScientific {
                             }
                         }
                         Err(_) => {
-                            error!(target: LOG_TARGET_ATLAS_SCIENTIFIC, "Could not convert response buffer.");
+                            error!(target: module_path!(), "Could not convert response buffer.");
                             Err(AtlasScientificError::IncorrectBufferLength)
                         }
                     };
@@ -554,7 +552,7 @@ impl AtlasScientific {
                                     self.lock_warn_max_mutex_access_duration_temperature = true;
                                     #[cfg(not(test))]
                                     warn!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        target: module_path!(),
                                         "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
                                         max_mutex_access_duration.as_millis(),
                                         measured_mutex_access_duration.as_millis(),
@@ -572,7 +570,7 @@ impl AtlasScientific {
                                     self.lock_warn_max_mutex_access_duration_ph = true;
                                     #[cfg(not(test))]
                                     warn!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        target: module_path!(),
                                         "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
                                         max_mutex_access_duration.as_millis(),
                                         measured_mutex_access_duration.as_millis(),
@@ -590,7 +588,7 @@ impl AtlasScientific {
                                     self.lock_warn_max_mutex_access_duration_conductivity = true;
                                     #[cfg(not(test))]
                                     warn!(
-                                        target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                        target: module_path!(),
                                         "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
                                         max_mutex_access_duration.as_millis(),
                                         measured_mutex_access_duration.as_millis(),
@@ -633,7 +631,7 @@ impl AtlasScientific {
                     TryRecvError::Disconnected => {
                         if !self.lock_error_channel_receive_i2c_interface {
                             error!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                target: module_path!(),
                                 "error occurred when trying to receive response from I2cInterface ({e:?})"
                             );
                             self.lock_error_channel_receive_i2c_interface = true;
@@ -712,7 +710,7 @@ impl AtlasScientific {
                 //#[cfg(test)]
                 //println!(
                 //    "{}: state_send_receive={}, duration since last measurement={}, measurement_interval={}",
-                //    LOG_TARGET_ATLAS_SCIENTIFIC,
+                //    module_path!(),
                 //    state_send_receive,
                 //    duration_since_last_measurement.as_millis(),
                 //    self.measurement_interval.as_millis(),
@@ -723,7 +721,7 @@ impl AtlasScientific {
                     #[cfg(test)]
                     println!(
                         "{}: Sending to i2c interface request for {}",
-                        LOG_TARGET_ATLAS_SCIENTIFIC, signal
+                        module_path!(), signal
                     );
                     state_send_receive = self.send_request_to_i2c_interface(
                         &signal,
@@ -732,7 +730,7 @@ impl AtlasScientific {
                     #[cfg(test)]
                     println!(
                         "{}: Sent to i2c interface request for {}",
-                        LOG_TARGET_ATLAS_SCIENTIFIC, signal
+                        module_path!(), signal
                     );
                 } else if state_send_receive {
                     // read from the channel if the measurement result is available from I2cInterface thread
@@ -765,7 +763,7 @@ impl AtlasScientific {
             Ok(()) => {}
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                    target: module_path!(),
                     "sending quit confirmation back to signal handler failed ({e:?})"
                 );
             }
@@ -788,7 +786,7 @@ impl AtlasScientific {
                     _ => {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
-                                target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                                target: module_path!(),
                                 "ignoring inapplicable command from signal handler ({})",
                                 c
                             );
@@ -800,7 +798,7 @@ impl AtlasScientific {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination {
                         error!(
-                            target: LOG_TARGET_ATLAS_SCIENTIFIC,
+                            target: module_path!(),
                             "receiving termination signal from signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination = true;

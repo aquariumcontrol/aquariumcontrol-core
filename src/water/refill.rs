@@ -76,8 +76,6 @@ pub struct RefillConfig {
     pub additional_refill_volume: f64,
 }
 
-const LOG_TARGET_REFILL: &str = "refill";
-
 const MILLIS_PER_SEC: u64 = 1000;
 
 /// Struct collects the channels for the communication between the refill control and the other components.
@@ -368,7 +366,7 @@ impl Refill {
                         #[cfg(not(test))]
                         if !self.lock_error_read_duration_since_last_refill {
                             error!(
-                                target: LOG_TARGET_REFILL,
+                                target: module_path!(),
                                 "could not get duration since last refill event ({_e:?})"
                             );
                         }
@@ -381,7 +379,7 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_check_empty {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "could not check if refill table is empty or not ({_e:?})"
                     );
                 }
@@ -399,7 +397,7 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_24h {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "could not get refill volume of last 24 hours ({_e:?})"
                     );
                 }
@@ -417,7 +415,7 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_24h {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "could not get refill count of last 24 hours: {_e:?}"
                     );
                 }
@@ -435,7 +433,7 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_hour {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "Could not get refill volume of last hour: {_e:?}"
                     );
                 }
@@ -453,7 +451,7 @@ impl Refill {
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_hour {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "Could not get refill count of last hour: {_e:?}"
                     );
                 }
@@ -502,7 +500,7 @@ impl Refill {
             if !self.lock_info_stop_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "received Stop command. Inhibiting refill control."
                 );
 
@@ -518,7 +516,7 @@ impl Refill {
             if !self.lock_info_start_command_received {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "received Start command. Restarting refill control."
                 );
 
@@ -558,7 +556,7 @@ impl Refill {
     ) -> bool {
         #[cfg(feature = "debug_refill")]
         debug!(
-            target: LOG_TARGET_REFILL,
+            target: module_path!(),
             "check_volume_count_time_limits called.",
         );
         let refill_check_volume_last_24h =
@@ -568,7 +566,7 @@ impl Refill {
             if !self.lock_info_refill_check_volume_last_24h {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "refill volume of last 24h exceeds permissible refill volume per 24h of {} L",
                     self.config.max_refill_volume_24h
                 );
@@ -585,7 +583,7 @@ impl Refill {
             if !self.lock_info_refill_check_count_last_24h {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "refill count of last 24h exceeds permissible refill count per 24h of {} L",
                     self.config.max_refill_count_24h
                 );
@@ -602,7 +600,7 @@ impl Refill {
             if !self.lock_info_refill_check_volume_last_hour {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "refill volume of last hour exceeds permissible refill volume per hour of {}",
                     self.config.max_refill_volume_hour
                 );
@@ -619,7 +617,7 @@ impl Refill {
             if !self.lock_info_refill_check_count_last_hour {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "refill count of last 24h exceeds permissible refill count per hour of {}",
                     self.config.max_refill_count_hour
                 );
@@ -636,7 +634,7 @@ impl Refill {
             if !self.lock_info_refill_check_interval_last_refill {
                 #[cfg(not(test))]
                 info!(
-                    target: LOG_TARGET_REFILL,
+                    target: module_path!(),
                     "time interval since last refill {} is too small (limit={}).",
                     sql_refill_data.duration_since_last_refill, self.config.min_interval_last_refill
                 );
@@ -661,7 +659,7 @@ impl Refill {
             }
             Err(e) => {
                 if !self.lock_error_channel_send_monitors {
-                    error!(target:  LOG_TARGET_REFILL, "sending view to monitor failed ({})", e);
+                    error!(target:  module_path!(), "sending view to monitor failed ({})", e);
                     self.lock_error_channel_send_monitors = true;
                 }
             }
@@ -705,7 +703,7 @@ impl Refill {
                     Err(e) => {
                         if !self.lock_error_channel_receive_schedule_check {
                             error!(
-                                target: LOG_TARGET_REFILL,
+                                target: module_path!(),
                                 "reading channel content for schedule check failed ({e:?})"
                             );
                             self.lock_error_channel_receive_schedule_check = false;
@@ -717,7 +715,7 @@ impl Refill {
             Err(e) => {
                 if !self.lock_error_channel_send_schedule_check {
                     error!(
-                        target: LOG_TARGET_REFILL,
+                        target: module_path!(),
                         "channel communication to schedule check failed ({e:?})"
                     );
                     self.lock_error_channel_send_schedule_check = true;
@@ -883,7 +881,7 @@ impl Refill {
                         {
                             #[cfg(feature = "debug_refill")]
                             debug!(
-                                target: LOG_TARGET_REFILL,
+                                target: module_path!(),
                                 "acquiring semaphore...",
                             );
 
@@ -893,7 +891,7 @@ impl Refill {
 
                             #[cfg(feature = "debug_refill")]
                             debug!(
-                                target: LOG_TARGET_REFILL,
+                                target: module_path!(),
                                 "mutex_data = {}",
                                 mutex_data
                             );
@@ -915,7 +913,7 @@ impl Refill {
                                         refill_status.refill_in_progress_for_database = true;
                                     }
                                     Err(_) => {
-                                        error!(target: LOG_TARGET_REFILL, "error locking mutex for refill status");
+                                        error!(target: module_path!(), "error locking mutex for refill status");
                                     }
                                 };
                             }
@@ -935,14 +933,14 @@ impl Refill {
                                         refill_status.refill_in_progress_live = false;
                                     }
                                     Err(_) => {
-                                        error!(target: LOG_TARGET_REFILL, "error locking mutex for refill status");
+                                        error!(target: module_path!(), "error locking mutex for refill status");
                                     }
                                 };
                             }
 
                             #[cfg(feature = "debug_refill")]
                             debug!(
-                                target: LOG_TARGET_REFILL,
+                                target: module_path!(),
                                 "releasing semaphore..."
                             );
                         }
@@ -952,7 +950,7 @@ impl Refill {
 
             #[cfg(feature = "debug_refill")]
             debug!(
-                target: LOG_TARGET_REFILL,
+                target: module_path!(),
                 "refill_inhibited = {}, error_switch_stuck_low={}, error_sql_update_failed={}, error_sql_get_historic_data_failed={}, schedule_check_result={}, tank_level_switch_position_stabilized={}, tank_level_switch_invalid={}",
                 refill_inhibited,
                 self.refill_errors.error_switch_stuck_low,
@@ -969,7 +967,7 @@ impl Refill {
             let mut remaining_sleep_time_millis: u64 = 0;
             if execution_duration >= cycle_time_duration {
                 if !lock_warn_cycle_time_exceeded {
-                    warn!(target: LOG_TARGET_REFILL,
+                    warn!(target: module_path!(),
                         "execution duration of {} ms exceeds cycle time of {} ms",
                         execution_duration.as_millis(),
                         cycle_time_duration.as_millis()
@@ -988,7 +986,7 @@ impl Refill {
 
             #[cfg(feature = "debug_refill")]
             debug!(
-                target: LOG_TARGET_REFILL,
+                target: module_path!(),
                 "execution duration = {}, cycle time = {}, remaining_sleep_time_millis = {}",
                 execution_duration_millis,
                 self.config.check_interval * MILLIS_PER_SEC,
@@ -1051,7 +1049,7 @@ impl Refill {
         #[cfg(test)]
         println!(
             "{}: sending Quit confirmation to signal handler.",
-            LOG_TARGET_REFILL
+            module_path!()
         );
 
         match refill_channels.tx_refill_to_signal_handler.send(true) {
@@ -1080,7 +1078,7 @@ impl Refill {
                         _ => {
                             if !self.lock_warn_not_applicable_command {
                                 warn!(
-                                    target: LOG_TARGET_REFILL,
+                                    target: module_path!(),
                                     "ignoring not applicable command {} from the signal handler",
                                     c
                                 );
@@ -1093,7 +1091,7 @@ impl Refill {
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_command {
                         error!(
-                            target: LOG_TARGET_REFILL,
+                            target: module_path!(),
                             "receiving termination signal from the signal handler failed ({e:?})"
                         );
                         self.lock_error_channel_receive_termination_command = true;
@@ -1129,8 +1127,6 @@ pub mod tests {
     use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
     use crate::stubs::mock_water_injection::tests::MockWaterInjection;
     use crate::stubs::test_command::tests::TestCommand;
-
-    use crate::water::refill::LOG_TARGET_REFILL;
 
     use crate::utilities::logger::setup_logger;
     use crate::water::refill_stats_data::RefillStatsData;
@@ -2609,7 +2605,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: could not send stop command to refill ({e:?})",
-                            LOG_TARGET_REFILL
+                            module_path!()
                         );
                     }
                 }
@@ -2641,7 +2637,7 @@ pub mod tests {
                     Err(e) => {
                         panic!(
                             "{}: could not send start command to refill ({e:?})",
-                            LOG_TARGET_REFILL
+                            module_path!()
                         );
                     }
                 }

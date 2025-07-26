@@ -9,8 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    const LOG_TARGET_MOCK_HEATING: &str = "mock_heating";
-
     use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
@@ -52,7 +50,7 @@ pub mod tests {
                                                 TryRecvError::Disconnected => {
                                                     panic!(
                                                         "{}: Error in trying to receive signal from test object: {e:?}",
-                                                        LOG_TARGET_MOCK_HEATING
+                                                        module_path!()
                                                     );
                                                 }
                                             }
@@ -62,7 +60,7 @@ pub mod tests {
                                 None => {
                                     panic!(
                                         "{}: invoked with valid sender but with empty receiver part for channel communication to tank level switch.",
-                                        LOG_TARGET_MOCK_HEATING
+                                        module_path!()
                                     );
                                 }
                             }
@@ -70,7 +68,7 @@ pub mod tests {
                         Err(e) => {
                             panic!(
                                 "{}: Could not send signal request to test object: {e:?}",
-                                LOG_TARGET_MOCK_HEATING
+                                module_path!()
                             );
                         }
                     }
@@ -80,7 +78,7 @@ pub mod tests {
 
             if mock_common_receive_from_signal_handler(
                 rx_heating_from_signal_handler,
-                LOG_TARGET_MOCK_HEATING,
+                module_path!(),
             ) {
                 break;
             }
@@ -108,7 +106,7 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                LOG_TARGET_MOCK_HEATING, test_signal
+                                                module_path!(), test_signal
                                             );
                                         }
                                     }
@@ -116,7 +114,7 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        LOG_TARGET_MOCK_HEATING, test_command
+                                        module_path!(), test_command
                                     );
                                 }
                             }
@@ -127,7 +125,7 @@ pub mod tests {
                                 TryRecvError::Disconnected => {
                                     panic!(
                                         "{}: Error in trying to receive command from test environment: {e:?}",
-                                        LOG_TARGET_MOCK_HEATING
+                                        module_path!()
                                     );
                                 }
                             }

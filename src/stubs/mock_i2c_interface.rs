@@ -15,8 +15,6 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use std::sync::mpsc::{Receiver, Sender};
 
-    const LOG_TARGET_MOCK_I2C_INTERFACE: &str = "mock_i2c_interface";
-
     pub struct MockI2cInterface {
         /// I2C address of Atlas Scientific pH sensor unit
         address_atlas_scientific_ph: u16,
@@ -79,7 +77,7 @@ pub mod tests {
 
                 match rx_i2c_interface_from_atlas_scientific.try_recv() {
                     Ok(request) => {
-                        println!("{}: Read from channel.", LOG_TARGET_MOCK_I2C_INTERFACE);
+                        println!("{}: Read from channel.", module_path!());
                         let mut response: I2cResponse = self.mock_response_temperature.clone();
 
                         if request.i2c_address == self.address_atlas_scientific_ph {
@@ -90,7 +88,7 @@ pub mod tests {
                         }
                         println!(
                             "{}: responding with response={}",
-                            LOG_TARGET_MOCK_I2C_INTERFACE, response
+                            module_path!(), response
                         );
                         tx_i2c_interface_to_atlas_scientific
                             .send(Ok(response))
@@ -102,12 +100,12 @@ pub mod tests {
                 match rx_i2c_interface_from_signal_handler.try_recv() {
                     Ok(signal_handler_request) => {
                         if signal_handler_request == InternalCommand::Quit {
-                            println!("{}: received Quit command.", LOG_TARGET_MOCK_I2C_INTERFACE);
+                            println!("{}: received Quit command.", module_path!());
                             break;
                         } else {
                             panic!(
                                 "{}: received unknown request {} from signal handler.",
-                                LOG_TARGET_MOCK_I2C_INTERFACE, signal_handler_request
+                                module_path!(), signal_handler_request
                             );
                         }
                     }

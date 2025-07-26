@@ -18,8 +18,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::thread::sleep;
 
-const LOG_TARGET_DS18B20: &str = "ds18b20";
-
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
 
@@ -131,17 +129,17 @@ impl Ds18b20 {
         if config.system_driver_base_path.is_empty() {
             panic!(
                 "{}: System driver base path prefix is empty!",
-                LOG_TARGET_DS18B20
+                module_path!()
             );
         }
         if config.system_driver_sensor_path_prefix.is_empty() {
             panic!(
                 "{}: System driver sensor path prefix is empty!",
-                LOG_TARGET_DS18B20
+                module_path!()
             );
         }
         if config.system_driver_file_name.is_empty() {
-            panic!("{}: System driver file name is empty!", LOG_TARGET_DS18B20);
+            panic!("{}: System driver file name is empty!", module_path!());
         }
         if config.active
             && config.water_temperature_sensor_id.is_empty()
@@ -149,7 +147,7 @@ impl Ds18b20 {
         {
             panic!(
                 "{}: No water temperature sensor ID nor ambient temperature sensor ID provided!",
-                LOG_TARGET_DS18B20
+                module_path!()
             );
         }
         if config.active
@@ -157,7 +155,7 @@ impl Ds18b20 {
         {
             #[cfg(not(test))]
             warn!(
-                target: LOG_TARGET_DS18B20,
+                target: module_path!(),
                 "Ambient and water temperature sensor IDs are identical."
             );
         }
@@ -191,7 +189,7 @@ impl Ds18b20 {
     /// - `Err(Ds18b20Error)`: Description of the error which occurred during reading.
     pub fn read(&self, sensor_id: &str) -> Ds18b20Result {
         #[cfg(test)]
-        println!("{}: reading from {}", LOG_TARGET_DS18B20, sensor_id);
+        println!("{}: reading from {}", module_path!(), sensor_id);
 
         let base_dir = PathBuf::from(self.config.system_driver_base_path.clone());
         let device_folder =
@@ -316,7 +314,7 @@ impl Ds18b20 {
                     if !self.lock_warn_max_mutex_access_duration {
                         self.lock_warn_max_mutex_access_duration = true;
                         #[cfg(not(test))]
-                        warn!(target: LOG_TARGET_DS18B20,
+                        warn!(target: module_path!(),
                             "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                             max_mutex_access_duration.as_millis(),
                             measured_mutex_access_duration.as_millis(),
@@ -356,7 +354,7 @@ impl Ds18b20 {
 #[cfg(test)]
 pub mod tests {
     use crate::sensors::ds18b20::{Ds18b20, Ds18b20Error};
-    use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData, LOG_TARGET_DS18B20};
+    use crate::sensors::ds18b20::{Ds18b20Result, Ds18b20ResultData};
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::read_config_file;
     use spin_sleep::SpinSleeper;
@@ -409,7 +407,7 @@ pub mod tests {
             Ok(temperature) => {
                 println!(
                     "{}: Temperature read from file: {:.2}°C ({} milliseconds ago)",
-                    LOG_TARGET_DS18B20,
+                    module_path!(),
                     temperature.value,
                     temperature.measurement_instant.elapsed().as_millis()
                 );

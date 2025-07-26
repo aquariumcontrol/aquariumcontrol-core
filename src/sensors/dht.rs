@@ -19,8 +19,6 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-const LOG_TARGET_DHT: &str = "dht";
-
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use rppal::gpio::{Gpio, Level, Trigger};
@@ -406,7 +404,7 @@ impl Dht {
         if checksum_calculated != checksum_received {
             //#[cfg(not(test))]
             //error!(
-            //    target: LOG_TARGET_DHT,
+            //    target: module_path!(),
             //    "checksum error (calculated {}, received {})",
             //    checksum_calculated, checksum_received);
             return Err(DhtError::ChecksumError);
@@ -518,7 +516,7 @@ impl Dht {
             #[cfg(not(test))]
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_DHT,
+                    target: module_path!(),
                     "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
                     self.gpio_dht22_vcc
                 );
@@ -538,7 +536,7 @@ impl Dht {
                 #[cfg(not(test))]
                 Err(e) => {
                     error!(
-                        target: LOG_TARGET_DHT,
+                        target: module_path!(),
                         "failed to acquire pin {} for triggering DHT sensor ({e:?})",
                         self.gpio_dht22_io,
                     );
@@ -658,7 +656,7 @@ impl Dht {
 
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
             error!(
-                target: LOG_TARGET_DHT,
+                target: module_path!(),
                 "incorrect number of valid ticks received: target={}, measured={}",
                 dht22_constants::DHT22_TRANSMISSION_END_IDX - 1,
                 valid_ticks_received
@@ -717,7 +715,7 @@ impl Dht {
 
                     #[cfg(feature = "debug_dht")]
                     debug!(
-                        target: LOG_TARGET_DHT,
+                        target: module_path!(),
                         "measured successfully: temperature={}, humidity={}",
                         temperature,
                         humidity
@@ -733,7 +731,7 @@ impl Dht {
                             if !self.lock_error_max_retries {
                                 self.lock_error_max_retries = true;
                                 error!(
-                                    target: LOG_TARGET_DHT,
+                                    target: module_path!(),
                                     "failed to read from DHT sensor (after {} retries, {e:?})",
                                     retry_counter,
                                 );
@@ -744,7 +742,7 @@ impl Dht {
                     } else {
                         #[cfg(not(test))]
                         error!(
-                            target: LOG_TARGET_DHT,
+                            target: module_path!(),
                             "failed to read from DHT sensor ({e:?})",
                         );
                         return Err(e);
@@ -794,7 +792,7 @@ impl Dht {
                         InternalCommand::Quit => {
                             #[cfg(feature = "debug_dht")]
                             debug!(
-                                target: LOG_TARGET_DHT,
+                                target: module_path!(),
                                 "Received QUIT command"
                             );
                             break;
@@ -802,7 +800,7 @@ impl Dht {
                         _ => {
                             if !lock_error_invalid_command {
                                 error!(
-                                    target: LOG_TARGET_DHT,
+                                    target: module_path!(),
                                     "Received invalid command."
                                 );
                                 lock_error_invalid_command = true;
@@ -816,7 +814,7 @@ impl Dht {
                         TryRecvError::Disconnected => {
                             if !lock_error_receive {
                                 error!(
-                                    target: LOG_TARGET_DHT,
+                                    target: module_path!(),
                                     "Error in trying to receive command from signal handler: {e:?}"
                                 );
                                 lock_error_receive = true;
@@ -852,7 +850,7 @@ impl Dht {
                             Err(_) => {
                                 if !self.lock_error_mutex {
                                     self.lock_error_mutex = true;
-                                    error!(target: LOG_TARGET_DHT, "error locking mutex for dht result");
+                                    error!(target: module_path!(), "error locking mutex for dht result");
                                 }
                             }
                         };
@@ -864,7 +862,7 @@ impl Dht {
                         if !self.lock_warn_max_mutex_access_duration {
                             self.lock_warn_max_mutex_access_duration = true;
                             #[cfg(not(test))]
-                            warn!(target: LOG_TARGET_DHT,
+                            warn!(target: module_path!(),
                                 "Access to mutex took too long. Allowed={}ms, Measured={}ms",
                                 max_mutex_access_duration.as_millis(),
                                 measured_mutex_access_duration.as_millis(),

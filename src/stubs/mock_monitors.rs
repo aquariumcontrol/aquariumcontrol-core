@@ -18,8 +18,6 @@ pub mod tests {
     use std::sync::mpsc::TryRecvError;
     use std::time::{Duration, Instant};
 
-    const LOG_TARGET_MOCK_MONITOR: &str = "mock_monitors";
-
     const MOCK_MONITORS_MAX_VEC_LEN: usize = 4096;
 
     // Simplified version of Monitors for testing refill
@@ -78,7 +76,7 @@ pub mod tests {
             loop {
                 if mock_common_receive_from_signal_handler(
                     &rx_from_signal_handler,
-                    LOG_TARGET_MOCK_MONITOR,
+                    module_path!(),
                 ) {
                     break;
                 }
@@ -91,7 +89,7 @@ pub mod tests {
                         match e {
                             TryRecvError::Empty => { /* do nothing */ }
                             TryRecvError::Disconnected => {
-                                panic!("{}: channel disconnected", LOG_TARGET_MOCK_MONITOR);
+                                panic!("{}: channel disconnected", module_path!());
                             }
                         }
                     }

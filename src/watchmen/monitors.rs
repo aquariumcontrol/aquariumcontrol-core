@@ -86,8 +86,6 @@ pub struct Monitors {
 impl ProcessExternalRequestTrait for Monitors {}
 
 impl Monitors {
-    const LOG_TARGET_MONITORS: &'static str = "monitors";
-
     /// Creates a new `Monitors` instance.
     ///
     /// This constructor initializes the monitoring module with its specified
@@ -169,14 +167,14 @@ impl Monitors {
             if self.config.active {
                 if monitors_inhibited && !self.lock_info_monitors_inhibited {
                     info!(
-                        target: Self::LOG_TARGET_MONITORS,
+                        target: module_path!(),
                         "monitors are inhibited after receiving stop command via message.");
                     self.lock_info_monitors_inhibited = true;
                 } else {
                     self.lock_info_monitors_inhibited = false;
                     #[cfg(test)]
                     debug!(
-                        target: Self::LOG_TARGET_MONITORS,
+                        target: module_path!(),
                         "executing monitors"
                     );
                 }
@@ -194,14 +192,14 @@ impl Monitors {
                 }
                 if stop_command_received {
                     info!(
-                        target: Self::LOG_TARGET_MONITORS,
+                        target: module_path!(),
                         "received Stop command. Inhibiting monitoring."
                     );
                     monitors_inhibited = true;
                 }
                 if start_command_received {
                     info!(
-                        target: Self::LOG_TARGET_MONITORS,
+                        target: module_path!(),
                         "received Start command. Restarting monitoring."
                     );
                     monitors_inhibited = false;
@@ -225,7 +223,7 @@ impl Monitors {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 if !self.lock_error_receive_refill {
-                                    error!(target: Self::LOG_TARGET_MONITORS, "Error when trying to receive from refill: {}", e);
+                                    error!(target: module_path!(), "Error when trying to receive from refill: {}", e);
                                     self.lock_error_receive_refill = true;
                                 }
                             }
@@ -241,7 +239,7 @@ impl Monitors {
                 Ok(()) => {}
                 Err(e) => {
                     error!(
-                        target: Self::LOG_TARGET_MONITORS,
+                        target: module_path!(),
                         "sending quit confirmation back to signal handler failed ({e:?})"
                     );
                 }

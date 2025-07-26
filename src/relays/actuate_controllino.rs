@@ -17,8 +17,6 @@ use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
 use std::time::Duration;
 
-const LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE: &str = "controllino_actuate_hardware";
-
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
 const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
 
@@ -81,7 +79,7 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
     let second_checksum = data[4] ^ data[5] ^ data[6];
     let ok_result = (data[3] == first_checksum) && (data[7] == second_checksum);
     if !ok_result {
-        warn!(target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+        warn!(target: module_path!(),
             "data used for checksum calculation: \n\
             [0]={} [1]={} [2]={} [3]={} [4]={} [5]={} [6]={} [7]={}\n\
             first checksum ([3]) should have been {}\n\
@@ -431,7 +429,7 @@ impl RelayActuationTrait for ActuateControllino {
                     Ok(c) => c,
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                            target: module_path!(),
                             "preparation of communication failed ({e:?})"
                         );
                         return Err(RelayError::FailureCommandMessageCreation);
@@ -444,7 +442,7 @@ impl RelayActuationTrait for ActuateControllino {
                         if amount_byte_written != message.data.len() {
                             warn!(
                                     "{}: Writing to Controllino device failed. Amount of bytes written: {}. Expected: {}",
-                                    LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                    module_path!(),
                                     amount_byte_written,
                                     message.data.len()
                                 );
@@ -452,7 +450,7 @@ impl RelayActuationTrait for ActuateControllino {
                     }
                     Err(e) => {
                         error!(
-                            target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                            target: module_path!(),
                             "sending command to Controllino failed ({e:?})"
                         );
                         return Err(RelayError::WriteError);
@@ -479,7 +477,7 @@ impl RelayActuationTrait for ActuateControllino {
                     Ok(()) => {
                         if !check_controllino_checksums(serial_buf.as_slice()) {
                             warn!(
-                                target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                                target: module_path!(),
                                 "Received response from device with incorrect checksums"
                             );
                             Err(RelayError::IncorrectChecksum)
@@ -489,7 +487,7 @@ impl RelayActuationTrait for ActuateControllino {
                     }
                     Err(_) => {
                         error!(
-                            target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                            target: module_path!(),
                             "receiving response from device failed."
                         );
                         Err(RelayError::ReadError)
@@ -498,7 +496,7 @@ impl RelayActuationTrait for ActuateControllino {
             }
             _ => {
                 warn!(
-                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    target: module_path!(),
                     "ignoring irrelevant internal command {}.",
                     internal_command
                 );
@@ -529,7 +527,7 @@ impl RelayActuationTrait for ActuateControllino {
                 if amount_byte_written != message.data.len() {
                     warn!(
                         "{}: Writing heartbeat message to Controllino device failed. Amount of bytes written: {}. Expected: {}",
-                        LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                        module_path!(),
                         amount_byte_written,
                         message.data.len()
                     );
@@ -537,7 +535,7 @@ impl RelayActuationTrait for ActuateControllino {
             }
             Err(e) => {
                 error!(
-                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    target: module_path!(),
                     "sending heartbeat command to Controllino failed ({e:?})"
                 );
             }
@@ -559,13 +557,13 @@ impl RelayActuationTrait for ActuateControllino {
             Ok(_) => {
                 warn!(
                     "{}: flushed Controllino communication buffer.",
-                    LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                    module_path!()
                 );
             }
             Err(e) => {
                 error!(
                     "{}: error when clearing buffer ({e:?})",
-                    LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                    module_path!()
                 );
             }
         }
@@ -608,7 +606,7 @@ fn controllino_open_serial_port(
         Err(e) => {
             panic!(
                 "{}: failed to open serial port ({e:?})",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                module_path!()
             );
         }
     };
@@ -619,7 +617,7 @@ fn controllino_open_serial_port(
         Err(_) => {
             panic!(
                 "{}: could not set timeout of {} milliseconds.",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE, timeout_millis
+                module_path!(), timeout_millis
             );
         }
     }
@@ -630,7 +628,7 @@ fn controllino_open_serial_port(
         Err(e) => {
             panic!(
                 "{}: error when clearing DTR ({e:?})",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                module_path!()
             );
         }
     }
@@ -646,7 +644,7 @@ fn controllino_open_serial_port(
         Err(e) => {
             panic!(
                 "{}: error when clearing buffer ({e:?})",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                module_path!()
             );
         }
     }
@@ -700,7 +698,7 @@ impl ActuateControllino {
             if !(CONTROLLINO_MIN_RELAY_ID..=CONTROLLINO_MAX_RELAY_ID).contains(&value) {
                 #[cfg(not(test))]
                 error!(
-                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    target: module_path!(),
                     "Not all relay IDs are inside permissible range."
                 );
                 #[cfg(test)]
@@ -710,7 +708,7 @@ impl ActuateControllino {
             if !seen_values.insert(value) {
                 #[cfg(not(test))]
                 error!(
-                    target: LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE,
+                    target: module_path!(),
                     "Not all relay IDs are distinct - duplicate values found."
                 );
                 #[cfg(test)]
@@ -746,14 +744,14 @@ impl ActuateControllino {
         if !Self::check_valid_relay_id_config(&config) {
             panic!(
                 "{}: Relay ID configuration is invalid.",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                module_path!()
             );
         }
 
         if config.port_name.is_empty() {
             panic!(
                 "{}: Port name for communication with Controllino is empty.",
-                LOG_TARGET_CONTROLLINO_ACTUATE_HARDWARE
+                module_path!()
             );
         }
 
