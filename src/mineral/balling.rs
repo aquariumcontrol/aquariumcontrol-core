@@ -517,11 +517,16 @@ impl Balling {
                         &balling_setval,
                         actual_dosing_duration_millis,
                     );
-                    _ = self.sql_interface_balling.insert_balling_event(
+                    if let Err(e) = self.sql_interface_balling.insert_balling_event(
                         Local::now().naive_local(),
                         pump_id.into(),
                         actual_dosing_volume.into(),
-                    );
+                    ) {
+                        error!(
+                            target: module_path!(),
+                            "Error occurred in database communication: {e:?}"
+                        );
+                    }
                 }
             }
             Err(e) => {
@@ -952,7 +957,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         // create the test object
         let _ = Balling::new(
@@ -977,7 +983,8 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         // empty the Balling dosing log table
         SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
@@ -1072,7 +1079,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1226,7 +1234,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1582,7 +1591,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         // empty the Balling dosing log table
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
@@ -1776,7 +1786,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         // insert a valid pump configuration for pump #1
         insert_pump_configurations(
@@ -1824,7 +1835,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1970,7 +1982,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
         // create the test object
         let _ = Balling::new(

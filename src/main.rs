@@ -81,7 +81,7 @@ use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_feed::{DatabaseInterfaceFeedTrait, SqlInterfaceFeed};
 use crate::database::sql_interface_heating_setvals::SqlInterfaceHeatingSetVals;
-use crate::database::sql_interface_heating_stats::SqlInterfaceHeating;
+use crate::database::sql_interface_heating_stats::SqlInterfaceHeatingStats;
 use crate::database::sql_interface_heating_stats_data_transfer::HeatingStatsDataTransfer;
 use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
 use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
@@ -141,8 +141,6 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
-
-const LOG_TARGET_MAIN: &str = "main";
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -377,10 +375,7 @@ fn run() -> Result<(), StartupError> {
 
     // calculate hash of executable
     let version_information = VersionInformation::new();
-    info!(target: LOG_TARGET_MAIN,
-        "{}",
-        version_information
-    );
+    info!(target: module_path!(), "{}", version_information);
 
     // check if the user has root privileges - disabled when developing on the Windows platform
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -428,11 +423,14 @@ fn run() -> Result<(), StartupError> {
     }
 
     // connect to SQL database, subsequently set up component-specific interfaces
-    let mut sql_interface = SqlInterface::new(config.sql_interface)?;
+    let mut sql_interface = SqlInterface::new(config.sql_interface)
+        .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
+    let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection())
+        .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection())
+        .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> =
         Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
@@ -440,56 +438,58 @@ fn run() -> Result<(), StartupError> {
     let sql_interface_midnight_calculator =
         SqlInterfaceMidnightCalculator::new(sql_interface.get_connection());
 
-    let sql_interface_heating = SqlInterfaceHeating::new(
+    let sql_interface_heating = SqlInterfaceHeatingStats::new(
         sql_interface.get_connection(),
         Box::new(sql_interface_midnight_calculator),
-    );
+    ).map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-        Box::new(SqlInterfaceFeed::new(sql_interface.get_connection()));
+        Box::new(SqlInterfaceFeed::new(sql_interface.get_connection())
+            .map_err(|e| StartupError::Database { source: e })?);
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
-    let tables = sql_interface.get_tables()?;
+    let tables = sql_interface.get_tables()
+        .map_err(|e| StartupError::Database { source: e })?;
 
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
             info!(
-                target: LOG_TARGET_MAIN,
+                target: module_path!(),
                 "version information including hash of executable found in database: {}",
                 c
             );
             if c != version_information.hash {
                 warn!(
-                    target: LOG_TARGET_MAIN,
+                    target: module_path!(),
                     "hash value for version in database does not match hash version of executable. Proceed with caution.");
             }
         }
         Err(e) => {
             if matches!(e, SqlInterfaceError::SingleVersionRequestMultipleResults(_)) {
                 warn!(
-                    target: LOG_TARGET_MAIN,
+                    target: module_path!(),
                     "main: Found multiple hash values for version in database. Proceed with caution.");
             } else {
-                return Err(e.into());
+                return Err(StartupError::Database { source: e });
             }
         }
     }
 
-    let database = sql_interface.get_database()?;
-    info!(target: LOG_TARGET_MAIN, "current database name is {}", database);
+    let database = sql_interface.get_database().
+        map_err(|e| StartupError::Database { source: e })?;
+    info!(target: module_path!(), "current database name is {}", database);
 
-    sql_interface.check_required_tables_existing()?;
-    info!(target: LOG_TARGET_MAIN, "required tables are existing in database.");
+    sql_interface.check_required_tables_existing().
+        map_err(|e| StartupError::Database { source: e })?;
+    info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
     for table in tables {
         tables_string += " ";
         tables_string += &table;
     }
-    info!(
-        target: LOG_TARGET_MAIN,
-        "{}", tables_string);
+    info!(target: module_path!(), "{}", tables_string);
 
     // check if any of the components requires use of the simulator
     let use_simulator = config.gpio_handler.use_simulator
@@ -1134,16 +1134,23 @@ fn run() -> Result<(), StartupError> {
     let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration);
 
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
+    
     let mut heating_set_value_updater =
-        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+        SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating)
+            .map_err(|e| StartupError::Database { source: e })?;
+    
     let mut heating = Heating::new(
         config.heating,
         sql_interface_heating,
         database_ping_duration,
     );
+
     let mut feed = Feed::new(config.feed, sql_interface_feed, database_ping_duration);
+
     let mut ventilation_set_value_updater =
-        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation);
+        SqlInterfaceVentilationSetVals::new(sql_interface.get_connection(), &config.ventilation)
+            .map_err(|e| StartupError::Database { source: e })?;
+
     let mut ventilation = Ventilation::new(config.ventilation);
     let mut balling = Balling::new(
         config.balling,
@@ -1318,7 +1325,7 @@ fn run() -> Result<(), StartupError> {
                 tcp_communication.execute(tcp_communication_channels);
             });
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "TcpCommunication terminated.");
+            debug!(target: module_path!(), "TcpCommunication terminated.");
         };
 
         if config.relay_manager.use_simulator {
@@ -1327,7 +1334,7 @@ fn run() -> Result<(), StartupError> {
                     ActuateSimulator::new(tx_relay_manager_to_tcp_opt, config.controllino_relay);
                 relay_manager.execute(relay_manager_channels, &mut actuate_simulator);
                 #[cfg(feature = "debug_main")]
-                debug!(target: LOG_TARGET_MAIN, "Controllino (simulator) terminated.");
+                debug!(target: module_path!(), "Controllino (simulator) terminated.");
             });
         } else {
             scope.spawn(move || {
@@ -1343,7 +1350,7 @@ fn run() -> Result<(), StartupError> {
                 }
 
                 #[cfg(feature = "debug_main")]
-                debug!(target: LOG_TARGET_MAIN, "Controllino (with hardware) terminated.");
+                debug!(target: module_path!(), "Controllino (with hardware) terminated.");
             });
         }
 
@@ -1353,14 +1360,14 @@ fn run() -> Result<(), StartupError> {
             handle_signals(term, signal_handler_channels);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Signal handler terminated.");
+            debug!(target: module_path!(), "Signal handler terminated.");
         });
 
         scope.spawn(move || {
             schedule_check.execute(schedule_check_channels);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Schedule checker terminated.");
+            debug!(target: module_path!(), "Schedule checker terminated.");
         });
 
         scope.spawn(move || {
@@ -1372,7 +1379,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Atlas Scientific terminated.");
+            debug!(target: module_path!(), "Atlas Scientific terminated.");
         });
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -1387,7 +1394,7 @@ fn run() -> Result<(), StartupError> {
                 );
 
                 #[cfg(feature = "debug_main")]
-                debug!(target: LOG_TARGET_MAIN, "i2c_interface terminated.");
+                debug!(target: module_path!(), "i2c_interface terminated.");
             });
         }
 
@@ -1395,7 +1402,7 @@ fn run() -> Result<(), StartupError> {
             dht.execute(mutex_dht, rx_dht_from_signal_handler);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Dht terminated.");
+            debug!(target: module_path!(), "Dht terminated.");
         });
 
         scope.spawn(move || {
@@ -1423,7 +1430,7 @@ fn run() -> Result<(), StartupError> {
             sensor_manager.execute(sensor_manager_channels, mutexes_sensor_manager);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Ambient terminated.");
+            debug!(target: module_path!(), "Ambient terminated.");
         });
 
         // give sensor reading components some time so that they can acquire a first data set
@@ -1460,7 +1467,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Data logger terminated.");
+            debug!(target: module_path!(), "Data logger terminated.");
         });
 
         scope.spawn(move || {
@@ -1473,7 +1480,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Tank level switch calculation terminated.");
+            debug!(target: module_path!(), "Tank level switch calculation terminated.");
         });
 
         // Refill needs actuation of relay
@@ -1489,7 +1496,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Refill terminated.");
+            debug!(target: module_path!(), "Refill terminated.");
         });
 
         // Heating needs actuation of relay
@@ -1513,7 +1520,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Heating terminated.");
+            debug!(target: module_path!(), "Heating terminated.");
         });
 
         // Ventilation needs actuation of relay
@@ -1529,7 +1536,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Ventilation terminated.");
+            debug!(target: module_path!(), "Ventilation terminated.");
         });
 
         // Monitors needs communication with the Controllino device
@@ -1539,7 +1546,7 @@ fn run() -> Result<(), StartupError> {
             monitors.execute(mutex_device_scheduler_monitors, monitors_channels);
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Monitors terminated.");
+            debug!(target: module_path!(), "Monitors terminated.");
         });
 
         // Feed needs actuation of relay
@@ -1552,7 +1559,7 @@ fn run() -> Result<(), StartupError> {
                 &mut food_injection,
             );
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Feed terminated.");
+            debug!(target: module_path!(), "Feed terminated.");
         });
 
         // Balling dosing needs actuation of relays
@@ -1566,7 +1573,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Balling terminated.");
+            debug!(target: module_path!(), "Balling terminated.");
         });
 
         // IPC via messages
@@ -1579,7 +1586,7 @@ fn run() -> Result<(), StartupError> {
             publish_pid.erase_pid();
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Messaging terminated.");
+            debug!(target: module_path!(), "Messaging terminated.");
         });
 
         // Watchdog communication
@@ -1592,7 +1599,7 @@ fn run() -> Result<(), StartupError> {
             );
 
             #[cfg(feature = "debug_main")]
-            debug!(target: LOG_TARGET_MAIN, "Watchdog terminated.");
+            debug!(target: module_path!(), "Watchdog terminated.");
         });
 
         // Ds18b20 communication

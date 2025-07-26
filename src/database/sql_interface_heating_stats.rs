@@ -13,12 +13,11 @@ use crate::database::{
 };
 
 use chrono::*;
-use log::warn;
+use log::{error, warn};
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-
-const LOG_TARGET_SQL_INTERFACE_HEATING: &str = "sql_interface_heating";
+use crate::database::sql_query_strings::{SQL_QUERY_CHECK_HEATING_STATS_NULL};
 
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from a database query which is then updated by the control application.
@@ -58,7 +57,7 @@ impl HeatingStatsEntry {
     pub fn new(conn: &mut PooledConn) -> HeatingStatsEntry {
         // Get the current date from the database
         let today: NaiveDate = SqlInterface::get_current_date(conn).unwrap_or_else(|_| {
-            warn!(target: LOG_TARGET_SQL_INTERFACE_HEATING, "Could not get current date from database.");
+            warn!(target: module_path!(), "Could not get current date from database.");
             // fall back: calculation using machine-local time
             let now = Local::now();
             let year = now.year();
@@ -198,7 +197,7 @@ pub struct HeatingStatsStringEntry {
 }
 
 /// Contains the configuration and the implementation of the SQL interface for heating.
-pub struct SqlInterfaceHeating {
+pub struct SqlInterfaceHeatingStats {
     /// Connection to the database
     pub conn: PooledConn,
 
@@ -207,8 +206,8 @@ pub struct SqlInterfaceHeating {
         Box<dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send>,
 }
 
-impl SqlInterfaceHeating {
-    /// Creates a new `SqlInterfaceHeating` instance.
+impl SqlInterfaceHeatingStats {
+    /// Creates a new `SqlInterfaceHeatingStats` instance.
     ///
     /// This constructor initializes the heating SQL interface with a primary
     /// database connection and a dedicated calculator for time-until-midnight
@@ -227,41 +226,32 @@ impl SqlInterfaceHeating {
     ///   for dynamic dispatch and mock implementations in tests.
     ///
     /// # Returns
-    /// A new `SqlInterfaceHeating` struct.
+    /// * A new `SqlInterfaceHeatingStats` struct in case of success.
+    /// * An error `SqlInterfaceError` in case of failure.
     pub fn new(
         mut conn: PooledConn,
         sql_interface_heating_midnight_calculator: Box<
             dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send,
         >,
-    ) -> SqlInterfaceHeating {
-        if SqlInterface::get_single_integer_from_database(
+    ) -> Result<SqlInterfaceHeatingStats, SqlInterfaceError> {
+        let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            sql_query_strings::SQL_QUERY_CHECK_HEATINGSETVALS_NULL,
+            SQL_QUERY_CHECK_HEATING_STATS_NULL,
         )
-        .expect("Could not check heating set value table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Heating set value table may be inconsistent - it contains NULL values.",
-                LOG_TARGET_SQL_INTERFACE_HEATING
-            );
+            .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
+                source: Box::new(e),
+            })?;
+
+        if count_null_values > 0 {
+            return Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsNull(
+                count_null_values,
+            ));
         }
-        if SqlInterface::get_single_integer_from_database(
-            &mut conn,
-            sql_query_strings::SQL_QUERY_CHECK_HEATINGSTATS_NULL,
-        )
-        .expect("Could not check heating statistics table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Heating statistics table may be inconsistent - it contains NULL values.",
-                LOG_TARGET_SQL_INTERFACE_HEATING
-            );
-        }
-        SqlInterfaceHeating {
+
+        Ok(SqlInterfaceHeatingStats {
             conn,
             sql_interface_heating_midnight_calculator,
-        }
+        })
     }
 
     /// Retrieves a single `HeatingStatsEntry` for the current date from the database.
@@ -343,17 +333,12 @@ impl SqlInterfaceHeating {
         let single_heating_stats_string_entry = &single_heating_stats_entry_array[0];
 
         // convert String to NaiveDate
-        let date = match NaiveDate::parse_from_str(
-            single_heating_stats_string_entry.date.as_str(),
-            "%Y-%m-%d",
-        ) {
-            Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::TimestampConversionFailure(
-                    single_heating_stats_string_entry.date.clone(),
-                ));
-            }
-        };
+        let date =
+            NaiveDate::parse_from_str(single_heating_stats_string_entry.date.as_str(), "%Y-%m-%d")
+                .map_err(|e| SqlInterfaceError::TimestampConversionFailure {
+                    timestamp_string: single_heating_stats_string_entry.date.clone(),
+                    source: e,
+                })?;
 
         let single_heating_stats_entry = HeatingStatsEntry {
             date,
@@ -460,8 +445,10 @@ impl SqlInterfaceHeating {
             ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                println!("{e:?}");
-                Err(SqlInterfaceError::InsertHeatingStatsEntryFailure(sql_query_string))
+                Err(SqlInterfaceError::InsertHeatingStatsEntryFailure {
+                    sql_query_string,
+                    source: e,
+                })
             }
         }
     }
@@ -485,7 +472,9 @@ impl SqlInterfaceHeating {
 
     /// Execute a ping to the database to avoid timeout.
     pub fn ping(&mut self) {
-        SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_HEATING);
+        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
+        }
     }
 }
 
@@ -493,7 +482,7 @@ impl SqlInterfaceHeating {
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
-    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
+    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -512,12 +501,12 @@ pub mod tests {
         let sql_interface_heating_midnight_calculator = Box::new(
             SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
         );
-        let mut sql_interface_heating = SqlInterfaceHeating::new(
+        let mut sql_interface_heating = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
-        );
+        ).unwrap();
 
-        // *** retrieve heating stats - FAIL ****************************************************
+        // *** retrieve heating stats - ************************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "heatingstats".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -527,18 +516,13 @@ pub mod tests {
                 panic!("Call to get_single_heating_stats_from_database should have failed.");
             }
             Err(e) => {
-                assert_eq!(
-                    e,
-                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(
-                        "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();".to_string()
-                    )
-                );
+                assert!(matches!(e, SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_)));
             }
         }
-        println!("* checking retrieving heating stats (FAIL) succeeded.");
-        // **************************************************************************************
+        println!("* checking retrieving heating stats succeeded.");
+        // *****************************************************************************************
 
-        // *** insert heating stats - PASS ******************************************************
+        // *** insert heating stats ****************************************************************
         // prepare data for inserting into the database
         let today = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
@@ -553,14 +537,11 @@ pub mod tests {
             water_temperature_average_counter: 78000,
             heating_control_runtime: 64000,
         };
-        assert_eq!(
-            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
-            Ok(())
-        );
-        println!("* checking inserting heating stats (PASS) succeeded.");
-        // **************************************************************************************
+        assert!(matches!(sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry), Ok(())));
+        println!("* checking inserting heating stats succeeded.");
+        // *****************************************************************************************
 
-        // *** retrieve stats - PASS ************************************************************
+        // *** retrieve stats **********************************************************************
         match sql_interface_heating.get_single_heating_stats_from_database() {
             Ok(c) => {
                 assert_eq!(c.date, today.into());
@@ -575,9 +556,9 @@ pub mod tests {
                 panic!("Call to get_single_heating_stats_from_database has failed.");
             }
         }
-        println!("* checking retrieving heating stats (PASS) succeeded.");
+        println!("* checking retrieving heating stats succeeded.");
 
-        // *** retrieve stats - PASS ************************************************************
+        // *** retrieve stats **********************************************************************
         // update data and trigger SQL statement (ON DUPLICATE UPDATE)
         heating_stats_entry.energy += 0.1;
         heating_stats_entry.ambient_temperature_average_value += 0.1;
@@ -585,10 +566,10 @@ pub mod tests {
         heating_stats_entry.water_temperature_average_value += 0.1;
         heating_stats_entry.water_temperature_average_counter += 1;
         heating_stats_entry.heating_control_runtime += 1;
-        assert_eq!(
+        assert!(matches!(
             sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
             Ok(())
-        );
+        ));
         match sql_interface_heating.get_single_heating_stats_from_database() {
             Ok(c) => {
                 assert_eq!(c.date, today.into());
@@ -603,10 +584,10 @@ pub mod tests {
                 panic!("Call to get_single_heating_stats_from_database has failed.");
             }
         }
-        println!("* checking retrieving updated heating stats (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking retrieving updated heating stats succeeded.");
+        // *****************************************************************************************
 
-        // *** calculate duration until midnight ************************************************
+        // *** calculate duration until midnight ***************************************************
         // reference calculation in Rust
         // Get current date components
         let now = Local::now();
@@ -630,7 +611,7 @@ pub mod tests {
                 panic!("Call to get_duration_until_midnight failed.");
             }
         }
-        println!("* checking duration until midnight in seconds (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking duration until midnight in seconds succeeded.");
+        // *****************************************************************************************
     }
 }

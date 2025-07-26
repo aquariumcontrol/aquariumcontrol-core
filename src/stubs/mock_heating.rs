@@ -20,6 +20,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use crate::database::sql_interface_error::SqlInterfaceError;
 
     pub fn mock_heating(
         tx_heating_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
@@ -182,7 +183,7 @@ pub mod tests {
             &mut self,
             heating_switch_off_temperature: &mut f32,
             heating_switch_on_temperature: &mut f32,
-        ) {
+        ) -> Result<(), SqlInterfaceError> {
             if self.active
                 && self.delay_duration.is_some()
                 && self.new_set_value_heating_switch_off_temperature.is_some()
@@ -196,6 +197,7 @@ pub mod tests {
                         self.new_set_value_heating_switch_on_temperature.unwrap();
                 }
             }
+            Ok(())
         }
     }
 }

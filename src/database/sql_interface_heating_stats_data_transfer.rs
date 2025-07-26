@@ -1,8 +1,6 @@
-use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::database::sql_interface_error::SqlInterfaceError;
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::thermal::heating::HeatingStatsDataTransferTrait;
-use log::error;
-
-const LOG_TARGET_HEATING_STATS_DATA_TRANSFER: &str = "HeatingStatsDataTransfer";
 
 /// Implements the `HeatingStatsDataTransferTrait` for transferring heating statistics to the SQL database.
 ///
@@ -25,16 +23,8 @@ impl HeatingStatsDataTransferTrait for HeatingStatsDataTransfer {
     fn transfer_heating_stats(
         &mut self,
         heating_stats_entry: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeating,
-    ) {
-        match sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry) {
-            Ok(_) => {}
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET_HEATING_STATS_DATA_TRANSFER,
-                    "could not insert heating statistics into database: {e:?}"
-                );
-            }
-        };
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
+    ) -> Result<(), SqlInterfaceError> {
+        sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry)
     }
 }

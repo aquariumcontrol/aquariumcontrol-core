@@ -15,8 +15,6 @@ cfg_if::cfg_if! {
         use ws2818_rgb_led_spi_driver::encoding::encode_rgb;
     }
 }
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-const LOG_TAG_WS2812B: &str = "WS2812B";
 
 #[cfg(all(target_os = "linux", feature = "target_hw"))]
 pub enum RgbLedColor {
@@ -71,7 +69,7 @@ impl Ws2812B {
                 Ok(adapter) => adapter,
                 Err(e) => panic!(
                     "{}: Could not instantiate adapter for RGB LED {e:?}",
-                    LOG_TAG_WS2812B
+                    module_path!()
                 ),
             };
             Ws2812B { adapter, config }
@@ -98,7 +96,7 @@ impl Ws2812B {
         match self.adapter.write_encoded_rgb(&spi_encoded_rgb_bits) {
             Ok(_) => {}
             Err(e) => {
-                warn!(target: LOG_TAG_WS2812B, "Could not set color {e:?}");
+                warn!(target: module_path!(), "Could not set color {e:?}");
             }
         }
     }

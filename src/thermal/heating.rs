@@ -13,7 +13,7 @@ use log::{error, warn};
 use log::info;
 
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
-use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
+use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::sensor_manager::SensorManagerSignals;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
@@ -25,6 +25,7 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::database::sql_interface_error::SqlInterfaceError;
 
 const LOG_TARGET_HEATING: &str = "heating";
 
@@ -43,8 +44,8 @@ pub trait HeatingStatsDataTransferTrait {
     fn transfer_heating_stats(
         &mut self,
         data: HeatingStatsEntry,
-        sql_interface_heating: &mut SqlInterfaceHeating,
-    );
+        sql_interface_heating: &mut SqlInterfaceHeatingStats,
+    ) -> Result<(), SqlInterfaceError>;
 }
 
 /// Holds the configuration data for the heating control.
@@ -263,7 +264,7 @@ pub struct Heating {
     config: HeatingConfig,
 
     /// SQL interface for heating control
-    sql_interface_heating: SqlInterfaceHeating,
+    sql_interface_heating: SqlInterfaceHeatingStats,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive information from schedule check
     lock_error_channel_receive_schedule_check: bool,
@@ -286,6 +287,9 @@ pub struct Heating {
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     lock_warn_max_mutex_access_duration: bool,
 
+    /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
+    lock_error_heating_set_value_read_failure: bool,
+    
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
@@ -314,7 +318,7 @@ impl Heating {
     /// A new **`Heating` struct**, ready to manage the aquarium's heating system.
     pub fn new(
         config: HeatingConfig,
-        sql_interface_heating: SqlInterfaceHeating,
+        sql_interface_heating: SqlInterfaceHeatingStats,
         database_ping_interval: Duration,
     ) -> Heating {
         Self {
@@ -327,7 +331,7 @@ impl Heating {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_warn_max_mutex_access_duration: false,
-
+            lock_error_heating_set_value_read_failure: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
         }
@@ -563,10 +567,25 @@ impl Heating {
                 }
 
                 // check if set values need to be updated
-                heating_set_val_updater.update_set_value(
+                if let Err(e) = heating_set_val_updater.update_set_value(
                     &mut self.config.switch_off_temperature,
                     &mut self.config.switch_on_temperature,
-                );
+                ) {
+                    if !self.lock_error_heating_set_value_read_failure {
+                        error!(
+                            target: module_path!(),
+                            concat!(
+                                "Error occurred when trying to retrieve heating set values from database",
+                                "maintaining the current heating set values (off={:?}, on={:?}): {:?}"
+                            ),
+                            self.config.switch_off_temperature, self.config.switch_on_temperature, e
+                        );
+                        self.lock_error_heating_set_value_read_failure = true;
+                    }
+                }
+                else {
+                    self.lock_error_heating_set_value_read_failure = false;
+                }
 
                 if self.config.stop_on_refill_error
                     && (tank_level_low_counter > self.config.stop_on_refill_error_delay)
@@ -738,10 +757,12 @@ impl Heating {
 
                     // check if midnight has arrived
                     if duration_until_midnight <= 0 && heating_stats_opt.is_some() {
-                        heating_stats_transfer.transfer_heating_stats(
+                        if let Err(e) = heating_stats_transfer.transfer_heating_stats(
                             heating_stats_opt.clone().unwrap(),
                             &mut self.sql_interface_heating,
-                        );
+                        ) {
+                            error!("Error occurred when trying to store heating stats data in database: {e:?}")
+                        }
                         // reset heating stats
                         heating_stats_opt =
                             Some(HeatingStatsEntry::new(&mut self.sql_interface_heating.conn));
@@ -844,10 +865,12 @@ impl Heating {
         // update the database with the heating stats data recorded
         // so far for this date
         if heating_stats_opt.is_some() {
-            heating_stats_transfer.transfer_heating_stats(
+            if let Err(e) = heating_stats_transfer.transfer_heating_stats(
                 heating_stats_opt.clone().unwrap(),
                 &mut self.sql_interface_heating,
-            );
+            ) {
+                error!("Error occurred when trying to store heating stats data in database (during termination): {e:?}")
+            }
         }
 
         // The application received request to terminate. That is why the loop was left.
@@ -921,7 +944,7 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeating};
+    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::sensor_manager::SensorManagerSignals;
@@ -975,14 +998,15 @@ pub mod tests {
         fn transfer_heating_stats(
             &mut self,
             heating_stats_entry: HeatingStatsEntry,
-            _sql_interface_heating: &mut SqlInterfaceHeating,
-        ) {
+            _sql_interface_heating: &mut SqlInterfaceHeatingStats,
+        ) -> Result<(), SqlInterfaceError> {
             self.heating_stats_entry_previous = self.heating_stats_entry.clone();
             self.heating_stats_entry = heating_stats_entry.clone();
             println!(
                 "Heating: Received command to transfer mock data to SQL database: {}",
                 heating_stats_entry,
             );
+            Ok(())
         }
     }
 
@@ -1095,10 +1119,11 @@ pub mod tests {
         let sql_interface_heating_midnight_calculator = Box::new(
             SqlInterfaceHeatingMockMidnightCalculator::new(seconds_to_midnight),
         );
-        let sql_interface_heating = SqlInterfaceHeating::new(
+        let sql_interface_heating_stats = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
-        );
+        ).unwrap();
+        
         println!(
             "prepare_heating_tests_mock_midnight_calculator: SwitchOff temperature = {}, SwitchOn temperature = {}",
             config.heating.switch_on_temperature, config.heating.switch_off_temperature
@@ -1108,7 +1133,7 @@ pub mod tests {
             config,
             Heating::new(
                 heating_config,
-                sql_interface_heating,
+                sql_interface_heating_stats,
                 Duration::from_secs(1000),
             ),
             sql_interface,

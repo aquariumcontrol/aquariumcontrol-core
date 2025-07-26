@@ -278,7 +278,7 @@ impl Feed {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_FEED,
-                    "could not insert feed event into database ({:?})",
+                    "Could not insert feed event into database ({:?})",
                     e
                 );
                 Err(())
@@ -414,7 +414,7 @@ impl Feed {
             Err(e) => {
                 error!(
                     target: LOG_TARGET_FEED,
-                    "updating feed schedule entry failed ({e:?})"
+                    "Updating feed schedule entry failed ({e:?})"
                 );
                 self.execution_blocked = true;
             }
@@ -874,7 +874,7 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -998,7 +998,7 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -1437,7 +1437,7 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -1566,7 +1566,7 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 

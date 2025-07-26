@@ -12,16 +12,12 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
-};
+use crate::database::sql_query_strings::{SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL, SQL_TABLE_FEEDPATTERNS};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
 use crate::food::feed_pattern::{FeedPhase, Feedpattern};
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
-
-const LOG_TARGET_SQL_INTERFACE_FEED: &str = "sql_interface_feed";
 
 #[derive(Clone)]
 /// Holds the header information of a feed pattern.
@@ -196,11 +192,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not insert feed event into database ({e:?})"
-                );
-                Err(SqlInterfaceError::InsertFeedEventFailure)
+                Err(SqlInterfaceError::InsertFeedEventFailure { source: e })
             }
         }
     }
@@ -228,11 +220,6 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         let sql_feedpattern_header = match self.get_feedpattern_header_from_database(profile_id) {
             Ok(c) => c,
             Err(e) => {
-                #[cfg(not(test))]
-                error!(
-                    target: LOG_TARGET_SQL_INTERFACE_FEED,
-                    "could not retrieve feed pattern from the database ({e:?})"
-                );
                 return Err(e);
             }
         };
@@ -291,7 +278,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         &mut self,
         feedschedule_entries: &mut Vec<FeedScheduleEntry>,
     ) -> Result<(), SqlInterfaceError> {
-        let mut result = Ok(()); // initial value - will be overwritten by any error occurred
+        let mut result = Ok(()); // an initial value - will be overwritten by any error occurred
         for feedschedule_entry in feedschedule_entries {
             if feedschedule_entry.repeat_daily {
                 // the feed schedule shall be repeated daily, so update the entry with
@@ -304,11 +291,9 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                     match SqlInterface::get_tomorrow_date(&mut self.conn) {
                         Ok(c) => c,
                         Err(e) => {
-                            error!(
-                                target: LOG_TARGET_SQL_INTERFACE_FEED,
-                                "could not calculate update of feed schedule entry ({e:?})"
-                            );
-                            result = Err(SqlInterfaceError::FeedScheduleUpdateFailure);
+                            result = Err(SqlInterfaceError::FeedScheduleUpdateFailure {
+                                source: Box::new(e),
+                            });
                             continue;
                         }
                     };
@@ -326,11 +311,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 ) {
                     Ok(_) => { /* do nothing */ },
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_SQL_INTERFACE_FEED,
-                            "could not update feed schedule entry ({e:?})"
-                        );
-                        result = Err(SqlInterfaceError::FeedScheduleDropFailure);
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure { source: e });
                     }
                 };
             } else {
@@ -345,11 +326,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                 ) {
                     Ok(_) => { /* do nothing */ },
                     Err(e) => {
-                        error!(
-                            target: LOG_TARGET_SQL_INTERFACE_FEED,
-                            "could not delete feed schedule entry ({e:?})"
-                        );
-                        result = Err(SqlInterfaceError::FeedScheduleDropFailure);
+                        result = Err(SqlInterfaceError::FeedScheduleDropFailure { source: e });
                     }
                 };
             }
@@ -359,7 +336,9 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
 
     /// Execute a ping to the database to avoid timeout.
     fn ping(&mut self) {
-        SqlInterface::ping_database(&mut self.conn, LOG_TARGET_SQL_INTERFACE_FEED)
+        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
+        }
     }
 
     #[cfg(test)]
@@ -402,11 +381,11 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: LOG_TARGET_SQL_INTERFACE_FEED,
+                error!( // logging for testing purposes only
+                    target: module_path!(),
                     "could not insert feed schedule entry ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertFeedEventFailure)
+                Err(SqlInterfaceError::InsertFeedEventFailure { source : e})
             }
         }
     }
@@ -424,34 +403,42 @@ impl SqlInterfaceFeed {
     /// * `conn` - An active database connection pool object.
     ///
     /// # Returns
-    /// A new `SqlInterfaceFeed` struct.
-    pub fn new(mut conn: PooledConn) -> SqlInterfaceFeed {
-        if SqlInterface::get_single_integer_from_database(
+    /// * A new `SqlInterfaceFeed` struct in case of success.
+    /// * An error `SqlInterfaceError` in case of failure.
+    pub fn new(mut conn: PooledConn) -> Result<Self, SqlInterfaceError> {
+        // check if feed patterns table is consistent
+        let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_FEEDPATTERNS_NULL,
-        )
-        .expect("Could not check feed pattern table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Feed pattern table may be inconsistent - it contains NULL values.",
-                LOG_TARGET_SQL_INTERFACE_FEED
-            );
-        }
-        if SqlInterface::get_single_integer_from_database(
-            &mut conn,
-            SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
-        )
-        .expect("Could not check feed schedule table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Feed schedule table may be inconsistent - it contains NULL values.",
-                LOG_TARGET_SQL_INTERFACE_FEED
-            );
+        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+                table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
+                source: Box::new(e),
+            }
+        )?;
+
+        if count_null_values > 0 {
+            return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                SQL_TABLE_FEEDPATTERNS.to_string(), count_null_values,
+            ));
         }
 
-        SqlInterfaceFeed { conn }
+        // check if the feed schedule table is consistent
+        let count_null_values = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
+        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+                table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
+                source: Box::new(e),
+            }
+        )?;
+
+        if count_null_values > 0 {
+            return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                SQL_QUERY_CHECK_FEEDSCHEDULE_NULL.to_string(), count_null_values,
+            ));
+        }
+
+        Ok(SqlInterfaceFeed { conn })
     }
 
     /// Retrieves and post-processes feed schedule entries from the database based on a given SQL query.
@@ -600,10 +587,11 @@ impl SqlInterfaceFeed {
                     }
                 }) {
                 Ok(c) => c,
-                Err(_) => {
-                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                        sql_query.as_str().to_string(),
-                    ));
+                Err(e) => {
+                    return Err(SqlInterfaceError::SingleFeedpatternRequestFailure {
+                        query: sql_query.as_str().to_string(),
+                        source: e
+                    });
                 }
             };
 
@@ -686,10 +674,11 @@ impl SqlInterfaceFeed {
             },
         ) {
             Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure(
-                    sql_query,
-                ));
+            Err(e) => {
+                return Err(SqlInterfaceError::SingleFeedpatternRequestFailure {
+                    query: sql_query,
+                    source: e,
+                });
             }
         };
 
@@ -795,9 +784,9 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
-        //*** check retrieving of the feed pattern from empty table - FAIL **************************
+        //*** check retrieving of the feed pattern from empty table *********************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedpatterns".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -807,19 +796,13 @@ pub mod tests {
                 panic!("Call to get_single_feedpattern_from_database should have failed.");
             }
             Err(e) => {
-                assert_eq!(
-                    e,
-                    SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(
-                        "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=1;"
-                            .to_string()
-                    )
-                );
+                assert!(matches!(e, SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(_)));
             }
         }
         println!("* checking retrieving of Feed pattern (FAIL) succeeded.");
         // **************************************************************************************
 
-        // *** check retrieving of existing feed pattern - FAIL *********************************
+        // *** check retrieving of existing feed pattern ****************************************
         // prepare database: insert feed profile
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST1.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
@@ -971,8 +954,8 @@ pub mod tests {
                 panic!("Call to get_single_feedpattern_from_database has failed: {e:?}.");
             }
         }
-        println!("* checking retrieving of feed pattern (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking retrieving of feed pattern succeeded.");
+        // *****************************************************************************************
     }
 
     #[test]
@@ -986,8 +969,8 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
-        //*** check inserting of feed event into empty table - FAIL ****************************
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        //*** check inserting of feed event into empty table ***************************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedlog".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -1030,8 +1013,8 @@ pub mod tests {
         assert_eq!(feed_event.feeder_run_time, 5.5);
         assert_eq!(feed_event.feed_profile_name, "Test");
         assert_eq!(feed_event.feed_profile_id, 1);
-        println!("* checking inserting of feed event into log (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking inserting of feed event into log succeeded.");
+        // *****************************************************************************************
     }
 
     #[test]
@@ -1045,7 +1028,7 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection());
+        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
         // *** check trying to load feed schedule entry when table is empty *********************
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
             Ok(_) => {}
@@ -1119,10 +1102,10 @@ pub mod tests {
                 panic!("Error occurred when trying to load feed schedule entry.");
             }
         };
-        println!("* reading existing entry from feed schedule (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* reading existing entry from feed schedule succeeded.");
+        // *****************************************************************************************
 
-        // *** check updating feed schedule with repetition ***************************************
+        // *** check updating feed schedule with repetition ****************************************
         println!(
             "Feed schedule entry before database update: {}",
             feedschedule_entry_before_update
@@ -1171,10 +1154,10 @@ pub mod tests {
             "Feed schedule entry after database update: {}",
             feedschedule_entry_after_update
         );
-        println!("* update existing entry from feed schedule (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* update existing entry from feed schedule succeeded.");
+        // *****************************************************************************************
 
-        // *** test updating feed schedule without repetition ************************************
+        // *** test updating feed schedule without repetition **************************************
         // modify existing feed schedule entry -> it shall be deleted with a call to update
         feedschedule_entry_after_update.repeat_daily = false;
         let mut feedschedule_entries_after_update: Vec<FeedScheduleEntry> = Vec::new();
@@ -1197,10 +1180,10 @@ pub mod tests {
                 panic!("Error when trying to load feed schedule entry from empty table.");
             }
         };
-        println!("* deleting existing entry from feed schedule (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* deleting existing entry from feed schedule succeeded.");
+        // *****************************************************************************************
 
-        // *** check updating multiple feed schedule entries with repetition **********************
+        // *** check updating multiple feed schedule entries with repetition ***********************
         // calculate dynamic reference
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
             Ok(_) => {}
@@ -1321,7 +1304,7 @@ pub mod tests {
                 panic!("Error occurred when trying to load feed schedule entry.");
             }
         };
-        println!("* update of existing entries from feed schedule (PASS) succeeded.");
+        println!("* update of existing entries from feed schedule succeeded.");
         // **************************************************************************************
     }
 }

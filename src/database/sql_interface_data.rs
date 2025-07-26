@@ -21,8 +21,6 @@ pub struct SqlInterfaceData {
 }
 
 impl SqlInterfaceData {
-    const LOG_TARGET_SQL_INTERFACE_DATA: &'static str = "sql_interface_data";
-
     /// Creates a new `SqlInterfaceData` instance.
     ///
     /// This constructor initializes the time-based data SQL interface
@@ -232,8 +230,7 @@ impl SqlInterfaceData {
             },
         );
 
-        println!("Executing query: {}", sql_query_string);
-        // execute query
+        // execute the database query and evaluate the result
         match self.conn.exec_drop::<_, _>(
             sql_query_string.clone(),
             params! {
@@ -242,18 +239,19 @@ impl SqlInterfaceData {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE_DATA,
-                    "could not insert data frame into database ({e:?})"
-                );
-                Err(SqlInterfaceError::InsertDataFrameFailure(sql_query_string))
+                Err(SqlInterfaceError::InsertDataFrameFailure{
+                    sql_query_string,
+                    source: e
+                })
             }
         }
     }
 
     /// Execute a ping to the database to avoid timeout.
     pub fn ping(&mut self) {
-        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_DATA);
+        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
+        }
     }
 }
 
@@ -493,7 +491,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
-        // *** insert and load RecorderDataFrame - PASS ****************************************************
+        // *** insert and load RecorderDataFrame ***************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -541,7 +539,7 @@ pub mod tests {
         println!("* checking inserting data frame into empty table succeeded");
         // *****************************************************************************************
 
-        // *** insert and load the same RecorderDataFrame again - PASS (check ON DUPLICATE functionality) **
+        // *** insert and load the same RecorderDataFrame again (check ON DUPLICATE functionality) *
         let dataframe_reference_2 = RecorderDataFrame {
             timestamp: dataframe_reference_1.timestamp,
             water_temperature: Some(26.5),
@@ -579,7 +577,7 @@ pub mod tests {
         println!("* checking inserting already existing data frame into empty table succeeded");
         // *****************************************************************************************
 
-        // *** insert and load DataFrame with NULL data - PASS *************************************
+        // *** insert and load DataFrame with NULL data ********************************************
         match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),

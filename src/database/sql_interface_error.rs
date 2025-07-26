@@ -6,10 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use chrono::ParseError;
+use mysql::Error as MySqlError;
 use thiserror::Error;
 
-#[derive(PartialEq, Debug, Error)]
+#[derive(Debug, Error)]
 /// Enum codifies the errors which the program may encounter in communication with the DB
 pub enum SqlInterfaceError {
     #[error(
@@ -80,8 +81,13 @@ pub enum SqlInterfaceError {
     #[error("SQL database responded with multiple responses to request to query: {0}")]
     SingleHeatingStatsRequestNoSingleResponse(String),
 
-    #[error("Could not get feed pattern header from the database with query: {0}")]
-    SingleFeedpatternRequestFailure(String),
+    #[error("Could not get feed pattern header from the database with query: {query}")]
+    SingleFeedpatternRequestFailure {
+        query: String,
+
+        #[source]
+        source: MySqlError,
+    },
 
     #[error("SQL database responded with empty response to query: {0}")]
     SingleFeedpatternRequestEmptyResponse(String),
@@ -89,8 +95,18 @@ pub enum SqlInterfaceError {
     #[error("SQL database responded with multiple responses to request to query: {0}")]
     SingleFeedpatternRequestNoSingleResponse(String),
 
-    #[error("Could not get schedule entries from SQL database using query: {0}")]
-    ScheduleRequestFailure(String),
+    #[error("Could not get schedule entries from SQL database using query: {query}")]
+    ScheduleRequestFailure{
+        query: String,
+        #[source]
+        source: MySqlError
+    },
+
+    #[error("Could not process the results obtained from SQL database.")]
+    ScheduleProcessingFailure{
+        #[source]
+        source: Box<SqlInterfaceError>
+    },
 
     #[error("ScheduleEntry: Error in conversion of SQL database result to enum ({0}).")]
     ScheduleTypeConversionFailure(String),
@@ -104,20 +120,46 @@ pub enum SqlInterfaceError {
     #[error("Schedule of type {0} could not be found in database.")]
     ScheduleTypeNotFound(String),
 
-    #[error("Error when trying to convert string to timestamp: {0}")]
-    TimestampConversionFailure(String),
+    #[error("Error when trying to convert string to timestamp: {timestamp_string}")]
+    TimestampConversionFailure {
+        timestamp_string: String,
+        #[source]
+        source: ParseError,
+    },
 
-    #[error("Error when inserting heating stats into database using query: {0}")]
-    InsertHeatingStatsEntryFailure(String),
+    #[error("Error when inserting heating stats into database using query: {sql_query_string}")]
+    InsertHeatingStatsEntryFailure{
+        sql_query_string: String,
+        #[source]
+        source: MySqlError,
+    },
 
-    #[error("Error occurred when trying to insert a feed event into database.")]
-    InsertFeedEventFailure,
+    #[error("Error occurred when trying to insert a feed event into database: {source}")]
+    InsertFeedEventFailure {
+        #[source]
+        source: MySqlError
+    },
 
-    #[error("Error occurred when trying to insert a feed event into database.")]
-    InsertRefillEventFailure,
+    #[error("Error occurred when trying to insert a refill event into database using query: {sql_query_string}.")]
+    InsertRefillEventFailure {
+        sql_query_string: String,
+        #[source]
+        source: MySqlError
+    },
 
     #[error("Error occurred when trying to insert a Balling dosing event into database.")]
-    InsertBallingEventFailure,
+    InsertBallingEventFailure {
+        #[source]
+        source: MySqlError,
+    },
+
+    #[error("Database request for retrieving the refill {category} of last {interval} failed.")]
+    RefillPastDataRetrievalFailed {
+        category: String,
+        interval: String,
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
 
     #[error("Could not get feed schedule entry from the database using query: {0}")]
     FeedScheduleEntryRequestFailure(String),
@@ -126,10 +168,16 @@ pub enum SqlInterfaceError {
     FeedScheduleEntryTimeStampConversionFailure,
 
     #[error("Error occurred when trying to calculate update of feed schedule entry.")]
-    FeedScheduleUpdateFailure,
+    FeedScheduleUpdateFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
 
     #[error("Error occurred when trying to drop a feed schedule entry from database.")]
-    FeedScheduleDropFailure,
+    FeedScheduleDropFailure {
+        #[source]
+        source: MySqlError
+    },
 
     #[error("Could not get single Balling set value from the database using query: {0}")]
     SingleBallingSetValRequestFailure(String),
@@ -140,8 +188,13 @@ pub enum SqlInterfaceError {
     #[error("SQL database responded with multiple responses to request to query: {0}")]
     SingleBallingSetValNoSingleResponse(String),
 
-    #[error("Error when inserting data frame into database using query: {0}")]
-    InsertDataFrameFailure(String),
+    #[error("Error when inserting data frame into database using query: {sql_query_string}")]
+    InsertDataFrameFailure {
+        sql_query_string: String,
+
+        #[source]
+        source: MySqlError,
+    },
 
     #[error("Database responded with a timestamp in the future (delta of {0} seconds).")]
     NegativeTimeDeltaSeconds(i64),
@@ -155,6 +208,18 @@ pub enum SqlInterfaceError {
     #[error("The database returned more than one heating set value entry with query: {0}")]
     HeatingSetValsNoSingleResponse(String),
 
+    #[error("Updating the heating set values failed.")]
+    HeatingSetValsUpdateFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Updating the ventilation set values failed.")]
+    VentilationSetValsUpdateFailure {
+        #[source]
+        source: Box<SqlInterfaceError>
+    },
+
     #[error("The heating switch on temperature ({0}) is higher than the heating switch off temperature ({1}).")]
     HeatingSetValsInvalid(f32, f32),
 
@@ -166,6 +231,91 @@ pub enum SqlInterfaceError {
 
     #[error("The ventilation switch on temperature ({0}) is lower than the ventilation switch off temperature ({1}).")]
     VentilationSetValsInvalid(f32, f32),
+
+    #[error("Could not retrieve database name.")]
+    DatabaseNameRequestFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not retrieve date from database.")]
+    DateRequestFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not retrieve timestamp from database.")]
+    TimestampRequestFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not retrieve optional timestamp from database.")]
+    OptionalTimestampRequestFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not ping database.")]
+    DatabasePingFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Balling set value table may be inconsistent - it contains {0} NULL values.")]
+    DatabaseBallingSetValTableContainsNull(i64),
+
+    #[error("Schedule table may be inconsistent - it contains {0} NULL values.")]
+    DatabaseScheduleTableContainsNull(i64),
+
+    #[error("Heating set value table may be inconsistent - it contains {0} NULL values.")]
+    DatabaseHeatingSetValTableContainsNull(i64),
+
+    #[error("Heating stats table may be inconsistent - it contains {0} NULL values.")]
+    DatabaseHeatingStatsTableContainsNull(i64),
+
+    #[error("Ventilation set value table may be inconsistent - it contains {0} NULL values.")]
+    DatabaseVentilationSetValTableContainsNull(i64),
+
+    #[error("Feed set value table {0} may be inconsistent - it contains {1} NULL values.")]
+    DatabaseFeedSetValTableContainsNull(String, i64),
+
+    #[error("Could not check balling set value table for NULL values.")]
+    DatabaseCheckBallingSetValsFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not check schedule table for NULL values.")]
+    DatabaseCheckScheduleNullFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not check heating set value table for NULL values.")]
+    DatabaseCheckHeatingSetValsFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not check heating stats table for NULL values.")]
+    DatabaseCheckHeatingStatsFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not check ventilation set value table for NULL values.")]
+    DatabaseCheckVentilationSetValsFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    #[error("Could not check feed set value table {table_name} for NULL values.")]
+    DatabaseCheckFeedSetValsFailure {
+        table_name: String,
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
 
     #[cfg(test)]
     #[error("Error when inserting heating set values into database using query: {0}")]

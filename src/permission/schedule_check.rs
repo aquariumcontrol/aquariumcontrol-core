@@ -137,6 +137,9 @@ pub struct ScheduleCheck {
     /// inhibition flag to avoid flooding the log file with repeated messages about having received inapplicable command from heating control
     lock_warn_inapplicable_command_heating: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from database
+    lock_error_database_read: bool,
+    
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
@@ -187,6 +190,7 @@ impl ScheduleCheck {
             lock_warn_inapplicable_command_ventilation: false,
             lock_warn_inapplicable_command_refill: false,
             lock_warn_inapplicable_command_heating: false,
+            lock_error_database_read: false,
             last_ping_instant: Instant::now(),
             database_ping_interval,
         }
@@ -302,7 +306,20 @@ impl ScheduleCheck {
 
         loop {
             if loop_counter % self.config.schedule_check_interval * 10 == 0 {
-                _ = self.sql_interface_schedule.read_schedule();
+                if let Err(errors) = self.sql_interface_schedule.read_schedule() {
+                    if !self.lock_error_database_read {
+                        for e in errors {
+                            error!(
+                                target: Self::LOG_TARGET_SCHEDULE_CHECK,
+                                "Reading schedule failed ({e:?})"
+                            );
+                        }
+                        self.lock_error_database_read = true;
+                    }
+                }
+                else {
+                    self.lock_error_database_read = false;
+                }
             }
 
             let (quit_command_received, _, _) = self.process_external_request(

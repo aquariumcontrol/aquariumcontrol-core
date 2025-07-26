@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 use chrono::LocalResult::{Ambiguous, None, Single};
 use chrono::*;
-use log::error;
 use mysql::prelude::*;
 use mysql::*;
 use serde_derive::Deserialize;
@@ -77,8 +76,6 @@ pub struct SqlInterface {
 }
 
 impl SqlInterface {
-    const LOG_TARGET_SQL_INTERFACE: &'static str = "sql_interface";
-
     /// Creates a new `SqlInterface` instance and establishes a connection pool
     /// to the SQL database based on the provided configuration.
     ///
@@ -328,7 +325,6 @@ impl SqlInterface {
                 "SQL database responded with multiple responses to request to query ({})",
                 sql_query_string
             );
-            error!(target: Self::LOG_TARGET_SQL_INTERFACE, "{}", error_message);
             Err(SqlInterfaceError::SingleVersionRequestMultipleResults(
                 error_message,
             ))
@@ -500,19 +496,10 @@ impl SqlInterface {
     ///   such as a communication error or an unexpected response from the database.
     pub fn get_database(&mut self) -> Result<String, SqlInterfaceError> {
         // trigger SQL call
-        match Self::get_single_string_from_database(
-            &mut self.conn,
-            sql_query_strings::SQL_QUERY_DATABASE,
-        ) {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE,
-                    "Could not retrieve database name ({e:?})"
-                );
-                Err(e)
-            }
-        }
+        Self::get_single_string_from_database(&mut self.conn, sql_query_strings::SQL_QUERY_DATABASE)
+            .map_err(|e| SqlInterfaceError::DatabaseNameRequestFailure {
+                source: Box::new(e),
+            })
     }
 
     /// Executes an SQL query to retrieve a single timestamp string and converts it to `NaiveDateTime`.
@@ -529,34 +516,27 @@ impl SqlInterface {
     /// - `Ok(NaiveDateTime)`: The successfully parsed timestamp.
     /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)`: If the SQL query
     ///   returns no result or more than one result.
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)`: If the SQL query itself fails.
+    /// - `Err(SqlInterfaceError::TimestampRequestFailure)`: If the SQL query itself fails.
     /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
     ///   cannot be parsed into a valid `NaiveDateTime`.
     pub fn get_timestamp(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<NaiveDateTime, SqlInterfaceError> {
-        // trigger SQL call
-        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
-            Ok(c) => c,
-            Err(e) => {
-                if !cfg!(test) {
-                    error!(
-                        target: Self::LOG_TARGET_SQL_INTERFACE,
-                        "could not retrieve timestamp from the database ({e:?})"
-                    );
-                }
-                return Err(e);
-            }
-        };
-
+        // request timestamp from database
+        let timestamp_string = Self::get_single_string_from_database(conn, sql_query_string)
+            .map_err(|e| SqlInterfaceError::TimestampRequestFailure {
+                source: Box::new(e),
+            })?;
         // convert data type
-        match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S") {
-            Ok(c) => Ok(c),
-            Err(_) => Err(SqlInterfaceError::TimestampConversionFailure(
-                timestamp_string,
-            )),
-        }
+        let parsed_timestamp =
+            NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S").map_err(
+                |e| SqlInterfaceError::TimestampConversionFailure {
+                    timestamp_string,
+                    source: e,
+                },
+            )?;
+        Ok(parsed_timestamp)
     }
 
     /// Executes an SQL query to retrieve an optional timestamp string and converts it to `NaiveDateTime`.
@@ -577,27 +557,20 @@ impl SqlInterface {
     /// - `Ok(Option::None)`: If the SQL query returns no rows.
     /// - `Err(SqlInterfaceError::SingleStringRequestNoSingleResponse)`: If the SQL query
     ///   returns more than one row (indicating a data inconsistency).
-    /// - `Err(SqlInterfaceError::SingleStringRequestFailure)`: If the SQL query itself fails.
+    /// - `Err(SqlInterfaceError::OptionalTimestampRequestFailure)`: If the SQL query itself fails.
     /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
     ///   cannot be parsed into a valid `NaiveDateTime`.
     pub fn get_optional_timestamp(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<Option<NaiveDateTime>, SqlInterfaceError> {
-        // trigger SQL call
+        // request (optional) timestamp from database
         let timestamp_string_opt =
-            match Self::get_single_optional_string_from_database(conn, sql_query_string) {
-                Ok(c) => c,
-                Err(e) => {
-                    if !cfg!(test) {
-                        error!(
-                            target: Self::LOG_TARGET_SQL_INTERFACE,
-                            "could not retrieve optional timestamp from the database ({e:?})"
-                        );
-                    }
-                    return Err(e);
-                }
-            };
+            Self::get_single_optional_string_from_database(conn, sql_query_string).map_err(
+                |e| SqlInterfaceError::OptionalTimestampRequestFailure {
+                    source: Box::new(e),
+                },
+            )?;
 
         let result_opt = match timestamp_string_opt {
             Some(timestamp_string) => {
@@ -605,10 +578,11 @@ impl SqlInterface {
                 match NaiveDateTime::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d %H:%M:%S")
                 {
                     Ok(c) => Some(c),
-                    Err(_) => {
-                        return Err(SqlInterfaceError::TimestampConversionFailure(
-                            "Error when converting timestamp: ".to_string() + &timestamp_string,
-                        ));
+                    Err(e) => {
+                        return Err(SqlInterfaceError::TimestampConversionFailure {
+                            timestamp_string,
+                            source: e,
+                        });
                     }
                 }
             }
@@ -676,36 +650,31 @@ impl SqlInterface {
     /// - or an error code from the enum SqlInterfaceError
     /// # Arguments
     /// * `sql_query_string` - SQL query for retrieving timestamp as String
+    /// # Returns
+    /// A `Result` which is:
+    /// - `Err(SqlInterfaceError::DateRequestFailure)`: If the SQL query itself fails.
+    /// - `Err(SqlInterfaceError::TimestampConversionFailure)`: If the retrieved string
+    ///   cannot be parsed into a valid `NaiveDateTime`.
     fn get_date(
         conn: &mut PooledConn,
         sql_query_string: &str,
     ) -> Result<NaiveDate, SqlInterfaceError> {
         // trigger SQL call
-        let timestamp_string = match Self::get_single_string_from_database(conn, sql_query_string) {
-            Ok(c) => c,
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE,
-                    "could not retrieve date from the database ({e:?})"
-                );
-                return Err(e);
-            }
-        };
+        let timestamp_string = Self::get_single_string_from_database(conn, sql_query_string)
+            .map_err(|e| SqlInterfaceError::DateRequestFailure {
+                source: Box::new(e),
+            })?;
 
         // convert data type
-        match NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d") {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE,
-                    "Error converting timestamp_string={} to date ({e:?})",
-                    timestamp_string
-                );
-                Err(SqlInterfaceError::TimestampConversionFailure(
+        let result =
+            NaiveDate::parse_from_str(timestamp_string.as_str(), "%Y-%m-%d").map_err(|e| {
+                SqlInterfaceError::TimestampConversionFailure {
                     timestamp_string,
-                ))
-            }
-        }
+                    source: e,
+                }
+            })?;
+
+        Ok(result)
     }
 
     /// Fetches the current calendar date directly from the database.
@@ -960,9 +929,6 @@ impl SqlInterface {
     ///
     /// * `conn` - A mutable reference to a `PooledConn`, representing an active
     ///   database connection obtained from a connection pool.
-    /// * `source_thread` - A string slice indicating the name of the calling thread or
-    ///   module. This is used as the logging target for any errors
-    ///   generated by this function.
     ///
     /// # Returns
     ///
@@ -971,16 +937,12 @@ impl SqlInterface {
     /// - `Err(SqlInterfaceError::PingNotSuccessful)`: If the ping query failed for any
     ///   reason (e.g., network issues, database server unresponsiveness, connection closed).
     ///   An error message is also logged with the `source_thread` as the target.
-    pub fn ping_database(conn: &mut PooledConn, source_thread: &str) {
-        match SqlInterface::get_single_integer_from_database(conn, SQL_QUERY_PING) {
-            Ok(_) => { /* do nothing */ }
-            Err(e) => {
-                error!(
-                    target: source_thread,
-                    "could not ping database ({e:?})",
-                );
-            }
-        }
+    pub fn ping_database(conn: &mut PooledConn) -> Result<(), SqlInterfaceError> {
+        SqlInterface::get_single_integer_from_database(conn, SQL_QUERY_PING)
+            .map_err(|e| SqlInterfaceError::DatabasePingFailure {
+                source: Box::new(e),
+            })
+            .map(|_| ()) // On success, transform the i64 into a unit type
     }
 }
 
@@ -1015,29 +977,28 @@ pub mod tests {
         };
         assert_eq!(database_name_from_db, database_name_from_config);
         println!(
-            "* checking database name (PASS) succeeded. database_name_from_db={}",
+            "* checking database name succeeded. database_name_from_db={}",
             database_name_from_db
         );
 
-        // *** check if required tables are existing - PASS *************************************
-        assert_eq!(sql_interface.check_required_tables_existing(), Ok(()));
-        println!("* checking required tables (PASS) succeeded.");
-        // **************************************************************************************
+        // *** check if required tables are existing - *********************************************
+        assert!(matches!(sql_interface.check_required_tables_existing(), Ok(())));
+        println!("* checking required tables succeeded.");
+        // *****************************************************************************************
 
-        // *** check if required tables are existing - FAIL *************************************
+        // *** check if required tables are existing - *********************************************
         let dummy_table = "dummy".to_string();
         sql_interface.config.db_tables.push(dummy_table.clone());
-        assert_eq!(
+        assert!(
             matches!(
                 sql_interface.check_required_tables_existing(),
                 Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))
-            ),
-            true
+            )
         );
-        println!("* checking required tables (FAIL) succeeded.");
-        // **************************************************************************************
+        println!("* checking required tables succeeded.");
+        // *****************************************************************************************
 
-        // *** check if the current date is local date - PASS ***********************************
+        // *** check if the current date is local date *********************************************
         let sql_date = match SqlInterface::get_current_date(&mut sql_interface.get_connection()) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current date from the database."),
@@ -1045,18 +1006,18 @@ pub mod tests {
         let sql_date_string = sql_date.format("%Y-%m-%d").to_string();
         let local_date_string = Local::now().trunc_subsecs(0).format("%Y-%m-%d").to_string();
         assert_eq!(sql_date_string, local_date_string);
-        println!("* checking current date (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking current date succeeded.");
+        // *****************************************************************************************
 
-        // *** check if current timestamp is local timestamp - PASS *****************************
+        // *** check if current timestamp is local timestamp ***************************************
         let sql_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
             Ok(c) => c,
             Err(_) => panic!("Could not get current timestamp from the database."),
         };
         let date_time: DateTime<Local> = Local.from_local_datetime(&sql_timestamp).unwrap();
         assert_eq!(date_time, Local::now().trunc_subsecs(0));
-        println!("* checking current timestamp (PASS) succeeded.");
-        // **************************************************************************************
+        println!("* checking current timestamp succeeded.");
+        // *****************************************************************************************
     }
 
     pub const SQL_QUERY_WRITE_VERSION_INFORMATION: &str =
@@ -1077,7 +1038,7 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
 
-        // *** check error response when querying empty table - FAIL ***********************************
+        // *** check error response when querying empty table **************************************
         let version_information = VersionInformation::new();
         match SqlInterface::truncate_table(&mut sql_interface, "version".to_string()) {
             Ok(_) => {}
@@ -1088,23 +1049,12 @@ pub mod tests {
                 panic!("Found version information in truncated table.");
             }
             Err(e) => {
-                assert_eq!(
-                    e,
-                    SqlInterfaceError::SingleVersionRequestNotListed(
-                        "SELECT hash FROM version WHERE major=".to_string()
-                            + &version_information.major.to_string()
-                            + " AND minor="
-                            + &version_information.minor.to_string()
-                            + " AND build="
-                            + &version_information.build.to_string()
-                            + ";"
-                    )
-                );
+                assert!(matches!(e, SqlInterfaceError::SingleVersionRequestNotListed(_)));
             }
         }
-        // *********************************************************************************************
+        // *****************************************************************************************
 
-        // *** check error response when version information does not match entry in database - FAIL ***
+        // *** check error response when version information does not match entry in database ******
         let unknown_version_information = VersionInformation {
             major: -1,
             minor: -1,
@@ -1131,17 +1081,11 @@ pub mod tests {
                 panic!("Found correct version information although having inserted incorrect version information table.");
             }
             Err(e) => {
-                assert_eq!(
-                    e,
-                    SqlInterfaceError::SingleVersionRequestNotListed(
-                        "SELECT hash FROM version WHERE major=0 AND minor=1 AND build=1;"
-                            .to_string()
-                    )
-                );
+                assert!(matches!(e, SqlInterfaceError::SingleVersionRequestNotListed(_)))
             }
         }
 
-        // *** check error response when the hash is incorrect - FAIL ********************************
+        // *** check response when the hash is correct ********************************************
         let version_information_with_wrong_hash = VersionInformation {
             major: version_information.major,
             minor: version_information.minor,
@@ -1212,6 +1156,6 @@ pub mod tests {
         let sql_interface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed");
 
-        SqlInterface::ping_database(&mut sql_interface.get_connection(), "test_ping");
+        SqlInterface::ping_database(&mut sql_interface.get_connection()).unwrap();
     }
 }

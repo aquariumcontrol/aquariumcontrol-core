@@ -20,6 +20,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
+    use crate::database::sql_interface_error::SqlInterfaceError;
 
     pub fn mock_ventilation(
         rx_ventilation_from_signal_handler: &Receiver<InternalCommand>,
@@ -135,7 +136,7 @@ pub mod tests {
             &mut self,
             ventilation_switch_off_temperature: &mut f32,
             ventilation_switch_on_temperature: &mut f32,
-        ) {
+        ) -> Result <(), SqlInterfaceError> {
             if self.active
                 && self.delay_duration.is_some()
                 && self
@@ -155,6 +156,7 @@ pub mod tests {
                         .unwrap();
                 }
             }
+            Ok(())
         }
     }
 }

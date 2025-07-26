@@ -19,7 +19,7 @@ use crate::database::sql_query_strings::SQL_QUERY_CHECK_SCHEDULE_NULL;
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 
 /// List of all modules that are subject to limitations by schedule.
-/// Background: These activities cause noise - user shall be able to inhibit these noises during nighttime.
+/// Background: These activities cause noise - the user shall be able to inhibit these noises during nighttime.
 #[derive(PartialEq)]
 pub enum ScheduleType {
     Balling,
@@ -191,7 +191,6 @@ pub struct SqlInterfaceSchedule {
 }
 
 impl SqlInterfaceSchedule {
-    const LOG_TARGET_SQL_INTERFACE_SCHEDULE: &'static str = "sql_interface_schedule";
 
     /// Provides a new `SqlInterfaceSchedule` instance.
     ///
@@ -203,21 +202,25 @@ impl SqlInterfaceSchedule {
     /// * `conn` - The established database connection pool object.
     ///
     /// # Returns
-    /// A new `SqlInterfaceSchedule` struct.
-    pub fn new(mut conn: PooledConn) -> SqlInterfaceSchedule {
-        if SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_SCHEDULE_NULL)
-            .expect("Could not check schedule table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Schedule table may be inconsistent - it contains NULL values.",
-                Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE
-            );
+    /// * A new `SqlInterfaceSchedule` struct in case of success.
+    /// * An error `SqlInterfaceError` in case of failure.
+    pub fn new(mut conn: PooledConn) -> Result<SqlInterfaceSchedule, SqlInterfaceError> {
+        let count_null_values = SqlInterface::get_single_integer_from_database(
+            &mut conn, SQL_QUERY_CHECK_SCHEDULE_NULL)
+            .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleNullFailure {
+                source: Box::new(e),
+            })?;
+        
+        if count_null_values > 0 {
+            return Err(SqlInterfaceError::DatabaseScheduleTableContainsNull(
+                count_null_values,
+            ));
         }
-        Self {
+
+        Ok(Self {
             conn,
             schedules: Vec::new(),
-        }
+        })
     }
 
     /// Reads all schedule entries from the SQL database, processes them and updates the internal state.
@@ -233,7 +236,7 @@ impl SqlInterfaceSchedule {
     /// - `Err(SqlInterfaceError::ScheduleRequestFailure)` if the initial database query fails.
     /// - `Err(SqlInterfaceError)`: If any error occurs during the conversion of individual
     ///   raw schedule entries into `ScheduleEntry` structs (e.g., due to invalid data formats).
-    pub fn read_schedule(&mut self) -> Result<(), SqlInterfaceError> {
+    pub fn read_schedule(&mut self) -> Result<(), Vec<SqlInterfaceError>> {
         // Get all schedule entries from the database
         let schedule_string_array = match self.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_SCHEDULE,
@@ -245,30 +248,35 @@ impl SqlInterfaceSchedule {
             },
         ) {
             Ok(c) => c,
-            Err(_) => {
-                return Err(SqlInterfaceError::ScheduleRequestFailure(
-                    sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string(),
-                ));
+            Err(e) => {
+                return Err(vec![SqlInterfaceError::ScheduleRequestFailure {
+                    query: sql_query_strings::SQL_QUERY_READ_SCHEDULE.to_string(),
+                    source: e,
+                }]);
             }
         };
 
         self.schedules.clear();
 
+        let mut errors = vec![]; // for collecting the errors
         for schedule_string in schedule_string_array {
             match ScheduleEntry::new(schedule_string) {
                 Ok(schedule_entry) => {
                     self.schedules.push(schedule_entry);
                 }
                 Err(e) => {
-                    error!(
-                        target: Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE,
-                        "reading schedule failed ({e:?})"
+                    errors.push( // collect the error
+                        SqlInterfaceError::ScheduleProcessingFailure { source: Box::new(e)}
                     );
-                    return Err(e);
                 }
             }
         }
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        }
+        else {
+            Err(errors)
+        }
     }
 
     /// Retrieves the schedule for a given schedule type.
@@ -294,8 +302,10 @@ impl SqlInterfaceSchedule {
     }
 
     /// Execute a ping to the database to avoid timeout.
-    pub(crate) fn ping(&mut self) {
-        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_SCHEDULE);
+    pub fn ping(&mut self) {
+        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
+        }
     }
 }
 
@@ -320,7 +330,7 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection());
+        let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection()).unwrap();
 
         match sql_interface_schedule.read_schedule() {
             Ok(_) => {

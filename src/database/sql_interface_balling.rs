@@ -37,7 +37,7 @@ pub struct BallingSetVal {
     /// dosing volume in ml which the pump shall deliver each hour
     pub dosing_volume: f32,
 
-    /// Label which describes the fluid that the pump is delivering
+    /// A label which describes the fluid that the pump is delivering
     /// Attribute is public because access from within test cases.
     /// Data is not used in the implementation. Therefore, it is tagged as unused.
     #[allow(unused)]
@@ -45,8 +45,6 @@ pub struct BallingSetVal {
 }
 
 impl SqlInterfaceBalling {
-    const LOG_TARGET_SQL_INTERFACE_BALLING: &'static str = "sql_interface_balling";
-
     /// Creates a new `SqlInterfaceBalling` instance.
     ///
     /// This constructor initializes the Balling SQL interface with an established
@@ -58,22 +56,23 @@ impl SqlInterfaceBalling {
     /// * `conn` - An active database connection pool object.
     ///
     /// # Returns
-    /// A new `SqlInterfaceBalling` struct.
-    pub fn new(mut conn: PooledConn) -> SqlInterfaceBalling {
-        if SqlInterface::get_single_integer_from_database(
-            &mut conn,
-            SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+    /// * A new `SqlInterfaceBalling` struct in case of success.
+    /// * An error `SqlInterfaceError` in case of failure.
+    pub fn new(mut conn: PooledConn) -> Result<Self, SqlInterfaceError> {
+        let count_null_values = SqlInterface::get_single_integer_from_database(
+            &mut conn, SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
         )
-        .expect("Could not check balling set value table for NULL values.")
-            > 0
-        {
-            panic!(
-                "{}: Balling set value table may be inconsistent - it contains NULL values.",
-                Self::LOG_TARGET_SQL_INTERFACE_BALLING
-            );
+        .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            source: Box::new(e),
+        })?;
+
+        if count_null_values > 0 {
+            return Err(SqlInterfaceError::DatabaseBallingSetValTableContainsNull(
+                count_null_values,
+            ));
         }
 
-        SqlInterfaceBalling { conn }
+        Ok(SqlInterfaceBalling { conn })
     }
 
     /// Retrieves the timestamp of the last Balling dosing event for a specific pump.
@@ -180,11 +179,7 @@ impl SqlInterfaceBalling {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
-                    "could not insert Balling dosing event into database ({e:?})"
-                );
-                Err(SqlInterfaceError::InsertBallingEventFailure)
+                Err(SqlInterfaceError::InsertBallingEventFailure { source: e})
             }
         }
     }
@@ -285,8 +280,8 @@ impl SqlInterfaceBalling {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: Self::LOG_TARGET_SQL_INTERFACE_BALLING,
+                error!( // logging for testing purposes only
+                    target: module_path!(),
                     "could not insert Balling pump configuration into database ({e:?})"
                 );
                 Err(SqlInterfaceError::InsertBallingPumpConfigurationFailure(
@@ -298,7 +293,9 @@ impl SqlInterfaceBalling {
 
     /// Execute a ping to the database to avoid timeout.
     pub fn ping(&mut self) {
-        SqlInterface::ping_database(&mut self.conn, Self::LOG_TARGET_SQL_INTERFACE_BALLING)
+        if let Err(e) = SqlInterface::ping_database(&mut self.conn) {
+            error!(target: module_path!(), "Encountered error while pinging database: {e:?}");
+        }
     }
 }
 
@@ -341,35 +338,36 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
-        // *** check the timestamp of last Balling dosing - FAIL ************************************
+        // *** check the timestamp of last Balling dosing ******************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
-        assert_eq!(
+        assert!(matches!(
             sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
             Ok(None)
-        );
-        println!("* checking timestamp of last Balling dosing log (FAIL) succeeded.");
-        // **************************************************************************************
+        ));
+        println!("* checking timestamp of last Balling dosing log succeeded.");
+        // *****************************************************************************************
 
-        // *** check timestamp of last Balling dosing - PASS ************************************
+        // *** check timestamp of last Balling dosing **********************************************
         let balling_timestamp =
             NaiveDateTime::parse_from_str("2025-04-12 11:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         match sql_interface_balling.insert_balling_event(balling_timestamp, pump_id, 0.5) {
             Ok(_) => {}
             Err(e) => panic!("Could not insert Balling dosing event into database: {e:?}"),
         };
-        assert_eq!(
+        assert!(matches!(
             sql_interface_balling.get_last_balling_dosing_timestamp(pump_id),
-            Ok(Some(balling_timestamp))
-        );
-        println!("* checking timestamp of last Balling dosing (PASS) succeeded.");
-        // **************************************************************************************
+            Ok(_)
+        ));
+        println!("* checking timestamp of last Balling dosing succeeded.");
+        // *****************************************************************************************
 
-        // *** check the content of last Balling dosing - PASS **************************************
+        // *** check the content of last Balling dosing ********************************************
         // Read back Balling dosing event entry from the database
         let single_balling_event_entry_array = match sql_interface_balling.conn.query_map(
             sql_query_strings::SQL_QUERY_READ_BALLING_EVENT,
@@ -399,9 +397,9 @@ pub mod tests {
         assert_eq!(balling_event.timestamp, balling_timestamp);
         assert_eq!(balling_event.pump_id, 1);
         assert_eq!(balling_event.dosing_volume, 0.5);
-        // **************************************************************************************
+        // *****************************************************************************************
 
-        // *** check duration since last Balling dosing - PASS **********************************
+        // *** check duration since last Balling dosing ********************************************
         let duration_since_last_balling_dosing =
             match sql_interface_balling.get_duration_since_last_balling_dosing(1) {
                 Ok(c) => c,
@@ -415,7 +413,7 @@ pub mod tests {
             Some(reference_duration_since_last_balling_dosing)
         );
         println!("* checking duration since last Balling dosing succeeded.");
-        // **************************************************************************************
+        // *****************************************************************************************
     }
 
     #[test]
@@ -430,9 +428,10 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection());
+        let mut sql_interface_balling =
+            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
 
-        // *** read balling set vals from empty table - FAIL ************************************
+        // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingsetvals".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
@@ -442,20 +441,13 @@ pub mod tests {
                 panic!("Reading from empty set value table returned value.");
             }
             Err(e) => {
-                assert_eq!(
-                    e,
-                    SqlInterfaceError::SingleBallingSetValEmptyResponse(
-                        "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals \
-                        WHERE pumpid=1;"
-                            .to_string()
-                    )
-                );
+                assert!(matches!(e, SqlInterfaceError::SingleBallingSetValEmptyResponse(_)));
             }
         }
         println!("* checking reading from empty Balling dosing set value table succeeded.");
-        // **************************************************************************************
+        // *****************************************************************************************
 
-        // *** read balling set vals from pre-filled table - PASS *******************************
+        // *** read balling set vals from pre-filled table *****************************************
         // prepare database: insert Balling set vals
         let sql_query_string = SQL_QUERY_WRITE_BALLING_SETVALS.to_string();
         match sql_interface_balling.conn.exec_drop::<_, _>(

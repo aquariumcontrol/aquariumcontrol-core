@@ -233,6 +233,7 @@ pub struct Ventilation {
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
+    lock_error_ventilation_set_value_read_failure: bool
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -260,6 +261,7 @@ impl Ventilation {
             lock_error_channel_send_schedule_check: false,
             lock_error_channel_receive_schedule_check: false,
             lock_warn_max_mutex_access_duration: false,
+            lock_error_ventilation_set_value_read_failure: false,
 
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
@@ -426,10 +428,25 @@ impl Ventilation {
                 }
 
                 // check if set values need to be updated
-                ventilation_set_val_updater.update_set_value(
+                if let Err(e) = ventilation_set_val_updater.update_set_value(
                     &mut self.config.switch_off_temperature,
                     &mut self.config.switch_on_temperature,
-                );
+                ) {
+                    if !self.lock_error_ventilation_set_value_read_failure {
+                        error!(
+                            target: module_path!(),
+                            concat!(
+                                "Error occurred when trying to retrieve ventilation set values from database",
+                                "maintaining the current ventilation set values (off={:?}, on={:?}): {:?}"
+                            ),
+                            self.config.switch_off_temperature, self.config.switch_on_temperature, e
+                        );
+                        self.lock_error_ventilation_set_value_read_failure = true;
+                    }
+                }
+                else {
+                    self.lock_error_ventilation_set_value_read_failure = false;
+                }
 
                 // schedule check to see if actuation is allowed
                 match ventilation_channels
