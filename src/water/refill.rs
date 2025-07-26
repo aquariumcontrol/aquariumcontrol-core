@@ -659,7 +659,7 @@ impl Refill {
             }
             Err(e) => {
                 if !self.lock_error_channel_send_monitors {
-                    error!(target:  module_path!(), "sending view to monitor failed ({})", e);
+                    error!(target:  module_path!(), "sending view to monitor failed ({e})");
                     self.lock_error_channel_send_monitors = true;
                 }
             }
@@ -1079,8 +1079,7 @@ impl Refill {
                             if !self.lock_warn_not_applicable_command {
                                 warn!(
                                     target: module_path!(),
-                                    "ignoring not applicable command {} from the signal handler",
-                                    c
+                                    "ignoring not applicable command {c} from the signal handler"
                                 );
                                 self.lock_warn_not_applicable_command = true;
                             }

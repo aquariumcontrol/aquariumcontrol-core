@@ -95,7 +95,7 @@ impl fmt::Display for I2cResponse {
         // Format the read_buf content
         // Iterate over the bytes and format each as two-digit hexadecimal
         for (i, &byte) in self.read_buf.iter().enumerate() {
-            write!(f, "{:02x}", byte)?; // :02x ensures two hexadecimal digits, padding with leading zero if necessary
+            write!(f, "{byte:02x}")?; // :02x ensures two hexadecimal digits, padding with leading zero if necessary
             if i < self.read_buf.len() - 1 {
                 write!(f, " ")?; // Add a space between bytes for readability
             }
@@ -143,7 +143,6 @@ pub struct I2cInterface {
 }
 
 impl I2cInterface {
-
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// Creates a new **`I2cInterface`** instance, establishing and configuring the I2C bus for sensor communication.
     ///

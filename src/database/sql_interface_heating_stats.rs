@@ -12,12 +12,12 @@ use crate::database::{
     sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait, sql_query_strings,
 };
 
+use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATING_STATS_NULL;
 use chrono::*;
 use log::{error, warn};
 use mysql::prelude::*;
 use mysql::*;
 use std::fmt;
-use crate::database::sql_query_strings::{SQL_QUERY_CHECK_HEATING_STATS_NULL};
 
 /// Holds the statistical data of heating for one day.
 /// It is filled with post-processed data from a database query which is then updated by the control application.
@@ -238,9 +238,9 @@ impl SqlInterfaceHeatingStats {
             &mut conn,
             SQL_QUERY_CHECK_HEATING_STATS_NULL,
         )
-            .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
-                source: Box::new(e),
-            })?;
+        .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
+            source: Box::new(e),
+        })?;
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsNull(
@@ -482,7 +482,9 @@ impl SqlInterfaceHeatingStats {
 pub mod tests {
     use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
 
-    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
+    use crate::database::sql_interface_heating_stats::{
+        HeatingStatsEntry, SqlInterfaceHeatingStats,
+    };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -504,7 +506,8 @@ pub mod tests {
         let mut sql_interface_heating = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
-        ).unwrap();
+        )
+        .unwrap();
 
         // *** retrieve heating stats - ************************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "heatingstats".to_string()) {
@@ -516,7 +519,10 @@ pub mod tests {
                 panic!("Call to get_single_heating_stats_from_database should have failed.");
             }
             Err(e) => {
-                assert!(matches!(e, SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_)));
+                assert!(matches!(
+                    e,
+                    SqlInterfaceError::SingleHeatingStatsRequestEmptyResponse(_)
+                ));
             }
         }
         println!("* checking retrieving heating stats succeeded.");
@@ -537,7 +543,10 @@ pub mod tests {
             water_temperature_average_counter: 78000,
             heating_control_runtime: 64000,
         };
-        assert!(matches!(sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry), Ok(())));
+        assert!(matches!(
+            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
+            Ok(())
+        ));
         println!("* checking inserting heating stats succeeded.");
         // *****************************************************************************************
 

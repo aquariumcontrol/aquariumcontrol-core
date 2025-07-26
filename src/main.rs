@@ -164,7 +164,7 @@ fn check_is_command(command: &str) -> bool {
         "-v" | "--version" => {
             // calculate hash of executable
             let version_information = VersionInformation::new();
-            println!("{}", version_information);
+            println!("{version_information}");
             true
         }
         _ => false, // All other strings do not match
@@ -376,7 +376,7 @@ fn run() -> Result<(), StartupError> {
 
     // calculate hash of executable
     let version_information = VersionInformation::new();
-    info!(target: module_path!(), "{}", version_information);
+    info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -397,7 +397,7 @@ fn run() -> Result<(), StartupError> {
         // clear the PID file.
         // Print the panic message to stderr.
         publish_pid_clone.erase_pid();
-        error!("Panic occurred: {}", panic_info);
+        error!("Panic occurred: {panic_info}");
 
         if let Some(location) = panic_info.location() {
             error!(
@@ -442,23 +442,25 @@ fn run() -> Result<(), StartupError> {
     let sql_interface_heating = SqlInterfaceHeatingStats::new(
         sql_interface.get_connection(),
         Box::new(sql_interface_midnight_calculator),
-    ).map_err(|e| StartupError::Database { source: e })?;
+    )
+    .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> =
-        Box::new(SqlInterfaceFeed::new(sql_interface.get_connection())
-            .map_err(|e| StartupError::Database { source: e })?);
+    let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
+        SqlInterfaceFeed::new(sql_interface.get_connection())
+            .map_err(|e| StartupError::Database { source: e })?,
+    );
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
 
-    let tables = sql_interface.get_tables()
+    let tables = sql_interface
+        .get_tables()
         .map_err(|e| StartupError::Database { source: e })?;
 
     match sql_interface.get_hash_from_database(&version_information) {
         Ok(c) => {
             info!(
                 target: module_path!(),
-                "version information including hash of executable found in database: {}",
-                c
+                "version information including hash of executable found in database: {c}"
             );
             if c != version_information.hash {
                 warn!(
@@ -477,12 +479,14 @@ fn run() -> Result<(), StartupError> {
         }
     }
 
-    let database = sql_interface.get_database().
-        map_err(|e| StartupError::Database { source: e })?;
-    info!(target: module_path!(), "current database name is {}", database);
+    let database = sql_interface
+        .get_database()
+        .map_err(|e| StartupError::Database { source: e })?;
+    info!(target: module_path!(), "current database name is {database}");
 
-    sql_interface.check_required_tables_existing().
-        map_err(|e| StartupError::Database { source: e })?;
+    sql_interface
+        .check_required_tables_existing()
+        .map_err(|e| StartupError::Database { source: e })?;
     info!(target: module_path!(), "required tables are existing in database.");
 
     let mut tables_string: String = "read the following tables from database:".to_string();
@@ -490,7 +494,7 @@ fn run() -> Result<(), StartupError> {
         tables_string += " ";
         tables_string += &table;
     }
-    info!(target: module_path!(), "{}", tables_string);
+    info!(target: module_path!(), "{tables_string}");
 
     // check if any of the components requires use of the simulator
     let use_simulator = config.gpio_handler.use_simulator
@@ -986,8 +990,8 @@ fn run() -> Result<(), StartupError> {
     ) = mpsc::channel();
 
     #[cfg(target_os = "linux")]
-    let mut messaging = Messaging::new(config.messaging)
-        .map_err(|e| StartupError::Messaging { source: e })?;
+    let mut messaging =
+        Messaging::new(config.messaging).map_err(|e| StartupError::Messaging { source: e })?;
 
     let mut food_injection = FoodInjection::new(&config.feed);
     let mut mineral_injection = MineralInjection::new();
@@ -1136,11 +1140,11 @@ fn run() -> Result<(), StartupError> {
     let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration);
 
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
-    
+
     let mut heating_set_value_updater =
         SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating)
             .map_err(|e| StartupError::Database { source: e })?;
-    
+
     let mut heating = Heating::new(
         config.heating,
         sql_interface_heating,
@@ -1621,11 +1625,11 @@ fn run() -> Result<(), StartupError> {
 /// The main entry point for the application is within the run() function.
 fn main() {
     if let Err(e) = run() {
-        error!("Application failed to start: {}", e);
+        error!("Application failed to start: {e}");
         // Use a loop to walk the chain of source errors
         let mut source = e.source();
         while let Some(cause) = source {
-            error!("  Caused by: {}", cause);
+            error!("  Caused by: {cause}");
             source = cause.source();
         }
         std::process::exit(1);

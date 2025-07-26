@@ -45,20 +45,14 @@ pub mod tests {
                                 stimuli_position_stabilized
                             }
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    module_path!(), d
-                                );
+                                panic!("{}: inapplicable signal request {}", module_path!(), d);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                module_path!()
-                            );
+                            panic!("{}: Received invalid command.", module_path!());
                         }
                     };
                     match tx_tank_level_switch_to_test_object.send(response_value) {
@@ -135,7 +129,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: Received invalid command {} from DataLogger",
-                                        module_path!(), data_logger_request
+                                        module_path!(),
+                                        data_logger_request
                                     );
                                 }
                             }
@@ -171,16 +166,14 @@ pub mod tests {
                                     _ => {
                                         panic!(
                                             "{}: Invalid test command {} received.",
-                                            module_path!(), d
+                                            module_path!(),
+                                            d
                                         );
                                     }
                                 }
                             }
                             _ => {
-                                panic!(
-                                    "{}: received invalid command {}",
-                                    module_path!(), c
-                                );
+                                panic!("{}: received invalid command {}", module_path!(), c);
                             }
                         },
                         Err(e) => {

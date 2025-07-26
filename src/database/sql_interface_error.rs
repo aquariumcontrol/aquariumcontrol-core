@@ -122,17 +122,17 @@ pub enum SqlInterfaceError {
 
     /// Could not get schedule entries from the database.
     #[error("Could not get schedule entries from database using query: {query}")]
-    ScheduleRequestFailure{
+    ScheduleRequestFailure {
         query: String,
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// Could not process the results obtained from the database.
     #[error("Could not process the results obtained from database.")]
-    ScheduleProcessingFailure{
+    ScheduleProcessingFailure {
         #[source]
-        source: Box<SqlInterfaceError>
+        source: Box<SqlInterfaceError>,
     },
 
     /// Error in conversion of the database result to schedule entry.
@@ -160,8 +160,10 @@ pub enum SqlInterfaceError {
     },
 
     /// Error when inserting heating stats into the database.
-    #[error("Error when inserting heating stats into the database using query: {sql_query_string}")]
-    InsertHeatingStatsEntryFailure{
+    #[error(
+        "Error when inserting heating stats into the database using query: {sql_query_string}"
+    )]
+    InsertHeatingStatsEntryFailure {
         sql_query_string: String,
         #[source]
         source: MySqlError,
@@ -171,7 +173,7 @@ pub enum SqlInterfaceError {
     #[error("Error occurred when trying to insert a feed event into the database: {source}")]
     InsertFeedEventFailure {
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// Error occurred when trying to insert a refill event into the database.
@@ -179,7 +181,7 @@ pub enum SqlInterfaceError {
     InsertRefillEventFailure {
         sql_query_string: String,
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// Error occurred when trying to insert a Balling dosing event into the database.
@@ -228,7 +230,7 @@ pub enum SqlInterfaceError {
     #[error("Error occurred when trying to drop a feed schedule entry from the database.")]
     FeedScheduleDropFailure {
         #[source]
-        source: MySqlError
+        source: MySqlError,
     },
 
     /// Could not get a single Balling set value from the database.
@@ -279,7 +281,7 @@ pub enum SqlInterfaceError {
     #[error("Updating the ventilation set values failed.")]
     VentilationSetValsUpdateFailure {
         #[source]
-        source: Box<SqlInterfaceError>
+        source: Box<SqlInterfaceError>,
     },
 
     /// The heating switch on temperature is higher than the heating switch-off temperature.

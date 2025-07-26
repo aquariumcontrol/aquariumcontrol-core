@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
@@ -18,7 +19,6 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    use crate::database::sql_interface_error::SqlInterfaceError;
 
     pub fn mock_heating(
         tx_heating_to_tank_level_switch_opt: Option<&Sender<InternalCommand>>,
@@ -106,7 +106,8 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                module_path!(), test_signal
+                                                module_path!(),
+                                                test_signal
                                             );
                                         }
                                     }
@@ -114,7 +115,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        module_path!(), test_command
+                                        module_path!(),
+                                        test_command
                                     );
                                 }
                             }

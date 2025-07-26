@@ -86,10 +86,7 @@ pub mod tests {
                         if request.i2c_address == self.address_atlas_scientific_conductivity {
                             response = self.mock_response_conductivity.clone();
                         }
-                        println!(
-                            "{}: responding with response={}",
-                            module_path!(), response
-                        );
+                        println!("{}: responding with response={}", module_path!(), response);
                         tx_i2c_interface_to_atlas_scientific
                             .send(Ok(response))
                             .unwrap();
@@ -105,7 +102,8 @@ pub mod tests {
                         } else {
                             panic!(
                                 "{}: received unknown request {} from signal handler.",
-                                module_path!(), signal_handler_request
+                                module_path!(),
+                                signal_handler_request
                             );
                         }
                     }

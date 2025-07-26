@@ -130,8 +130,7 @@ impl GpioHandler {
                 #[cfg(not(test))]
                 error!(
                     target: module_path!(),
-                    "Not all GPIOs are inside permissible range. GPIO {} is not valid.",
-                    value
+                    "Not all GPIOs are inside permissible range. GPIO {value} is not valid."
                 );
                 #[cfg(test)]
                 println!("Not all GPIOs are inside permissible range.");
@@ -177,10 +176,7 @@ impl GpioHandler {
 
         // check if GPIO pin configuration is valid
         if !Self::check_valid_gpio_pin_config(&config) {
-            panic!(
-                "{}: GPIO pin configuration is invalid",
-                module_path!(),
-            );
+            panic!("{}: GPIO pin configuration is invalid", module_path!(),);
         }
 
         if !use_simulator {
@@ -234,10 +230,7 @@ impl GpioHandler {
         }
 
         if !Self::check_valid_gpio_pin_config(&config) {
-            panic!(
-                "{}: GPIO pin configuration is invalid",
-                module_path!(),
-            );
+            panic!("{}: GPIO pin configuration is invalid", module_path!(),);
         }
         None
     }

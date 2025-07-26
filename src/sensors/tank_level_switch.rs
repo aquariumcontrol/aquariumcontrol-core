@@ -522,8 +522,7 @@ impl TankLevelSwitch {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
                                 target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
+                                "ignoring inapplicable command from signal handler ({c})"
                             );
                             self.lock_warn_inapplicable_command_signal_handler = true;
                         }

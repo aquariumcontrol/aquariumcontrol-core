@@ -231,7 +231,7 @@ pub struct Ventilation {
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
-    lock_error_ventilation_set_value_read_failure: bool
+    lock_error_ventilation_set_value_read_failure: bool,
 }
 
 impl ProcessExternalRequestTrait for Ventilation {}
@@ -441,8 +441,7 @@ impl Ventilation {
                         );
                         self.lock_error_ventilation_set_value_read_failure = true;
                     }
-                }
-                else {
+                } else {
                     self.lock_error_ventilation_set_value_read_failure = false;
                 }
 
@@ -691,8 +690,7 @@ impl Ventilation {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
                                     target: module_path!(),
-                                    "ignoring inapplicable command ({}) from signal handler.",
-                                    c
+                                    "ignoring inapplicable command ({c}) from signal handler."
                                 );
                                 self.lock_warn_inapplicable_command = true;
                             }

@@ -19,12 +19,12 @@ pub enum MessagingError {
         #[source]
         source: std::io::Error,
     },
-    
+
     /// Error occurred when trying to access POSIX message queue attributes.
     #[cfg(target_os = "linux")]
     #[error("Error occurred when trying to access POSIX message queue attributes.")]
     PosixMessageQueueAttributesError {
         #[source]
-        source: std::io::Error
-    }
+        source: std::io::Error,
+    },
 }

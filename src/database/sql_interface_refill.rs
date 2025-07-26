@@ -54,7 +54,6 @@ pub struct SqlInterfaceRefill {
 }
 
 impl SqlInterfaceRefill {
-
     /// Creates a new `SqlInterfaceRefill` instance.
     ///
     /// This constructor initializes the refill management SQL interface with an established
@@ -192,10 +191,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     fn get_refill_count_of_last_hour(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_HOUR,
-        ).map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+        )
+        .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
             category: "count".to_string(),
             interval: "last hour".to_string(),
-            source: Box::new(e)
+            source: Box::new(e),
         })
     }
 
@@ -212,10 +212,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
     fn get_refill_count_of_last_24h(&mut self) -> Result<u64, SqlInterfaceError> {
         self.get_positive_integer_value_from_database(
             sql_query_strings::SQL_QUERY_READ_REFILL_COUNT_LAST_24H,
-        ).map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+        )
+        .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
             category: "count".to_string(),
             interval: "last 24h".to_string(),
-            source: Box::new(e)
+            source: Box::new(e),
         })
     }
 
@@ -233,10 +234,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         SqlInterface::get_single_float_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_24H,
-        ).map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+        )
+        .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
             category: "volume".to_string(),
             interval: "last 24h".to_string(),
-            source: Box::new(e)
+            source: Box::new(e),
         })
     }
 
@@ -254,10 +256,11 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         SqlInterface::get_single_float_from_database(
             &mut self.conn,
             sql_query_strings::SQL_QUERY_READ_REFILL_VOLUME_LAST_HOUR,
-        ).map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
+        )
+        .map_err(|e| SqlInterfaceError::RefillPastDataRetrievalFailed {
             category: "volume".to_string(),
             interval: "last hour".to_string(),
-            source: Box::new(e)
+            source: Box::new(e),
         })
     }
 
@@ -285,18 +288,20 @@ impl DatabaseInterfaceRefillTrait for SqlInterfaceRefill {
         error_code: i32,
     ) -> Result<(), SqlInterfaceError> {
         let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_REFILL_EVENT.to_owned();
-        self.conn.exec_drop::<_, _>(
-            sql_query_string.clone(),
-            params! {
-            "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
-            "duration" => duration,
-            "volume" => volume,
-            "error_code" => error_code,
-            },
-        ).map_err(|e| SqlInterfaceError::InsertRefillEventFailure {
-                    sql_query_string,
-                    source: e,
-        })
+        self.conn
+            .exec_drop::<_, _>(
+                sql_query_string.clone(),
+                params! {
+                "timestamp" => timestamp.format("%Y-%m-%d %H:%M:%S").to_string(),
+                "duration" => duration,
+                "volume" => volume,
+                "error_code" => error_code,
+                },
+            )
+            .map_err(|e| SqlInterfaceError::InsertRefillEventFailure {
+                sql_query_string,
+                source: e,
+            })
     }
 
     /// Execute a ping to the database to avoid timeout.

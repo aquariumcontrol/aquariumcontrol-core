@@ -154,7 +154,9 @@ pub fn get_output_pin(gpio: &Gpio, gpio_number: u8, device_name: &str) -> Output
         Err(e) => {
             panic!(
                 "{}: could not get pin {} from GPIO interface for {} ({e:?})",
-                module_path!(), gpio_number, device_name
+                module_path!(),
+                gpio_number,
+                device_name
             );
         }
     }
@@ -338,8 +340,7 @@ impl RelayActuationTrait for ActuateGpio {
             _ => {
                 warn!(
                     target: module_path!(),
-                    "ignoring irrelevant internal command {}.",
-                    internal_command
+                    "ignoring irrelevant internal command {internal_command}."
                 );
                 Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }

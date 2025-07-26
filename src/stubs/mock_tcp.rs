@@ -56,10 +56,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: invalid command to mock TCP handler",
-                                module_path!()
-                            );
+                            panic!("{}: invalid command to mock TCP handler", module_path!());
                         }
                     };
                     match tx_tcp_to_test_object.send(response_value) {
@@ -109,13 +106,15 @@ pub mod tests {
                                 MockSignal::TankLevelSwitchPositionStabilized(_) => {
                                     panic!(
                                         "{}: received invalid test command {}",
-                                        module_path!(), d
+                                        module_path!(),
+                                        d
                                     );
                                 }
                                 _ => {
                                     panic!(
                                         "{}: Invalid test command {} received.",
-                                        module_path!(), d
+                                        module_path!(),
+                                        d
                                     );
                                 }
                             },

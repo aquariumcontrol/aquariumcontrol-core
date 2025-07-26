@@ -30,10 +30,7 @@ impl FilterDefault for f32 {
     /// explicitly provided, and for `f32` filters, a meaningful default cannot be
     /// automatically assumed without a specific initial state.
     fn filter_default() -> Self {
-        panic!(
-            "{}: initial value was required for filter",
-            module_path!()
-        )
+        panic!("{}: initial value was required for filter", module_path!())
     }
 }
 

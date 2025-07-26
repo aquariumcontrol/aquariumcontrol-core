@@ -21,6 +21,12 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging_error::MessagingError;
+#[cfg(target_os = "linux")]
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+#[cfg(target_os = "linux")]
+use crate::InternalCommand;
 use serde_derive::Deserialize;
 #[cfg(target_os = "linux")]
 use std::fmt;
@@ -28,13 +34,6 @@ use std::fmt;
 use std::io::ErrorKind;
 #[cfg(target_os = "linux")]
 use std::sync::mpsc::{Receiver, Sender};
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging_error::MessagingError;
-#[cfg(target_os = "linux")]
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-#[cfg(target_os = "linux")]
-use crate::InternalCommand;
-
 
 #[cfg(target_os = "linux")]
 /// Contains constants of all domains addressed in IPC messages
@@ -151,8 +150,7 @@ impl Message {
     ///
     /// # Returns
     /// A new `Message` struct with `domain`, `command`, `command_param1`,
-    /// and `command_param2` all set to `0`.    
-
+    /// and `command_param2` all set to `0`.
     pub fn new() -> Message {
         Message {
             domain: 0,
@@ -240,7 +238,6 @@ pub struct Messaging {
     config: MessagingConfig,
 
     // Message queue
-
     mq: PosixMq,
     mq_max_msg_len: usize,
 }
@@ -269,18 +266,21 @@ impl Messaging {
     /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
 
     pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
-    
         let mq_file_name_clone_for_error = config.mq_filename.clone();
-    
-        let mq = PosixMq::open(&config.mq_filename)
-            .map_err(|e| MessagingError::PosixMessageQueueOpeningError {mq_name: mq_file_name_clone_for_error, source: e})?;
+
+        let mq = PosixMq::open(&config.mq_filename).map_err(|e| {
+            MessagingError::PosixMessageQueueOpeningError {
+                mq_name: mq_file_name_clone_for_error,
+                source: e,
+            }
+        })?;
 
         // identify maximum length of message queue
-    
+
         let mq_max_msg_len = match mq.attributes() {
             Ok(c) => c.max_msg_len,
             Err(e) => {
-                return Err(MessagingError::PosixMessageQueueAttributesError { source: e});
+                return Err(MessagingError::PosixMessageQueueAttributesError { source: e });
             }
         };
         #[cfg(not(target_os = "linux"))]
@@ -289,12 +289,10 @@ impl Messaging {
         Ok(Messaging {
             config,
 
-        
             mq,
             mq_max_msg_len,
         })
     }
-
 
     /// Continuously monitors the POSIX message queue for incoming commands and forwards them to the relevant modules.
     ///
@@ -548,7 +546,8 @@ pub mod tests {
             Err(e) => {
                 panic!(
                     "{}: failure to open message queue for test using {}, error={e:?}",
-                    module_path!(), filename
+                    module_path!(),
+                    filename
                 );
             }
         }

@@ -61,18 +61,24 @@ impl SqlInterfaceVentilationSetVals {
     ///
     /// # Returns
     /// A new `SqlInterfaceVentilationSetVals` struct.
-    pub fn new(mut conn: PooledConn, config: &VentilationConfig) -> Result<Self, SqlInterfaceError> {
+    pub fn new(
+        mut conn: PooledConn,
+        config: &VentilationConfig,
+    ) -> Result<Self, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL,
-        ).map_err(|e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
+        )
+        .map_err(
+            |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
                 source: Box::new(e),
-            })?;
+            },
+        )?;
 
         if count_null_values > 0 {
-            return Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsNull(
-                count_null_values,
-            ));
+            return Err(
+                SqlInterfaceError::DatabaseVentilationSetValTableContainsNull(count_null_values),
+            );
         }
 
         Ok(SqlInterfaceVentilationSetVals {
@@ -210,12 +216,10 @@ impl VentilationSetValueUpdaterTrait for SqlInterfaceVentilationSetVals {
                     ventilation_set_vals.ventilation_switch_on_temperature;
                 Ok(())
             }
-            Ok(None) => {
-                Ok(())
-            }
-            Err(e) => {
-                Err(SqlInterfaceError::VentilationSetValsUpdateFailure { source: Box::new(e) })
-            }
+            Ok(None) => Ok(()),
+            Err(e) => Err(SqlInterfaceError::VentilationSetValsUpdateFailure {
+                source: Box::new(e),
+            }),
         }
     }
 }
@@ -249,7 +253,8 @@ pub mod tests {
         let mut sql_interface_ventilation_setvals = SqlInterfaceVentilationSetVals::new(
             sql_interface.get_connection(),
             &config.ventilation,
-        ).unwrap();
+        )
+        .unwrap();
 
         // check if reading an empty table returns None
         match sql_interface_ventilation_setvals.get_ventilation_set_values() {
@@ -307,13 +312,18 @@ pub mod tests {
         };
 
         // insert invalid values
-        assert!(matches!(sql_interface_ventilation_setvals.insert_ventilation_set_values(
-                    &invalid_ventilation_set_vals), Ok(())));
+        assert!(matches!(
+            sql_interface_ventilation_setvals
+                .insert_ventilation_set_values(&invalid_ventilation_set_vals),
+            Ok(())
+        ));
         println!("* inserting invalid ventilation set values as precondition succeeded.");
 
         // check if reading an invalid value combination returns an error
-        assert!(matches!(sql_interface_ventilation_setvals.get_ventilation_set_values(),
-                Err(SqlInterfaceError::VentilationSetValsInvalid(_, _))));
+        assert!(matches!(
+            sql_interface_ventilation_setvals.get_ventilation_set_values(),
+            Err(SqlInterfaceError::VentilationSetValsInvalid(_, _))
+        ));
         println!("* reading  invalid ventilation set values succeeded.");
 
         //***************************************************************************************

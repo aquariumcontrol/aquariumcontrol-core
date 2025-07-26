@@ -57,8 +57,7 @@ fn send_command(
                             Err(e) => {
                                 error!(
                                     target: module_path!(),
-                                    "could not receive answer from {} thread {e:?}",
-                                    thread_name
+                                    "could not receive answer from {thread_name} thread {e:?}"
                                 );
                             }
                         },
@@ -68,8 +67,7 @@ fn send_command(
                 Err(e) => {
                     error!(
                         target: module_path!(),
-                        "channel communication to {} thread failed when sending Quit command ({e:?})",
-                        thread_name
+                        "channel communication to {thread_name} thread failed when sending Quit command ({e:?})"
                     );
                 }
             }
@@ -267,10 +265,7 @@ pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHand
                 );
             }
             Err(e) => {
-                panic!(
-                    "{}: Could not hook SIGTERM routine: {e:?}",
-                    module_path!()
-                );
+                panic!("{}: Could not hook SIGTERM routine: {e:?}", module_path!());
             }
         }
     }

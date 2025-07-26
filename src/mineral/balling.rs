@@ -225,28 +225,36 @@ impl Balling {
             panic!(
                 "{}: Invalid dosing interval for pump #1 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                module_path!(), config.dosing_interval_pump1, config.schedule_check_interval,
+                module_path!(),
+                config.dosing_interval_pump1,
+                config.schedule_check_interval,
             );
         }
         if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #2 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                module_path!(), config.dosing_interval_pump2, config.schedule_check_interval,
+                module_path!(),
+                config.dosing_interval_pump2,
+                config.schedule_check_interval,
             );
         }
         if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #3 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                module_path!(), config.dosing_interval_pump3, config.schedule_check_interval,
+                module_path!(),
+                config.dosing_interval_pump3,
+                config.schedule_check_interval,
             );
         }
         if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
             panic!(
                 "{}: Invalid dosing interval for pump #4 in configuration file: \
                 Dosing interval ({}) is shorter than check interval ({}).",
-                module_path!(), config.dosing_interval_pump4, config.schedule_check_interval,
+                module_path!(),
+                config.dosing_interval_pump4,
+                config.schedule_check_interval,
             );
         }
     }
@@ -352,14 +360,16 @@ impl Balling {
                 // Panic is happening at the startup of the system.
                 panic!(
                     "{}: countdown calculation encountered invalid pump id = {}",
-                    module_path!(), pump_id
+                    module_path!(),
+                    pump_id
                 );
             }
         };
         if target_dosing_interval == 0 {
             panic!(
                 "{}: Invalid dosing interval for pump #{} in configuration.",
-                module_path!(), pump_id
+                module_path!(),
+                pump_id
             );
         }
 
@@ -389,7 +399,9 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}, Duration since last dosing for pump {} is {} seconds.",
-            module_path!(), pump_id, duration_since_balling_dosing
+            module_path!(),
+            pump_id,
+            duration_since_balling_dosing
         );
 
         // limit subtraction to 0
@@ -398,7 +410,9 @@ impl Balling {
         #[cfg(test)]
         println!(
             "{}: Countdown for next dosing of pump {} is {} seconds.",
-            module_path!(), pump_id, countdown
+            module_path!(),
+            pump_id,
+            countdown
         );
 
         countdown
@@ -499,7 +513,9 @@ impl Balling {
                 #[cfg(test)]
                 println!(
                     "{}: Calculated target dosing duration of {} ms for pump #{}",
-                    module_path!(), dosing_duration_millis, pump_id
+                    module_path!(),
+                    dosing_duration_millis,
+                    pump_id
                 );
 
                 if dosing_duration_millis > 0 {
@@ -530,8 +546,7 @@ impl Balling {
             Err(e) => {
                 error!(
                     target: module_path!(),
-                    "encountered error when reading set values of pump #{}: {e:?}",
-                    pump_id
+                    "encountered error when reading set values of pump #{pump_id}: {e:?}"
                 );
             }
         }
@@ -884,7 +899,7 @@ impl Balling {
                                 if !self.lock_warn_inapplicable_command {
                                     warn!(
                                     target: module_path!(),
-                                    "ignoring inapplicable command {} from signal handler.", c);
+                                    "ignoring inapplicable command {c} from signal handler.");
                                     self.lock_warn_inapplicable_command = true;
                                 }
                                 false

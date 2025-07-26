@@ -262,10 +262,7 @@ impl DataLogger {
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
             {
-                panic!(
-                    "{}: one of the output file names is empty.",
-                    module_path!()
-                );
+                panic!("{}: one of the output file names is empty.", module_path!());
             } else {
                 fs::write(config.output_file_name_timestamp.clone(), "")
                     .expect("DataLogger: Could not reset content of output file for timestamp.");
@@ -377,8 +374,7 @@ impl DataLogger {
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
-                            "output of value {} to {} failed: {e:?}",
-                            signal_string, output_file_name
+                            "output of value {signal_string} to {output_file_name} failed: {e:?}"
                         );
                     }
                     true // indicate error
@@ -418,8 +414,7 @@ impl DataLogger {
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
-                            "output of value {} to {} failed: {e:?}",
-                            state_string, output_file_name
+                            "output of value {state_string} to {output_file_name} failed: {e:?}"
                         );
                     }
                     true // indicate error
@@ -467,9 +462,7 @@ impl DataLogger {
                     if !inhibit_error_log {
                         error!(
                             target: module_path!(),
-                            "output of value {} to {} failed: {e:?}",
-                            timestamp,
-                            output_file_name
+                            "output of value {timestamp} to {output_file_name} failed: {e:?}"
                         );
                     }
                     true // indicate error
@@ -891,8 +884,7 @@ impl DataLogger {
                         if !self.lock_warn_inapplicable_command {
                             warn!(
                                 target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
+                                "ignoring inapplicable command from signal handler ({c})"
                             );
                             self.lock_warn_inapplicable_command = true;
                         }

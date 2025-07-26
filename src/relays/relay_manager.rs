@@ -219,9 +219,7 @@ impl RelayManager {
                         #[cfg(not(test))]
                         warn!(
                             target: module_path!(),
-                            "{}: actuation succeeded after {} retries.",
-                            actuation_name,
-                            attempts
+                            "{actuation_name}: actuation succeeded after {attempts} retries."
                         );
                         #[cfg(test)] // to avoid warning when compiling for test
                         if actuation_name == "not existing name" {

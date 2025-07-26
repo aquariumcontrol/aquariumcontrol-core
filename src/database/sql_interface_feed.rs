@@ -12,7 +12,9 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::sql_query_strings::{SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL, SQL_TABLE_FEEDPATTERNS};
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL, SQL_TABLE_FEEDPATTERNS,
+};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -191,9 +193,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
             },
         ) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                Err(SqlInterfaceError::InsertFeedEventFailure { source: e })
-            }
+            Err(e) => Err(SqlInterfaceError::InsertFeedEventFailure { source: e }),
         }
     }
 
@@ -385,7 +385,7 @@ impl DatabaseInterfaceFeedTrait for SqlInterfaceFeed {
                     target: module_path!(),
                     "could not insert feed schedule entry ({e:?})"
                 );
-                Err(SqlInterfaceError::InsertFeedEventFailure { source : e})
+                Err(SqlInterfaceError::InsertFeedEventFailure { source: e })
             }
         }
     }
@@ -410,15 +410,16 @@ impl SqlInterfaceFeed {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_FEEDPATTERNS_NULL,
-        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
-                table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
-                source: Box::new(e),
-            }
-        )?;
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
+            source: Box::new(e),
+        })?;
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
-                SQL_TABLE_FEEDPATTERNS.to_string(), count_null_values,
+                SQL_TABLE_FEEDPATTERNS.to_string(),
+                count_null_values,
             ));
         }
 
@@ -426,15 +427,16 @@ impl SqlInterfaceFeed {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
-        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
-                table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
-                source: Box::new(e),
-            }
-        )?;
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
+            source: Box::new(e),
+        })?;
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
-                SQL_QUERY_CHECK_FEEDSCHEDULE_NULL.to_string(), count_null_values,
+                SQL_QUERY_CHECK_FEEDSCHEDULE_NULL.to_string(),
+                count_null_values,
             ));
         }
 
@@ -492,20 +494,21 @@ impl SqlInterfaceFeed {
                 Ok(c) => {
                     feedschedule_entries.push(c);
                 }
-                Err(e) => { 
+                Err(e) => {
                     // abort processing and return the error
-                    return Err(SqlInterfaceError::FeedScheduleEntryTimeStampProcessingFailure {
-                        number_entries: feedschedule_entries.len(),
-                        source: Box::new(e)
-                    });
+                    return Err(
+                        SqlInterfaceError::FeedScheduleEntryTimeStampProcessingFailure {
+                            number_entries: feedschedule_entries.len(),
+                            source: Box::new(e),
+                        },
+                    );
                 }
             }
         }
 
         if feedschedule_entries.is_empty() {
             Ok(None)
-        }
-        else {
+        } else {
             Ok(Some(feedschedule_entries))
         }
     }
@@ -597,7 +600,7 @@ impl SqlInterfaceFeed {
                 Err(e) => {
                     return Err(SqlInterfaceError::SingleFeedpatternRequestFailure {
                         query: sql_query.as_str().to_string(),
-                        source: e
+                        source: e,
                     });
                 }
             };
@@ -648,7 +651,7 @@ impl SqlInterfaceFeed {
             "profile_id",
             &profile_id.to_string(),
         );
-        let sql_query = str::replace(&sql_query_pre, "#", format!("{:02}", phase_nr).as_str());
+        let sql_query = str::replace(&sql_query_pre, "#", format!("{phase_nr:02}").as_str());
 
         let single_feedpattern_entry_array = match self.conn.query_map(
             sql_query.clone(),
@@ -803,7 +806,10 @@ pub mod tests {
                 panic!("Call to get_single_feedpattern_from_database should have failed.");
             }
             Err(e) => {
-                assert!(matches!(e, SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(_)));
+                assert!(matches!(
+                    e,
+                    SqlInterfaceError::SingleFeedpatternRequestEmptyResponse(_)
+                ));
             }
         }
         println!("* checking retrieving of Feed pattern (FAIL) succeeded.");

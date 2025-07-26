@@ -145,11 +145,11 @@ impl AquariumSignal {
     /// For example, `WaterTemperature` is formatted to one decimal place, `pH` to two, etc.
     pub fn output_file_string(&self, signal: f32) -> String {
         match self {
-            AquariumSignal::WaterTemperature => format!("{:.1}", signal),
-            AquariumSignal::Conductivity => format!("{:.0}", signal),
-            AquariumSignal::pH => format!("{:.2}", signal),
-            AquariumSignal::AmbientTemperature => format!("{:.1}", signal),
-            AquariumSignal::AmbientHumidity => format!("{:.1}", signal),
+            AquariumSignal::WaterTemperature => format!("{signal:.1}"),
+            AquariumSignal::Conductivity => format!("{signal:.0}"),
+            AquariumSignal::pH => format!("{signal:.2}"),
+            AquariumSignal::AmbientTemperature => format!("{signal:.1}"),
+            AquariumSignal::AmbientHumidity => format!("{signal:.1}"),
             #[cfg(all(target_os = "linux", feature = "target_hw", test))]
             AquariumSignal::MockInvalidSignal => "MockInvalid".to_string(),
             _ => signal.to_string(),

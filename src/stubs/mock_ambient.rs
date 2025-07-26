@@ -39,10 +39,7 @@ pub mod tests {
                             AquariumSignal::AmbientTemperature => stimuli_ambient_temperature,
                             AquariumSignal::AmbientHumidity => stimuli_ambient_humidity,
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    module_path!(), d
-                                );
+                                panic!("{}: inapplicable signal request {}", module_path!(), d);
                             }
                         },
                         InternalCommand::Quit => {
@@ -92,7 +89,8 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                module_path!(), test_signal
+                                                module_path!(),
+                                                test_signal
                                             );
                                         }
                                     }
@@ -100,7 +98,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        module_path!(), test_command
+                                        module_path!(),
+                                        test_command
                                     );
                                 }
                             }

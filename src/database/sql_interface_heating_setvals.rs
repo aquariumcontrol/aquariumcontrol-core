@@ -28,7 +28,7 @@ pub trait HeatingSetValueUpdaterTrait {
         &mut self,
         heating_switch_off_temperature: &mut f32,
         heating_switch_on_temperature: &mut f32,
-    ) -> Result <(), SqlInterfaceError>;
+    ) -> Result<(), SqlInterfaceError>;
 }
 
 pub struct SqlInterfaceHeatingSetVals {
@@ -54,14 +54,17 @@ impl SqlInterfaceHeatingSetVals {
     /// # Returns
     /// * A new `SqlInterfaceHeatingSetVals` struct in case of success.
     /// * An error `SqlInterfaceError` in case of failure.
-    pub fn new(mut conn: PooledConn, config: &HeatingConfig) -> Result<SqlInterfaceHeatingSetVals, SqlInterfaceError> {
+    pub fn new(
+        mut conn: PooledConn,
+        config: &HeatingConfig,
+    ) -> Result<SqlInterfaceHeatingSetVals, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
         )
-            .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
-                source: Box::new(e),
-            })?;
+        .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
+            source: Box::new(e),
+        })?;
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsNull(
@@ -204,9 +207,9 @@ impl HeatingSetValueUpdaterTrait for SqlInterfaceHeatingSetVals {
             Ok(None) => {
                 Ok(()) // no heating set values found in database - maintain the configured ones
             }
-            Err(e) => {
-                Err(SqlInterfaceError::HeatingSetValsUpdateFailure { source: Box::new(e) })
-            }
+            Err(e) => Err(SqlInterfaceError::HeatingSetValsUpdateFailure {
+                source: Box::new(e),
+            }),
         }
     }
 }
@@ -238,7 +241,8 @@ pub mod tests {
 
         // instantiation of the test object
         let mut sql_interface_heating_setvals =
-            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating).unwrap();
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating)
+                .unwrap();
 
         // check if reading an empty table returns None
         match sql_interface_heating_setvals.get_heating_set_values() {

@@ -238,12 +238,10 @@ impl SqlInterfaceData {
             },
         ) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                Err(SqlInterfaceError::InsertDataFrameFailure{
-                    sql_query_string,
-                    source: e
-                })
-            }
+            Err(e) => Err(SqlInterfaceError::InsertDataFrameFailure {
+                sql_query_string,
+                source: e,
+            }),
         }
     }
 

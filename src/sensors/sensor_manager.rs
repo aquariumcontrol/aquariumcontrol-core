@@ -463,7 +463,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_ds18b20_water_temperature_mutex {
                                     self.lock_error_ds18b20_water_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Ds18b20 water temperature mutex: {e}");
                                 }
                             }
                         }
@@ -486,7 +486,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_ds18b20_ambient_temperature_mutex {
                                     self.lock_error_ds18b20_ambient_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Ds18b20 ambient temperature mutex: {e}");
                                 }
                             }
                         }
@@ -511,7 +511,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_dht_mutex {
                                     self.lock_error_dht_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock Dht mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock Dht mutex: {e}");
                                 }
                             }
                         }
@@ -535,7 +535,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_temperature_mutex {
                                     self.lock_error_atlas_scientific_temperature_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
                                 }
                             }
                         }
@@ -556,7 +556,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_ph_mutex {
                                     self.lock_error_atlas_scientific_ph_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
                                 }
                             }
                         }
@@ -578,7 +578,7 @@ impl SensorManager {
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_conductivity_mutex {
                                     self.lock_error_atlas_scientific_conductivity_mutex = true;
-                                    error!(target: module_path!(), "error when trying to lock mutex: {}", e);
+                                    error!(target: module_path!(), "error when trying to lock mutex: {e}");
                                 }
                             }
                         }
@@ -664,8 +664,7 @@ impl SensorManager {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
                                 target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
+                                "ignoring inapplicable command from signal handler ({c})"
                             );
                             self.lock_warn_inapplicable_command_signal_handler = true;
                         }

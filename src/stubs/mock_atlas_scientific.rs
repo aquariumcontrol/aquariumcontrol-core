@@ -41,20 +41,14 @@ pub mod tests {
                             AquariumSignal::Conductivity => stimuli_conductivity,
                             AquariumSignal::pH => stimuli_ph,
                             _ => {
-                                panic!(
-                                    "{}: inapplicable signal request {}",
-                                    module_path!(), d
-                                );
+                                panic!("{}: inapplicable signal request {}", module_path!(), d);
                             }
                         },
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: Received invalid command.",
-                                module_path!()
-                            );
+                            panic!("{}: Received invalid command.", module_path!());
                         }
                     };
                     match tx_atlas_scientific_to_test_object.send(response_value) {
@@ -97,7 +91,8 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                module_path!(), test_signal
+                                                module_path!(),
+                                                test_signal
                                             );
                                         }
                                     }
@@ -105,7 +100,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        module_path!(), test_command
+                                        module_path!(),
+                                        test_command
                                     );
                                 }
                             }

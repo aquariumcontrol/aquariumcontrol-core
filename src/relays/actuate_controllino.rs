@@ -497,8 +497,7 @@ impl RelayActuationTrait for ActuateControllino {
             _ => {
                 warn!(
                     target: module_path!(),
-                    "ignoring irrelevant internal command {}.",
-                    internal_command
+                    "ignoring irrelevant internal command {internal_command}."
                 );
                 Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }
@@ -561,10 +560,7 @@ impl RelayActuationTrait for ActuateControllino {
                 );
             }
             Err(e) => {
-                error!(
-                    "{}: error when clearing buffer ({e:?})",
-                    module_path!()
-                );
+                error!("{}: error when clearing buffer ({e:?})", module_path!());
             }
         }
 
@@ -604,10 +600,7 @@ fn controllino_open_serial_port(
     let mut serial_port = match serialport::new(port_name.clone(), baud_rate).open() {
         Ok(c) => c,
         Err(e) => {
-            panic!(
-                "{}: failed to open serial port ({e:?})",
-                module_path!()
-            );
+            panic!("{}: failed to open serial port ({e:?})", module_path!());
         }
     };
 
@@ -617,7 +610,8 @@ fn controllino_open_serial_port(
         Err(_) => {
             panic!(
                 "{}: could not set timeout of {} milliseconds.",
-                module_path!(), timeout_millis
+                module_path!(),
+                timeout_millis
             );
         }
     }
@@ -626,10 +620,7 @@ fn controllino_open_serial_port(
     match serial_port.write_data_terminal_ready(false) {
         Ok(_) => { /* could reset DTR - do nothing */ }
         Err(e) => {
-            panic!(
-                "{}: error when clearing DTR ({e:?})",
-                module_path!()
-            );
+            panic!("{}: error when clearing DTR ({e:?})", module_path!());
         }
     }
 
@@ -642,10 +633,7 @@ fn controllino_open_serial_port(
     match serial_port.clear(ClearBuffer::All) {
         Ok(_) => { /* could clear buffer - do nothing */ }
         Err(e) => {
-            panic!(
-                "{}: error when clearing buffer ({e:?})",
-                module_path!()
-            );
+            panic!("{}: error when clearing buffer ({e:?})", module_path!());
         }
     }
 
@@ -742,10 +730,7 @@ impl ActuateControllino {
 
         // check the validity of configuration
         if !Self::check_valid_relay_id_config(&config) {
-            panic!(
-                "{}: Relay ID configuration is invalid.",
-                module_path!()
-            );
+            panic!("{}: Relay ID configuration is invalid.", module_path!());
         }
 
         if config.port_name.is_empty() {

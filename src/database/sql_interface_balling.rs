@@ -60,7 +60,8 @@ impl SqlInterfaceBalling {
     /// * An error `SqlInterfaceError` in case of failure.
     pub fn new(mut conn: PooledConn) -> Result<Self, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+            &mut conn,
+            SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             source: Box::new(e),
@@ -178,9 +179,7 @@ impl SqlInterfaceBalling {
             },
         ) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                Err(SqlInterfaceError::InsertBallingEventFailure { source: e})
-            }
+            Err(e) => Err(SqlInterfaceError::InsertBallingEventFailure { source: e }),
         }
     }
 
@@ -441,7 +440,10 @@ pub mod tests {
                 panic!("Reading from empty set value table returned value.");
             }
             Err(e) => {
-                assert!(matches!(e, SqlInterfaceError::SingleBallingSetValEmptyResponse(_)));
+                assert!(matches!(
+                    e,
+                    SqlInterfaceError::SingleBallingSetValEmptyResponse(_)
+                ));
             }
         }
         println!("* checking reading from empty Balling dosing set value table succeeded.");

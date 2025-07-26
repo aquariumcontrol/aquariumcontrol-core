@@ -1,9 +1,9 @@
 use crate::database::sql_interface_error::SqlInterfaceError;
+#[cfg(target_os = "linux")]
+use crate::dispatch::messaging_error::MessagingError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-#[cfg(target_os = "linux")]
-use crate::dispatch::messaging_error::MessagingError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

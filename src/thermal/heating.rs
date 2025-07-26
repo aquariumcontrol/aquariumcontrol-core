@@ -12,6 +12,7 @@ use log::{error, warn};
 #[cfg(not(test))]
 use log::info;
 
+use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
 use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
 use crate::sensors::sensor_manager::SensorManagerSignals;
@@ -25,7 +26,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::database::sql_interface_error::SqlInterfaceError;
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -287,7 +287,7 @@ pub struct Heating {
 
     /// Flag to avoid flooding the log with warnings when the heating set values could not be read from the database
     lock_error_heating_set_value_read_failure: bool,
-    
+
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
@@ -580,8 +580,7 @@ impl Heating {
                         );
                         self.lock_error_heating_set_value_read_failure = true;
                     }
-                }
-                else {
+                } else {
                     self.lock_error_heating_set_value_read_failure = false;
                 }
 
@@ -942,7 +941,9 @@ pub mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use crate::database::sql_interface_heating_stats::{HeatingStatsEntry, SqlInterfaceHeatingStats};
+    use crate::database::sql_interface_heating_stats::{
+        HeatingStatsEntry, SqlInterfaceHeatingStats,
+    };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::sensors::sensor_manager::SensorManagerSignals;
@@ -1120,8 +1121,9 @@ pub mod tests {
         let sql_interface_heating_stats = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
             sql_interface_heating_midnight_calculator,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         println!(
             "prepare_heating_tests_mock_midnight_calculator: SwitchOff temperature = {}, SwitchOn temperature = {}",
             config.heating.switch_on_temperature, config.heating.switch_off_temperature

@@ -15,7 +15,6 @@ use crate::relays::relay_error::RelayError;
 use crate::relays::relay_manager::RelayActuationTrait;
 use crate::utilities::channel_content::InternalCommand;
 
-
 /// Contains trait implementation for system testing purposes.
 pub struct ActuateSimulator {
     config: ActuateControllinoConfig,
@@ -64,8 +63,7 @@ impl RelayActuationTrait for ActuateSimulator {
                     Ok(()) => Ok(()),
                     Err(e) => {
                         panic!(
-                            "Controllino: error when sending relay command {} to TCP thread: {e:?}",
-                            relay_command
+                            "Controllino: error when sending relay command {relay_command} to TCP thread: {e:?}"
                         );
                     }
                 }
@@ -73,8 +71,7 @@ impl RelayActuationTrait for ActuateSimulator {
             _ => {
                 warn!(
                     target: module_path!(),
-                    "ignoring irrelevant internal command {}.",
-                    internal_command
+                    "ignoring irrelevant internal command {internal_command}."
                 );
                 Err(RelayError::IrrelevantCommand(internal_command.clone()))
             }

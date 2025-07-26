@@ -42,10 +42,7 @@ pub mod tests {
                             break;
                         }
                         _ => {
-                            panic!(
-                                "{}: test object sent invalid command.",
-                                module_path!()
-                            );
+                            panic!("{}: test object sent invalid command.", module_path!());
                         }
                     }
                 }
@@ -74,7 +71,8 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                module_path!(), test_signal
+                                                module_path!(),
+                                                test_signal
                                             );
                                         }
                                     }
@@ -82,7 +80,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        module_path!(), test_command
+                                        module_path!(),
+                                        test_command
                                     );
                                 }
                             }

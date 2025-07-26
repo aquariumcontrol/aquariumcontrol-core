@@ -978,19 +978,20 @@ pub mod tests {
         );
 
         // *** check if required tables are existing - *********************************************
-        assert!(matches!(sql_interface.check_required_tables_existing(), Ok(())));
+        assert!(matches!(
+            sql_interface.check_required_tables_existing(),
+            Ok(())
+        ));
         println!("* checking required tables succeeded.");
         // *****************************************************************************************
 
         // *** check if required tables are existing - *********************************************
         let dummy_table = "dummy".to_string();
         sql_interface.config.db_tables.push(dummy_table.clone());
-        assert!(
-            matches!(
-                sql_interface.check_required_tables_existing(),
-                Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))
-            )
-        );
+        assert!(matches!(
+            sql_interface.check_required_tables_existing(),
+            Err(SqlInterfaceError::RequiredTablesNotExisting(_, _))
+        ));
         println!("* checking required tables succeeded.");
         // *****************************************************************************************
 
@@ -1045,7 +1046,10 @@ pub mod tests {
                 panic!("Found version information in truncated table.");
             }
             Err(e) => {
-                assert!(matches!(e, SqlInterfaceError::SingleVersionRequestNotListed(_)));
+                assert!(matches!(
+                    e,
+                    SqlInterfaceError::SingleVersionRequestNotListed(_)
+                ));
             }
         }
         // *****************************************************************************************
@@ -1077,7 +1081,10 @@ pub mod tests {
                 panic!("Found correct version information although having inserted incorrect version information table.");
             }
             Err(e) => {
-                assert!(matches!(e, SqlInterfaceError::SingleVersionRequestNotListed(_)))
+                assert!(matches!(
+                    e,
+                    SqlInterfaceError::SingleVersionRequestNotListed(_)
+                ))
             }
         }
 

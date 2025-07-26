@@ -139,7 +139,7 @@ pub struct ScheduleCheck {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from the database
     lock_error_database_read: bool,
-    
+
     /// recording when the last database ping happened
     pub last_ping_instant: Instant,
 
@@ -148,7 +148,6 @@ pub struct ScheduleCheck {
 }
 
 impl ScheduleCheck {
-
     /// Creates a new `ScheduleCheck` instance.
     ///
     /// This constructor initializes the schedule checking module with its specific
@@ -308,14 +307,11 @@ impl ScheduleCheck {
                 if let Err(errors) = self.sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {
                         for e in errors {
-                            error!(
-                                "Reading schedule failed ({e:?})"
-                            );
+                            error!("Reading schedule failed ({e:?})");
                         }
                         self.lock_error_database_read = true;
                     }
-                }
-                else {
+                } else {
                     self.lock_error_database_read = false;
                 }
             }

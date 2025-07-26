@@ -141,7 +141,7 @@ impl MineralInjectionTrait for MineralInjection {
                 Ok(val) => val,
                 Err(e) => {
                     error!(
-                        target: module_path!(), "Error converting u128 to u32: {}", e
+                        target: module_path!(), "Error converting u128 to u32: {e}"
                     );
                     break; // abort dosing - dosing counter keeps current value
                 }

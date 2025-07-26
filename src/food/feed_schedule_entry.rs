@@ -46,9 +46,10 @@ impl FeedScheduleEntry {
         let timestamp = NaiveDateTime::parse_from_str(
             sql_feed_schedule_entry.timestamp.as_str(),
             "%Y-%m-%d %H:%M:%S",
-            ).map_err(|e|
-                SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure { source: e }
-            )?;
+        )
+        .map_err(
+            |e| SqlInterfaceError::FeedScheduleEntryTimeStampConversionFailure { source: e },
+        )?;
 
         Ok(FeedScheduleEntry {
             timestamp,

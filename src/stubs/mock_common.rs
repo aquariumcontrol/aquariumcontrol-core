@@ -10,15 +10,14 @@ pub fn mock_common_receive_from_signal_handler(
         Ok(c) => match c {
             InternalCommand::Quit => true,
             _ => {
-                panic!("{}: Received invalid command.", sourced_from);
+                panic!("{sourced_from}: Received invalid command.");
             }
         },
         Err(e) => match e {
             TryRecvError::Empty => false,
             TryRecvError::Disconnected => {
                 panic!(
-                    "{}: Error in trying to receive command from signal handler: {e:?}",
-                    sourced_from
+                    "{sourced_from}: Error in trying to receive command from signal handler: {e:?}"
                 );
             }
         },

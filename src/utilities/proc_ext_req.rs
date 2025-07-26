@@ -268,8 +268,7 @@ fn process_external_request_without_messaging(
                 TryRecvError::Disconnected => {
                     error!(
                         target: module_path!(),
-                        "({}) receiving command from signal handler failed ({e:?})",
-                        sender
+                        "({sender}) receiving command from signal handler failed ({e:?})"
                     );
                 }
             }
@@ -578,8 +577,7 @@ fn process_standard_request(rx_from_signal_handler: &Receiver<InternalCommand>) 
             _ => {
                 warn!(
                     target: module_path!(),
-                    "ignoring inapplicable command {} from signal handler.",
-                    c
+                    "ignoring inapplicable command {c} from signal handler."
                 );
                 false
             }
@@ -649,8 +647,7 @@ impl ProcessExternalRequestTrait for Feed {
                             _ => {
                                 warn!(
                                     target: module_path!(),
-                                    "ignoring inapplicable command {} from messaging.",
-                                    c
+                                    "ignoring inapplicable command {c} from messaging."
                                 );
                                 (false, false, false, 0)
                             }
@@ -724,8 +721,7 @@ impl ProcessExternalRequestTrait for Balling {
                             _ => {
                                 warn!(
                                     target: module_path!(),
-                                    "ignoring inapplicable command {} from messaging.",
-                                    c
+                                    "ignoring inapplicable command {c} from messaging."
                                 );
                                 (false, false, false, 0)
                             }
@@ -794,8 +790,7 @@ impl ProcessExternalRequestTrait for Watchdog {
                         _ => {
                             warn!(
                                 target: module_path!(),
-                                "ignoring inapplicable command {} from messaging.",
-                                c
+                                "ignoring inapplicable command {c} from messaging."
                             );
                             (false, false)
                         }

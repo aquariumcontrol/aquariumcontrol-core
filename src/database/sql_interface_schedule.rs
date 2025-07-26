@@ -191,7 +191,6 @@ pub struct SqlInterfaceSchedule {
 }
 
 impl SqlInterfaceSchedule {
-
     /// Provides a new `SqlInterfaceSchedule` instance.
     ///
     /// This constructor initializes the interface with a database connection
@@ -206,11 +205,13 @@ impl SqlInterfaceSchedule {
     /// * An error `SqlInterfaceError` in case of failure.
     pub fn new(mut conn: PooledConn) -> Result<SqlInterfaceSchedule, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
-            &mut conn, SQL_QUERY_CHECK_SCHEDULE_NULL)
-            .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleNullFailure {
-                source: Box::new(e),
-            })?;
-        
+            &mut conn,
+            SQL_QUERY_CHECK_SCHEDULE_NULL,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleNullFailure {
+            source: Box::new(e),
+        })?;
+
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseScheduleTableContainsNull(
                 count_null_values,
@@ -265,16 +266,18 @@ impl SqlInterfaceSchedule {
                     self.schedules.push(schedule_entry);
                 }
                 Err(e) => {
-                    errors.push( // collect the error
-                        SqlInterfaceError::ScheduleProcessingFailure { source: Box::new(e)}
+                    errors.push(
+                        // collect the error
+                        SqlInterfaceError::ScheduleProcessingFailure {
+                            source: Box::new(e),
+                        },
                     );
                 }
             }
         }
         if errors.is_empty() {
             Ok(())
-        }
-        else {
+        } else {
             Err(errors)
         }
     }
@@ -330,7 +333,8 @@ pub mod tests {
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_schedule =
+            SqlInterfaceSchedule::new(sql_interface.get_connection()).unwrap();
 
         match sql_interface_schedule.read_schedule() {
             Ok(_) => {

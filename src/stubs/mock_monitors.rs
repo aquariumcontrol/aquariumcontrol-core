@@ -74,10 +74,8 @@ pub mod tests {
             let spin_sleeper = SpinSleeper::default();
 
             loop {
-                if mock_common_receive_from_signal_handler(
-                    &rx_from_signal_handler,
-                    module_path!(),
-                ) {
+                if mock_common_receive_from_signal_handler(&rx_from_signal_handler, module_path!())
+                {
                     break;
                 }
 

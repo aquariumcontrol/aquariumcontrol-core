@@ -300,7 +300,7 @@ impl AtlasScientific {
             if i > 0 {
                 print!(" ");
             }
-            print!("{}", byte);
+            print!("{byte}");
         }
         // Print a newline character at the end to ensure the next output appears on a new line.
         println!();
@@ -356,10 +356,7 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
-                println!(
-                    "Encountered non-numeric character {} in sequence: ",
-                    character
-                );
+                println!("Encountered non-numeric character {character} in sequence: ");
                 Self::print_ascii_values(numeric_content);
                 return Err(AtlasScientificError::ContainsInvalidCharacter(*character));
             }
@@ -415,8 +412,7 @@ impl AtlasScientific {
                 #[cfg(not(test))]
                 warn!(
                     target: module_path!(),
-                    "ignoring invalid signal request ({})",
-                    signal
+                    "ignoring invalid signal request ({signal})"
                 );
                 return false;
             }
@@ -491,9 +487,7 @@ impl AtlasScientific {
                                 Err(e) => {
                                     error!(
                                         target: module_path!(),
-                                        "error in sensor unit response for {}: {:?}",
-                                        signal,
-                                        e
+                                        "error in sensor unit response for {signal}: {e:?}"
                                     );
                                     Err(e)
                                 }
@@ -721,7 +715,8 @@ impl AtlasScientific {
                     #[cfg(test)]
                     println!(
                         "{}: Sending to i2c interface request for {}",
-                        module_path!(), signal
+                        module_path!(),
+                        signal
                     );
                     state_send_receive = self.send_request_to_i2c_interface(
                         &signal,
@@ -730,7 +725,8 @@ impl AtlasScientific {
                     #[cfg(test)]
                     println!(
                         "{}: Sent to i2c interface request for {}",
-                        module_path!(), signal
+                        module_path!(),
+                        signal
                     );
                 } else if state_send_receive {
                     // read from the channel if the measurement result is available from I2cInterface thread
@@ -787,8 +783,7 @@ impl AtlasScientific {
                         if !self.lock_warn_inapplicable_command_signal_handler {
                             warn!(
                                 target: module_path!(),
-                                "ignoring inapplicable command from signal handler ({})",
-                                c
+                                "ignoring inapplicable command from signal handler ({c})"
                             );
                             self.lock_warn_inapplicable_command_signal_handler = true;
                         }

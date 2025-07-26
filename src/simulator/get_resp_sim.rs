@@ -64,9 +64,7 @@ pub trait GetResponseFromSimulatorTrait {
             _ => {
                 warn!(
                     target: module_path!(),
-                    "ignoring not applicable internal command ({}) from {}",
-                    internal_command,
-                    requester
+                    "ignoring not applicable internal command ({internal_command}) from {requester}"
                 );
                 0.0
             }

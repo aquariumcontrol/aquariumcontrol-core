@@ -9,6 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
+    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
     use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
     use crate::stubs::mock_signal::tests::MockSignal;
@@ -18,7 +19,6 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, TryRecvError};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    use crate::database::sql_interface_error::SqlInterfaceError;
 
     pub fn mock_ventilation(
         rx_ventilation_from_signal_handler: &Receiver<InternalCommand>,
@@ -59,7 +59,8 @@ pub mod tests {
                                         _ => {
                                             panic!(
                                                 "{}: received test command for invalid signal {}",
-                                                module_path!(), test_signal
+                                                module_path!(),
+                                                test_signal
                                             );
                                         }
                                     }
@@ -67,7 +68,8 @@ pub mod tests {
                                 _ => {
                                     panic!(
                                         "{}: received invalid command {}.",
-                                        module_path!(), test_command
+                                        module_path!(),
+                                        test_command
                                     );
                                 }
                             }
@@ -134,7 +136,7 @@ pub mod tests {
             &mut self,
             ventilation_switch_off_temperature: &mut f32,
             ventilation_switch_on_temperature: &mut f32,
-        ) -> Result <(), SqlInterfaceError> {
+        ) -> Result<(), SqlInterfaceError> {
             if self.active
                 && self.delay_duration.is_some()
                 && self

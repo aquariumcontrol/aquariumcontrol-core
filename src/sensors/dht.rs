@@ -732,8 +732,7 @@ impl Dht {
                                 self.lock_error_max_retries = true;
                                 error!(
                                     target: module_path!(),
-                                    "failed to read from DHT sensor (after {} retries, {e:?})",
-                                    retry_counter,
+                                    "failed to read from DHT sensor (after {retry_counter} retries, {e:?})",
                                 );
                             }
                             dht_error = e;

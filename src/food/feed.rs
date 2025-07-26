@@ -221,8 +221,7 @@ impl Feed {
             Err(e) => {
                 error!(
                     target: module_path!(),
-                    "Error occurred when trying to read feed pattern {} from database: {:?}",
-                    profile_id, e
+                    "Error occurred when trying to read feed pattern {profile_id} from database: {e:?}"
                 );
                 return (Err(()), false); // Return failure, no quit command received yet.
             }
@@ -241,7 +240,7 @@ impl Feed {
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
             for error in errors {
-                error!(target: module_path!(), "Food injection failed: {}", error);
+                error!(target: module_path!(), "Food injection failed: {error}");
             }
         }
 
@@ -251,8 +250,7 @@ impl Feed {
             Err(e) => {
                 error!(
                     target: module_path!(),
-                    "could not get current timestamp from database ({:?})",
-                    e
+                    "could not get current timestamp from database ({e:?})"
                 );
                 // If we can't get a timestamp, we can't log the event.
                 // Return the original injection failure status and the quit status.
@@ -276,8 +274,7 @@ impl Feed {
             Err(e) => {
                 error!(
                     target: module_path!(),
-                    "Could not insert feed event into database ({:?})",
-                    e
+                    "Could not insert feed event into database ({e:?})"
                 );
                 Err(())
             }
@@ -673,8 +670,7 @@ impl Feed {
                             if !self.lock_warn_inapplicable_command {
                                 warn!(
                                     target: module_path!(),
-                                    "ignoring inapplicable command from signal handler ({})",
-                                    c
+                                    "ignoring inapplicable command from signal handler ({c})"
                                 );
                                 self.lock_warn_inapplicable_command = true;
                             }
@@ -872,7 +868,8 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed_unboxed =
+            SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -996,7 +993,8 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed_unboxed =
+            SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -1435,7 +1433,8 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed_unboxed =
+            SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 
@@ -1564,7 +1563,8 @@ pub mod tests {
             }
         };
 
-        let mut sql_interface_feed_unboxed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed_unboxed =
+            SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
 
         insert_feed_patterns(&mut sql_interface, &mut sql_interface_feed_unboxed);
 

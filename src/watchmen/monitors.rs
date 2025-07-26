@@ -223,7 +223,7 @@ impl Monitors {
                             TryRecvError::Empty => { /* empty buffer - no action required */ }
                             TryRecvError::Disconnected => {
                                 if !self.lock_error_receive_refill {
-                                    error!(target: module_path!(), "Error when trying to receive from refill: {}", e);
+                                    error!(target: module_path!(), "Error when trying to receive from refill: {e}");
                                     self.lock_error_receive_refill = true;
                                 }
                             }

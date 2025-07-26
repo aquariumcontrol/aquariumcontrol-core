@@ -269,10 +269,7 @@ impl TcpCommunication {
                 }
             }
             Err(e) => {
-                panic!(
-                    "{}: Writing to TCP stream failed ({e:?})",
-                    module_path!(),
-                );
+                panic!("{}: Writing to TCP stream failed ({e:?})", module_path!(),);
             }
         };
         let _ = self.write_stream.flush();
@@ -297,8 +294,7 @@ impl TcpCommunication {
         let request: String = if state {
             debug!(
                 target: module_path!(),
-                "switching on relay #{}",
-                relay_id
+                "switching on relay #{relay_id}"
             );
             category::CONTROLLINO.to_string()
                 + " "
@@ -309,8 +305,7 @@ impl TcpCommunication {
         } else {
             debug!(
                 target: module_path!(),
-                "switching off relay #{}",
-                relay_id
+                "switching off relay #{relay_id}"
             );
             category::CONTROLLINO.to_string()
                 + " "
@@ -326,10 +321,7 @@ impl TcpCommunication {
         match self.buf_reader.read_line(&mut response) {
             Ok(_) => {}
             Err(e) => {
-                panic!(
-                    "{}: Reading from TCP stream failed ({e:?})",
-                    module_path!(),
-                );
+                panic!("{}: Reading from TCP stream failed ({e:?})", module_path!(),);
             }
         };
     }
@@ -398,10 +390,7 @@ impl TcpCommunication {
         match self.buf_reader.read_line(&mut response) {
             Ok(_) => {}
             Err(e) => {
-                panic!(
-                    "{}: Reading from TCP stream failed ({e:?})",
-                    module_path!()
-                );
+                panic!("{}: Reading from TCP stream failed ({e:?})", module_path!());
             }
         };
         match Self::get_last_word(&response) {
@@ -419,17 +408,11 @@ impl TcpCommunication {
                         }
                     }
                 } else {
-                    panic!(
-                        "{}: Last word of response is empty.",
-                        module_path!()
-                    );
+                    panic!("{}: Last word of response is empty.", module_path!());
                 }
             }
             None => {
-                panic!(
-                    "{}: Response does not contain any words.",
-                    module_path!()
-                );
+                panic!("{}: Response does not contain any words.", module_path!());
             }
         }
     }
@@ -509,7 +492,7 @@ impl TcpCommunication {
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);
 
-        println!("{}", tcp_communication_channels);
+        println!("{tcp_communication_channels}");
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
