@@ -698,7 +698,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_ventilation() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.5UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -710,7 +710,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::VENTILATION;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -771,7 +771,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_heating() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.6UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -783,7 +783,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::HEATING;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -844,7 +844,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_refill() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.7UXp".to_string();
         let mq_file_name_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -860,7 +860,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::REFILL;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, rx_refill_from_messaging) = mpsc::channel();
@@ -935,7 +935,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_feed() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.8UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -952,7 +952,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::FEED;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -1026,7 +1026,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_balling() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -1040,7 +1040,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::BALLING;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
@@ -1101,7 +1101,7 @@ pub mod tests {
     #[test]
     pub fn test_messaging_watchdog() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.messaging.mq_filename = "/aquarium_control.9UXp".to_string();
         let mq_filename_for_test_environment = config.messaging.mq_filename.clone();
 
@@ -1113,7 +1113,7 @@ pub mod tests {
         msg_stop.domain = messaging_domains::WATCHDOG;
         msg_stop.command = messaging_commands::STOP;
 
-        let messaging = Messaging::new(config.messaging);
+        let messaging = Messaging::new(config.messaging).unwrap();
 
         let (tx_signal_handler_to_messaging, rx_messaging_from_signal_handler) = mpsc::channel();
         let (tx_messaging_to_refill, _rx_refill_from_messaging) = mpsc::channel();
