@@ -24,6 +24,9 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct ScheduleCheckConfig {
+    /// reading from the database only happens when the flag is true
+    active: bool,
+
     /// interval for polling the SQL database
     schedule_check_interval: u32,
 
@@ -303,16 +306,18 @@ impl ScheduleCheck {
         let mut loop_counter = 0;
 
         loop {
-            if loop_counter % self.config.schedule_check_interval * 10 == 0 {
-                if let Err(errors) = self.sql_interface_schedule.read_schedule() {
-                    if !self.lock_error_database_read {
-                        for e in errors {
-                            error!("Reading schedule failed ({e:?})");
+            if self.config.active {
+                if loop_counter % self.config.schedule_check_interval * 10 == 0 {
+                    if let Err(errors) = self.sql_interface_schedule.read_schedule() {
+                        if !self.lock_error_database_read {
+                            for e in errors {
+                                error!("Reading schedule failed ({e:?})");
+                            }
+                            self.lock_error_database_read = true;
                         }
-                        self.lock_error_database_read = true;
+                    } else {
+                        self.lock_error_database_read = false;
                     }
-                } else {
-                    self.lock_error_database_read = false;
                 }
             }
 

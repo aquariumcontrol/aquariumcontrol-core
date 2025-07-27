@@ -191,6 +191,7 @@ timeout_transaction = 100                               # timeout for transactio
 max_read_attempts = 10                                  # maximum number of read attempts
 
 [schedule_check]
+active = true                                           # used for testing purposes only
 schedule_check_interval = 300                           # interval in seconds for polling the database
 strategy_if_schedule_not_found = true                   # strategy for allowing (true) or inhibiting (false) actuation when schedule could not be found in the database
 
@@ -202,7 +203,7 @@ timeout_millis = 250                                    # timeout to check for s
 pid_filename = "/var/local/aquarium-ctrl.pid"           # filename for publishing PID
 
 [watchdog]
-active = true
+active = true                                           # used for testing purposes only
 watchdog_filename = "/dev/watchdog"                     # filename for sending heartbeat to system watchdog
 watchdog_heartbeat = "1"                                # content to be written to watchdog file
 heartbeat_duration_millis = 1000                        # duration between two hearbeats in milliseconds
