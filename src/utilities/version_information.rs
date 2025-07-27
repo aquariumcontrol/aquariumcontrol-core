@@ -17,7 +17,7 @@ use std::fmt::{Display, Formatter};
 pub const VERSION_MAJOR: i32 = 0;
 
 /// Minor version number
-pub const VERSION_MINOR: i32 = 2;
+pub const VERSION_MINOR: i32 = 3;
 
 /// Build number
 pub const VERSION_BUILD: i32 = 0;

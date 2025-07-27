@@ -63,6 +63,8 @@ mod beacon;
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 
+use jemallocator::Jemalloc;
+
 use log::{error, info, warn};
 
 #[cfg(feature = "debug_main")]
@@ -142,6 +144,9 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {

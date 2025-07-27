@@ -1706,7 +1706,7 @@ pub mod tests {
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
-                    Some(true),  // target_heater_status
+                    Some(false),  // target_heater_status
                 );
 
                 // Dataframe #1
