@@ -14,7 +14,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jemallocator = "0.5.4"
 mysql = "25.0.1"
 chrono = { version = "0.4.31", features = ["serde"] }
 serde = "1.0.136"

@@ -63,9 +63,6 @@ mod beacon;
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 
-#[cfg(target_os = "linux")]
-use jemallocator::Jemalloc;
-
 use log::{error, info, warn};
 
 #[cfg(feature = "debug_main")]
@@ -145,10 +142,6 @@ cfg_if::cfg_if! {
         use crate::sensors::i2c_interface::I2cInterface;
     }
 }
-
-#[cfg(target_os = "linux")]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 /// Displays the valid command line parameter combinations
 fn display_usage() {
@@ -353,6 +346,11 @@ fn run() -> Result<(), StartupError> {
     // setup logging to write to the log output file and stdout
     setup_logger();
 
+    match std::env::var("MALLOC_ARENA_MAX") {
+        Ok(val) => info!("MALLOC_ARENA_MAX is set to: {}", val),
+        Err(_) => warn!("MALLOC_ARENA_MAX is not set."),
+    }
+    
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
 
