@@ -796,7 +796,7 @@ impl Balling {
                 balling_channels.rx_balling_from_messaging_opt.as_ref(),
             );
 
-            if self.execute_command_received {
+            if self.execute_command_received && self.config.active {
                 let pump_device_opt = Self::get_pump_from_id(self.pump_id_requested);
                 match pump_device_opt {
                     Some((pump_id, pump_device)) => {

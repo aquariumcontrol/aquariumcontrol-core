@@ -63,6 +63,7 @@ mod beacon;
 /// This container module features all functionality to replace the evaporated water with fresh water.
 mod water;
 
+#[cfg(target_os = "linux")]
 use jemallocator::Jemalloc;
 
 use log::{error, info, warn};
@@ -145,6 +146,7 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(target_os = "linux")]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
@@ -1381,18 +1383,6 @@ fn run() -> Result<(), StartupError> {
             debug!(target: module_path!(), "Schedule checker terminated.");
         });
 
-        scope.spawn(move || {
-            atlas_scientific.execute(
-                atlas_scientific_channels,
-                mutex_atlas_scientific_temperature,
-                mutex_atlas_scientific_ph,
-                mutex_atlas_scientific_conductivity,
-            );
-
-            #[cfg(feature = "debug_main")]
-            debug!(target: module_path!(), "Atlas Scientific terminated.");
-        });
-
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface);
@@ -1408,6 +1398,18 @@ fn run() -> Result<(), StartupError> {
                 debug!(target: module_path!(), "i2c_interface terminated.");
             });
         }
+
+        scope.spawn(move || {
+            atlas_scientific.execute(
+                atlas_scientific_channels,
+                mutex_atlas_scientific_temperature,
+                mutex_atlas_scientific_ph,
+                mutex_atlas_scientific_conductivity,
+            );
+
+            #[cfg(feature = "debug_main")]
+            debug!(target: module_path!(), "Atlas Scientific terminated.");
+        });
 
         scope.spawn(move || {
             dht.execute(mutex_dht, rx_dht_from_signal_handler);

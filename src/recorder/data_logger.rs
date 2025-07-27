@@ -40,6 +40,9 @@ const MILLIS_PER_SEC: u64 = 1000;
 /// This struct does not contain any implementation.
 #[derive(Deserialize)]
 pub struct DataLoggerConfig {
+    /// data logging will only be active when the flag is set to true
+    active: bool,
+
     /// switch indicating if a self-generated timestamp or the database-generated timestamp shall be used
     use_sql_timestamp: bool,
 
@@ -1012,67 +1015,68 @@ impl DataLogger {
         let mut start_time = Instant::now();
 
         loop {
-            self.update_signals(
-                &mut refill_in_progress_live,
-                &mut refill_in_progress_for_database,
-                true,
-                &mut heater_is_on,
-                &mut ventilation_is_on,
-                &data_logger_mutexes,
-            );
-
-            // update signals by accessing mutex for Atlas Scientific signals
-            self.update_sensor_manager_signals(
-                data_logger_mutexes.mutex_sensor_manager_signals.clone(),
-                &mut water_temperature,
-                &mut ph,
-                &mut conductivity,
-                &mut ambient_temperature,
-                &mut ambient_humidity,
-            );
-
-            // update signals by accessing mutex for tank level switch signals
-            self.update_tank_level_switch_signals(
-                &data_logger_mutexes.mutex_tank_level_switch_signals,
-                &mut tank_level_switch_position,
-                &mut tank_level_switch_position_stabilized,
-                &mut tank_level_switch_invalid,
-            );
-
-            let (water_temperature_filtered, pH_filtered, conductivity_filtered) = self
-                .calculate_filtered_signals(
-                    water_temperature,
-                    ph,
-                    conductivity,
-                    &mut filter_water_temperature,
-                    &mut filter_pH,
-                    &mut filter_conductivity,
+            if self.config.active {
+                self.update_signals(
+                    &mut refill_in_progress_live,
+                    &mut refill_in_progress_for_database,
+                    true,
+                    &mut heater_is_on,
+                    &mut ventilation_is_on,
+                    &data_logger_mutexes,
                 );
 
-            let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
+                // update signals by accessing mutex for Atlas Scientific signals
+                self.update_sensor_manager_signals(
+                    data_logger_mutexes.mutex_sensor_manager_signals.clone(),
+                    &mut water_temperature,
+                    &mut ph,
+                    &mut conductivity,
+                    &mut ambient_temperature,
+                    &mut ambient_humidity,
+                );
 
-            // all data received, let's construct a data frame
-            let data_frame = RecorderDataFrame {
-                timestamp: current_timestamp,
-                water_temperature,
-                water_temperature_filtered,
-                ph,
-                ph_filtered: pH_filtered,
-                conductivity,
-                conductivity_filtered,
-                conductivity_compensated: None,
-                refill_in_progress: Some(refill_in_progress_for_database),
-                tank_level_switch_position,
-                tank_level_switch_position_stabilized,
-                tank_level_switch_invalid,
-                surface_ventilation_status: Some(ventilation_is_on),
-                ambient_temperature,
-                ambient_humidity,
-                heater_status: Some(heater_is_on),
-            };
+                // update signals by accessing mutex for tank level switch signals
+                self.update_tank_level_switch_signals(
+                    &data_logger_mutexes.mutex_tank_level_switch_signals,
+                    &mut tank_level_switch_position,
+                    &mut tank_level_switch_position_stabilized,
+                    &mut tank_level_switch_invalid,
+                );
 
-            data_injection.inject_data(data_frame, &mut sql_interface_data);
+                let (water_temperature_filtered, pH_filtered, conductivity_filtered) = self
+                    .calculate_filtered_signals(
+                        water_temperature,
+                        ph,
+                        conductivity,
+                        &mut filter_water_temperature,
+                        &mut filter_pH,
+                        &mut filter_conductivity,
+                    );
 
+                let current_timestamp = self.update_timestamp(&mut sql_interface_data.conn);
+
+                // all data received, let's construct a data frame
+                let data_frame = RecorderDataFrame {
+                    timestamp: current_timestamp,
+                    water_temperature,
+                    water_temperature_filtered,
+                    ph,
+                    ph_filtered: pH_filtered,
+                    conductivity,
+                    conductivity_filtered,
+                    conductivity_compensated: None,
+                    refill_in_progress: Some(refill_in_progress_for_database),
+                    tank_level_switch_position,
+                    tank_level_switch_position_stabilized,
+                    tank_level_switch_invalid,
+                    surface_ventilation_status: Some(ventilation_is_on),
+                    ambient_temperature,
+                    ambient_humidity,
+                    heater_status: Some(heater_is_on),
+                };
+
+                data_injection.inject_data(data_frame, &mut sql_interface_data);
+            }
             let stop_time = Instant::now();
             let execution_duration = stop_time.duration_since(start_time);
 
@@ -1120,34 +1124,36 @@ impl DataLogger {
                     break;
                 }
 
-                // once per second, retrieve signals and write them to the RAM disk
-                if i % 1000 == 0 {
-                    self.update_signals(
-                        &mut refill_in_progress_live,
-                        &mut refill_in_progress_for_database,
-                        false,
-                        &mut heater_is_on,
-                        &mut ventilation_is_on,
-                        &data_logger_mutexes,
-                    );
+                if self.config.active {
+                    // once per second, retrieve signals and write them to the RAM disk
+                    if i % 1000 == 0 {
+                        self.update_signals(
+                            &mut refill_in_progress_live,
+                            &mut refill_in_progress_for_database,
+                            false,
+                            &mut heater_is_on,
+                            &mut ventilation_is_on,
+                            &data_logger_mutexes,
+                        );
 
-                    // update signals by accessing mutex for Atlas Scientific signals
-                    self.update_sensor_manager_signals(
-                        data_logger_mutexes.mutex_sensor_manager_signals.clone(),
-                        &mut water_temperature,
-                        &mut ph,
-                        &mut conductivity,
-                        &mut ambient_temperature,
-                        &mut ambient_humidity,
-                    );
+                        // update signals by accessing mutex for Atlas Scientific signals
+                        self.update_sensor_manager_signals(
+                            data_logger_mutexes.mutex_sensor_manager_signals.clone(),
+                            &mut water_temperature,
+                            &mut ph,
+                            &mut conductivity,
+                            &mut ambient_temperature,
+                            &mut ambient_humidity,
+                        );
 
-                    // update signals by accessing mutex for tank level switch signals
-                    self.update_tank_level_switch_signals(
-                        &data_logger_mutexes.mutex_tank_level_switch_signals,
-                        &mut tank_level_switch_position,
-                        &mut tank_level_switch_position_stabilized,
-                        &mut tank_level_switch_invalid,
-                    );
+                        // update signals by accessing mutex for tank level switch signals
+                        self.update_tank_level_switch_signals(
+                            &data_logger_mutexes.mutex_tank_level_switch_signals,
+                            &mut tank_level_switch_position,
+                            &mut tank_level_switch_position_stabilized,
+                            &mut tank_level_switch_invalid,
+                        );
+                    }
                 }
                 cycle_time_exceeded = false;
             }

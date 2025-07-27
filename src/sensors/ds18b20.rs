@@ -280,55 +280,57 @@ impl Ds18b20 {
         let mut measurement_countdown: i32 = 0;
 
         loop {
-            if measurement_countdown > 0 {
-                // count down to zero
-                measurement_countdown = measurement_countdown.saturating_sub(100);
-            } else {
-                let instant_before_locking_mutex = Instant::now();
-                let instant_after_locking_mutex: Instant;
+            if self.config.active {
+                if measurement_countdown > 0 {
+                    // count down to zero
+                    measurement_countdown = measurement_countdown.saturating_sub(100);
+                } else {
+                    let instant_before_locking_mutex = Instant::now();
+                    let instant_after_locking_mutex: Instant;
 
-                // count down has reached zero - initiate the measurement
-                {
-                    // life-time limitation of open mutex
-                    let mut water_temperature = mutex_water_temperature.lock().unwrap();
-                    let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
-                    instant_after_locking_mutex = Instant::now();
+                    // count down has reached zero - initiate the measurement
+                    {
+                        // life-time limitation of open mutex
+                        let mut water_temperature = mutex_water_temperature.lock().unwrap();
+                        let mut ambient_temperature = mutex_ambient_temperature.lock().unwrap();
+                        instant_after_locking_mutex = Instant::now();
 
-                    if !self.config.ambient_temperature_sensor_id.is_empty() {
-                        *ambient_temperature =
-                            self.read(self.config.ambient_temperature_sensor_id.as_str());
+                        if !self.config.ambient_temperature_sensor_id.is_empty() {
+                            *ambient_temperature =
+                                self.read(self.config.ambient_temperature_sensor_id.as_str());
+                        }
+                        if !self.config.water_temperature_sensor_id.is_empty() {
+                            *water_temperature =
+                                self.read(self.config.water_temperature_sensor_id.as_str());
+                        }
+
+                        // restart the countdown
+                        measurement_countdown = self.config.measurement_pause_duration_millis as i32;
                     }
-                    if !self.config.water_temperature_sensor_id.is_empty() {
-                        *water_temperature =
-                            self.read(self.config.water_temperature_sensor_id.as_str());
-                    }
 
-                    // restart the countdown
-                    measurement_countdown = self.config.measurement_pause_duration_millis as i32;
-                }
+                    // check if access to mutex took too long
+                    let measured_mutex_access_duration =
+                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                    if measured_mutex_access_duration > max_mutex_access_duration {
+                        if !self.lock_warn_max_mutex_access_duration {
+                            self.lock_warn_max_mutex_access_duration = true;
+                            #[cfg(not(test))]
+                            warn!(target: module_path!(),
+                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                                max_mutex_access_duration.as_millis(),
+                                measured_mutex_access_duration.as_millis(),
+                            );
 
-                // check if access to mutex took too long
-                let measured_mutex_access_duration =
-                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                if measured_mutex_access_duration > max_mutex_access_duration {
-                    if !self.lock_warn_max_mutex_access_duration {
-                        self.lock_warn_max_mutex_access_duration = true;
-                        #[cfg(not(test))]
-                        warn!(target: module_path!(),
-                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                            max_mutex_access_duration.as_millis(),
-                            measured_mutex_access_duration.as_millis(),
-                        );
-
-                        // record for testing purposes only
-                        cfg_if::cfg_if! {
-                            if #[cfg(test)] {
-                                self.mutex_access_duration_exceeded = true;
+                            // record for testing purposes only
+                            cfg_if::cfg_if! {
+                                if #[cfg(test)] {
+                                    self.mutex_access_duration_exceeded = true;
+                                }
                             }
                         }
+                    } else {
+                        self.lock_warn_max_mutex_access_duration = false;
                     }
-                } else {
-                    self.lock_warn_max_mutex_access_duration = false;
                 }
             }
 

@@ -31,6 +31,9 @@ use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 /// This struct does not contain any implementation.
 #[derive(Deserialize, Clone)]
 pub struct TankLevelSwitchConfig {
+    /// signal processing is only active when the flag is set to true
+    active: bool,
+
     /// flag to determine if the application shall communicate with hardware directly or via TCP with a simulator
     pub use_simulator: bool,
 
@@ -421,52 +424,54 @@ impl TankLevelSwitch {
                 break;
             }
 
-            // either communicate with real HW or with the simulator to get updated signal information
-            self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
+            if self.config.active {
+                // either communicate with real HW or with the simulator to get updated signal information
+                self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
 
-            self.calc_tank_level_switch_position_stabilized();
+                self.calc_tank_level_switch_position_stabilized();
 
-            let instant_before_locking_mutex = Instant::now();
-            let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+                let instant_before_locking_mutex = Instant::now();
+                let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
-            // Write calculated signals to mutex
-            {
-                match mutex_tank_level_switch_signals.lock() {
-                    Ok(mut c) => {
-                        instant_after_locking_mutex = Instant::now();
-                        c.tank_level_switch_position_stabilized =
-                            self.tank_level_switch_position_stabilized;
-                        c.tank_level_switch_invalid = self.tank_level_switch_invalid;
-                        c.tank_level_switch_position = self.tank_level_switch_position;
-                    }
-                    Err(_) => {
-                        // Do nothing
-                    }
-                }
-            }
-
-            // check if access to mutex took too long
-            let measured_mutex_access_duration =
-                instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-            if measured_mutex_access_duration > max_mutex_access_duration {
-                if !self.lock_warn_max_mutex_access_duration {
-                    self.lock_warn_max_mutex_access_duration = true;
-                    #[cfg(not(test))]
-                    warn!(target: module_path!(),
-                        "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                        max_mutex_access_duration.as_millis(),
-                        measured_mutex_access_duration.as_millis(),
-                    );
-
-                    // record for testing purposes only
-                    cfg_if::cfg_if! {
-                        if #[cfg(test)] {
-                            self.mutex_access_duration_exceeded = true;
+                // Write calculated signals to mutex
+                {
+                    match mutex_tank_level_switch_signals.lock() {
+                        Ok(mut c) => {
+                            instant_after_locking_mutex = Instant::now();
+                            c.tank_level_switch_position_stabilized =
+                                self.tank_level_switch_position_stabilized;
+                            c.tank_level_switch_invalid = self.tank_level_switch_invalid;
+                            c.tank_level_switch_position = self.tank_level_switch_position;
+                        }
+                        Err(_) => {
+                            // Do nothing
                         }
                     }
                 }
-            } else {
-                self.lock_warn_max_mutex_access_duration = false;
+
+                // check if access to mutex took too long
+                let measured_mutex_access_duration =
+                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                if measured_mutex_access_duration > max_mutex_access_duration {
+                    if !self.lock_warn_max_mutex_access_duration {
+                        self.lock_warn_max_mutex_access_duration = true;
+                        #[cfg(not(test))]
+                        warn!(target: module_path!(),
+                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                            max_mutex_access_duration.as_millis(),
+                            measured_mutex_access_duration.as_millis(),
+                        );
+
+                        // record for testing purposes only
+                        cfg_if::cfg_if! {
+                            if #[cfg(test)] {
+                                self.mutex_access_duration_exceeded = true;
+                            }
+                        }
+                    }
+                } else {
+                    self.lock_warn_max_mutex_access_duration = false;
+                }
             }
 
             let stop_time = Instant::now();

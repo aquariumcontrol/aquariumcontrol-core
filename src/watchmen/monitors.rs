@@ -179,32 +179,6 @@ impl Monitors {
                     );
                 }
 
-                (
-                    quit_command_received,
-                    start_command_received,
-                    stop_command_received,
-                ) = self.process_external_request(
-                    &monitors_channels.rx_monitors_from_signal_handler,
-                    monitors_channels.rx_monitors_from_messaging_opt.as_ref(),
-                );
-                if quit_command_received {
-                    break;
-                }
-                if stop_command_received {
-                    info!(
-                        target: module_path!(),
-                        "received Stop command. Inhibiting monitoring."
-                    );
-                    monitors_inhibited = true;
-                }
-                if start_command_received {
-                    info!(
-                        target: module_path!(),
-                        "received Start command. Restarting monitoring."
-                    );
-                    monitors_inhibited = false;
-                }
-
                 match monitors_channels.rx_monitors_from_refill.try_recv() {
                     Ok(new_refill_view) => match old_refill_view_opt {
                         Some(ref old_refill_view) => {
@@ -230,7 +204,33 @@ impl Monitors {
                         }
                     }
                 };
-                spin_sleeper.sleep(sleep_duration_hundred_millis);
+            }
+            spin_sleeper.sleep(sleep_duration_hundred_millis);
+
+            (
+                quit_command_received,
+                start_command_received,
+                stop_command_received,
+            ) = self.process_external_request(
+                &monitors_channels.rx_monitors_from_signal_handler,
+                monitors_channels.rx_monitors_from_messaging_opt.as_ref(),
+            );
+            if quit_command_received {
+                break;
+            }
+            if stop_command_received {
+                info!(
+                        target: module_path!(),
+                        "received Stop command. Inhibiting monitoring."
+                    );
+                monitors_inhibited = true;
+            }
+            if start_command_received {
+                info!(
+                        target: module_path!(),
+                        "received Start command. Restarting monitoring."
+                    );
+                monitors_inhibited = false;
             }
 
             // The application received request to terminate. That is why the loop was left.
