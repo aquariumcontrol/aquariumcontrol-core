@@ -220,16 +220,16 @@ impl Monitors {
             }
             if stop_command_received {
                 info!(
-                        target: module_path!(),
-                        "received Stop command. Inhibiting monitoring."
-                    );
+                    target: module_path!(),
+                    "received Stop command. Inhibiting monitoring."
+                );
                 monitors_inhibited = true;
             }
             if start_command_received {
                 info!(
-                        target: module_path!(),
-                        "received Start command. Restarting monitoring."
-                    );
+                    target: module_path!(),
+                    "received Start command. Restarting monitoring."
+                );
                 monitors_inhibited = false;
             }
 

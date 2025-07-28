@@ -306,18 +306,16 @@ impl ScheduleCheck {
         let mut loop_counter = 0;
 
         loop {
-            if self.config.active {
-                if loop_counter % self.config.schedule_check_interval * 10 == 0 {
-                    if let Err(errors) = self.sql_interface_schedule.read_schedule() {
-                        if !self.lock_error_database_read {
-                            for e in errors {
-                                error!("Reading schedule failed ({e:?})");
-                            }
-                            self.lock_error_database_read = true;
+            if self.config.active && loop_counter % self.config.schedule_check_interval * 10 == 0 {
+                if let Err(errors) = self.sql_interface_schedule.read_schedule() {
+                    if !self.lock_error_database_read {
+                        for e in errors {
+                            error!("Reading schedule failed ({e:?})");
                         }
-                    } else {
-                        self.lock_error_database_read = false;
+                        self.lock_error_database_read = true;
                     }
+                } else {
+                    self.lock_error_database_read = false;
                 }
             }
 

@@ -14,6 +14,7 @@ pub mod config_error;
 pub mod config_file_definition_error;
 pub mod iir_filter;
 pub mod logger;
+pub mod memory_config_check;
 pub mod proc_ext_req;
 pub mod publish_pid;
 pub mod sawtooth_profile;

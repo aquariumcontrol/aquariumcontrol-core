@@ -4,6 +4,7 @@ use crate::dispatch::messaging_error::MessagingError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
+use crate::utilities::memory_config_check::MemoryConfigError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -52,4 +53,10 @@ pub enum StartupError {
     #[allow(unused)]
     #[error("Configuration error: GPIO handler not initialized.")]
     GpioHandlerMissing,
+
+    #[error("Configuration error: Memory configuration of operating system is invalid.")]
+    InvalidMemoryConfig {
+        #[source]
+        source: MemoryConfigError,
+    },
 }

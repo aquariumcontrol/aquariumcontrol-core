@@ -120,6 +120,7 @@ use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::logger::setup_logger;
+use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 use crate::utilities::startup_error::StartupError;
@@ -346,11 +347,6 @@ fn run() -> Result<(), StartupError> {
     // setup logging to write to the log output file and stdout
     setup_logger();
 
-    match std::env::var("MALLOC_ARENA_MAX") {
-        Ok(val) => info!("MALLOC_ARENA_MAX is set to: {}", val),
-        Err(_) => warn!("MALLOC_ARENA_MAX is not set."),
-    }
-    
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
 
@@ -412,6 +408,21 @@ fn run() -> Result<(), StartupError> {
             );
         }
     }));
+
+    // check if the memory configuration is valid
+    match memory_config_check(&config.memory_config) {
+        Ok(env_var_name_value_tuple_opt) => {
+            match env_var_name_value_tuple_opt {
+                Some((env_var_name, value)) => {
+                    info!("Memory configuration check: {env_var_name} is configured to {value}");
+                }
+                None => { /* do nothing, configuration check may be disabled */ }
+            }
+        }
+        Err(e) => {
+            return Err(StartupError::InvalidMemoryConfig { source: e });
+        }
+    }
 
     // check if the control parameters of heating and ventilation are valid
     if !distinct_thermal_control_interval_check(&config.heating, &config.ventilation) {

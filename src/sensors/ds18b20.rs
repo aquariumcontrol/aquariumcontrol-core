@@ -305,7 +305,8 @@ impl Ds18b20 {
                         }
 
                         // restart the countdown
-                        measurement_countdown = self.config.measurement_pause_duration_millis as i32;
+                        measurement_countdown =
+                            self.config.measurement_pause_duration_millis as i32;
                     }
 
                     // check if access to mutex took too long

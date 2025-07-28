@@ -43,6 +43,7 @@ use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
+use crate::utilities::memory_config_check::MemoryConfig;
 use crate::utilities::publish_pid::PublishPidConfig;
 use crate::watchmen::monitors::MonitorsConfig;
 use crate::watchmen::watchdog::WatchdogConfig;
@@ -123,6 +124,9 @@ pub struct ConfigData {
     /// configuration of WS2812B RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
     pub ws2812b: Ws2812BConfig,
+
+    /// check of memory configuration
+    pub memory_config: MemoryConfig,
 }
 
 #[cfg(not(test))]

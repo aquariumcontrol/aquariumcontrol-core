@@ -223,3 +223,9 @@ ambient_temperature_sensor_id = ""                      # sensor is not used
 active = true
 device_name = "/dev/spidev0.0"                          # device name required by low-level SPI driver
 number_leds = 3                                         # number of LEDs
+
+[memory]
+active = false                                          # needs to be deactivated for certain test environments
+env_variable_name = "MALLOC_ARENA_MAX"                  # check the configuration of standard memory allocator
+env_variable_min_val = 2                                # minimum value for environment variable
+env_variable_max_val = 3                                # maximum value for environment variable
