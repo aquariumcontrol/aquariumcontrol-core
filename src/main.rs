@@ -410,7 +410,7 @@ fn run() -> Result<(), StartupError> {
     }));
 
     // check if the memory configuration is valid
-    match memory_config_check(&config.memory_config) {
+    match memory_config_check(&config.memory) {
         Ok(env_var_name_value_tuple_opt) => {
             match env_var_name_value_tuple_opt {
                 Some((env_var_name, value)) => {

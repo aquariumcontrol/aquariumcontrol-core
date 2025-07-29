@@ -126,7 +126,7 @@ pub struct ConfigData {
     pub ws2812b: Ws2812BConfig,
 
     /// check of memory configuration
-    pub memory_config: MemoryConfig,
+    pub memory: MemoryConfig,
 }
 
 #[cfg(not(test))]
