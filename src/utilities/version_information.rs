@@ -12,15 +12,63 @@ use log::info;
 
 use std::env;
 use std::fmt::{Display, Formatter};
+use std::num::ParseIntError;
+use thiserror::Error;
 
-/// Major version number
-pub const VERSION_MAJOR: i32 = 0;
+/// Contains error definition for version information retrieval
+#[derive(Debug, Error)]
+pub enum VersionInformationError {
+    /// Major number could not be parsed from version string
+    #[error("Could not parse major number from version string ({0})")]
+    ParseErrorMajor(String),
 
-/// Minor version number
-pub const VERSION_MINOR: i32 = 3;
+    /// Minor number could not be parsed from version string
+    #[error("Could not parse minor number from version string ({0})")]
+    ParseErrorMinor(String),
 
-/// Build number
-pub const VERSION_BUILD: i32 = 0;
+    /// Build number could not be parsed from version string
+    #[error("Could not parse build number from version string ({0})")]
+    ParseErrorBuild(String),
+
+    /// Major number could not be converted to numeric value
+    #[error("Could not parse major number from version string ({version_string})")]
+    ConversionErrorMajor {
+        version_string: String,
+
+        #[source]
+        source: ParseIntError,
+    },
+
+    /// Minor number could not be converted to numeric value
+    #[error("Could not parse minor number from version string ({version_string})")]
+    ConversionErrorMinor {
+        version_string: String,
+
+        #[source]
+        source: ParseIntError,
+    },
+
+    /// Build number could not be converted to numeric value
+    #[error("Could not parse build number from version string ({version_string})")]
+    ConversionErrorBuild {
+        version_string: String,
+
+        #[source]
+        source: ParseIntError,
+    },
+
+    #[error("Failed to retrieve current executable path.")]
+    CurrentExecutablePathRetrievalFailure {
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to read executable file content.")]
+    ExecutableFileReadFailure {
+        #[source]
+        source: std::io::Error,
+    },
+}
 
 /// Holds the data structure and implementation for retrieving and storing version information of the application.
 pub struct VersionInformation {
@@ -30,7 +78,7 @@ pub struct VersionInformation {
     /// Minor version number (used to identify minor changes between releases)
     pub minor: i32,
 
-    /// Build numer (increases with every published build)
+    /// Build number (increases with every published build)
     pub build: i32,
 
     /// Hash serves as a fingerprint to match SW with database configuration
@@ -38,24 +86,20 @@ pub struct VersionInformation {
 }
 
 impl VersionInformation {
-    /// Creates a new `VersionInformation` instance, populating it with
-    /// the application's compiled-in version numbers and an SHA-256 hash
-    /// of its executable file.
+    /// Creates a new `VersionInformation` instance by reading the version from
+    /// `Cargo.toml` at compile time and calculating the SHA-256 hash of the
+    /// current executable.
     ///
-    /// This constructor is responsible for identifying the currently running
-    /// executable and computing a unique fingerprint (hash) of its binary content.
-    /// This hash is used to verify the integrity or version compatibility
-    /// of the running application against a database schema.
+    /// This is the primary constructor for production use.
     ///
     /// # Returns
-    /// A new `VersionInformation` struct containing the major, minor, build,
-    /// and the calculated executable hash.
-    ///
-    /// # Panics
-    /// This function will panic if it fails to:
-    /// - Determine the path of the current executable.
-    /// - Read the contents of the executable file (e.g., due to permissions or file system errors).
-    pub fn new() -> VersionInformation {
+    /// * A new `VersionInformation` struct containing the major, minor, build,
+    ///   and the calculated executable hash in case of success.
+    /// * `VersionInformationError` in case of error
+    pub fn new() -> Result<VersionInformation, VersionInformationError> {
+        // get the version string from Cargo.toml
+        let version_string = env!("CARGO_PKG_VERSION").to_string();
+
         // get the fully qualified path and file name
         let pathfilename = match env::current_exe() {
             Ok(exe_path) => {
@@ -68,21 +112,95 @@ impl VersionInformation {
                 exe_path
             }
             Err(e) => {
-                panic!(
-                    "{}: failed to get current executable path: {e:?}",
-                    module_path!(),
-                );
+                return Err(
+                    VersionInformationError::CurrentExecutablePathRetrievalFailure { source: e },
+                )
             }
         };
+
         // calculate hash from executable
-        let bytes = std::fs::read(pathfilename).unwrap(); // Vec<u8>
+        let bytes = std::fs::read(pathfilename)
+            .map_err(|e| VersionInformationError::ExecutableFileReadFailure { source: e })?;
+
         let hash = sha256::digest(&bytes);
-        VersionInformation {
-            major: VERSION_MAJOR,
-            minor: VERSION_MINOR,
-            build: VERSION_BUILD,
+
+        // further process information in testable function
+        Self::from_string_and_hash(version_string, hash)
+    }
+
+    /// Creates a new `VersionInformation` instance from a version string and a hash.
+    ///
+    /// This function is designed to be used in testing environments, allowing for the injection
+    /// of arbitrary version strings and hashes to validate parsing and behavior.
+    ///
+    /// # Arguments
+    /// * `version_string` - A string slice representing the version (e.g., "1.2.3").
+    /// * `hash` - The `String` to use for the hash value.
+    ///
+    /// # Returns
+    /// A `Result` containing a new `VersionInformation` struct, or a `VersionInformationError`
+    /// if the version string cannot be parsed.
+    pub fn from_string_and_hash(
+        version_string: String,
+        hash: String,
+    ) -> Result<VersionInformation, VersionInformationError> {
+        // Split the "0.3.0" string into its parts, returning specific error on failure
+        let mut parts = version_string.split('.');
+        let major_str = match parts.next() {
+            Some(major_str) => major_str,
+            None => {
+                return Err(VersionInformationError::ParseErrorMajor(version_string));
+            }
+        };
+
+        let minor_str = match parts.next() {
+            Some(minor_str) => minor_str,
+            None => {
+                return Err(VersionInformationError::ParseErrorMinor(version_string));
+            }
+        };
+
+        // The patch/build number might have suffixes like "-alpha", so we take only the numeric part.
+        let build_str = match parts.next() {
+            Some(build_part) => match build_part.split('-').next() {
+                Some(build_str) => build_str,
+                None => {
+                    return Err(VersionInformationError::ParseErrorBuild(version_string));
+                }
+            },
+            None => {
+                return Err(VersionInformationError::ParseErrorBuild(version_string));
+            }
+        };
+
+        // Parse each part into an i32, returning a specific error on failure.
+        let major = major_str.parse::<i32>().map_err(|e| {
+            VersionInformationError::ConversionErrorMajor {
+                version_string: major_str.to_string(),
+                source: e,
+            }
+        })?;
+
+        let minor = minor_str.parse::<i32>().map_err(|e| {
+            VersionInformationError::ConversionErrorMinor {
+                version_string: minor_str.to_string(),
+                source: e,
+            }
+        })?;
+
+        let build = build_str.parse::<i32>().map_err(|e| {
+            VersionInformationError::ConversionErrorBuild {
+                version_string: build_str.to_string(),
+                source: e,
+            }
+        })?;
+
+        Ok(VersionInformation {
+            major,
+            minor,
+            build,
             hash,
-        }
+        })
     }
 }
 
@@ -112,5 +230,73 @@ impl Display for VersionInformation {
         writeln!(f, "  Build: {}", self.build)?;
         writeln!(f, "  Hash:  {}", self.hash)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_hash() -> String {
+        "dummy_hash_for_testing".to_string()
+    }
+
+    #[test]
+    fn test_valid_version_string() {
+        let info =
+            VersionInformation::from_string_and_hash("1.2.3".to_string(), dummy_hash()).unwrap();
+        assert_eq!(info.major, 1);
+        assert_eq!(info.minor, 2);
+        assert_eq!(info.build, 3);
+    }
+
+    #[test]
+    fn test_version_string_with_prerelease_tag() {
+        let info =
+            VersionInformation::from_string_and_hash("0.4.5-beta.1".to_string(), dummy_hash())
+                .unwrap();
+        assert_eq!(info.major, 0);
+        assert_eq!(info.minor, 4);
+        assert_eq!(info.build, 5);
+    }
+
+    #[test]
+    fn test_invalid_major_version() {
+        let result =
+            VersionInformation::from_string_and_hash("a.2.3".to_string(), dummy_hash());
+        assert!(matches!(
+            result,
+            Err(VersionInformationError::ConversionErrorMajor { .. })
+        ));
+    }
+
+    #[test]
+    fn test_invalid_minor_version() {
+        let result =
+            VersionInformation::from_string_and_hash("1.a.3".to_string(), dummy_hash());
+        assert!(matches!(
+            result,
+            Err(VersionInformationError::ConversionErrorMinor { .. })
+        ));
+    }
+
+    #[test]
+    fn test_invalid_build_version() {
+        let result =
+            VersionInformation::from_string_and_hash("1.2.x".to_string(), dummy_hash());
+        assert!(matches!(
+            result,
+            Err(VersionInformationError::ConversionErrorBuild { .. })
+        ));
+    }
+
+    #[test]
+    fn test_incomplete_version_string() {
+        let result =
+            VersionInformation::from_string_and_hash("1.2".to_string(), dummy_hash());
+        assert!(matches!(
+            result,
+            Err(VersionInformationError::ParseErrorBuild { .. })
+        ));
     }
 }

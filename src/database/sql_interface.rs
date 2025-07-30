@@ -1036,7 +1036,7 @@ pub mod tests {
             .expect("Initialization of SQL interface for test failed.");
 
         // *** check error response when querying empty table **************************************
-        let version_information = VersionInformation::new();
+        let version_information = VersionInformation::new().unwrap();
         match SqlInterface::truncate_table(&mut sql_interface, "version".to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),

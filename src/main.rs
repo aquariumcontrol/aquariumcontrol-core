@@ -124,7 +124,7 @@ use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
 use crate::utilities::startup_error::StartupError;
-use crate::utilities::version_information::VersionInformation;
+use crate::utilities::version_information::{VersionInformation, VersionInformationError};
 use crate::watchmen::monitors::{Monitors, MonitorsChannels};
 use crate::watchmen::petting::Petting;
 use crate::watchmen::watchdog::Watchdog;
@@ -155,20 +155,25 @@ fn display_usage() {
 /// # Arguments
 /// * `command` - A string slice representing the potential command.
 /// # Returns
-/// A boolean value if a valid command has been recognized.
-fn check_is_command(command: &str) -> bool {
+/// * A boolean value if a valid command has been recognized unless error occurred.
+/// * `VersionInformationError` in case version information could not be retrieved
+fn check_is_command(command: &str) -> Result<bool, VersionInformationError> {
     match command {
         "-h" | "--help" => {
             display_usage();
-            true
+            Ok(true)
         }
         "-v" | "--version" => {
-            // calculate hash of executable
-            let version_information = VersionInformation::new();
-            println!("{version_information}");
-            true
+            // try to calculate hash of executable
+            match VersionInformation::new() {
+                Ok(version_information) => {
+                    println!("{version_information}");
+                    Ok(true)
+                }
+                Err(e) => Err(e),
+            }
         }
-        _ => false, // All other strings do not match
+        _ => Ok(false), // All other strings do not match
     }
 }
 
@@ -362,7 +367,14 @@ fn run() -> Result<(), StartupError> {
                 let mut user_arg_identified = false;
                 // Iterate through the command line parameters and check if they are valid.
                 for user_arg in args[1..].iter() {
-                    user_arg_identified = check_is_command(user_arg)
+                    user_arg_identified = match check_is_command(user_arg) {
+                        Ok(alternative_execution_path) => alternative_execution_path,
+                        Err(e) => {
+                            return Err(StartupError::VersionInformationRetrievalFailure {
+                                source: e,
+                            });
+                        }
+                    };
                 }
                 return if !user_arg_identified {
                     // If the user provided an invalid filename and no valid command, output error message and abort.
@@ -376,7 +388,9 @@ fn run() -> Result<(), StartupError> {
     }
 
     // calculate hash of executable
-    let version_information = VersionInformation::new();
+    let version_information = VersionInformation::new()
+        .map_err(|e| StartupError::VersionInformationRetrievalFailure { source: e })?;
+    #[cfg(not(test))]
     info!(target: module_path!(), "{version_information}");
 
     // check if the user has root privileges - disabled when developing on the Windows platform

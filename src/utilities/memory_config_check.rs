@@ -26,7 +26,9 @@ pub enum MemoryConfigError {
     ConfigEnvVarNameEmpty,
 
     /// result of environment variable value request could not be parsed to numeric value
-    #[error("result of environment variable value request ({0}) could not be parsed to numeric value")]
+    #[error(
+        "result of environment variable value request ({0}) could not be parsed to numeric value"
+    )]
     EnvVarParseError(String),
 
     /// environment variable value is lower than configured minimum value
