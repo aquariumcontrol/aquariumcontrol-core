@@ -46,6 +46,9 @@ pub struct SqlInterfaceConfig {
 
     /// the database-ping interval in seconds
     pub db_ping_interval: u64,
+
+    /// maximum allowed rows for balling set value table
+    pub max_rows_balling_set_values: u64,
 }
 
 /// Struct is used to retrieve a single integer value from the SQL database.

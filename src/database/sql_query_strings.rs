@@ -204,6 +204,11 @@ pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = concat!(
     "WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL) LIMIT 100;"
 );
 
+/// Checks if the balling set value table contains too many entries.
+pub const SQL_QUERY_CHECK_BALLING_SETVALS_COUNT: &str = concat!(
+    "SELECT COUNT(*) FROM ballingsetvals LIMIT 1;"
+);
+
 /// Checks if the feed patterns table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM feedpatterns ",

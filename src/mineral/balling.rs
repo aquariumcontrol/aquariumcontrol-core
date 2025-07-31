@@ -964,14 +964,15 @@ pub mod tests {
         config.balling.dosing_interval_pump4 = 0;
 
         println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         // create the test object
         let _ = Balling::new(
@@ -989,15 +990,15 @@ pub mod tests {
         let config: ConfigData = read_balling_config_with_database(1);
 
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         // empty the Balling dosing log table
         SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
@@ -1086,14 +1087,15 @@ pub mod tests {
         let config: ConfigData = read_balling_config_with_database(2);
 
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1241,14 +1243,15 @@ pub mod tests {
         }
 
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1598,14 +1601,15 @@ pub mod tests {
         config.balling.schedule_check_interval = 1;
         config.balling.dosing_interval_pump1 = 5;
 
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         // empty the Balling dosing log table
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
@@ -1793,14 +1797,15 @@ pub mod tests {
         config.balling.pump3_active = false;
         config.balling.pump4_active = false;
 
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         // insert a valid pump configuration for pump #1
         insert_pump_configurations(
@@ -1842,14 +1847,15 @@ pub mod tests {
         config.balling.schedule_check_interval = 100;
 
         println!("Testing with database {}", config.sql_interface.db_name);
-        let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let mut sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1989,14 +1995,15 @@ pub mod tests {
         config.balling.dosing_interval_pump4 = 100;
         config.balling.schedule_check_interval = 200;
 
-        let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
+        let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let sql_interface = match SqlInterface::new(config.sql_interface) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
         let sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
 
         // create the test object
         let _ = Balling::new(

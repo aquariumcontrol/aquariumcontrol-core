@@ -75,7 +75,6 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::{env, error::Error, panic, path::Path, thread::scope, time::Duration};
-use std::any::Any;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -445,6 +444,7 @@ fn run() -> Result<(), StartupError> {
 
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
+    let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
 
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -460,7 +460,7 @@ fn run() -> Result<(), StartupError> {
     let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection())
         .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection())
+    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
         .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> =

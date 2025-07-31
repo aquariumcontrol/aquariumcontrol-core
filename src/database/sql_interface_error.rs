@@ -339,6 +339,14 @@ pub enum SqlInterfaceError {
     #[error("Balling set value table may be inconsistent - it contains {0} NULL values.")]
     DatabaseBallingSetValTableContainsNull(i64),
 
+    /// Balling set value table may be inconsistent - invalid answer from database to query.
+    #[error("Balling set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
+    DatabaseBallingSetValTableNegativeValue(i64, i64),
+
+    /// Balling set value table contains too many rows.
+    #[error("Balling set value table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseBallingSetValTableContainsTooManyRows(i64, i64),
+
     /// Schedule table may be inconsistent - it contains NULL values.
     #[error("Schedule table may be inconsistent - it contains {0} NULL values.")]
     DatabaseScheduleTableContainsNull(i64),
@@ -360,12 +368,12 @@ pub enum SqlInterfaceError {
     DatabaseFeedSetValTableContainsNull(String, i64),
 
     /// Could not check balling set value table for NULL values.
-    #[error("Could not check balling set value table for NULL values.")]
+    #[error("Could not check balling set value table (existence of NULL values and number of rows).")]
     DatabaseCheckBallingSetValsFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
-
+    
     /// Could not check schedule table for NULL values.
     #[error("Could not check schedule table for NULL values.")]
     DatabaseCheckScheduleNullFailure {
