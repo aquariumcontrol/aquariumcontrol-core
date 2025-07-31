@@ -445,6 +445,8 @@ fn run() -> Result<(), StartupError> {
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
     let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+    let max_rows_feed_pattern= config.sql_interface.max_rows_feed_pattern;
+    let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
 
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -476,7 +478,7 @@ fn run() -> Result<(), StartupError> {
     .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
-        SqlInterfaceFeed::new(sql_interface.get_connection())
+        SqlInterfaceFeed::new(sql_interface.get_connection(), max_rows_feed_pattern, max_rows_feed_schedule)
             .map_err(|e| StartupError::Database { source: e })?,
     );
 

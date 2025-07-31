@@ -91,7 +91,7 @@ impl SqlInterfaceBalling {
             // execute the check only when the limit is greater than zero
             if count_rows > max_rows_balling_set_values.cast_signed() {
                 return Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
-                    count_rows, 10
+                    count_rows, max_rows_balling_set_values.cast_signed()
                 ));
             }
         }

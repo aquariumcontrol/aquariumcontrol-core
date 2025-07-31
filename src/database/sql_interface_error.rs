@@ -367,6 +367,10 @@ pub enum SqlInterfaceError {
     #[error("Feed set value table {0} may be inconsistent - it contains {1} NULL values.")]
     DatabaseFeedSetValTableContainsNull(String, i64),
 
+    /// Feed set value table contains too many rows.
+    #[error("Feed set value table {0} contains too many rows ({1}). Permissible maximum is {2}.")]
+    DatabaseFeedSetValTableContainsTooManyRows(String, i64, i64),
+
     /// Could not check balling set value table for NULL values.
     #[error("Could not check balling set value table (existence of NULL values and number of rows).")]
     DatabaseCheckBallingSetValsFailure {
@@ -403,13 +407,17 @@ pub enum SqlInterfaceError {
     },
 
     /// Could not check feed set value table for NULL values.
-    #[error("Could not check feed set value table {table_name} for NULL values.")]
+    #[error("Could not check feed set value table {table_name} for NULL values or number of rows.")]
     DatabaseCheckFeedSetValsFailure {
         table_name: String,
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
+    /// A feed set value table may be inconsistent - invalid answer from database to query.
+    #[error("Feed set value table {0} may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
+    DatabaseFeedSetValTableNegativeValue(String, i64, i64),
+    
     #[cfg(test)]
     #[error("Error when inserting heating set values into database using query: {0}")]
     InsertHeatingSetValuesFailure(String),

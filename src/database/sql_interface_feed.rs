@@ -12,9 +12,7 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL, SQL_TABLE_FEEDPATTERNS,
-};
+use crate::database::sql_query_strings::{SQL_QUERY_CHECK_FEEDPATTERNS_NULL, SQL_QUERY_CHECK_FEEDPATTERN_COUNT, SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT, SQL_QUERY_CHECK_FEEDSCHEDULE_NULL, SQL_TABLE_FEEDPATTERNS, SQL_TABLE_FEEDSCHEDULE};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -405,9 +403,9 @@ impl SqlInterfaceFeed {
     /// # Returns
     /// * A new `SqlInterfaceFeed` struct in case of success.
     /// * An error `SqlInterfaceError` in case of failure.
-    pub fn new(mut conn: PooledConn) -> Result<Self, SqlInterfaceError> {
-        // check if feed patterns table is consistent
-        let count_null_values = SqlInterface::get_single_integer_from_database(
+    pub fn new(mut conn: PooledConn, max_rows_feed_pattern: u64, max_rows_feed_schedule: u64) -> Result<Self, SqlInterfaceError> {
+        // check if feed pattern table is consistent
+        let count_null_values_feedpatterns = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_FEEDPATTERNS_NULL,
         )
@@ -415,29 +413,73 @@ impl SqlInterfaceFeed {
             table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
             source: Box::new(e),
         })?;
-
-        if count_null_values > 0 {
-            return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
-                SQL_TABLE_FEEDPATTERNS.to_string(),
-                count_null_values,
-            ));
-        }
+        let count_rows_feedpatterns = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_FEEDPATTERN_COUNT,
+        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+                table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
+                source: Box::new(e),
+            })?;
 
         // check if the feed schedule table is consistent
-        let count_null_values = SqlInterface::get_single_integer_from_database(
+        let count_null_values_feedschedule = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_FEEDSCHEDULE_NULL,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
+            table_name: SQL_TABLE_FEEDSCHEDULE.to_string(),
+            source: Box::new(e),
+        })?;
+        let count_rows_feedschedule = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT,
+        ).map_err(|e| SqlInterfaceError::DatabaseCheckFeedSetValsFailure {
             table_name: SQL_TABLE_FEEDPATTERNS.to_string(),
             source: Box::new(e),
         })?;
 
-        if count_null_values > 0 {
+        // check the query results
+        if count_null_values_feedpatterns < 0 || count_rows_feedpatterns < 0 {
+            return Err(SqlInterfaceError::DatabaseFeedSetValTableNegativeValue(
+                SQL_TABLE_FEEDPATTERNS.to_string(), count_null_values_feedpatterns, count_rows_feedpatterns))
+        }
+        if count_null_values_feedschedule < 0 || count_rows_feedschedule < 0 {
+            return Err(SqlInterfaceError::DatabaseFeedSetValTableNegativeValue(
+                SQL_TABLE_FEEDSCHEDULE.to_string(), count_null_values_feedschedule, count_rows_feedschedule))
+        }
+
+        // check if there are any NULL values in the feed set value tables
+        if count_null_values_feedpatterns > 0 {
+            return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
+                SQL_QUERY_CHECK_FEEDPATTERNS_NULL.to_string(),
+                count_null_values_feedpatterns,
+            ));
+        }
+        if count_null_values_feedschedule > 0 {
             return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsNull(
                 SQL_QUERY_CHECK_FEEDSCHEDULE_NULL.to_string(),
-                count_null_values,
+                count_null_values_feedschedule,
             ));
+        }
+
+        if max_rows_feed_pattern > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows_feedpatterns > max_rows_feed_pattern.cast_signed() {
+                return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsTooManyRows(
+                    SQL_TABLE_FEEDPATTERNS.to_string(),
+                    count_rows_feedpatterns, max_rows_feed_pattern.cast_signed(),
+                ));
+            }
+        }
+
+        if max_rows_feed_schedule > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows_feedschedule > max_rows_feed_schedule.cast_signed() {
+                return Err(SqlInterfaceError::DatabaseFeedSetValTableContainsTooManyRows(
+                    SQL_TABLE_FEEDSCHEDULE.to_string(),
+                    count_rows_feedschedule, max_rows_feed_schedule.cast_signed(),
+                ));
+            }
         }
 
         Ok(SqlInterfaceFeed { conn })
@@ -756,11 +798,11 @@ pub mod tests {
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
         // insert test feed profile #1
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST1.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
             sql_query_string,
             params! {
-            "profile_id" => 1,
+            "profile_id" => 1, "profile_name" => "test"
             },
         ) {
             Ok(_) => {}
@@ -792,9 +834,15 @@ pub mod tests {
             33,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_feed_pattern = config.sql_interface.max_rows_feed_pattern;
+        let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            max_rows_feed_pattern,
+            max_rows_feed_schedule,
+        ).unwrap();
 
         //*** check retrieving of the feed pattern from empty table *********************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedpatterns".to_string()) {
@@ -817,11 +865,11 @@ pub mod tests {
 
         // *** check retrieving of existing feed pattern ****************************************
         // prepare database: insert feed profile
-        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST1.to_string();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_FEEDPATTERN_TEST.to_string();
         match sql_interface_feed.conn.exec_drop::<_, _>(
-            sql_query_string,
+            sql_query_string.clone(),
             params! {
-            "profile_id" => 1,
+            "profile_id" => 1, "profile_name" => "test",
             },
         ) {
             Ok(_) => {}
@@ -968,6 +1016,27 @@ pub mod tests {
             }
         }
         println!("* checking retrieving of feed pattern succeeded.");
+
+        match sql_interface_feed.conn.exec_drop::<_, _>(
+            sql_query_string,
+            params! {
+            "profile_id" => 2, "profile_name" => "test2"
+            },
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Error when inserting feed pattern into database: {e:?}");
+            }
+        };
+        let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> = SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            1,
+            100,
+        );
+        assert!(matches!(test_result,Err(
+            SqlInterfaceError::DatabaseFeedSetValTableContainsTooManyRows(_, 2, 1))));
+        println!("* checking of feed pattern max rows limitation succeeded.");
+
         // *****************************************************************************************
     }
 
@@ -980,9 +1049,16 @@ pub mod tests {
             34,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_feed_pattern = config.sql_interface.max_rows_feed_pattern;
+        let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            max_rows_feed_pattern,
+            max_rows_feed_schedule,
+        ).unwrap();
+
         //*** check inserting of feed event into empty table ***************************************
         match SqlInterface::truncate_table(&mut sql_interface, "feedlog".to_string()) {
             Ok(_) => {}
@@ -1039,9 +1115,15 @@ pub mod tests {
             35,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_feed_pattern = config.sql_interface.max_rows_feed_pattern;
+        let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_feed = SqlInterfaceFeed::new(sql_interface.get_connection()).unwrap();
+        let mut sql_interface_feed = SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            max_rows_feed_pattern,
+            max_rows_feed_schedule,
+        ).unwrap();
         // *** check trying to load feed schedule entry when table is empty *********************
         match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
             Ok(_) => {}
@@ -1319,5 +1401,14 @@ pub mod tests {
         };
         println!("* update of existing entries from feed schedule succeeded.");
         // **************************************************************************************
+
+        let test_result: Result<SqlInterfaceFeed, SqlInterfaceError> = SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            100,
+            1,
+        );
+        assert!(matches!(test_result,Err(
+            SqlInterfaceError::DatabaseFeedSetValTableContainsTooManyRows(_, 2, 1))));
+        println!("* checking of feed schedule max rows limitation succeeded.");
     }
 }

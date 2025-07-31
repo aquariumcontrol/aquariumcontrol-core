@@ -36,6 +36,9 @@ pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
 /// Definition of table name for feed patterns
 pub const SQL_TABLE_FEEDPATTERNS: &str = "feedpatterns";
 
+/// Definition of table name for feed schedule
+pub const SQL_TABLE_FEEDSCHEDULE: &str = "feedschedule";
+
 /// Provides the header of a feed pattern from the database.
 pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
     "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id LIMIT 100;";
@@ -335,6 +338,11 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
     "Feed10APmp2 IS NULL) LIMIT 100;"
 );
 
+/// Checks if the feedpattern table contains too many entries.
+pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str = concat!(
+    "SELECT COUNT(*) FROM feedpatterns LIMIT 1;"
+);
+
 /// Checks if the feed schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM feedschedule ",
@@ -343,6 +351,11 @@ pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
     "ProfileName IS NULL OR ",
     "IsWeekly IS NULL OR ",
     "IsDaily IS NULL) LIMIT 100;");
+
+/// Checks if the feedpattern table contains too many entries.
+pub const SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT: &str = concat!(
+    "SELECT COUNT(*) FROM feedschedule LIMIT 1;"
+);
 
 /// Checks if the heating set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_SETVALS_NULL: &str = concat!(
@@ -439,9 +452,9 @@ pub const SQL_QUERY_WRITE_FEED_SCHEDULE_ENTRY: &str = concat!(
 
 /// This query is used for testing: It creates a first feed pattern.
 #[cfg(test)]
-pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST1: &str = concat!(
+pub const SQL_QUERY_WRITE_FEEDPATTERN_TEST: &str = concat!(
     "INSERT INTO feedpatterns VALUES ",
-    "(:profile_id,'test',",
+    "(:profile_id,:profile_name,",
     "0,1,0,0,0,0,",
     "1,0,1,0,0,0,",
     "2,0,0,1,0,0,",

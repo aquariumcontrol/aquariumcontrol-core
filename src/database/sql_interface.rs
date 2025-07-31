@@ -49,6 +49,13 @@ pub struct SqlInterfaceConfig {
 
     /// maximum allowed rows for balling set value table
     pub max_rows_balling_set_values: u64,
+
+    /// maximum allowed rows for feed pattern table
+    pub max_rows_feed_pattern: u64,
+    
+    /// maximum allowed rows for feed schedule table
+    pub max_rows_feed_schedule: u64,
+
 }
 
 /// Struct is used to retrieve a single integer value from the SQL database.
