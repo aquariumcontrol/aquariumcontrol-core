@@ -10,22 +10,22 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 /// Provides version information to check if the current application is listed in the table of supported versions.
 /// It informs whether the version is supported and which hash is stored in the database for the version.
 pub const SQL_QUERY_VERSION_INFORMATION: &str =
-    "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build;";
+    "SELECT hash FROM version WHERE major=#major AND minor=#minor AND build=#build LIMIT 100;";
 
 /// Provides the current database name.
-pub const SQL_QUERY_DATABASE: &str = "select database();";
+pub const SQL_QUERY_DATABASE: &str = "select database() LIMIT 1;";
 
 /// Provides all tables from the database.
-pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES;";
+pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES LIMIT 100;";
 
 /// Provides the current date (without time) from the database.
-pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE();";
+pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE() LIMIT 1;";
 
 /// Provides tomorrow's date (without time) from the database.
-pub const SQL_QUERY_READ_TOMORROW_DATE: &str = "SELECT CURRENT_DATE() + INTERVAL 1 DAY;";
+pub const SQL_QUERY_READ_TOMORROW_DATE: &str = "SELECT CURRENT_DATE() + INTERVAL 1 DAY LIMIT 1;";
 
 /// Provides the current timestamp from the database.
-pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP();";
+pub const SQL_QUERY_READ_CURRENT_TIMESTAMP: &str = "SELECT CURRENT_TIMESTAMP() LIMIT 1;";
 
 /// Inserts data of one feed event into the database.
 pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
@@ -38,13 +38,13 @@ pub const SQL_TABLE_FEEDPATTERNS: &str = "feedpatterns";
 
 /// Provides the header of a feed pattern from the database.
 pub const SQL_QUERY_READ_FEEDPATTERN_HEADER: &str =
-    "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id;";
+    "SELECT ProfileID, ProfileName FROM feedpatterns WHERE ProfileID=profile_id LIMIT 100;";
 
 /// Provides one phase of a feed pattern from the database.
 pub const SQL_QUERY_READ_FEED_PHASE: &str = concat!(
     "SELECT Pause#Duration, Pause#Skimmer, Pause#MPmp1, Pause#MPmp2, Pause#APmp1, Pause#APmp2, ",
     "Feed#Duration, Feed#Skimmer, Feed#MPmp1, Feed#MPmp2, Feed#APmp1, Feed#APmp2 ",
-    "FROM feedpatterns WHERE ProfileID=profile_id;"
+    "FROM feedpatterns WHERE ProfileID=profile_id LIMIT 100;"
 );
 
 /// Provides the timestamp of the last refill event from the database.
@@ -52,7 +52,7 @@ pub const SQL_QUERY_READ_LAST_REFILL_TIMESTAMP: &str =
     "SELECT Timestamp from refill as LSTTSTMP ORDER BY Timestamp DESC LIMIT 1;";
 
 /// Checks if the refill table is empty.
-pub const SQL_QUERY_CHECK_REFILL_EMPTY: &str = "SELECT EXISTS(SELECT 1 FROM refill);";
+pub const SQL_QUERY_CHECK_REFILL_EMPTY: &str = "SELECT EXISTS(SELECT 1 FROM refill) LIMIT 1;";
 
 /// Provides the timestamp of the last Balling dosing event from the database.
 pub const SQL_QUERY_READ_LAST_BALLING_DOSING_TIMESTAMP: &str = concat!(
@@ -75,7 +75,7 @@ pub const SQL_QUERY_WRITE_PUMP_CONFIGURATION: &str = concat!(
 
 /// Provides the Balling dosing pump configuration for one of the pumps.
 pub const SQL_QUERY_READ_BALLING_SETVALS: &str =
-    "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id;";
+    "SELECT pumpid, dosingspeed, dosingvolume, label FROM ballingsetvals WHERE pumpid=#pump_id LIMIT 100;";
 
 /// Provides the refill volume of the last hour from the database.
 /// It needs to use the COALESCE function because a null result is not interpreted correctly by the SQL library.
@@ -113,23 +113,23 @@ pub const SQL_QUERY_WRITE_REFILL_EVENT: &str = concat!(
 
 /// Provides the duration in seconds until midnight from the database.
 pub const SQL_QUERY_READ_DURATION_UNTIL_MIDNIGHT: &str =
-    "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY);";
+    "SELECT TIMESTAMPDIFF(SECOND,NOW(),DATE(NOW()) + INTERVAL 1 DAY) LIMIT 1;";
 
 /// Provides the heating statistical data of the current day from the database.
 pub const SQL_QUERY_READ_HEATING_STATS: &str =
-    "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE();";
+    "SELECT * FROM heatingstats WHERE Date=CURRENT_DATE() LIMIT 1;";
 
 /// Provides the feed schedule entries which lie in the past in descending order
 pub const SQL_QUERY_READ_PAST_FEED_SCHEDULE_ENTRY: &str = concat!(
     "SELECT TimeStamp, ProfileId, ProfileName, IsDaily FROM feedschedule ",
-    "WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC;"
+    "WHERE TimeStamp < CURRENT_TIMESTAMP() ORDER BY TimeStamp DESC LIMIT 100;"
 );
 
 #[cfg(test)]
 /// Provides the feed schedule entries which lie in the future in ascending order
 pub const SQL_QUERY_READ_FUTURE_FEED_SCHEDULE_ENTRY: &str = concat!(
     "SELECT TimeStamp, ProfileId, ProfileName, IsDaily FROM feedschedule ",
-    "WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC;"
+    "WHERE TimeStamp > CURRENT_TIMESTAMP() ORDER BY TimeStamp ASC LIMIT 100;"
 );
 
 /// Updates a feed schedule entry after having executing a feed pattern
@@ -196,12 +196,12 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
 );
 
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
-pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule;";
+pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule LIMIT 100;";
 
 /// Checks if the balling set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM ballingsetvals ",
-    "WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL);"
+    "WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL) LIMIT 100;"
 );
 
 /// Checks if the feed patterns table contains any NULL values.
@@ -327,18 +327,22 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
     "Feed10MPmp1 IS NULL OR ",
     "Feed10MPmp2 IS NULL OR ",
     "Feed10APmp1 IS NULL OR ",
-    "Feed10APmp2 IS NULL);"
+    "Feed10APmp2 IS NULL) LIMIT 100;"
 );
 
 /// Checks if the feed schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM feedschedule ",
-    "WHERE Timestamp IS NULL OR ProfileId IS NULL OR ProfileName IS NULL OR IsWeekly IS NULL OR IsDaily IS NULL);");
+    "WHERE Timestamp IS NULL OR ",
+    "ProfileId IS NULL OR ",
+    "ProfileName IS NULL OR ",
+    "IsWeekly IS NULL OR ",
+    "IsDaily IS NULL) LIMIT 100;");
 
 /// Checks if the heating set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_SETVALS_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM heatingsetvals ",
-    "WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL);"
+    "WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL) LIMIT 100;"
 );
 
 /// Checks if the heating stats table contains any NULL values.
@@ -350,16 +354,16 @@ pub const SQL_QUERY_CHECK_HEATING_STATS_NULL: &str = concat!(
     "AmbientTempCounter IS NULL OR ",
     "WaterTempAverage IS NULL OR ",
     "WaterTempCounter IS NULL OR ",
-    "HeatingControlRuntime IS NULL);"
+    "HeatingControlRuntime IS NULL) LIMIT 100;"
 );
 
 /// Reads the heating set values from the database.
 pub const SQL_QUERY_READ_HEATING_SETVALS: &str =
-    "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals;";
+    "SELECT heatingSwitchOffTemp, heatingSwitchOnTemp FROM heatingsetvals LIMIT 100;";
 
 /// Reads the ventilation set values from the database.
 pub const SQL_QUERY_READ_VENTILATION_SETVALS: &str =
-    "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals;";
+    "SELECT ventilationSwitchOffTemp, ventilationSwitchOnTemp FROM ventilationsetvals LIMIT 100;";
 
 #[cfg(test)]
 /// Write heating set values to the database.
@@ -378,23 +382,23 @@ pub const SQL_QUERY_WRITE_VENTILATION_SETVALS: &str = concat!(
 // Checks if the ventilation set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM ventilationsetvals ",
-    "WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL);)"
+    "WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL) LIMIT 100;"
 );
 
 /// Checks if the schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM schedule ",
-    "WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive IS NULL);"
+    "WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive IS NULL) LIMIT 100;"
 );
 
 /// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
 pub const SQL_QUERY_READ_TIMEOUT: &str = concat!(
     "SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES ",
-    "WHERE VARIABLE_NAME = 'wait_timeout';"
+    "WHERE VARIABLE_NAME = 'wait_timeout' LIMIT 100;"
 );
 
 /// Minimal request to the database to avoid timeouts
-pub const SQL_QUERY_PING: &str = "SELECT 1;";
+pub const SQL_QUERY_PING: &str = "SELECT 1 LIMIT 1;";
 
 // Deletes the content of a specific table.
 // This query is used for testing by multiple modules. Therefore, it resides here and not in the test module.
@@ -404,12 +408,12 @@ pub const SQL_QUERY_TRUNCATE_TABLE: &str = "truncate table #table;";
 // Provides feed event from the database - used for testing only.
 #[cfg(test)]
 pub const SQL_QUERY_READ_LAST_FEED_EVENT: &str =
-    "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog;";
+    "SELECT Timestamp, FeederOnTime, ProfileName, ProfileIdx from feedlog LIMIT 100;";
 
 // Provide Balling dosing event from the database - used for testing only.
 #[cfg(test)]
 pub const SQL_QUERY_READ_BALLING_EVENT: &str =
-    "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog;";
+    "SELECT Timestamp, pumpid, dosingvolume from ballingdosinglog LIMIT 100;";
 
 // Provides refill event from the database - used for testing only.
 #[cfg(test)]
@@ -419,7 +423,7 @@ pub const SQL_QUERY_READ_REFILL_EVENT: &str =
 /// Inserts data of one feed schedule entry into the database.
 #[cfg(test)]
 pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
-    "select date_add(current_timestamp(), interval #offset second);";
+    "select date_add(current_timestamp(), interval #offset second) LIMIT 100;";
 
 /// Inserts data of one feed schedule entry into the database.
 #[cfg(test)]
