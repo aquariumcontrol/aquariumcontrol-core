@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::NaiveDateTime;
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 /// Contains the data to be logged wrapped into Option.
 /// For each signal, where the data could not be acquired, the None value is used.
 /// The None value is represented as NULL in the SQL database.

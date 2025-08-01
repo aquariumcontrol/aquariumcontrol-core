@@ -1402,13 +1402,16 @@ pub mod tests {
         );
         config2.data_logger.logging_interval = 1;
 
+        let max_rows_data = config.sql_interface.max_rows_data;
+
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
+        let sql_interface_data =
+            SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
         let mut data_logger = DataLogger::new(config.data_logger, Duration::from_millis(1000));
 
         // replacement values are used to initialize the mutex content

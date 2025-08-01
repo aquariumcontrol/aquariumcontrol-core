@@ -39,6 +39,7 @@ max_rows_feed_pattern = 10                              # maximum number of allo
 max_rows_feed_schedule = 100                            # maximum number of allowed entries in feed schedule table
 max_rows_heating_stats = 1000                           # maximum number of allowed entries in heating stats table
 max_rows_schedule = 10                                  # maximum number of allowed entries in schedule table
+max_rows_data = 100000                                  # maximum allowed rows for data table
 
 [tcp_connection]
 ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes

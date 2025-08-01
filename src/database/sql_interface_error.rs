@@ -359,6 +359,21 @@ pub enum SqlInterfaceError {
     #[error("Schedule table contains too many rows ({0}). Permissible maximum is {1}.")]
     DatabaseScheduleTableContainsTooManyRows(u64, u64),
 
+    /// Data table may be inconsistent - invalid answer from database to query.
+    #[error("Could not check data table for number of rows.")]
+    DatabaseCheckDataFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    /// Data table may be inconsistent - invalid answer from database to query.
+    #[error("Data table may be inconsistent - database responded with negative value ({0}).")]
+    DatabaseDataTableNegativeValue(i64),
+
+    /// The data table contains too many rows.
+    #[error("Data table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseDataTableContainsTooManyRows(u64, u64),
+
     /// Heating set value table may be inconsistent - it contains NULL values.
     #[error("Heating set value table may be inconsistent - it contains {0} NULL values.")]
     DatabaseHeatingSetValTableContainsNull(i64),

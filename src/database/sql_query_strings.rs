@@ -214,6 +214,9 @@ pub const SQL_QUERY_WRITE_DATA: &str = concat!(
     "Heater=#Heater;"
 );
 
+/// Checks how many entries there are in the data table.
+pub const SQL_QUERY_CHECK_DATA_COUNT: &str = concat!("SELECT COUNT(*) FROM data LIMIT 1;");
+
 /// Provides the schedule entry for one of the controls (Refill, Ventilation, Heating, Balling)
 pub const SQL_QUERY_READ_SCHEDULE: &str = "SELECT * FROM schedule LIMIT 100;";
 
@@ -466,6 +469,9 @@ pub const SQL_QUERY_READ_BALLING_EVENT: &str =
 #[cfg(test)]
 pub const SQL_QUERY_READ_REFILL_EVENT: &str =
     "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
+
+/// Checks how many entries there are in the refill table.
+pub const SQL_QUERY_CHECK_REFILL_COUNT: &str = concat!("SELECT COUNT(*) FROM refill LIMIT 1;");
 
 /// Calculates a timestamp based on current timestamp and offset in seconds.
 #[cfg(test)]

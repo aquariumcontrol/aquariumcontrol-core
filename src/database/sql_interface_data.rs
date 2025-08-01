@@ -11,6 +11,7 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::database::sql_interface::SqlInterface;
+use crate::database::sql_query_strings::SQL_QUERY_CHECK_DATA_COUNT;
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
 
@@ -28,11 +29,36 @@ impl SqlInterfaceData {
     ///
     /// # Arguments
     /// * `conn` - An active database connection pool object.
-    ///
+    /// * `max_rows_data` - Maximum allowed number of rows in the Balling set value table.
     /// # Returns
     /// A new `SqlInterfaceData` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceData {
-        SqlInterfaceData { conn }
+    pub fn new(
+        mut conn: PooledConn,
+        max_rows_data: u64,
+    ) -> Result<SqlInterfaceData, SqlInterfaceError> {
+        let count_rows =
+            SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_DATA_COUNT)
+                .map_err(|e| SqlInterfaceError::DatabaseCheckDataFailure {
+                source: Box::new(e),
+            })?;
+
+        // check the query results
+        if count_rows < 0 {
+            return Err(SqlInterfaceError::DatabaseDataTableNegativeValue(
+                count_rows,
+            ));
+        }
+
+        if max_rows_data > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows > max_rows_data.cast_signed() {
+                return Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                    count_rows.cast_unsigned(),
+                    max_rows_data,
+                ));
+            }
+        }
+        Ok(SqlInterfaceData { conn })
     }
 
     /// Converts an optional `f32` value into its `String` representation,
@@ -255,13 +281,14 @@ impl SqlInterfaceData {
 
 #[cfg(test)]
 pub mod tests {
-    use chrono::NaiveDateTime;
-    use mysql::{prelude::Queryable, PooledConn, Row, Value};
-
     use crate::database::sql_interface_data::SqlInterfaceData;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use chrono::NaiveDateTime;
+    use mysql::{prelude::Queryable, PooledConn, Row, Value};
+    use spin_sleep::SpinSleeper;
+    use std::time::Duration;
 
     // This struct contains the first part of one row from table 'data'
     // Due to limitations of the library, this struct can only contain up to 12 elements.
@@ -485,9 +512,11 @@ pub mod tests {
             32,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_data = config.sql_interface.max_rows_data;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());
+        let mut sql_interface_data =
+            SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
 
         // *** insert and load RecorderDataFrame ***************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
@@ -615,6 +644,38 @@ pub mod tests {
             dataframe_reference_3.timestamp,
         );
         println!("* checking inserting data frame with NULL values into empty table succeeded");
+
+        // sleep for one second to get distinct timestamps
+        let spin_sleeper = SpinSleeper::default();
+        let sleep_duration_one_second = Duration::from_secs(1);
+        spin_sleeper.sleep(sleep_duration_one_second);
+
+        // create additional dataframe
+        let mut dataframe_reference_4 = dataframe_reference_3.clone();
+        let current_timestamp = match SqlInterface::get_current_timestamp(&mut sql_interface.conn) {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Could not get current timestamp from database: {e:?}");
+            }
+        };
+        dataframe_reference_4.timestamp = current_timestamp;
+
+        // insert additional dataframe
+        match sql_interface_data.write_data_frame_to_database(&dataframe_reference_4) {
+            Ok(()) => {}
+            Err(e) => {
+                panic!("Could not write dataframe to database: {e:?}");
+            }
+        }
+
+        let test_result = SqlInterfaceData::new(sql_interface.get_connection(), 1);
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseDataTableContainsTooManyRows(
+                _,
+                _
+            ))
+        ));
         // *****************************************************************************************
     }
 }
