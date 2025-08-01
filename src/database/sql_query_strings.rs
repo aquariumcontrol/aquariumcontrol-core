@@ -33,6 +33,22 @@ pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
     "values(:timestamp, :feeder_run_time, :profile_name, :profile_id)"
 );
 
+/// Definition of table name for schedule
+#[cfg(test)]
+pub const SQL_TABLE_SCHEDULE: &str = "schedule";
+
+/// Definition of table name for heating set values
+#[cfg(test)]
+pub const SQL_TABLE_HEATING_SETVALS: &str = "heatingsetvals";
+
+/// Definition of table name for heating statistics
+#[cfg(test)]
+pub const SQL_TABLE_HEATING_STATS: &str = "heatingstats";
+
+/// Definition of table name for ventilation set values
+#[cfg(test)]
+pub const SQL_TABLE_VENTILATION_SETVALS: &str = "ventilationsetvals";
+
 /// Definition of table name for feed patterns
 pub const SQL_TABLE_FEEDPATTERNS: &str = "feedpatterns";
 
@@ -207,10 +223,9 @@ pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = concat!(
     "WHERE dosingspeed IS NULL OR dosingvolume IS NULL OR label IS NULL OR pumpid IS NULL) LIMIT 100;"
 );
 
-/// Checks if the balling set value table contains too many entries.
-pub const SQL_QUERY_CHECK_BALLING_SETVALS_COUNT: &str = concat!(
-    "SELECT COUNT(*) FROM ballingsetvals LIMIT 1;"
-);
+/// Checks how many entries are in the balling set value table
+pub const SQL_QUERY_CHECK_BALLING_SETVALS_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM ballingsetvals LIMIT 1;");
 
 /// Checks if the feed patterns table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
@@ -338,10 +353,9 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
     "Feed10APmp2 IS NULL) LIMIT 100;"
 );
 
-/// Checks if the feedpattern table contains too many entries.
-pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str = concat!(
-    "SELECT COUNT(*) FROM feedpatterns LIMIT 1;"
-);
+/// Checks how many entries there are in the feed patterns table.
+pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM feedpatterns LIMIT 1;");
 
 /// Checks if the feed schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
@@ -350,18 +364,22 @@ pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(
     "ProfileId IS NULL OR ",
     "ProfileName IS NULL OR ",
     "IsWeekly IS NULL OR ",
-    "IsDaily IS NULL) LIMIT 100;");
-
-/// Checks if the feedpattern table contains too many entries.
-pub const SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT: &str = concat!(
-    "SELECT COUNT(*) FROM feedschedule LIMIT 1;"
+    "IsDaily IS NULL) LIMIT 100;"
 );
+
+/// Checks how many entries there are in the feed schedule table.
+pub const SQL_QUERY_CHECK_FEEDSCHEDULE_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM feedschedule LIMIT 1;");
 
 /// Checks if the heating set value table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_SETVALS_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM heatingsetvals ",
     "WHERE heatingSwitchOffTemp IS NULL OR heatingSwitchOnTemp IS NULL) LIMIT 100;"
 );
+
+/// Checks how many entries there are in the heating set value table.
+pub const SQL_QUERY_CHECK_HEATING_SETVALS_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM heatingsetvals LIMIT 1;");
 
 /// Checks if the heating stats table contains any NULL values.
 pub const SQL_QUERY_CHECK_HEATING_STATS_NULL: &str = concat!(
@@ -374,6 +392,10 @@ pub const SQL_QUERY_CHECK_HEATING_STATS_NULL: &str = concat!(
     "WaterTempCounter IS NULL OR ",
     "HeatingControlRuntime IS NULL) LIMIT 100;"
 );
+
+/// Checks how many entries there are in the heating set value table.
+pub const SQL_QUERY_CHECK_HEATING_STATS_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM heatingstats LIMIT 1;");
 
 /// Reads the heating set values from the database.
 pub const SQL_QUERY_READ_HEATING_SETVALS: &str =
@@ -403,11 +425,18 @@ pub const SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL: &str = concat!(
     "WHERE ventilationSwitchOffTemp IS NULL OR ventilationSwitchOnTemp IS NULL) LIMIT 100;"
 );
 
+/// Checks how many entries there are in the heating set value table.
+pub const SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT: &str =
+    concat!("SELECT COUNT(*) FROM ventilationsetvals LIMIT 1;");
+
 /// Checks if the schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_SCHEDULE_NULL: &str = concat!(
     "SELECT EXISTS(SELECT 1 FROM schedule ",
     "WHERE scheduleType IS NULL OR startTime IS NULL OR stopTime IS NULL OR isActive IS NULL) LIMIT 100;"
 );
+
+/// Checks how many entries there are in the schedule table.
+pub const SQL_QUERY_CHECK_SCHEDULE_COUNT: &str = concat!("SELECT COUNT(*) FROM schedule LIMIT 1;");
 
 /// Provides the system variable that controls how long the server waits for activity on an idle connection before closing it.
 pub const SQL_QUERY_READ_TIMEOUT: &str = concat!(
@@ -438,10 +467,15 @@ pub const SQL_QUERY_READ_BALLING_EVENT: &str =
 pub const SQL_QUERY_READ_REFILL_EVENT: &str =
     "SELECT Timestamp, Duration, Volume, ErrorCode from refill ORDER BY Timestamp DESC LIMIT 1;";
 
-/// Inserts data of one feed schedule entry into the database.
+/// Calculates a timestamp based on current timestamp and offset in seconds.
 #[cfg(test)]
 pub const SQL_QUERY_CURRENT_TIMESTAMP_OFFSET_SECONDS: &str =
     "select date_add(current_timestamp(), interval #offset second) LIMIT 100;";
+
+/// Insert test data into the schedule table;
+#[cfg(test)]
+pub const SQL_QUERY_WRITE_SCHEDULE_TEST_DATA: &str =
+    "INSERT INTO schedule VALUES(:schedule_name, :start_time, :stop_time, 1);";
 
 /// Inserts data of one feed schedule entry into the database.
 #[cfg(test)]

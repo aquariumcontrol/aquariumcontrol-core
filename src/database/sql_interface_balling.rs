@@ -12,7 +12,9 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::sql_query_strings::{SQL_QUERY_CHECK_BALLING_SETVALS_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_NULL};
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_BALLING_SETVALS_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -59,7 +61,10 @@ impl SqlInterfaceBalling {
     /// # Returns
     /// * A new `SqlInterfaceBalling` struct in case of success.
     /// * An error `SqlInterfaceError` in case of failure.
-    pub fn new(mut conn: PooledConn, max_rows_balling_set_values: u64) -> Result<Self, SqlInterfaceError> {
+    pub fn new(
+        mut conn: PooledConn,
+        max_rows_balling_set_values: u64,
+    ) -> Result<Self, SqlInterfaceError> {
         // query the database
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
@@ -72,13 +77,16 @@ impl SqlInterfaceBalling {
             &mut conn,
             SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
         )
-            .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
-                source: Box::new(e),
-            })?;
+        .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            source: Box::new(e),
+        })?;
 
         // check the query results
         if count_null_values < 0 || count_rows < 0 {
-            return Err(SqlInterfaceError::DatabaseBallingSetValTableNegativeValue(count_null_values, count_rows))
+            return Err(SqlInterfaceError::DatabaseBallingSetValTableNegativeValue(
+                count_null_values,
+                count_rows,
+            ));
         }
 
         if count_null_values > 0 {
@@ -90,9 +98,12 @@ impl SqlInterfaceBalling {
         if max_rows_balling_set_values > 0 {
             // execute the check only when the limit is greater than zero
             if count_rows > max_rows_balling_set_values.cast_signed() {
-                return Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
-                    count_rows, max_rows_balling_set_values.cast_signed()
-                ));
+                return Err(
+                    SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
+                        count_rows.cast_unsigned(),
+                        max_rows_balling_set_values,
+                    ),
+                );
             }
         }
 
@@ -362,7 +373,8 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // *** check the timestamp of last Balling dosing ******************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
@@ -453,7 +465,8 @@ pub mod tests {
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(&mut sql_interface, "ballingsetvals".to_string()) {

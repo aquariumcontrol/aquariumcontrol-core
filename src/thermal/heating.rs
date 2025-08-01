@@ -1099,7 +1099,6 @@ pub mod tests {
         }
 
         println!("Testing with database {}", config.sql_interface.db_name);
-
         let mut sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
             Err(e) => {
@@ -1120,6 +1119,7 @@ pub mod tests {
         );
         let sql_interface_heating_stats = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
+            config.sql_interface.max_rows_heating_stats,
             sql_interface_heating_midnight_calculator,
         )
         .unwrap();

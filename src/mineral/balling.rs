@@ -972,7 +972,8 @@ pub mod tests {
             }
         };
         let sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // create the test object
         let _ = Balling::new(
@@ -998,7 +999,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // empty the Balling dosing log table
         SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string())
@@ -1095,7 +1097,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1251,7 +1254,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -1609,7 +1613,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // empty the Balling dosing log table
         match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
@@ -1805,7 +1810,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // insert a valid pump configuration for pump #1
         insert_pump_configurations(
@@ -1855,7 +1861,8 @@ pub mod tests {
             }
         };
         let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         insert_pump_configurations(
             &mut sql_interface,
@@ -2003,7 +2010,8 @@ pub mod tests {
             }
         };
         let sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values).unwrap();
+            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+                .unwrap();
 
         // create the test object
         let _ = Balling::new(

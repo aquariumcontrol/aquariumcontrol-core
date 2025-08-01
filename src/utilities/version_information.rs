@@ -262,8 +262,7 @@ mod tests {
 
     #[test]
     fn test_invalid_major_version() {
-        let result =
-            VersionInformation::from_string_and_hash("a.2.3".to_string(), dummy_hash());
+        let result = VersionInformation::from_string_and_hash("a.2.3".to_string(), dummy_hash());
         assert!(matches!(
             result,
             Err(VersionInformationError::ConversionErrorMajor { .. })
@@ -272,8 +271,7 @@ mod tests {
 
     #[test]
     fn test_invalid_minor_version() {
-        let result =
-            VersionInformation::from_string_and_hash("1.a.3".to_string(), dummy_hash());
+        let result = VersionInformation::from_string_and_hash("1.a.3".to_string(), dummy_hash());
         assert!(matches!(
             result,
             Err(VersionInformationError::ConversionErrorMinor { .. })
@@ -282,8 +280,7 @@ mod tests {
 
     #[test]
     fn test_invalid_build_version() {
-        let result =
-            VersionInformation::from_string_and_hash("1.2.x".to_string(), dummy_hash());
+        let result = VersionInformation::from_string_and_hash("1.2.x".to_string(), dummy_hash());
         assert!(matches!(
             result,
             Err(VersionInformationError::ConversionErrorBuild { .. })
@@ -292,8 +289,7 @@ mod tests {
 
     #[test]
     fn test_incomplete_version_string() {
-        let result =
-            VersionInformation::from_string_and_hash("1.2".to_string(), dummy_hash());
+        let result = VersionInformation::from_string_and_hash("1.2".to_string(), dummy_hash());
         assert!(matches!(
             result,
             Err(VersionInformationError::ParseErrorBuild { .. })

@@ -7,7 +7,9 @@ use mysql::params;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATING_SETVALS_NULL;
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_HEATING_SETVALS_COUNT, SQL_QUERY_CHECK_HEATING_SETVALS_NULL,
+};
 use crate::thermal::heating::HeatingConfig;
 use mysql::prelude::Queryable;
 
@@ -65,11 +67,34 @@ impl SqlInterfaceHeatingSetVals {
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
             source: Box::new(e),
         })?;
+        let count_rows = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_HEATING_SETVALS_COUNT,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingSetValsFailure {
+            source: Box::new(e),
+        })?;
+
+        // check the query results
+        if count_null_values < 0 || count_rows < 0 {
+            return Err(SqlInterfaceError::DatabaseHeatingSetValTableNegativeValue(
+                count_null_values,
+                count_rows,
+            ));
+        }
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsNull(
                 count_null_values,
             ));
+        }
+
+        if count_rows > 1 {
+            return Err(
+                SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(
+                    count_rows.cast_unsigned(),
+                ),
+            );
         }
 
         Ok(SqlInterfaceHeatingSetVals {
@@ -219,6 +244,7 @@ pub mod tests {
     use crate::database::sql_interface_heating_setvals::{
         HeatingSetVals, SqlInterfaceHeatingSetVals,
     };
+    use crate::database::sql_query_strings::SQL_TABLE_HEATING_SETVALS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -232,9 +258,12 @@ pub mod tests {
         );
         println!("Testing with database {}", config.sql_interface.db_name);
         // *** test reading heating set values **************************************************
-        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface.clone())
             .expect("Initialization of SQL interface for test failed.");
-        match SqlInterface::truncate_table(&mut sql_interface, "heatingsetvals".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_HEATING_SETVALS.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -287,7 +316,10 @@ pub mod tests {
         }
         println!("* reading valid heating set values succeeded.");
 
-        match SqlInterface::truncate_table(&mut sql_interface, "heatingsetvals".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_HEATING_SETVALS.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -310,7 +342,31 @@ pub mod tests {
             sql_interface_heating_setvals.get_heating_set_values(),
             Err(SqlInterfaceError::HeatingSetValsInvalid(_, _))
         ));
-        println!("* reading  invalid heating set values succeeded.");
+        println!("* reading invalid heating set values succeeded.");
+
+        // test if too many rows are detected
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_HEATING_SETVALS.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        assert!(matches!(
+            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+            Ok(())
+        ));
+        assert!(matches!(
+            sql_interface_heating_setvals.insert_heating_set_values(&valid_heating_set_vals),
+            Ok(())
+        ));
+        let test_result =
+            SqlInterfaceHeatingSetVals::new(sql_interface.get_connection(), &config.heating);
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseHeatingSetValTableContainsTooManyRows(_))
+        ));
+        println!("* detecting too many rows succeeded.");
 
         //***************************************************************************************
     }

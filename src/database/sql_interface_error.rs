@@ -345,23 +345,55 @@ pub enum SqlInterfaceError {
 
     /// Balling set value table contains too many rows.
     #[error("Balling set value table contains too many rows ({0}). Permissible maximum is {1}.")]
-    DatabaseBallingSetValTableContainsTooManyRows(i64, i64),
+    DatabaseBallingSetValTableContainsTooManyRows(u64, u64),
 
     /// Schedule table may be inconsistent - it contains NULL values.
     #[error("Schedule table may be inconsistent - it contains {0} NULL values.")]
     DatabaseScheduleTableContainsNull(i64),
 
+    /// Schedule table may be inconsistent - invalid answer from database to query.
+    #[error("Schedule table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
+    DatabaseScheduleTableNegativeValue(i64, i64),
+
+    /// The schedule table contains too many rows.
+    #[error("Schedule table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseScheduleTableContainsTooManyRows(u64, u64),
+
     /// Heating set value table may be inconsistent - it contains NULL values.
     #[error("Heating set value table may be inconsistent - it contains {0} NULL values.")]
     DatabaseHeatingSetValTableContainsNull(i64),
+
+    /// Heating set value table may be inconsistent - invalid answer from database to query.
+    #[error("Heating set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
+    DatabaseHeatingSetValTableNegativeValue(i64, i64),
+
+    /// Heating set value table contains too many rows.
+    #[error("Heating set value table contains too many rows ({0}). Permissible maximum is 1.")]
+    DatabaseHeatingSetValTableContainsTooManyRows(u64),
 
     /// Heating stats table may be inconsistent - it contains NULL values.
     #[error("Heating stats table may be inconsistent - it contains {0} NULL values.")]
     DatabaseHeatingStatsTableContainsNull(i64),
 
+    /// Heating statistics table may be inconsistent - invalid answer from database to query.
+    #[error("Heating set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
+    DatabaseHeatingStatsTableNegativeValue(i64, i64),
+
+    /// Heating stats table contains too many rows.
+    #[error("Heating statistics table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseHeatingStatsTableContainsTooManyRows(u64, u64),
+
     /// Ventilation set value table may be inconsistent - it contains NULL values.
     #[error("Ventilation set value table may be inconsistent - it contains {0} NULL values.")]
     DatabaseVentilationSetValTableContainsNull(i64),
+
+    /// Ventilation set value table may be inconsistent - invalid answer from database to query.
+    #[error("Ventilation set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
+    DatabaseVentilationSetValTableNegativeValue(i64, i64),
+
+    /// Ventilation set value table contains too many rows.
+    #[error("Ventilation set value table contains too many rows ({0}). Permissible maximum is 1.")]
+    DatabaseVentilationSetValTableContainsTooManyRows(u64),
 
     /// Feed set value table may be inconsistent - it contains NULL values.
     #[error("Feed set value table {0} may be inconsistent - it contains {1} NULL values.")]
@@ -369,45 +401,49 @@ pub enum SqlInterfaceError {
 
     /// Feed set value table contains too many rows.
     #[error("Feed set value table {0} contains too many rows ({1}). Permissible maximum is {2}.")]
-    DatabaseFeedSetValTableContainsTooManyRows(String, i64, i64),
+    DatabaseFeedSetValTableContainsTooManyRows(String, u64, u64),
 
-    /// Could not check balling set value table for NULL values.
-    #[error("Could not check balling set value table (existence of NULL values and number of rows).")]
+    /// Could not check balling set value table for NULL values or number of rows.
+    #[error(
+        "Could not check balling set value table (existence of NULL values and number of rows)."
+    )]
     DatabaseCheckBallingSetValsFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
-    
-    /// Could not check schedule table for NULL values.
-    #[error("Could not check schedule table for NULL values.")]
-    DatabaseCheckScheduleNullFailure {
+
+    /// Could not check schedule table for NULL values or number of rows.
+    #[error("Could not check schedule table for NULL values or number of rows.")]
+    DatabaseCheckScheduleFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
-    /// Could not check heating set value table for NULL values.
-    #[error("Could not check heating set value table for NULL values.")]
+    /// Could not check heating set value table for NULL values or number of rows.
+    #[error("Could not check heating set value table for NULL values or number of rows.")]
     DatabaseCheckHeatingSetValsFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
-    /// Could not check heating stats table for NULL values.
-    #[error("Could not check heating stats table for NULL values.")]
+    /// Could not check heating stats table for NULL values or number of rows.
+    #[error("Could not check heating stats table for NULL values or number of rows.")]
     DatabaseCheckHeatingStatsFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
-    /// Could not check ventilation set value table for NULL values.
-    #[error("Could not check ventilation set value table for NULL values.")]
+    /// Could not check ventilation set value table for NULL values or number of rows.
+    #[error("Could not check ventilation set value table for NULL values or number of rows.")]
     DatabaseCheckVentilationSetValsFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },
 
-    /// Could not check feed set value table for NULL values.
-    #[error("Could not check feed set value table {table_name} for NULL values or number of rows.")]
+    /// Could not check feed set value table for NULL values or number of rows.
+    #[error(
+        "Could not check feed set value table {table_name} for NULL values or number of rows."
+    )]
     DatabaseCheckFeedSetValsFailure {
         table_name: String,
         #[source]
@@ -417,7 +453,7 @@ pub enum SqlInterfaceError {
     /// A feed set value table may be inconsistent - invalid answer from database to query.
     #[error("Feed set value table {0} may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
     DatabaseFeedSetValTableNegativeValue(String, i64, i64),
-    
+
     #[cfg(test)]
     #[error("Error when inserting heating set values into database using query: {0}")]
     InsertHeatingSetValuesFailure(String),

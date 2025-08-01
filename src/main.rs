@@ -71,10 +71,6 @@ use log::debug;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::unistd;
 
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, error::Error, panic, path::Path, thread::scope, time::Duration};
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_balling::SqlInterfaceBalling;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -130,6 +126,10 @@ use crate::watchmen::watchdog::Watchdog;
 use crate::water::refill::{Refill, RefillChannels, RefillStatus};
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::water_injection::WaterInjection;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{env, error::Error, panic, path::Path, thread::scope, time::Duration};
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use crate::sensors::gpio_handler::GpioHandler;
@@ -444,9 +444,13 @@ fn run() -> Result<(), StartupError> {
 
     // instantiate the duration for the database ping
     let database_ping_duration = Duration::from_secs(config.sql_interface.db_ping_interval);
+
+    // get values from config before moving the config
     let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
-    let max_rows_feed_pattern= config.sql_interface.max_rows_feed_pattern;
+    let max_rows_feed_pattern = config.sql_interface.max_rows_feed_pattern;
     let max_rows_feed_schedule = config.sql_interface.max_rows_feed_schedule;
+    let max_rows_heating_stats = config.sql_interface.max_rows_heating_stats;
+    let max_rows_schedule = config.sql_interface.max_rows_schedule;
 
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -459,11 +463,13 @@ fn run() -> Result<(), StartupError> {
     let mut sql_interface = SqlInterface::new(config.sql_interface)
         .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_schedule = SqlInterfaceSchedule::new(sql_interface.get_connection())
-        .map_err(|e| StartupError::Database { source: e })?;
+    let sql_interface_schedule =
+        SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule)
+            .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_balling = SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
-        .map_err(|e| StartupError::Database { source: e })?;
+    let sql_interface_balling =
+        SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
+            .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> =
         Box::new(SqlInterfaceRefill::new(sql_interface.get_connection()));
@@ -473,13 +479,18 @@ fn run() -> Result<(), StartupError> {
 
     let sql_interface_heating = SqlInterfaceHeatingStats::new(
         sql_interface.get_connection(),
+        max_rows_heating_stats,
         Box::new(sql_interface_midnight_calculator),
     )
     .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_feed: Box<dyn DatabaseInterfaceFeedTrait + Sync + Send> = Box::new(
-        SqlInterfaceFeed::new(sql_interface.get_connection(), max_rows_feed_pattern, max_rows_feed_schedule)
-            .map_err(|e| StartupError::Database { source: e })?,
+        SqlInterfaceFeed::new(
+            sql_interface.get_connection(),
+            max_rows_feed_pattern,
+            max_rows_feed_schedule,
+        )
+        .map_err(|e| StartupError::Database { source: e })?,
     );
 
     let sql_interface_data = SqlInterfaceData::new(sql_interface.get_connection());

@@ -36,7 +36,9 @@ db_min_wait_timeout = 100000                            # required minimum for w
 db_ping_interval = 3600                                 # database-ping interval in seconds
 max_rows_balling_set_values = 10                        # maximum number of allowed entries in Balling set value table. use a value of 0 to deactivate the check.
 max_rows_feed_pattern = 10                              # maximum number of allowed entries in feed pattern table
-max_rows_feed_schedule = 100                            # maximum number of allowed entries feed schedule table
+max_rows_feed_schedule = 100                            # maximum number of allowed entries in feed schedule table
+max_rows_heating_stats = 1000                           # maximum number of allowed entries in heating stats table
+max_rows_schedule = 10                                  # maximum number of allowed entries in schedule table
 
 [tcp_connection]
 ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes

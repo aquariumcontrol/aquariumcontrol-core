@@ -15,7 +15,9 @@ use mysql::params;
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::database::sql_query_strings;
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL;
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT, SQL_QUERY_CHECK_VENTILATION_SETVALS_NULL,
+};
 use crate::thermal::ventilation::VentilationConfig;
 use mysql::prelude::Queryable;
 
@@ -75,9 +77,37 @@ impl SqlInterfaceVentilationSetVals {
             },
         )?;
 
+        let count_rows = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_VENTILATION_SETVALS_COUNT,
+        )
+        .map_err(
+            |e| SqlInterfaceError::DatabaseCheckVentilationSetValsFailure {
+                source: Box::new(e),
+            },
+        )?;
+
+        // check the query results
+        if count_null_values < 0 || count_rows < 0 {
+            return Err(
+                SqlInterfaceError::DatabaseVentilationSetValTableNegativeValue(
+                    count_null_values,
+                    count_rows,
+                ),
+            );
+        }
+
         if count_null_values > 0 {
             return Err(
                 SqlInterfaceError::DatabaseVentilationSetValTableContainsNull(count_null_values),
+            );
+        }
+
+        if count_rows > 1 {
+            return Err(
+                SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(
+                    count_rows.cast_unsigned(),
+                ),
             );
         }
 
@@ -229,6 +259,7 @@ pub mod tests {
     use crate::database::sql_interface_ventilation_setvals::{
         SqlInterfaceVentilationSetVals, VentilationSetVals,
     };
+    use crate::database::sql_query_strings::SQL_TABLE_VENTILATION_SETVALS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -244,7 +275,10 @@ pub mod tests {
         // *** test reading ventilation set values **************************************************
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        match SqlInterface::truncate_table(&mut sql_interface, "ventilationsetvals".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -300,7 +334,10 @@ pub mod tests {
         }
         println!("* reading valid ventilation set values succeeded.");
 
-        match SqlInterface::truncate_table(&mut sql_interface, "ventilationsetvals".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -325,6 +362,34 @@ pub mod tests {
             Err(SqlInterfaceError::VentilationSetValsInvalid(_, _))
         ));
         println!("* reading  invalid ventilation set values succeeded.");
+
+        // test if too many rows are detected
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_VENTILATION_SETVALS.to_string(),
+        ) {
+            Ok(_) => {}
+            Err(e) => panic!("Could not prepare test case: {e:?}"),
+        }
+        assert!(matches!(
+            sql_interface_ventilation_setvals
+                .insert_ventilation_set_values(&valid_ventilation_set_vals),
+            Ok(())
+        ));
+        assert!(matches!(
+            sql_interface_ventilation_setvals
+                .insert_ventilation_set_values(&valid_ventilation_set_vals),
+            Ok(())
+        ));
+        let test_result = SqlInterfaceVentilationSetVals::new(
+            sql_interface.get_connection(),
+            &config.ventilation,
+        );
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseVentilationSetValTableContainsTooManyRows(_))
+        ));
+        println!("* detecting too many rows succeeded.");
 
         //***************************************************************************************
     }

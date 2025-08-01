@@ -15,7 +15,9 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::database::sql_interface::SqlInterface;
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_SCHEDULE_NULL;
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_SCHEDULE_COUNT, SQL_QUERY_CHECK_SCHEDULE_NULL,
+};
 use crate::database::{sql_interface_error::SqlInterfaceError, sql_query_strings};
 
 /// List of all modules that are subject to limitations by schedule.
@@ -203,19 +205,47 @@ impl SqlInterfaceSchedule {
     /// # Returns
     /// * A new `SqlInterfaceSchedule` struct in case of success.
     /// * An error `SqlInterfaceError` in case of failure.
-    pub fn new(mut conn: PooledConn) -> Result<SqlInterfaceSchedule, SqlInterfaceError> {
+    pub fn new(
+        mut conn: PooledConn,
+        max_rows_schedule: u64,
+    ) -> Result<SqlInterfaceSchedule, SqlInterfaceError> {
         let count_null_values = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_SCHEDULE_NULL,
         )
-        .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleNullFailure {
+        .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleFailure {
             source: Box::new(e),
         })?;
+        let count_rows = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_SCHEDULE_COUNT,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckScheduleFailure {
+            source: Box::new(e),
+        })?;
+
+        // check the query results
+        if count_null_values < 0 || count_rows < 0 {
+            return Err(SqlInterfaceError::DatabaseScheduleTableNegativeValue(
+                count_null_values,
+                count_rows,
+            ));
+        }
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseScheduleTableContainsNull(
                 count_null_values,
             ));
+        }
+
+        if max_rows_schedule > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows > max_rows_schedule.cast_signed() {
+                return Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                    count_rows.cast_unsigned(),
+                    max_rows_schedule,
+                ));
+            }
         }
 
         Ok(Self {
@@ -315,10 +345,15 @@ impl SqlInterfaceSchedule {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface::SqlInterface;
+    use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_schedule::{
         ScheduleEntry, ScheduleType, SqlInterfaceSchedule, SqlScheduleEntry,
     };
+    use crate::database::sql_query_strings;
+    use crate::database::sql_query_strings::SQL_TABLE_SCHEDULE;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
+    use mysql::params;
+    use mysql::prelude::Queryable;
 
     #[test]
     // Test case reads entries from the SQL database.
@@ -331,10 +366,46 @@ pub mod tests {
             38,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
-        let sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
+        let max_rows_schedule = config.sql_interface.max_rows_schedule;
+        let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
+        SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_SCHEDULE.to_string()).unwrap();
+        let sql_query_string = sql_query_strings::SQL_QUERY_WRITE_SCHEDULE_TEST_DATA.to_string();
+        sql_interface
+            .conn
+            .exec_drop::<_, _>(
+                sql_query_string.clone(),
+                params! {
+                "schedule_name" => "Balling", "start_time" => "01:00:00", "stop_time" => "23:00:00"
+                },
+            )
+            .unwrap();
+        sql_interface
+            .conn
+            .exec_drop::<_, _>(
+                sql_query_string.clone(),
+                params! {
+                "schedule_name" => "Heating", "start_time" => "00:00:00", "stop_time" => "23:59:00"
+                },
+            )
+            .unwrap();
+        sql_interface.conn.exec_drop::<_, _>(
+            sql_query_string.clone(),
+            params! {
+            "schedule_name" => "Ventilation", "start_time" => "03:00:00", "stop_time" => "21:00:00"
+            },
+        ).unwrap();
+        sql_interface
+            .conn
+            .exec_drop::<_, _>(
+                sql_query_string.clone(),
+                params! {
+                "schedule_name" => "Refill", "start_time" => "02:00:00", "stop_time" => "22:00:00"
+                },
+            )
+            .unwrap();
         let mut sql_interface_schedule =
-            SqlInterfaceSchedule::new(sql_interface.get_connection()).unwrap();
+            SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule).unwrap();
 
         match sql_interface_schedule.read_schedule() {
             Ok(_) => {
@@ -377,6 +448,8 @@ pub mod tests {
         })
         .unwrap();
 
+        assert_eq!(sql_interface_schedule.schedules.len(), 4);
+
         for schedule_entry in sql_interface_schedule.schedules {
             let reference = match schedule_entry.schedule_type {
                 ScheduleType::Balling => &schedule_entry_reference_balling,
@@ -388,5 +461,15 @@ pub mod tests {
             assert_eq!(reference.stop_time, schedule_entry.stop_time);
             assert_eq!(reference.is_active, schedule_entry.is_active);
         }
+
+        // *** check if row limitation is active ***
+        let test_result = SqlInterfaceSchedule::new(sql_interface.conn, 1);
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseScheduleTableContainsTooManyRows(
+                _,
+                _
+            ))
+        ));
     }
 }

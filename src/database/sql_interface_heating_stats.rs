@@ -12,7 +12,9 @@ use crate::database::{
     sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait, sql_query_strings,
 };
 
-use crate::database::sql_query_strings::SQL_QUERY_CHECK_HEATING_STATS_NULL;
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_HEATING_STATS_COUNT, SQL_QUERY_CHECK_HEATING_STATS_NULL,
+};
 use chrono::*;
 use log::{error, warn};
 use mysql::prelude::*;
@@ -230,6 +232,7 @@ impl SqlInterfaceHeatingStats {
     /// * An error `SqlInterfaceError` in case of failure.
     pub fn new(
         mut conn: PooledConn,
+        max_rows_heating_stats: u64,
         sql_interface_heating_midnight_calculator: Box<
             dyn SqlInterfaceMidnightCalculatorTrait + Sync + Send,
         >,
@@ -241,11 +244,38 @@ impl SqlInterfaceHeatingStats {
         .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
             source: Box::new(e),
         })?;
+        let count_rows = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_HEATING_STATS_COUNT,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckHeatingStatsFailure {
+            source: Box::new(e),
+        })?;
+
+        // check the query results
+        if count_null_values < 0 || count_rows < 0 {
+            return Err(SqlInterfaceError::DatabaseHeatingStatsTableNegativeValue(
+                count_null_values,
+                count_rows,
+            ));
+        }
 
         if count_null_values > 0 {
             return Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsNull(
                 count_null_values,
             ));
+        }
+
+        if max_rows_heating_stats > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows > max_rows_heating_stats.cast_signed() {
+                return Err(
+                    SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(
+                        count_rows.cast_unsigned(),
+                        max_rows_heating_stats,
+                    ),
+                );
+            }
         }
 
         Ok(SqlInterfaceHeatingStats {
@@ -486,6 +516,7 @@ pub mod tests {
         HeatingStatsEntry, SqlInterfaceHeatingStats,
     };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculator;
+    use crate::database::sql_query_strings::SQL_TABLE_HEATING_STATS;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -498,6 +529,7 @@ pub mod tests {
             36,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_heating_stats = config.sql_interface.max_rows_heating_stats;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
         let sql_interface_heating_midnight_calculator = Box::new(
@@ -505,12 +537,14 @@ pub mod tests {
         );
         let mut sql_interface_heating = SqlInterfaceHeatingStats::new(
             sql_interface.get_connection(),
+            max_rows_heating_stats,
             sql_interface_heating_midnight_calculator,
         )
         .unwrap();
 
         // *** retrieve heating stats - ************************************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "heatingstats".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_HEATING_STATS.to_string())
+        {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -525,7 +559,7 @@ pub mod tests {
                 ));
             }
         }
-        println!("* checking retrieving heating stats succeeded.");
+        println!("* checking reading from empty heating stat table succeeded.");
         // *****************************************************************************************
 
         // *** insert heating stats ****************************************************************
@@ -621,6 +655,27 @@ pub mod tests {
             }
         }
         println!("* checking duration until midnight in seconds succeeded.");
+
+        // *** check if too many rows are detected ***
+        // insert one more entry with modified date
+        heating_stats_entry.date =
+            SqlInterface::get_tomorrow_date(&mut sql_interface.get_connection()).unwrap();
+        assert!(matches!(
+            sql_interface_heating.insert_heating_stats_entry(&heating_stats_entry),
+            Ok(())
+        ));
+        let sql_interface_heating_midnight_calculator = Box::new(
+            SqlInterfaceMidnightCalculator::new(sql_interface.get_connection()),
+        );
+        let test_result = SqlInterfaceHeatingStats::new(
+            sql_interface.get_connection(),
+            1,
+            sql_interface_heating_midnight_calculator,
+        );
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseHeatingStatsTableContainsTooManyRows(_, _))
+        ));
         // *****************************************************************************************
     }
 }
