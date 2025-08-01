@@ -15,8 +15,8 @@ pub const SQL_QUERY_VERSION_INFORMATION: &str =
 /// Provides the current database name.
 pub const SQL_QUERY_DATABASE: &str = "select database() LIMIT 1;";
 
-/// Provides all tables from the database.
-pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES LIMIT 100;";
+/// Provides all tables from the database. This query cannot be limited.
+pub const SQL_QUERY_READ_TABLES: &str = "SHOW TABLES";
 
 /// Provides the current date (without time) from the database.
 pub const SQL_QUERY_READ_CURRENT_DATE: &str = "SELECT CURRENT_DATE() LIMIT 1;";

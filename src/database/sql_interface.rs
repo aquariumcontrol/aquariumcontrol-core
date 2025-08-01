@@ -972,7 +972,7 @@ pub mod tests {
     // - if required tables are existing
     // - if current timestamp is local timestamp
     // Test case uses test database #28.
-    pub fn test_sql_interface() {
+    pub fn test_sql_interface_required_tables_existing() {
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
             28,
