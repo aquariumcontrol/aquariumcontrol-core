@@ -282,6 +282,7 @@ impl SqlInterfaceData {
 #[cfg(test)]
 pub mod tests {
     use crate::database::sql_interface_data::SqlInterfaceData;
+    use crate::database::sql_query_strings::SQL_TABLE_DATA;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::recorder::recorder_data_frame::RecorderDataFrame;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
@@ -519,7 +520,7 @@ pub mod tests {
             SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
 
         // *** insert and load RecorderDataFrame ***************************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -605,7 +606,7 @@ pub mod tests {
         // *****************************************************************************************
 
         // *** insert and load DataFrame with NULL data ********************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "data".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_DATA.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }

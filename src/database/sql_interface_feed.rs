@@ -785,6 +785,9 @@ pub mod tests {
         DatabaseInterfaceFeedTrait, FeedScheduleEntry, SqlInterfaceFeed,
     };
     use crate::database::sql_query_strings;
+    use crate::database::sql_query_strings::{
+        SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDPATTERNS, SQL_TABLE_FEEDSCHEDULE,
+    };
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
 
@@ -815,7 +818,7 @@ pub mod tests {
         sql_interface_feed: &mut SqlInterfaceFeed,
     ) {
         // remove all feed patterns
-        match SqlInterface::truncate_table(sql_interface, "feedpatterns".to_string()) {
+        match SqlInterface::truncate_table(sql_interface, SQL_TABLE_FEEDPATTERNS.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -868,7 +871,7 @@ pub mod tests {
         .unwrap();
 
         //*** check retrieving of the feed pattern from empty table *********************************
-        match SqlInterface::truncate_table(&mut sql_interface, "feedpatterns".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDPATTERNS.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -1083,7 +1086,7 @@ pub mod tests {
         .unwrap();
 
         //*** check inserting of feed event into empty table ***************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "feedlog".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDLOG.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -1149,7 +1152,7 @@ pub mod tests {
         )
         .unwrap();
         // *** check trying to load feed schedule entry when table is empty *********************
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -1304,7 +1307,7 @@ pub mod tests {
 
         // *** check updating multiple feed schedule entries with repetition ***********************
         // calculate dynamic reference
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }

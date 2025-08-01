@@ -33,6 +33,18 @@ pub const SQL_QUERY_WRITE_FEED_EVENT: &str = concat!(
     "values(:timestamp, :feeder_run_time, :profile_name, :profile_id)"
 );
 
+/// Definition of table name for Data recorder
+#[cfg(test)]
+pub const SQL_TABLE_DATA: &str = "data";
+
+/// Definition of table name for Balling set values
+#[cfg(test)]
+pub const SQL_TABLE_BALLING_SETVALS: &str = "ballingsetvals";
+
+/// Definition of table name for Balling dosing log
+#[cfg(test)]
+pub const SQL_TABLE_BALLING_DOSING_LOG: &str = "ballingdosinglog";
+
 /// Definition of table name for schedule
 #[cfg(test)]
 pub const SQL_TABLE_SCHEDULE: &str = "schedule";
@@ -48,6 +60,14 @@ pub const SQL_TABLE_HEATING_STATS: &str = "heatingstats";
 /// Definition of table name for ventilation set values
 #[cfg(test)]
 pub const SQL_TABLE_VENTILATION_SETVALS: &str = "ventilationsetvals";
+
+/// Definition of table name for feed log
+#[cfg(test)]
+pub const SQL_TABLE_FEEDLOG: &str = "feedlog";
+
+/// Definition of table name for refill log
+#[cfg(test)]
+pub const SQL_TABLE_REFILL: &str = "refill";
 
 /// Definition of table name for feed patterns
 pub const SQL_TABLE_FEEDPATTERNS: &str = "feedpatterns";

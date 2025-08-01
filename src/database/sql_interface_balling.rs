@@ -338,6 +338,9 @@ pub mod tests {
     use mysql::{params, prelude::Queryable};
 
     use crate::database::sql_interface_balling::SqlInterfaceBalling;
+    use crate::database::sql_query_strings::{
+        SQL_TABLE_BALLING_DOSING_LOG, SQL_TABLE_BALLING_SETVALS,
+    };
     use crate::database::{
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     };
@@ -355,8 +358,10 @@ pub mod tests {
         dosing_volume: f32,
     }
 
-    pub const SQL_QUERY_WRITE_BALLING_SETVALS: &str =
-        "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) values(:pump_id, :dosing_speed, :dosing_volume, :label);";
+    pub const SQL_QUERY_WRITE_BALLING_SETVALS: &str = concat!(
+        "INSERT into ballingsetvals(pumpid, dosingspeed, dosingvolume, label) ",
+        "values(:pump_id, :dosing_speed, :dosing_volume, :label);"
+    );
 
     #[test]
     // Test case verifies the behavior of all functions accessing the Balling event log table.
@@ -377,7 +382,10 @@ pub mod tests {
                 .unwrap();
 
         // *** check the timestamp of last Balling dosing ******************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingdosinglog".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_DOSING_LOG.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }
@@ -469,7 +477,10 @@ pub mod tests {
                 .unwrap();
 
         // *** read balling set vals from empty table **********************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "ballingsetvals".to_string()) {
+        match SqlInterface::truncate_table(
+            &mut sql_interface,
+            SQL_TABLE_BALLING_SETVALS.to_string(),
+        ) {
             Ok(_) => {}
             Err(e) => panic!("Could not prepare test case: {e:?}"),
         }

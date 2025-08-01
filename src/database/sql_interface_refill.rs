@@ -12,9 +12,7 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
-use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_REFILL_COUNT,
-};
+use crate::database::sql_query_strings::SQL_QUERY_CHECK_REFILL_COUNT;
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -348,6 +346,7 @@ pub mod tests {
     use mysql::prelude::Queryable;
 
     use crate::database::sql_interface_refill::{DatabaseInterfaceRefillTrait, SqlInterfaceRefill};
+    use crate::database::sql_query_strings::SQL_TABLE_REFILL;
     use crate::database::{
         sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
     };
@@ -383,7 +382,7 @@ pub mod tests {
             SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).unwrap();
 
         // *** check timestamp of last refill *************************************************
-        match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_REFILL.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
