@@ -717,6 +717,7 @@ pub mod tests {
     use crate::utilities::logger::setup_logger;
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
+    use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
     use crate::food::food_injection_error::FoodInjectionError;
     use crate::stubs::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
@@ -841,7 +842,7 @@ pub mod tests {
     }
 
     #[test]
-    // "happy" case executing a set of feed schedule entries
+    // "Happy" case executing a set of feed schedule entries. Additionally, it checks row limitation.
     // Test case uses test database #07.
     pub fn test_feed_schedule_execution() {
         let sleep_duration_100_millis = Duration::from_millis(100);
@@ -872,6 +873,7 @@ pub mod tests {
             sql_interface.get_connection(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
+            config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
@@ -881,7 +883,14 @@ pub mod tests {
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
+            Ok(_) => {}
+            Err(e) => {
+                panic!("Could not prepare test case: {e:?}")
+            }
+        }
+        // empty the feed log table
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDLOG.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1001,6 +1010,7 @@ pub mod tests {
             sql_interface.get_connection(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
+            config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
@@ -1010,7 +1020,7 @@ pub mod tests {
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1445,6 +1455,7 @@ pub mod tests {
             sql_interface.get_connection(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
+            config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
@@ -1454,7 +1465,7 @@ pub mod tests {
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")
@@ -1579,6 +1590,7 @@ pub mod tests {
             sql_interface.get_connection(),
             config.sql_interface.max_rows_feed_pattern,
             config.sql_interface.max_rows_feed_schedule,
+            config.sql_interface.max_rows_feed_log,
         )
         .unwrap();
 
@@ -1588,7 +1600,7 @@ pub mod tests {
             Box::new(sql_interface_feed_unboxed);
 
         // empty the feed schedule table
-        match SqlInterface::truncate_table(&mut sql_interface, "feedschedule".to_string()) {
+        match SqlInterface::truncate_table(&mut sql_interface, SQL_TABLE_FEEDSCHEDULE.to_string()) {
             Ok(_) => {}
             Err(e) => {
                 panic!("Could not prepare test case: {e:?}")

@@ -13,7 +13,7 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
+    SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
     SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
 };
 use crate::database::{
@@ -84,7 +84,7 @@ impl SqlInterfaceBalling {
         })?;
         let count_rows_dosinglog = SqlInterface::get_single_integer_from_database(
             &mut conn,
-            SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT,
+            SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             source: Box::new(e),

@@ -454,6 +454,7 @@ fn run() -> Result<(), StartupError> {
     let max_rows_data = config.sql_interface.max_rows_data;
     let max_rows_refill = config.sql_interface.max_rows_refill;
     let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
+    let max_rows_feed_log = config.sql_interface.max_rows_feed_log;
 
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -497,6 +498,7 @@ fn run() -> Result<(), StartupError> {
             sql_interface.get_connection(),
             max_rows_feed_pattern,
             max_rows_feed_schedule,
+            max_rows_feed_log,
         )
         .map_err(|e| StartupError::Database { source: e })?,
     );

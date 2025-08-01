@@ -62,7 +62,6 @@ pub const SQL_TABLE_HEATING_STATS: &str = "heatingstats";
 pub const SQL_TABLE_VENTILATION_SETVALS: &str = "ventilationsetvals";
 
 /// Definition of table name for feed log
-#[cfg(test)]
 pub const SQL_TABLE_FEEDLOG: &str = "feedlog";
 
 /// Definition of table name for refill log
@@ -251,7 +250,7 @@ pub const SQL_QUERY_CHECK_BALLING_SETVALS_COUNT: &str =
     "SELECT COUNT(*) FROM ballingsetvals LIMIT 1;";
 
 /// Checks how many entries are in the balling dosing log
-pub const SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT: &str =
+pub const SQL_QUERY_CHECK_BALLING_DOSING_LOG_COUNT: &str =
     "SELECT COUNT(*) FROM ballingdosinglog LIMIT 1;";
 
 /// Checks if the feed patterns table contains any NULL values.
@@ -383,6 +382,9 @@ pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(
 /// Checks how many entries there are in the feed patterns table.
 pub const SQL_QUERY_CHECK_FEEDPATTERN_COUNT: &str =
     concat!("SELECT COUNT(*) FROM feedpatterns LIMIT 1;");
+
+/// Checks how many entries there are in the feed log table.
+pub const SQL_QUERY_CHECK_FEEDLOG_COUNT: &str = concat!("SELECT COUNT(*) FROM feedlog LIMIT 1;");
 
 /// Checks if the feed schedule table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDSCHEDULE_NULL: &str = concat!(

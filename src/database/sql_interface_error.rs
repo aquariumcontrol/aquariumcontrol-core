@@ -427,8 +427,8 @@ pub enum SqlInterfaceError {
     DatabaseFeedSetValTableContainsNull(String, i64),
 
     /// Feed set value table contains too many rows.
-    #[error("Feed set value table {0} contains too many rows ({1}). Permissible maximum is {2}.")]
-    DatabaseFeedSetValTableContainsTooManyRows(String, u64, u64),
+    #[error("Feed table {0} contains too many rows ({1}). Permissible maximum is {2}.")]
+    DatabaseFeedTableContainsTooManyRows(String, u64, u64),
 
     /// Could not check balling set value table for NULL values or number of rows.
     #[error(
@@ -486,7 +486,7 @@ pub enum SqlInterfaceError {
 
     /// A feed set value table may be inconsistent - invalid answer from database to query.
     #[error("Feed set value table {0} may be inconsistent - database responded with negative value(s) ({1}, {2}).")]
-    DatabaseFeedSetValTableNegativeValue(String, i64, i64),
+    DatabaseFeedTableNegativeValue(String, i64, i64),
 
     #[cfg(test)]
     #[error("Error when inserting heating set values into database using query: {0}")]
