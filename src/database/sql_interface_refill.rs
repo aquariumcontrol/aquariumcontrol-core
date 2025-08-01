@@ -12,6 +12,9 @@ use log::error;
 use mysql::prelude::*;
 use mysql::*;
 
+use crate::database::sql_query_strings::{
+    SQL_QUERY_CHECK_REFILL_COUNT,
+};
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
 };
@@ -61,11 +64,38 @@ impl SqlInterfaceRefill {
     ///
     /// # Arguments
     /// * `conn` - An active database connection pool object.
+    /// * `max_rows_refill` - Maximum allowed number of rows
     ///
     /// # Returns
     /// A new `SqlInterfaceRefill` struct.
-    pub fn new(conn: PooledConn) -> SqlInterfaceRefill {
-        SqlInterfaceRefill { conn }
+    pub fn new(
+        mut conn: PooledConn,
+        max_rows_refill: u64,
+    ) -> Result<SqlInterfaceRefill, SqlInterfaceError> {
+        let count_rows =
+            SqlInterface::get_single_integer_from_database(&mut conn, SQL_QUERY_CHECK_REFILL_COUNT)
+                .map_err(|e| SqlInterfaceError::DatabaseCheckRefillFailure {
+                    source: Box::new(e),
+                })?;
+
+        // check the query results
+        if count_rows < 0 {
+            return Err(SqlInterfaceError::DatabaseRefillTableNegativeValue(
+                count_rows,
+            ));
+        }
+
+        if max_rows_refill > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows > max_rows_refill.cast_signed() {
+                return Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                    count_rows.cast_unsigned(),
+                    max_rows_refill,
+                ));
+            }
+        }
+
+        Ok(SqlInterfaceRefill { conn })
     }
 
     /// Fetches the timestamp of the most recent water refill event from the database.
@@ -346,9 +376,11 @@ pub mod tests {
             37,
         );
         println!("Testing with database {}", config.sql_interface.db_name);
+        let max_rows_refill = config.sql_interface.max_rows_refill;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+        let mut sql_interface_refill =
+            SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).unwrap();
 
         // *** check timestamp of last refill *************************************************
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {
@@ -526,6 +558,17 @@ pub mod tests {
         assert_eq!(refill_event.duration, 5.0);
         assert_eq!(refill_event.volume, 0.25);
         assert_eq!(refill_event.error_code, -2);
+
+        // *** Check max. number of rows detection ***
+        // refill table already has three rows at this point.
+        let test_result = SqlInterfaceRefill::new(sql_interface.get_connection(), 1);
+        assert!(matches!(
+            test_result,
+            Err(SqlInterfaceError::DatabaseRefillTableContainsTooManyRows(
+                _,
+                _
+            ))
+        ));
         // **************************************************************************************
     }
 }

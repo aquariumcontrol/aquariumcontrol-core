@@ -34,12 +34,13 @@ db_name = "aquarium_test_secondary"
 db_tables = [ "ballingdosinglog", "ballingsetvals", "data", "feedlog", "feedpatterns", "feedschedule", "heatingstats", "refill", "schedule", "users", "ventilationsetvals", "heatingsetvals", "version" ]
 db_min_wait_timeout = 100000                            # required minimum for wait timeout of SQL server - needs to be set up in SQL server configuration. use a value of 0 to deactivate the check.
 db_ping_interval = 3600                                 # database-ping interval in seconds
-max_rows_balling_set_values = 10                        # maximum number of allowed entries in Balling set value table. use a value of 0 to deactivate the check.
-max_rows_feed_pattern = 10                              # maximum number of allowed entries in feed pattern table
-max_rows_feed_schedule = 100                            # maximum number of allowed entries in feed schedule table
-max_rows_heating_stats = 1000                           # maximum number of allowed entries in heating stats table
-max_rows_schedule = 10                                  # maximum number of allowed entries in schedule table
-max_rows_data = 100000                                  # maximum allowed rows for data table
+max_rows_balling_set_values = 10                        # maximum allowed number of rows in Balling set value table. use a value of 0 to deactivate the check.
+max_rows_feed_pattern = 10                              # maximum allowed number of rows in feed pattern table. use a value of 0 to deactivate the check.
+max_rows_feed_schedule = 100                            # maximum allowed number of rows in feed schedule table. use a value of 0 to deactivate the check.
+max_rows_heating_stats = 1000                           # maximum allowed number of rows in heating stats table. use a value of 0 to deactivate the check.
+max_rows_schedule = 10                                  # maximum allowed number of rows in schedule table. use a value of 0 to deactivate the check.
+max_rows_data = 100000                                  # maximum allowed number of rows for data table. use a value of 0 to deactivate the check.
+max_rows_refill = 1000                                  # maximum alloweed number of rows in refill table. use a value of 0 to deactivate the check.
 
 [tcp_connection]
 ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes

@@ -410,6 +410,14 @@ pub enum SqlInterfaceError {
     #[error("Ventilation set value table contains too many rows ({0}). Permissible maximum is 1.")]
     DatabaseVentilationSetValTableContainsTooManyRows(u64),
 
+    /// Refill table may be inconsistent - invalid answer from database to query.
+    #[error("Refill table may be inconsistent - database responded with negative value ({0}).")]
+    DatabaseRefillTableNegativeValue(i64),
+
+    /// Refill table contains too many rows.
+    #[error("Refill table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseRefillTableContainsTooManyRows(u64, u64),
+
     /// Feed set value table may be inconsistent - it contains NULL values.
     #[error("Feed set value table {0} may be inconsistent - it contains {1} NULL values.")]
     DatabaseFeedSetValTableContainsNull(String, i64),
@@ -451,6 +459,13 @@ pub enum SqlInterfaceError {
     /// Could not check ventilation set value table for NULL values or number of rows.
     #[error("Could not check ventilation set value table for NULL values or number of rows.")]
     DatabaseCheckVentilationSetValsFailure {
+        #[source]
+        source: Box<SqlInterfaceError>,
+    },
+
+    /// Could not check refill table for number of rows.
+    #[error("Could not check refill table for number of rows.")]
+    DatabaseCheckRefillFailure {
         #[source]
         source: Box<SqlInterfaceError>,
     },

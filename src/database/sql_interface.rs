@@ -64,6 +64,7 @@ pub struct SqlInterfaceConfig {
 
     /// maximum allowed rows for data table
     pub max_rows_data: u64,
+    pub max_rows_refill: u64,
 }
 
 /// Struct is used to retrieve a single integer value from the SQL database.

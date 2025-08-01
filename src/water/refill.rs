@@ -1178,6 +1178,8 @@ pub mod tests {
         config.refill.initial_wait_interval = initial_wait_interval;
         config.refill.check_interval = check_interval;
 
+        let max_rows_refill = config.sql_interface.max_rows_data;
+
         println!("Testing with database {}", config.sql_interface.db_name);
         let sql_interface = match SqlInterface::new(config.sql_interface.clone()) {
             Ok(c) => c,
@@ -1185,7 +1187,8 @@ pub mod tests {
                 panic!("Could not connect to SQL database: {e:?}");
             }
         };
-        let sql_interface_refill = SqlInterfaceRefill::new(sql_interface.get_connection());
+        let sql_interface_refill =
+            SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill).unwrap();
         let refill_config = config.refill.clone();
         (
             config,
