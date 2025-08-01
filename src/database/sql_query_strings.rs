@@ -248,7 +248,11 @@ pub const SQL_QUERY_CHECK_BALLING_SETVALS_NULL: &str = concat!(
 
 /// Checks how many entries are in the balling set value table
 pub const SQL_QUERY_CHECK_BALLING_SETVALS_COUNT: &str =
-    concat!("SELECT COUNT(*) FROM ballingsetvals LIMIT 1;");
+    "SELECT COUNT(*) FROM ballingsetvals LIMIT 1;";
+
+/// Checks how many entries are in the balling dosing log
+pub const SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT: &str =
+    "SELECT COUNT(*) FROM ballingdosinglog LIMIT 1;";
 
 /// Checks if the feed patterns table contains any NULL values.
 pub const SQL_QUERY_CHECK_FEEDPATTERNS_NULL: &str = concat!(

@@ -340,12 +340,16 @@ pub enum SqlInterfaceError {
     DatabaseBallingSetValTableContainsNull(i64),
 
     /// Balling set value table may be inconsistent - invalid answer from database to query.
-    #[error("Balling set value table may be inconsistent - database responded with negative value(s) ({0}, {1}).")]
-    DatabaseBallingSetValTableNegativeValue(i64, i64),
+    #[error("Balling set value table may be inconsistent - database responded with negative value(s) ({0}, {1}, {2}).")]
+    DatabaseBallingSetValTableNegativeValue(i64, i64, i64),
 
     /// Balling set value table contains too many rows.
     #[error("Balling set value table contains too many rows ({0}). Permissible maximum is {1}.")]
     DatabaseBallingSetValTableContainsTooManyRows(u64, u64),
+
+    /// Balling dosing log table contains too many rows.
+    #[error("Balling dosing log table contains too many rows ({0}). Permissible maximum is {1}.")]
+    DatabaseBallingDosingLogTableContainsTooManyRows(u64, u64),
 
     /// Schedule table may be inconsistent - it contains NULL values.
     #[error("Schedule table may be inconsistent - it contains {0} NULL values.")]

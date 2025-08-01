@@ -453,6 +453,7 @@ fn run() -> Result<(), StartupError> {
     let max_rows_schedule = config.sql_interface.max_rows_schedule;
     let max_rows_data = config.sql_interface.max_rows_data;
     let max_rows_refill = config.sql_interface.max_rows_refill;
+    let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
 
     // instantiate driver for RGB LED
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -469,9 +470,12 @@ fn run() -> Result<(), StartupError> {
         SqlInterfaceSchedule::new(sql_interface.get_connection(), max_rows_schedule)
             .map_err(|e| StartupError::Database { source: e })?;
 
-    let sql_interface_balling =
-        SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
-            .map_err(|e| StartupError::Database { source: e })?;
+    let sql_interface_balling = SqlInterfaceBalling::new(
+        sql_interface.get_connection(),
+        max_rows_balling_set_values,
+        max_rows_balling_dosing_log,
+    )
+    .map_err(|e| StartupError::Database { source: e })?;
 
     let sql_interface_refill: Box<dyn DatabaseInterfaceRefillTrait + Sync + Send> = Box::new(
         SqlInterfaceRefill::new(sql_interface.get_connection(), max_rows_refill)

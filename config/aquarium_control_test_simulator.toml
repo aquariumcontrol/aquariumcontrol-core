@@ -41,6 +41,7 @@ max_rows_heating_stats = 1000                           # maximum allowed number
 max_rows_schedule = 10                                  # maximum allowed number of rows in schedule table. use a value of 0 to deactivate the check.
 max_rows_data = 100000                                  # maximum allowed number of rows for data table. use a value of 0 to deactivate the check.
 max_rows_refill = 1000                                  # maximum alloweed number of rows in refill table. use a value of 0 to deactivate the check.
+max_rows_balling_dosing_log = 10000                     # maximum allowed number of rows in Balling dosing log table. use a value of 0 to deactivate the check.
 
 [tcp_connection]
 ip_address = "127.0.0.1"                                # ipv4 address for communication with control application for testing purposes

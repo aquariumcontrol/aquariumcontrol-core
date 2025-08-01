@@ -13,7 +13,8 @@ use mysql::prelude::*;
 use mysql::*;
 
 use crate::database::sql_query_strings::{
-    SQL_QUERY_CHECK_BALLING_SETVALS_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
+    SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT, SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
+    SQL_QUERY_CHECK_BALLING_SETVALS_NULL,
 };
 use crate::database::{
     sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError, sql_query_strings,
@@ -64,6 +65,7 @@ impl SqlInterfaceBalling {
     pub fn new(
         mut conn: PooledConn,
         max_rows_balling_set_values: u64,
+        max_rows_balling_dosing_log: u64,
     ) -> Result<Self, SqlInterfaceError> {
         // query the database
         let count_null_values = SqlInterface::get_single_integer_from_database(
@@ -73,19 +75,27 @@ impl SqlInterfaceBalling {
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             source: Box::new(e),
         })?;
-        let count_rows = SqlInterface::get_single_integer_from_database(
+        let count_rows_setvals = SqlInterface::get_single_integer_from_database(
             &mut conn,
             SQL_QUERY_CHECK_BALLING_SETVALS_COUNT,
         )
         .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
             source: Box::new(e),
         })?;
+        let count_rows_dosinglog = SqlInterface::get_single_integer_from_database(
+            &mut conn,
+            SQL_QUERY_CHECK_BALLING_DOSINGLOG_COUNT,
+        )
+        .map_err(|e| SqlInterfaceError::DatabaseCheckBallingSetValsFailure {
+            source: Box::new(e),
+        })?;
 
         // check the query results
-        if count_null_values < 0 || count_rows < 0 {
+        if count_null_values < 0 || count_rows_setvals < 0 || count_rows_dosinglog < 0 {
             return Err(SqlInterfaceError::DatabaseBallingSetValTableNegativeValue(
                 count_null_values,
-                count_rows,
+                count_rows_setvals,
+                count_rows_dosinglog,
             ));
         }
 
@@ -97,11 +107,23 @@ impl SqlInterfaceBalling {
 
         if max_rows_balling_set_values > 0 {
             // execute the check only when the limit is greater than zero
-            if count_rows > max_rows_balling_set_values.cast_signed() {
+            if count_rows_setvals > max_rows_balling_set_values.cast_signed() {
                 return Err(
                     SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(
-                        count_rows.cast_unsigned(),
+                        count_rows_setvals.cast_unsigned(),
                         max_rows_balling_set_values,
+                    ),
+                );
+            }
+        }
+
+        if max_rows_balling_dosing_log > 0 {
+            // execute the check only when the limit is greater than zero
+            if count_rows_dosinglog > max_rows_balling_dosing_log.cast_signed() {
+                return Err(
+                    SqlInterfaceError::DatabaseBallingDosingLogTableContainsTooManyRows(
+                        count_rows_dosinglog.cast_unsigned(),
+                        max_rows_balling_dosing_log,
                     ),
                 );
             }
@@ -375,11 +397,15 @@ pub mod tests {
         );
         println!("Testing with database {}", config.sql_interface.db_name);
         let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
-                .unwrap();
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
+            sql_interface.get_connection(),
+            max_rows_balling_set_values,
+            max_rows_balling_dosing_log,
+        )
+        .unwrap();
 
         // *** check the timestamp of last Balling dosing ******************************************
         match SqlInterface::truncate_table(
@@ -470,11 +496,15 @@ pub mod tests {
         );
         println!("Testing with database {}", config.sql_interface.db_name);
         let max_rows_balling_set_values = config.sql_interface.max_rows_balling_set_values;
+        let max_rows_balling_dosing_log = config.sql_interface.max_rows_balling_dosing_log;
         let mut sql_interface: SqlInterface = SqlInterface::new(config.sql_interface)
             .expect("Initialization of SQL interface for test failed.");
-        let mut sql_interface_balling =
-            SqlInterfaceBalling::new(sql_interface.get_connection(), max_rows_balling_set_values)
-                .unwrap();
+        let mut sql_interface_balling = SqlInterfaceBalling::new(
+            sql_interface.get_connection(),
+            max_rows_balling_set_values,
+            max_rows_balling_dosing_log,
+        )
+        .unwrap();
 
         // *** read balling set vals from empty table **********************************************
         match SqlInterface::truncate_table(
@@ -544,7 +574,7 @@ pub mod tests {
                 panic!("Error when inserting Balling set values into database: {e:?}");
             }
         };
-        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection(), 1);
+        let test_result = SqlInterfaceBalling::new(sql_interface.get_connection(), 1, 0);
         assert!(matches!(
             test_result,
             Err(SqlInterfaceError::DatabaseBallingSetValTableContainsTooManyRows(_, _))
