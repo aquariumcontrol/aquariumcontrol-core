@@ -1127,7 +1127,7 @@ pub mod tests {
     use crate::stubs::mock_water_injection::tests::MockWaterInjection;
     use crate::stubs::test_command::tests::TestCommand;
 
-    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger::{setup_logger, LoggerConfig};
     use crate::water::refill_stats_data::RefillStatsData;
 
     // Prepares and returns a configured `Refill` control instance along with its associated interfaces for testing.
@@ -1496,7 +1496,7 @@ pub mod tests {
         ) = mpsc::channel();
 
         // this test case shall output debug! macros
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         // empty the refill table
         match SqlInterface::truncate_table(&mut sql_interface, "refill".to_string()) {

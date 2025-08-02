@@ -890,7 +890,7 @@ pub mod tests {
     use assert_float_eq::*;
 
     use crate::sensors::dht::{dht22_constants, Dht, DhtError};
-    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger::{setup_logger, LoggerConfig};
 
     // feature-specific imports
     cfg_if::cfg_if! {
@@ -934,7 +934,7 @@ pub mod tests {
     // Test case checks if the implementation correctly calculates a valid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_valid() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
 
@@ -947,7 +947,7 @@ pub mod tests {
     // Test case checks if the implementation correctly calculates an invalid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_error() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [255, 255, 255, 255, 10];
 
@@ -961,7 +961,7 @@ pub mod tests {
     // given valid input data.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_valid() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
 
@@ -982,7 +982,7 @@ pub mod tests {
     // given invalid input data for the humidity.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_humidity_too_high() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [4, 205, 0, 245, 198];
 
@@ -997,7 +997,7 @@ pub mod tests {
     // given invalid input data for the temperature.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_signals_temperature_too_high() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 1, 245, 197];
 
@@ -1012,7 +1012,7 @@ pub mod tests {
     // Test case executes a read operation from real hardware.
     // Test case does not require any communication with the database.
     pub fn test_dht_read() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string());

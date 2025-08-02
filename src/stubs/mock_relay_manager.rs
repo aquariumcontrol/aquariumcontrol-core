@@ -58,10 +58,22 @@ pub mod tests {
             assert_eq!(self.main_pump2_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump1_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump1_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump3_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump4_actuation_state, ActuatorState::Undefined);
+            assert_eq!(
+                self.peristaltic_pump1_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump2_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump3_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump4_actuation_state,
+                ActuatorState::Undefined
+            );
             assert_eq!(self.feeder_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.heater_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.ventilation_actuation_state, ActuatorState::Undefined);
@@ -74,10 +86,22 @@ pub mod tests {
             assert_eq!(self.main_pump2_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump1_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump1_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump3_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump4_actuation_state, ActuatorState::Undefined);
+            assert_eq!(
+                self.peristaltic_pump1_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump2_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump3_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump4_actuation_state,
+                ActuatorState::Undefined
+            );
             assert_eq!(self.feeder_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.heater_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.ventilation_actuation_state, ActuatorState::On);
@@ -90,10 +114,22 @@ pub mod tests {
             assert_eq!(self.main_pump2_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump1_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.aux_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump1_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump2_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump3_actuation_state, ActuatorState::Undefined);
-            assert_eq!(self.peristaltic_pump4_actuation_state, ActuatorState::Undefined);
+            assert_eq!(
+                self.peristaltic_pump1_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump2_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump3_actuation_state,
+                ActuatorState::Undefined
+            );
+            assert_eq!(
+                self.peristaltic_pump4_actuation_state,
+                ActuatorState::Undefined
+            );
             assert_eq!(self.feeder_actuation_state, ActuatorState::Undefined);
             assert_eq!(self.heater_actuation_state, ActuatorState::Off);
             assert_eq!(self.ventilation_actuation_state, ActuatorState::Undefined);

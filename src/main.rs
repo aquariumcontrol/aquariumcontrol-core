@@ -114,7 +114,7 @@ use crate::thermal::ventilation::{Ventilation, VentilationChannels};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-use crate::utilities::logger::setup_logger;
+use crate::utilities::logger::{setup_logger, LoggerConfig};
 use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
@@ -348,9 +348,6 @@ fn run() -> Result<(), StartupError> {
     #[cfg(all(not(target_os = "linux"), feature = "target_hw"))]
     compile_error!("Target hardware is only available with Linux operating system.");
 
-    // setup logging to write to the log output file and stdout
-    setup_logger();
-
     // get command line parameters from OS
     let args: Vec<String> = env::args().collect();
 
@@ -385,6 +382,12 @@ fn run() -> Result<(), StartupError> {
             }
         }
     }
+    // read the configuration file for operating the control system
+    let config = read_config_file(config_file_name)?;
+
+    // setup logging to write to the log output file and stdout
+    setup_logger(config.logger)
+        .map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
     let version_information = VersionInformation::new()
@@ -397,9 +400,6 @@ fn run() -> Result<(), StartupError> {
     if !is_running_as_root() {
         return Err(StartupError::NotRoot);
     }
-
-    // read the configuration file for operating the control system
-    let config = read_config_file(config_file_name)?;
 
     // publish the PID to a file so that the client application can communicate with this application
     let publish_pid = PublishPid::new(config.publish_pid);
@@ -1678,6 +1678,12 @@ fn run() -> Result<(), StartupError> {
 /// The main function is a simple error handler.
 /// The main entry point for the application is within the run() function.
 fn main() {
+    // setup preliminary logger
+    if let Err(e) = setup_logger(LoggerConfig::default()) {
+        println!("Error setting up preliminary logger ({e:?})");
+        return;
+    }
+
     if let Err(e) = run() {
         error!("Application failed to start: {e}");
         // Use a loop to walk the chain of source errors

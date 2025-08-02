@@ -234,7 +234,9 @@ pub enum SqlInterfaceError {
     },
 
     // The database responded with one or even two negative values for feed phase/feed pause duration.
-    #[error("Database responded with negative value(s) for feed phase/feed pause duration: {0} {1}")]
+    #[error(
+        "Database responded with negative value(s) for feed phase/feed pause duration: {0} {1}"
+    )]
     DatabaseFeedPhaseDurationNegative(i16, i16),
 
     /// Could not get a single Balling set value from the database.

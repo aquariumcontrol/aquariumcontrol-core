@@ -7,6 +7,7 @@ use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
+use crate::utilities::logger::LoggerSetupError;
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -65,5 +66,11 @@ pub enum StartupError {
     VersionInformationRetrievalFailure {
         #[source]
         source: VersionInformationError,
+    },
+
+    #[error("Could not setup logger.")]
+    LoggingSetupFailure {
+        #[source]
+        source: LoggerSetupError
     },
 }

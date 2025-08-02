@@ -43,6 +43,7 @@ use crate::sensors::ds18b20::Ds18b20Config;
 use crate::simulator::tcp_communication::TcpConnectionConfig;
 use crate::thermal::ventilation::VentilationConfig;
 use crate::utilities::config_error::ConfigError;
+use crate::utilities::logger::LoggerConfig;
 use crate::utilities::memory_config_check::MemoryConfig;
 use crate::utilities::publish_pid::PublishPidConfig;
 use crate::watchmen::monitors::MonitorsConfig;
@@ -127,6 +128,9 @@ pub struct ConfigData {
 
     /// check of memory configuration
     pub memory: MemoryConfig,
+
+    /// configuration of the general log file
+    pub logger: LoggerConfig,
 }
 
 #[cfg(not(test))]

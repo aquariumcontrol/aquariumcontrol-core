@@ -714,7 +714,7 @@ pub mod tests {
     use crate::utilities::config::{
         read_config_file, read_config_file_with_test_database, ConfigData,
     };
-    use crate::utilities::logger::setup_logger;
+    use crate::utilities::logger::{setup_logger, LoggerConfig};
 
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
@@ -992,7 +992,7 @@ pub mod tests {
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let config: ConfigData = read_config_file_with_test_database(
             "/config/aquarium_control_test_generic.toml".to_string(),
@@ -1186,7 +1186,7 @@ pub mod tests {
         let sleep_duration_10_secs = Duration::from_secs(10);
         let spin_sleeper = SpinSleeper::default();
 
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -1300,7 +1300,7 @@ pub mod tests {
     // This test case tests the strategy to select none of them.
     // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_none() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = -1;
@@ -1330,7 +1330,7 @@ pub mod tests {
     // This test case tests the strategy to select the first one.
     // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_first() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = 0;
@@ -1362,7 +1362,7 @@ pub mod tests {
     // This test case tests the strategy to select a middle one.
     // This test case does not require any communication with the database.
     pub fn test_select_feed_schedule_entry_for_execution_middle() {
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
         config.feed.strategy_multiple_schedule_entries_in_past = 1;
@@ -1435,7 +1435,7 @@ pub mod tests {
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let mut mock_food_injection = MockFoodInjection::new();
 
@@ -1568,7 +1568,7 @@ pub mod tests {
         let (tx_signal_handler_to_feed, rx_feed_from_signal_handler) = mpsc::channel();
         let (tx_feed_to_signal_handler, rx_signal_handler_from_feed) = mpsc::channel();
 
-        setup_logger();
+        setup_logger(LoggerConfig::default()).unwrap();
 
         let mut mock_food_injection = MockFoodInjection::new();
 

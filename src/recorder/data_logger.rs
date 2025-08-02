@@ -1715,7 +1715,7 @@ pub mod tests {
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
-                    Some(true), // target_heater_status
+                    Some(true),  // target_heater_status
                 );
 
                 assert!(mock_data_injection.data_frames.is_empty());

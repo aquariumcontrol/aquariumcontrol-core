@@ -238,3 +238,6 @@ active = true                                           # needs to be deactivate
 env_variable_name = "MALLOC_ARENA_MAX"                  # check the configuration of standard memory allocator
 env_variable_min_val = 2                                # minimum value for environment variable
 env_variable_max_val = 3                                # maximum value for environment variable
+
+[logger]
+logfile = "/var/log/aquarium.log"                       # path and filename of the log file 
