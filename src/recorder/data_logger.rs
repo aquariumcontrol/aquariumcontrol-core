@@ -1613,9 +1613,9 @@ pub mod tests {
                     assert_eq!(refill_status.refill_in_progress_for_database, false);
                 }
 
-                // Dataframe #6
+                // Dataframe #5
                 let mut data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #6");
+                println!("Asserting data frame #5");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
                     Some(28.40625), // target_water_temperature_filtered
@@ -1634,9 +1634,9 @@ pub mod tests {
                     Some(true),     // target_heater_status
                 );
 
-                // Dataframe #5
+                // Dataframe #4
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #5");
+                println!("Asserting data frame #4");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
                     Some(27.8125),  // target_water_temperature_filtered
@@ -1655,9 +1655,9 @@ pub mod tests {
                     Some(true),     // target_heater_status
                 );
 
-                // Dataframe #4
+                // Dataframe #3
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #4");
+                println!("Asserting data frame #3");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
                     Some(26.625),   // target_water_temperature_filtered
@@ -1676,9 +1676,9 @@ pub mod tests {
                     Some(true),     // target_heater_status
                 );
 
-                // Dataframe #3
+                // Dataframe #2
                 data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #3");
+                println!("Asserting data frame #2");
                 data_frame.assert(
                     Some(29.0),     // target_water_temperature
                     Some(24.25),    // target_water_temperature_filtered
@@ -1697,31 +1697,9 @@ pub mod tests {
                     Some(true),     // target_heater_status
                 );
 
-                // Dataframe #2
-                data_frame = mock_data_injection.data_frames.pop().unwrap();
-                println!("Asserting data frame #2");
-                data_frame.assert(
-                    Some(29.0),  // target_water_temperature
-                    Some(19.5),  // target_water_temperature_filtered
-                    Some(7.0),   // target_water_ph
-                    Some(9.0),   // target_water_ph_filtered
-                    Some(12.0),  // target_water_conductivity
-                    Some(12.0),  // target_water_conductivity_filtered
-                    None,        // target_water_conductivity_compensated
-                    Some(false), // target_refill_in_progress
-                    Some(true),  // target_tank_level_switch_position
-                    Some(true),  // target_tank_level_switch_position_stabilized
-                    Some(false), // target_tank_level_switch_invalid
-                    Some(true),  // target_surface_ventilation_status
-                    Some(13.0),  // target_ambient_temperature
-                    Some(14.0),  // target_ambient_humidity
-                    Some(false), // target_heater_status
-                );
-
                 // Dataframe #1
-                /*data_frame = mock_data_injection.data_frames.pop().unwrap();
+                data_frame = mock_data_injection.data_frames.pop().unwrap();
                 println!("Asserting data frame #1");
-
                 data_frame.assert(
                     Some(29.0),  // target_water_temperature
                     Some(19.5),  // target_water_temperature_filtered
@@ -1737,9 +1715,10 @@ pub mod tests {
                     Some(true),  // target_surface_ventilation_status
                     Some(13.0),  // target_ambient_temperature
                     Some(14.0),  // target_ambient_humidity
-                    Some(true),  // target_heater_status
+                    Some(true), // target_heater_status
                 );
-                */
+
+                assert!(mock_data_injection.data_frames.is_empty());
 
                 assert_output_file_contents(
                     &config2.data_logger, // data_logger_config,
