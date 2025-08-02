@@ -960,7 +960,7 @@ pub mod tests {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
@@ -975,6 +975,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOff(AquariumDevice::Ventilation)
                 );
+                mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap()
     }
@@ -1142,7 +1143,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
@@ -1279,6 +1280,7 @@ pub mod tests {
                     }
                 }
                 assert_le!(delta_min_max_duration, 50);
+                mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap();
 
@@ -1516,7 +1518,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
@@ -1550,6 +1552,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
+                mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap();
 
@@ -1736,7 +1739,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
@@ -1756,6 +1759,7 @@ pub mod tests {
                     actuation_event_3.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
+                mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap();
 
@@ -1836,7 +1840,7 @@ pub mod tests {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_ventilation,
                     &rx_relay_manager_from_ventilation,
                 );
@@ -1846,6 +1850,7 @@ pub mod tests {
                     actuation_event.command,
                     InternalCommand::SwitchOn(AquariumDevice::Ventilation)
                 );
+                mock_actuator_states.check_terminal_condition_ventilation();
             })
             .unwrap()
     }

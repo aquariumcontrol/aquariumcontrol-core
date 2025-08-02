@@ -536,7 +536,7 @@ pub mod tests {
 
     use crate::food::feed_pattern::{FeedPhase, Feedpattern};
     use crate::food::food_injection::{FoodInjection, FoodInjectionTrait};
-    use crate::utilities::channel_content::InternalCommand;
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
 
     // Simulates the relay manager's behavior in response to actuation commands.
@@ -562,7 +562,7 @@ pub mod tests {
         rx_relay_manager_from_feed: &Receiver<InternalCommand>,
         counter_switch_on: &mut i32,
         counter_switch_off: &mut i32,
-    ) {
+    ) -> InternalCommand {
         // receive command from the test object
         let (command, device) = match rx_relay_manager_from_feed.recv() {
             Ok(c) => match c {
@@ -603,6 +603,49 @@ pub mod tests {
                 // Do nothing. This case is covered with panic beforehand.
             }
         }
+        command
+    }
+    // Helper function to record the actuation state of the devices.
+    fn update_actuator_states(
+        command: InternalCommand,
+        skimmer_actuation_state: &mut ActuatorState,
+        main_pump1_actuation_state: &mut ActuatorState,
+        main_pump2_actuation_state: &mut ActuatorState,
+        aux_pump1_actuation_state: &mut ActuatorState,
+        aux_pump2_actuation_state: &mut ActuatorState,
+        feeder_actuation_state: &mut ActuatorState,
+    ) {
+        // Determine the new state and the target device from the command.
+        let (device, new_state) = match command {
+            InternalCommand::SwitchOn(device) => (device, ActuatorState::On),
+            InternalCommand::SwitchOff(device) => (device, ActuatorState::Off),
+            // If it's any other command, we don't need to do anything.
+            _ => return,
+        };
+
+        // Update the state of the correct pump in a single match block.
+        match device {
+            AquariumDevice::Skimmer => {
+                *skimmer_actuation_state = new_state;
+            }
+            AquariumDevice::MainPump1 => {
+                *main_pump1_actuation_state = new_state;
+            }
+            AquariumDevice::MainPump2 => {
+                *main_pump2_actuation_state = new_state;
+            }
+            AquariumDevice::AuxPump1 => {
+                *aux_pump1_actuation_state = new_state;
+            }
+            AquariumDevice::AuxPump2 => {
+                *aux_pump2_actuation_state = new_state;
+            }
+            AquariumDevice::Feeder => {
+                *feeder_actuation_state = new_state;
+            }
+            // Ignore commands for any other devices.
+            _ => {}
+        }
     }
 
     #[test]
@@ -621,14 +664,29 @@ pub mod tests {
             scope.spawn(move || {
                 let mut counter_switch_on: i32 = 0;
                 let mut counter_switch_off: i32 = 0;
+                let mut skimmer_actuation_state = ActuatorState::On;
+                let mut main_pump1_actuation_state = ActuatorState::On;
+                let mut main_pump2_actuation_state = ActuatorState::On;
+                let mut aux_pump1_actuation_state = ActuatorState::On;
+                let mut aux_pump2_actuation_state = ActuatorState::On;
+                let mut feeder_actuation_state = ActuatorState::Off;
 
                 for i in 0..126 {
                     println!("test_food_injection: loop #{}", i);
-                    test_food_injection_receive_actuation_command_send_confirmation(
+                    let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_relay_manager_to_feed,
                         &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
+                    );
+                    update_actuator_states(
+                        command,
+                        &mut skimmer_actuation_state,
+                        &mut main_pump1_actuation_state,
+                        &mut main_pump2_actuation_state,
+                        &mut aux_pump1_actuation_state,
+                        &mut aux_pump2_actuation_state,
+                        &mut feeder_actuation_state,
                     );
                 }
                 println!(
@@ -637,6 +695,12 @@ pub mod tests {
                 );
                 assert_eq!(counter_switch_on, 65);
                 assert_eq!(counter_switch_off, 61);
+                assert_eq!(skimmer_actuation_state, ActuatorState::On);
+                assert_eq!(main_pump1_actuation_state, ActuatorState::On);
+                assert_eq!(main_pump2_actuation_state, ActuatorState::On);
+                assert_eq!(aux_pump1_actuation_state, ActuatorState::On);
+                assert_eq!(aux_pump2_actuation_state, ActuatorState::On);
+                assert_eq!(feeder_actuation_state, ActuatorState::Off);
             });
 
             // this scope is executing the test object
@@ -708,25 +772,49 @@ pub mod tests {
             scope.spawn(move || {
                 let mut counter_switch_on: i32 = 0;
                 let mut counter_switch_off: i32 = 0;
+                let mut skimmer_actuation_state = ActuatorState::On;
+                let mut main_pump1_actuation_state = ActuatorState::On;
+                let mut main_pump2_actuation_state = ActuatorState::On;
+                let mut aux_pump1_actuation_state = ActuatorState::On;
+                let mut aux_pump2_actuation_state = ActuatorState::On;
+                let mut feeder_actuation_state = ActuatorState::Off;
 
                 for i in 0..5 {
                     println!("test_food_injection: loop #{}", i);
-                    test_food_injection_receive_actuation_command_send_confirmation(
+                    let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_relay_manager_to_feed,
                         &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
+                    );
+                    update_actuator_states(
+                        command,
+                        &mut skimmer_actuation_state,
+                        &mut main_pump1_actuation_state,
+                        &mut main_pump2_actuation_state,
+                        &mut aux_pump1_actuation_state,
+                        &mut aux_pump2_actuation_state,
+                        &mut feeder_actuation_state,
                     );
                 }
                 println!("test_food_injection_interrupted: sending Quit signal");
                 _ = tx_signal_handler_to_feed.send(InternalCommand::Quit);
                 for i in 0..1 {
                     println!("test_food_injection: loop #{}", i);
-                    test_food_injection_receive_actuation_command_send_confirmation(
+                    let command = test_food_injection_receive_actuation_command_send_confirmation(
                         &tx_relay_manager_to_feed,
                         &rx_relay_manager_from_feed,
                         &mut counter_switch_on,
                         &mut counter_switch_off,
+                    );
+                    update_actuator_states(
+                        command,
+                        &mut skimmer_actuation_state,
+                        &mut main_pump1_actuation_state,
+                        &mut main_pump2_actuation_state,
+                        &mut aux_pump1_actuation_state,
+                        &mut aux_pump2_actuation_state,
+                        &mut feeder_actuation_state,
                     );
                 }
                 println!(
@@ -735,6 +823,12 @@ pub mod tests {
                 );
                 assert_eq!(counter_switch_on, 5);
                 assert_eq!(counter_switch_off, 1);
+                assert_eq!(skimmer_actuation_state, ActuatorState::On);
+                assert_eq!(main_pump1_actuation_state, ActuatorState::On);
+                assert_eq!(main_pump2_actuation_state, ActuatorState::On);
+                assert_eq!(aux_pump1_actuation_state, ActuatorState::On);
+                assert_eq!(aux_pump2_actuation_state, ActuatorState::On);
+                assert_eq!(feeder_actuation_state, ActuatorState::Off);
             });
 
             // this scope is executing the test object

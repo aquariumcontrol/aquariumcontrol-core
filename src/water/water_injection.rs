@@ -281,7 +281,7 @@ impl WaterInjectionTrait for WaterInjection {
 pub mod tests {
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
     use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
     use crate::water::refill::Refill;
     use crate::water::water_injection::{
@@ -375,7 +375,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
@@ -397,6 +397,10 @@ pub mod tests {
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 4000);
                 assert_le!(actuation_duration, 4500);
+                assert_eq!(
+                    mock_actuator_states.refill_pump_actuation_state,
+                    ActuatorState::Off
+                );
             })
             .unwrap();
 
@@ -447,7 +451,7 @@ pub mod tests {
         thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
@@ -469,6 +473,10 @@ pub mod tests {
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 0);
                 assert_le!(actuation_duration, 200);
+                assert_eq!(
+                    mock_actuator_states.refill_pump_actuation_state,
+                    ActuatorState::Off
+                );
             })
             .unwrap()
     }
@@ -674,7 +682,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
@@ -696,6 +704,10 @@ pub mod tests {
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 5890);
                 assert_le!(actuation_duration, 6250);
+                assert_eq!(
+                    mock_actuator_states.refill_pump_actuation_state,
+                    ActuatorState::Off
+                );
             })
             .unwrap();
 
@@ -783,7 +795,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
@@ -805,6 +817,7 @@ pub mod tests {
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 40000);
                 assert_le!(actuation_duration, 43100);
+                actuator_states.check_terminal_condition_refill();
             })
             .unwrap();
 
@@ -885,7 +898,7 @@ pub mod tests {
         let join_handle_mock_relay_manager = thread::Builder::new()
             .name("mock_relay_manager".to_string())
             .spawn(move || {
-                let mut actuation_events = mock_relay_manager(
+                let (mut actuation_events, mock_actuator_states) = mock_relay_manager(
                     &tx_relay_manager_to_water_injection,
                     &rx_relay_manager_from_water_injection,
                 );
@@ -907,6 +920,10 @@ pub mod tests {
                 println!("Actuation duration={}", actuation_duration);
                 assert_ge!(actuation_duration, 1900);
                 assert_le!(actuation_duration, 2100);
+                assert_eq!(
+                    mock_actuator_states.refill_pump_actuation_state,
+                    ActuatorState::Off
+                );
             })
             .unwrap();
 

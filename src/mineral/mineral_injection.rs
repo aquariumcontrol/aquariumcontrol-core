@@ -187,7 +187,7 @@ pub mod tests {
     use std::time::Duration;
 
     use crate::mineral::mineral_injection::{MineralInjection, MineralInjectionTrait};
-    use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
+    use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 
     // Simulates the Relay Manager's behavior for Mineral Injection tests.
     //
@@ -244,6 +244,81 @@ pub mod tests {
         command
     }
 
+    // Helper function to record the actuation state of the devices.
+    fn update_actuator_states(
+        command: InternalCommand,
+        peristaltic_pump1_actuation_state: &mut ActuatorState,
+        peristaltic_pump2_actuation_state: &mut ActuatorState,
+        peristaltic_pump3_actuation_state: &mut ActuatorState,
+        peristaltic_pump4_actuation_state: &mut ActuatorState,
+    ) {
+        // First, determine the new state and the target device from the command.
+        let (device, new_state) = match command {
+            InternalCommand::SwitchOn(device) => (device, ActuatorState::On),
+            InternalCommand::SwitchOff(device) => (device, ActuatorState::Off),
+            // If it's any other command, we don't need to do anything.
+            _ => return,
+        };
+
+        // Now, update the state of the correct pump in a single match block.
+        match device {
+            AquariumDevice::PeristalticPump1 => {
+                *peristaltic_pump1_actuation_state = new_state;
+            }
+            AquariumDevice::PeristalticPump2 => {
+                *peristaltic_pump2_actuation_state = new_state;
+            }
+            AquariumDevice::PeristalticPump3 => {
+                *peristaltic_pump3_actuation_state = new_state;
+            }
+            AquariumDevice::PeristalticPump4 => {
+                *peristaltic_pump4_actuation_state = new_state;
+            }
+            // Ignore commands for any other devices.
+            _ => {}
+        }
+    }
+
+    fn mineral_injection_test_environment(
+        tx_relay_manager_to_mineral_injection: Sender<bool>,
+        rx_relay_manager_from_mineral_injection: Receiver<InternalCommand>,
+    ) {
+        let mut peristaltic_pump1_actuation_state = ActuatorState::Off;
+        let mut peristaltic_pump2_actuation_state = ActuatorState::Off;
+        let mut peristaltic_pump3_actuation_state = ActuatorState::Off;
+        let mut peristaltic_pump4_actuation_state = ActuatorState::Off;
+
+        // allow switching on peristaltic pump
+        let command = test_mineral_injection_receive_actuation_command_send_confirmation(
+            &tx_relay_manager_to_mineral_injection,
+            &rx_relay_manager_from_mineral_injection,
+        );
+        update_actuator_states(
+            command,
+            &mut peristaltic_pump1_actuation_state,
+            &mut peristaltic_pump2_actuation_state,
+            &mut peristaltic_pump3_actuation_state,
+            &mut peristaltic_pump4_actuation_state,
+        );
+
+        // allow switching off peristaltic pump
+        let command = test_mineral_injection_receive_actuation_command_send_confirmation(
+            &tx_relay_manager_to_mineral_injection,
+            &rx_relay_manager_from_mineral_injection,
+        );
+        update_actuator_states(
+            command,
+            &mut peristaltic_pump1_actuation_state,
+            &mut peristaltic_pump2_actuation_state,
+            &mut peristaltic_pump3_actuation_state,
+            &mut peristaltic_pump4_actuation_state,
+        );
+        assert_eq!(peristaltic_pump1_actuation_state, ActuatorState::Off);
+        assert_eq!(peristaltic_pump2_actuation_state, ActuatorState::Off);
+        assert_eq!(peristaltic_pump3_actuation_state, ActuatorState::Off);
+        assert_eq!(peristaltic_pump4_actuation_state, ActuatorState::Off);
+    }
+
     // This test case executes the mineral injection without interruption from the signal handler.
     #[test]
     pub fn test_mineral_dosing_happy_case() {
@@ -261,16 +336,9 @@ pub mod tests {
         scope(|scope| {
             // thread for test environment
             scope.spawn(move || {
-                // allow switching on peristaltic pump
-                test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_relay_manager_to_mineral_injection,
-                    &rx_relay_manager_from_mineral_injection,
-                );
-
-                // allow switching off peristaltic pump
-                test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_relay_manager_to_mineral_injection,
-                    &rx_relay_manager_from_mineral_injection,
+                mineral_injection_test_environment(
+                    tx_relay_manager_to_mineral_injection,
+                    rx_relay_manager_from_mineral_injection,
                 );
             });
 
@@ -323,16 +391,9 @@ pub mod tests {
 
             // thread for the rest of test environment
             scope.spawn(move || {
-                // allow switching on peristaltic pump
-                test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_relay_manager_to_mineral_injection,
-                    &rx_relay_manager_from_mineral_injection,
-                );
-
-                // allow switching off peristaltic pump
-                test_mineral_injection_receive_actuation_command_send_confirmation(
-                    &tx_relay_manager_to_mineral_injection,
-                    &rx_relay_manager_from_mineral_injection,
+                mineral_injection_test_environment(
+                    tx_relay_manager_to_mineral_injection,
+                    rx_relay_manager_from_mineral_injection,
                 );
             });
 
