@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::food::food_injection_error::FoodInjectionError;
 use crate::food::{feed::FeedConfig, feed_pattern::Feedpattern};
@@ -375,7 +375,6 @@ impl FoodInjectionTrait for FoodInjection {
         let mut target_main_pump2_state: ActuatorState;
         let mut target_aux_pump1_state: ActuatorState;
         let mut target_aux_pump2_state: ActuatorState;
-        let mut sleep_counter_millis: i16;
         let mut quit_command_received: bool = false;
         let mut collected_errors_cumulated: Vec<FoodInjectionError> = vec![];
 
@@ -428,8 +427,9 @@ impl FoodInjectionTrait for FoodInjection {
             }
 
             // wait for a determined period and check quit request in between
-            sleep_counter_millis = 0;
-            while sleep_counter_millis < feedphase.pause_duration {
+            let start_of_pause = Instant::now();
+            let pause_duration = Duration::from_millis(feedphase.pause_duration as u64);
+            while Instant::now().duration_since(start_of_pause) < pause_duration {
                 (quit_command_received, _, _) =
                     self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
@@ -437,7 +437,6 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during pause phase of food injection");
                     break; // exit inner loop
                 }
-                sleep_counter_millis += sleep_interval_millis;
                 spin_sleeper.sleep(sleep_duration);
             }
             if quit_command_received {
@@ -485,8 +484,9 @@ impl FoodInjectionTrait for FoodInjection {
             }
 
             // wait for a determined period and check quit request in between
-            sleep_counter_millis = 0;
-            while sleep_counter_millis < feedphase.feed_duration {
+            let start_of_pause = Instant::now();
+            let feed_duration = Duration::from_millis(feedphase.feed_duration as u64);
+            while Instant::now().duration_since(start_of_pause) < feed_duration {
                 (quit_command_received, _, _) =
                     self.process_external_request(rx_from_signal_handler, None);
                 if quit_command_received {
@@ -494,7 +494,6 @@ impl FoodInjectionTrait for FoodInjection {
                     println!("Received quit command during feed phase of food injection");
                     break; // exit inner loop
                 }
-                sleep_counter_millis += sleep_interval_millis;
                 spin_sleeper.sleep(sleep_duration);
             }
             if quit_command_received {

@@ -797,6 +797,10 @@ impl SqlInterfaceFeed {
 
         let feed_phase = &single_feedpattern_entry_array[0];
 
+        // check if pause and feed duration values are positive
+        if feed_phase.pause_duration < 0 || feed_phase.feed_duration < 0 {
+            return Err(SqlInterfaceError::DatabaseFeedPhaseDurationNegative(feed_phase.pause_duration, feed_phase.feed_duration));
+        }
         Ok(feed_phase.clone())
     }
 }
