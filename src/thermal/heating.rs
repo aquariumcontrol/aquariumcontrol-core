@@ -946,12 +946,12 @@ pub mod tests {
     };
     use crate::database::sql_interface_midnight::SqlInterfaceMidnightCalculatorTrait;
     use crate::database::{sql_interface::SqlInterface, sql_interface_error::SqlInterfaceError};
+    use crate::mocks::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
+    use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
+    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
+    use crate::mocks::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_heating::tests::MockSqlInterfaceHeatingSetVals;
-    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-    use crate::stubs::mock_tank_level_switch::tests::mock_tank_level_switch;
     use crate::thermal::heating::{
         Heating, HeatingChannels, HeatingMutexes, HeatingStatsDataTransferTrait,
     };

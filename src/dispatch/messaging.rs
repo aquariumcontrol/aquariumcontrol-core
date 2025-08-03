@@ -521,7 +521,7 @@ pub mod tests {
     use crate::dispatch::messaging::{
         messaging_commands, messaging_domains, Message, Messaging, MessagingChannels,
     };
-    use crate::stubs::mock_message_command_receiver::tests::mock_message_command_receiver;
+    use crate::mocks::mock_message_command_receiver::tests::mock_message_command_receiver;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 

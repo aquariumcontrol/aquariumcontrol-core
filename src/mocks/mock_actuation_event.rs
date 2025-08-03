@@ -7,24 +7,34 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub mod actuation_event;
-pub mod mock_ambient;
-pub mod mock_atlas_scientific;
-mod mock_common;
-pub mod mock_data_injection;
-pub mod mock_heating;
-pub mod mock_i2c_interface;
-pub mod mock_message_command_receiver;
-pub mod mock_mineral_injection;
-pub mod mock_monitors;
-pub mod mock_petting;
-pub mod mock_relay_manager;
-pub mod mock_schedule_check;
-pub mod mock_signal;
-pub mod mock_sql_interface_feed;
-pub mod mock_sql_interface_refill;
-pub mod mock_tank_level_switch;
-pub mod mock_tcp;
-pub mod mock_ventilation;
-pub mod mock_water_injection;
-pub mod test_command;
+#[cfg(test)]
+pub mod tests {
+    use std::fmt;
+    use std::time::Instant;
+
+    use crate::utilities::channel_content::InternalCommand;
+
+    #[derive(Clone)]
+    pub struct MockActuationEvent {
+        pub time: Instant,
+        pub command: InternalCommand,
+    }
+
+    impl MockActuationEvent {
+        pub fn new(command: InternalCommand) -> MockActuationEvent {
+            MockActuationEvent {
+                time: Instant::now(),
+                command,
+            }
+        }
+    }
+
+    impl fmt::Display for MockActuationEvent {
+        /// Function provides output of MockActuationEvent for development purposes
+        /// # Arguments
+        /// * `f` - configuration for formatting
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", self.command)
+        }
+    }
+}

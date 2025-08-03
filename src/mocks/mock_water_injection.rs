@@ -14,8 +14,8 @@ pub mod tests {
     use std::time::Instant;
 
     use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::test_command::tests::TestCommand;
     use crate::water::refill_errors::RefillErrorStates;
     use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
 

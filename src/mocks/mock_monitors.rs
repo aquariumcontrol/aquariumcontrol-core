@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 #[cfg(test)]
 pub mod tests {
-    use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
+    use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
     use crate::utilities::channel_content::InternalCommand;
     use crate::water::refill_monitor_view::RefillMonitorView;
     use spin_sleep::SpinSleeper;

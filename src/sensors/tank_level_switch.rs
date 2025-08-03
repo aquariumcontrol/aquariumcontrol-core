@@ -557,10 +557,10 @@ pub mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use crate::mocks::mock_signal::tests::MockSignal;
+    use crate::mocks::mock_tcp::tests::mock_tcp_for_tank_level_switch;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::sensors::tank_level_switch::{TankLevelSwitch, TankLevelSwitchSignals};
-    use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::mock_tcp::tests::mock_tcp_for_tank_level_switch;
-    use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
 

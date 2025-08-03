@@ -926,8 +926,8 @@ pub mod tests {
     use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::mineral::balling::{Balling, BallingChannels};
-    use crate::stubs::mock_mineral_injection::tests::MockMineralInjection;
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
+    use crate::mocks::mock_mineral_injection::tests::MockMineralInjection;
+    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
     use crate::utilities::channel_content::AquariumDevice::{
         PeristalticPump1, PeristalticPump2, PeristalticPump3, PeristalticPump4,
     };

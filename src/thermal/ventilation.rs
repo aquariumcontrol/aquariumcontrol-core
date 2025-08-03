@@ -716,10 +716,10 @@ impl Ventilation {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
+    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
+    use crate::mocks::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::sensors::sensor_manager::SensorManagerSignals;
-    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-    use crate::stubs::mock_ventilation::tests::MockSqlInterfaceVentilationSetVals;
     use crate::thermal::ventilation::{Ventilation, VentilationChannels};
     use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
     use crate::utilities::common::tests::update_min_max_actuation_duration;

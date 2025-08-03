@@ -719,7 +719,7 @@ pub mod tests {
     use crate::database::sql_interface_feed::tests::insert_feed_patterns;
     use crate::database::sql_query_strings::{SQL_TABLE_FEEDLOG, SQL_TABLE_FEEDSCHEDULE};
     use crate::food::food_injection_error::FoodInjectionError;
-    use crate::stubs::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
+    use crate::mocks::mock_sql_interface_feed::tests::MockSqlInterfaceFeed;
 
     pub struct MockFoodInjection {
         pub profile_ids_executed: Vec<i32>,

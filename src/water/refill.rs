@@ -1143,11 +1143,11 @@ pub mod tests {
     use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
     use crate::water::refill::{Refill, RefillChannels, RefillErrorStates, RefillStatus};
 
-    use crate::stubs::mock_monitors::tests::MockMonitors;
-    use crate::stubs::mock_schedule_check::tests::mock_schedule_check;
-    use crate::stubs::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
-    use crate::stubs::mock_water_injection::tests::MockWaterInjection;
-    use crate::stubs::test_command::tests::TestCommand;
+    use crate::mocks::mock_monitors::tests::MockMonitors;
+    use crate::mocks::mock_schedule_check::tests::mock_schedule_check;
+    use crate::mocks::mock_sql_interface_refill::tests::MockSqlInterfaceRefill;
+    use crate::mocks::mock_water_injection::tests::MockWaterInjection;
+    use crate::mocks::test_command::tests::TestCommand;
 
     use crate::utilities::logger::{setup_logger, LoggerConfig};
     use crate::water::refill_stats_data::RefillStatsData;

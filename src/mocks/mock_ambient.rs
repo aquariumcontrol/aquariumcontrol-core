@@ -14,8 +14,8 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};
     use std::time::Duration;
 
-    use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::test_command::tests::TestCommand;
+    use crate::mocks::mock_signal::tests::MockSignal;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 
     pub fn mock_ambient(

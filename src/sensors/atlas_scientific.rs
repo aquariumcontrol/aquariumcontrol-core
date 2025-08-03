@@ -808,12 +808,12 @@ impl AtlasScientific {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificChannels, AtlasScientificError,
         AtlasScientificResultData,
     };
     use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse, I2cResult};
-    use crate::stubs::mock_i2c_interface::tests::MockI2cInterface;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use crate::utilities::config::{read_config_file, ConfigData};
     use assert_float_eq::*;

@@ -13,7 +13,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::time::Duration;
 
-    use crate::stubs::actuation_event::tests::ActuationEvent;
+    use crate::mocks::mock_actuation_event::tests::MockActuationEvent;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
 
     pub struct MockActuatorStates {
@@ -196,8 +196,8 @@ pub mod tests {
     pub fn mock_relay_manager(
         tx_relay_manager_to_test_object: &Sender<bool>,
         rx_relay_manager_from_test_object: &Receiver<InternalCommand>,
-    ) -> (Vec<ActuationEvent>, MockActuatorStates) {
-        let mut result: Vec<ActuationEvent> = Vec::new();
+    ) -> (Vec<MockActuationEvent>, MockActuatorStates) {
+        let mut result: Vec<MockActuationEvent> = Vec::new();
         let mut mock_actuator_states = MockActuatorStates::new();
 
         let sleep_duration_one_millisecond = Duration::from_millis(1);
@@ -209,18 +209,18 @@ pub mod tests {
                     match command {
                         InternalCommand::SwitchOn(_) => {
                             update_actuator_states(command.clone(), &mut mock_actuator_states);
-                            result.push(ActuationEvent::new(command));
+                            result.push(MockActuationEvent::new(command));
                         }
                         InternalCommand::SwitchOff(_) => {
                             update_actuator_states(command.clone(), &mut mock_actuator_states);
-                            result.push(ActuationEvent::new(command));
+                            result.push(MockActuationEvent::new(command));
                         }
                         InternalCommand::Quit => {
                             break;
                         }
                         _ => {
                             // println!("mock_relay_manager: Received command {}", command);
-                            result.push(ActuationEvent::new(command));
+                            result.push(MockActuationEvent::new(command));
                         }
                     }
                 }

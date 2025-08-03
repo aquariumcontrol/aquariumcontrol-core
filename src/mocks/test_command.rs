@@ -10,31 +10,31 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(test)]
 pub mod tests {
     use std::fmt;
-    use std::time::Instant;
 
-    use crate::utilities::channel_content::InternalCommand;
+    use crate::mocks::mock_signal::tests::MockSignal;
 
-    #[derive(Clone)]
-    pub struct ActuationEvent {
-        pub time: Instant,
-        pub command: InternalCommand,
+    /// Enum is used for internal thread messaging.
+    /// Note: Relay state and device state do not necessarily correlate.
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum TestCommand {
+        /// Request to update a signal in to be used by mock thread
+        UpdateSignal(MockSignal),
+
+        /// give feedback to the test environment that water injection has been triggered
+        InformWaterInjectionEvent,
     }
 
-    impl ActuationEvent {
-        pub fn new(command: InternalCommand) -> ActuationEvent {
-            ActuationEvent {
-                time: Instant::now(),
-                command,
-            }
-        }
-    }
-
-    impl fmt::Display for ActuationEvent {
-        /// Function provides output of ActuationEvent for development purposes
+    impl fmt::Display for TestCommand {
+        /// Function provides output of the enum values for debugging purposes.
         /// # Arguments
-        /// * `f` - configuration for formatting
+        /// * `f` - configuration for formatting    
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}", self.command)
+            match self {
+                TestCommand::UpdateSignal(d) => write!(f, "TestCommand::UpdateSignal({})", d),
+                TestCommand::InformWaterInjectionEvent => {
+                    write!(f, "TestCommand::InformWaterInjectionEvent",)
+                }
+            }
         }
     }
 }

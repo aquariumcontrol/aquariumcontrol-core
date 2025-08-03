@@ -48,7 +48,7 @@ mod sensors;
 mod simulator;
 
 /// This container module features a set of mock functionality used by test cases.
-mod stubs;
+mod mocks;
 
 /// This container module features all functionality to either cool the water using ventilation heat the water using a heater.
 mod thermal;

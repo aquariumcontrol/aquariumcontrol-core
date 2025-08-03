@@ -1186,16 +1186,16 @@ impl DataLogger {
 #[cfg(test)]
 pub mod tests {
     use crate::database::{sql_interface::SqlInterface, sql_interface_data::SqlInterfaceData};
+    use crate::mocks::mock_data_injection::tests::MockDataInjection;
+    use crate::mocks::mock_heating::tests::mock_heating;
+    use crate::mocks::mock_signal::tests::MockSignal;
+    use crate::mocks::mock_ventilation::tests::mock_ventilation;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::recorder::data_logger::{
         DataLogger, DataLoggerChannels, DataLoggerConfig, DataLoggerMutexes,
     };
     use crate::sensors::sensor_manager::SensorManagerSignals;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_data_injection::tests::MockDataInjection;
-    use crate::stubs::mock_heating::tests::mock_heating;
-    use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::mock_ventilation::tests::mock_ventilation;
-    use crate::stubs::test_command::tests::TestCommand;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file_with_test_database, ConfigData};
     use crate::water::refill::RefillStatus;

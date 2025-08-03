@@ -279,8 +279,8 @@ impl WaterInjectionTrait for WaterInjection {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mocks::mock_relay_manager::tests::mock_relay_manager;
     use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
-    use crate::stubs::mock_relay_manager::tests::mock_relay_manager;
     use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalCommand};
     use crate::water::refill::tests::prepare_refill_tests;
     use crate::water::refill::Refill;

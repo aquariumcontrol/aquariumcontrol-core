@@ -8,7 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::recorder_data_frame::RecorderDataFrame;
-use log::error;
+use crate::utilities::logger::log_error_chain;
 
 /// Trait for the execution of data logging to SQL database
 /// This trait allows running the main control with a mock implementation for testing.
@@ -50,7 +50,11 @@ impl DataInjectionTrait for DataInjection {
         match sql_interface_data.write_data_frame_to_database(&data_frame) {
             Ok(()) => { /* do nothing */ }
             Err(e) => {
-                error!(target: module_path!(), "Error occurred when injecting data into database: {e:?}");
+                log_error_chain(
+                    module_path!(),
+                    "Error occurred when injecting data into database.",
+                    e,
+                );
             }
         };
     }

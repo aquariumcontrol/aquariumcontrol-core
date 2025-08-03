@@ -11,9 +11,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 pub mod tests {
     use crate::database::sql_interface_error::SqlInterfaceError;
     use crate::database::sql_interface_heating_setvals::HeatingSetValueUpdaterTrait;
-    use crate::stubs::mock_common::mock_common_receive_from_signal_handler;
-    use crate::stubs::mock_signal::tests::MockSignal;
-    use crate::stubs::test_command::tests::TestCommand;
+    use crate::mocks::mock_common::mock_common_receive_from_signal_handler;
+    use crate::mocks::mock_signal::tests::MockSignal;
+    use crate::mocks::test_command::tests::TestCommand;
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
     use spin_sleep::SpinSleeper;
     use std::sync::mpsc::{Receiver, Sender, TryRecvError};

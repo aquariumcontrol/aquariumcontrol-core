@@ -202,7 +202,7 @@ pub mod tests {
     use std::thread::scope;
     use std::time::Duration;
 
-    use crate::stubs::mock_petting::tests::MockPetting;
+    use crate::mocks::mock_petting::tests::MockPetting;
     use crate::utilities::channel_content::InternalCommand;
     use crate::watchmen::petting::Petting;
 
