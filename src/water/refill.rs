@@ -9,12 +9,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_refill")]
 use log::debug;
 
-use log::{error, warn};
+use log::warn;
 
 #[cfg(not(test))]
 use log::info;
 
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
+use crate::log_error_chain;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -361,27 +362,29 @@ impl Refill {
                         refill_stats_data.duration_since_last_refill = duration;
                     }
                     Err(_e) => {
-                        self.lock_error_read_duration_since_last_refill = true;
                         self.refill_errors.error_sql_get_historic_data_failed = true;
                         #[cfg(not(test))]
                         if !self.lock_error_read_duration_since_last_refill {
-                            error!(
-                                target: module_path!(),
-                                "could not get duration since last refill event ({_e:?})"
+                            log_error_chain(
+                                module_path!(),
+                                "could not get duration since last refill event",
+                                _e,
                             );
+                            self.lock_error_read_duration_since_last_refill = true;
                         }
                     }
                 }
             }
             Err(_e) => {
-                self.lock_error_check_empty = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
                 #[cfg(not(test))]
                 if !self.lock_error_check_empty {
-                    error!(
-                        target: module_path!(),
-                        "could not check if refill table is empty or not ({_e:?})"
+                    log_error_chain(
+                        module_path!(),
+                        "could not check if refill table is empty or not",
+                        _e,
                     );
+                    self.lock_error_check_empty = true;
                 }
             }
         };
@@ -392,14 +395,15 @@ impl Refill {
                 refill_stats_data.refill_volume_last_24h = volume;
             }
             Err(_e) => {
-                self.lock_error_read_refill_volume_last_24h = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_24h {
-                    error!(
-                        target: module_path!(),
-                        "could not get refill volume of last 24 hours ({_e:?})"
+                    log_error_chain(
+                        module_path!(),
+                        "could not get refill volume of last 24 hours",
+                        _e,
                     );
+                    self.lock_error_read_refill_volume_last_24h = true;
                 }
             }
         };
@@ -410,14 +414,15 @@ impl Refill {
                 refill_stats_data.refill_count_last_24h = count;
             }
             Err(_e) => {
-                self.lock_error_read_refill_count_last_24h = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_24h {
-                    error!(
-                        target: module_path!(),
-                        "could not get refill count of last 24 hours: {_e:?}"
+                    log_error_chain(
+                        module_path!(),
+                        "could not get refill count of last 24 hours",
+                        _e,
                     );
+                    self.lock_error_read_refill_count_last_24h = true;
                 }
             }
         };
@@ -428,14 +433,15 @@ impl Refill {
                 refill_stats_data.refill_volume_last_hour = volume;
             }
             Err(_e) => {
-                self.lock_error_read_refill_volume_last_hour = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_volume_last_hour {
-                    error!(
-                        target: module_path!(),
-                        "Could not get refill volume of last hour: {_e:?}"
+                    log_error_chain(
+                        module_path!(),
+                        "Could not get refill volume of last hour",
+                        _e,
                     );
+                    self.lock_error_read_refill_volume_last_hour = true;
                 }
             }
         };
@@ -446,14 +452,15 @@ impl Refill {
                 refill_stats_data.refill_count_last_hour = count;
             }
             Err(_e) => {
-                self.lock_error_read_refill_count_last_hour = true;
                 self.refill_errors.error_sql_get_historic_data_failed = true;
                 #[cfg(not(test))]
                 if !self.lock_error_read_refill_count_last_hour {
-                    error!(
-                        target: module_path!(),
-                        "Could not get refill count of last hour: {_e:?}"
+                    log_error_chain(
+                        module_path!(),
+                        "Could not get refill count of last hour",
+                        _e,
                     );
+                    self.lock_error_read_refill_count_last_hour = true;
                 }
             }
         };
@@ -659,7 +666,7 @@ impl Refill {
             }
             Err(e) => {
                 if !self.lock_error_channel_send_monitors {
-                    error!(target:  module_path!(), "sending view to monitor failed ({e})");
+                    log_error_chain(module_path!(), "sending view to monitor failed", e);
                     self.lock_error_channel_send_monitors = true;
                 }
             }
@@ -702,11 +709,12 @@ impl Refill {
                     }
                     Err(e) => {
                         if !self.lock_error_channel_receive_schedule_check {
-                            error!(
-                                target: module_path!(),
-                                "reading channel content for schedule check failed ({e:?})"
+                            log_error_chain(
+                                module_path!(),
+                                "reading channel content for schedule check failed",
+                                e,
                             );
-                            self.lock_error_channel_receive_schedule_check = false;
+                            self.lock_error_channel_receive_schedule_check = true;
                         }
                         true // assume we are allowed to actuate when communication is not successful
                     }
@@ -714,9 +722,10 @@ impl Refill {
             }
             Err(e) => {
                 if !self.lock_error_channel_send_schedule_check {
-                    error!(
-                        target: module_path!(),
-                        "channel communication to schedule check failed ({e:?})"
+                    log_error_chain(
+                        module_path!(),
+                        "channel communication to schedule check failed",
+                        e,
                     );
                     self.lock_error_channel_send_schedule_check = true;
                 }
@@ -912,8 +921,12 @@ impl Refill {
                                         refill_status.refill_in_progress_live = true;
                                         refill_status.refill_in_progress_for_database = true;
                                     }
-                                    Err(_) => {
-                                        error!(target: module_path!(), "error locking mutex for refill status");
+                                    Err(e) => {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "error locking mutex for refill status",
+                                            e,
+                                        );
                                     }
                                 };
                             }
@@ -932,8 +945,12 @@ impl Refill {
                                     Ok(mut refill_status) => {
                                         refill_status.refill_in_progress_live = false;
                                     }
-                                    Err(_) => {
-                                        error!(target: module_path!(), "error locking mutex for refill status");
+                                    Err(e) => {
+                                        log_error_chain(
+                                            module_path!(),
+                                            "error locking mutex for refill status",
+                                            e,
+                                        );
                                     }
                                 };
                             }
@@ -1055,7 +1072,11 @@ impl Refill {
         match refill_channels.tx_refill_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                error!("sending quit confirmation back to signal handler failed ({e:?})");
+                log_error_chain(
+                    module_path!(),
+                    "sending quit confirmation back to signal handler failed",
+                    e,
+                );
             }
         };
 
@@ -1089,9 +1110,10 @@ impl Refill {
                 }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_command {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal from the signal handler failed ({e:?})"
+                        log_error_chain(
+                            module_path!(),
+                            "receiving termination signal from the signal handler failed",
+                            e,
                         );
                         self.lock_error_channel_receive_termination_command = true;
                     }

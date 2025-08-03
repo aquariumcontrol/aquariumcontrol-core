@@ -6,7 +6,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use log::error;
 use serde_derive::Deserialize;
+use std::error::Error;
 use std::path::Path;
 use thiserror::Error;
 
@@ -120,6 +122,27 @@ pub fn setup_logger(logger_config: LoggerConfig) -> Result<(), LoggerSetupError>
     Ok(())
 }
 
+/// Logs an error and its entire chain of sources with a given context message.
+///
+/// This function provides a standardized way to log errors. It logs a high-level
+/// context message, followed by the primary error, and then traverses and logs
+/// every underlying `source` error.
+///
+/// # Arguments
+///
+/// * `module` - module name where the error logging was triggered.
+/// * `context` - additional description of error
+/// * `error` - Top level error
+///
+pub fn log_error_chain<E: Error>(module: &str, context: &str, error: E) {
+    error!(target: module,"{context} ({error})");
+    let mut source = error.source();
+    while let Some(cause) = source {
+        error!("  Caused by: {cause}");
+        source = cause.source();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,14 +168,9 @@ mod tests {
         // which allows us to specifically isolate and test the `file_name().is_none()` check.
         let path_str = "/some/non/existent/path/..".to_string();
 
-        let config = LoggerConfig {
-            logfile: path_str,
-        };
+        let config = LoggerConfig { logfile: path_str };
         let result = setup_logger(config);
-        assert!(matches!(
-            result,
-            Err(LoggerSetupError::MissingFileName(_))
-        ));
+        assert!(matches!(result, Err(LoggerSetupError::MissingFileName(_))));
     }
 
     /// Tests that the function returns an error if the log file name is a directory.
@@ -162,14 +180,9 @@ mod tests {
         // Get the path of the temporary directory itself.
         let path_str = dir.path().to_str().unwrap().to_string();
 
-        let config = LoggerConfig {
-            logfile: path_str,
-        };
+        let config = LoggerConfig { logfile: path_str };
         let result = setup_logger(config);
-        assert!(matches!(
-            result,
-            Err(LoggerSetupError::PathIsADirectory(_))
-        ));
+        assert!(matches!(result, Err(LoggerSetupError::PathIsADirectory(_))));
     }
 
     /// Tests that the function returns an error if the parent directory does not exist.

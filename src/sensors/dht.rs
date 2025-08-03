@@ -13,6 +13,7 @@ use log::error;
 use log::warn;
 
 use crate::sensors::dht_error::DhtError;
+use crate::utilities::logger::log_error_chain;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -197,11 +198,11 @@ pub struct Dht {
     /// flag to avoid flooding the log file in case mutex cannot be locked
     lock_error_mutex: bool,
 
-    /// flag to avoid flooding the log file in case sensor does not reply after multiple retries
-    lock_error_max_retries: bool,
-
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     lock_warn_max_mutex_access_duration: bool,
+
+    /// inhibition flag to avoid flooding the log file with repeated messages about failure to read from DHT sensor
+    lock_error_failed_after_retries: bool,
 
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
@@ -237,8 +238,8 @@ impl Dht {
             gpio_dht22_vcc,
             instant_last_measurement: Instant::now(),
             lock_error_mutex: false,
-            lock_error_max_retries: false,
             lock_warn_max_mutex_access_duration: false,
+            lock_error_failed_after_retries: false,
 
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
@@ -402,12 +403,10 @@ impl Dht {
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
-            //#[cfg(not(test))]
-            //error!(
-            //    target: module_path!(),
-            //    "checksum error (calculated {}, received {})",
-            //    checksum_calculated, checksum_received);
-            return Err(DhtError::ChecksumError);
+            return Err(DhtError::ChecksumError(
+                checksum_calculated,
+                checksum_received,
+            ));
         }
         Ok(checksum_calculated)
     }
@@ -444,26 +443,20 @@ impl Dht {
 
         // range check for temperature
         if temp10 > dht22_constants::DHT22_MAXVAL_TEMP10 {
-            #[cfg(not(test))]
-            error!(
-                "temperature is out of range (measured {}, limits are {}, {})",
-                (temp10 / 10),
-                dht22_constants::DHT22_MINVAL_TEMP10 / 10,
-                dht22_constants::DHT22_MAXVAL_TEMP10 / 10
-            );
-            return Err(DhtError::TemperatureOutOfRange);
+            return Err(DhtError::TemperatureOutOfRange(
+                (temp10 / 10) as f32,
+                (dht22_constants::DHT22_MINVAL_TEMP10 / 10) as f32,
+                (dht22_constants::DHT22_MAXVAL_TEMP10 / 10) as f32,
+            ));
         }
 
         // range check for humidity
         if hum10 > dht22_constants::DHT22_MAXVAL_HUM10 {
-            #[cfg(not(test))]
-            error!(
-                "humidity is out of range (measured {}, limits are {}, {})",
-                (hum10 / 10),
-                dht22_constants::DHT22_MINVAL_HUM10 / 10,
-                dht22_constants::DHT22_MAXVAL_HUM10 / 10
-            );
-            return Err(DhtError::HumidityOutOfRange);
+            return Err(DhtError::HumidityOutOfRange(
+                (hum10 / 10) as f32,
+                (dht22_constants::DHT22_MINVAL_HUM10 / 10) as f32,
+                (dht22_constants::DHT22_MAXVAL_HUM10 / 10) as f32,
+            ));
         }
 
         // calculate final values
@@ -513,18 +506,8 @@ impl Dht {
         // get pin for providing supply voltage to DHT sensor
         let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {
             Ok(c) => c.into_output(),
-            #[cfg(not(test))]
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "could not get pin {} from GPIO interface for DHT power supply ({e:?})",
-                    self.gpio_dht22_vcc
-                );
-                return Err(DhtError::VccPinAcquisitionFailed);
-            }
-            #[cfg(test)]
-            Err(_) => {
-                return Err(DhtError::VccPinAcquisitionFailed);
+                return Err(DhtError::VccPinAcquisitionFailed(self.gpio_dht22_vcc));
             }
         };
 
@@ -533,18 +516,8 @@ impl Dht {
             // get pin for triggering DHT sensor
             let mut data_pin = match gpio.get(self.gpio_dht22_io) {
                 Ok(c) => c.into_output(),
-                #[cfg(not(test))]
                 Err(e) => {
-                    error!(
-                        target: module_path!(),
-                        "failed to acquire pin {} for triggering DHT sensor ({e:?})",
-                        self.gpio_dht22_io,
-                    );
-                    return Err(DhtError::DataPinOutputAcquisitionFailed);
-                }
-                #[cfg(test)]
-                Err(_) => {
-                    return Err(DhtError::DataPinOutputAcquisitionFailed);
+                    return Err(DhtError::DataPinOutputAcquisitionFailed(self.gpio_dht22_io));
                 }
             };
 
@@ -581,11 +554,7 @@ impl Dht {
         let mut data_pin = match gpio.get(self.gpio_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
-                error!(
-                    "failed to acquire pin {} for reading from DHT sensor ({e:?})",
-                    self.gpio_dht22_io,
-                );
-                return Err(DhtError::DataPinInputAcquisitionFailed);
+                return Err(DhtError::DataPinInputAcquisitionFailed(self.gpio_dht22_io));
             }
         };
 
@@ -655,13 +624,10 @@ impl Dht {
         }
 
         if valid_ticks_received != dht22_constants::DHT22_TRANSMISSION_END_IDX - 1 {
-            error!(
-                target: module_path!(),
-                "incorrect number of valid ticks received: target={}, measured={}",
+            return Err(DhtError::WrongNumberOfValidTicks(
                 dht22_constants::DHT22_TRANSMISSION_END_IDX - 1,
-                valid_ticks_received
-            );
-            return Err(DhtError::WrongNumberOfValidTicks);
+                valid_ticks_received,
+            ));
         }
 
         // identify the data bits and store values in data_bits
@@ -699,20 +665,13 @@ impl Dht {
     ///   checksum errors, timeouts after all retries, or out-of-range sensor values.
     pub fn get_data(&mut self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
-        let mut measurement_successful = false;
         let mut retry_counter = 0;
 
-        let mut result_tuple: (f32, f32) = (0.1, 0.1);
-        let mut dht_error = DhtError::Timeout; // Avoid compiler error. The value will be overwritten in the error case.
-
-        while !measurement_successful {
+        loop {
             match self.read(
                 retry_counter == 0, /* reset power supply for the first read */
             ) {
                 Ok((temperature, humidity)) => {
-                    measurement_successful = true;
-                    self.lock_error_max_retries = false;
-
                     #[cfg(feature = "debug_dht")]
                     debug!(
                         target: module_path!(),
@@ -721,38 +680,25 @@ impl Dht {
                         humidity
                     );
 
-                    result_tuple = (temperature, humidity);
+                    return Ok((temperature, humidity));
                 }
                 Err(e) => {
-                    if (e == DhtError::Timeout) || (e == DhtError::ChecksumError) {
+                    if (e == DhtError::Timeout) || matches!(e, DhtError::ChecksumError(_, _)) {
+                        // These two errors shall not be reported directly.
+                        // Instead, the application will try to read again for multiple times.
                         retry_counter += 1;
                         if retry_counter > dht22_constants::DHT22_MAX_RETRIES {
-                            #[cfg(not(test))]
-                            if !self.lock_error_max_retries {
-                                self.lock_error_max_retries = true;
-                                error!(
-                                    target: module_path!(),
-                                    "failed to read from DHT sensor (after {retry_counter} retries, {e:?})",
-                                );
-                            }
-                            dht_error = e;
-                            break;
+                            return Err(DhtError::FailedAfterRetries {
+                                retry_counter,
+                                source: Box::new(e),
+                            });
                         }
                     } else {
-                        #[cfg(not(test))]
-                        error!(
-                            target: module_path!(),
-                            "failed to read from DHT sensor ({e:?})",
-                        );
+                        // any other failure will be reported directly
                         return Err(e);
                     }
                 }
             }
-        }
-        if measurement_successful {
-            Ok(result_tuple)
-        } else {
-            Err(dht_error)
         }
     }
 
@@ -800,7 +746,7 @@ impl Dht {
                             if !lock_error_invalid_command {
                                 error!(
                                     target: module_path!(),
-                                    "Received invalid command."
+                                    "Received invalid command from signal handler."
                                 );
                                 lock_error_invalid_command = true;
                             }
@@ -834,6 +780,33 @@ impl Dht {
                     > self.config.measurement_interval_millis.into()
                 {
                     let result = self.get_data();
+                    if let Err(ref dht_error) = result {
+                        if matches!(
+                            dht_error,
+                            DhtError::FailedAfterRetries {
+                                retry_counter: _,
+                                source: _
+                            }
+                        ) {
+                            if !self.lock_error_failed_after_retries {
+                                // avoid log flooding
+                                log_error_chain(
+                                    module_path!(),
+                                    "Failure to read from DHT sensor",
+                                    dht_error,
+                                );
+                                self.lock_error_failed_after_retries = true;
+                            }
+                        } else {
+                            self.lock_error_failed_after_retries = false;
+                            // report directly
+                            log_error_chain(
+                                module_path!(),
+                                "Failure to read from DHT sensor",
+                                dht_error,
+                            );
+                        }
+                    }
 
                     let instant_before_locking_mutex = Instant::now();
                     let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
@@ -846,10 +819,10 @@ impl Dht {
                                 *c = result;
                                 self.lock_error_mutex = false;
                             }
-                            Err(_) => {
+                            Err(e) => {
                                 if !self.lock_error_mutex {
                                     self.lock_error_mutex = true;
-                                    error!(target: module_path!(), "error locking mutex for dht result");
+                                    error!(target: module_path!(), "error locking mutex for dht result ({e:?})");
                                 }
                             }
                         };
@@ -953,7 +926,7 @@ pub mod tests {
 
         let result = Dht::calc_checksum(stimuli);
 
-        assert_eq!(result, Err(DhtError::ChecksumError));
+        assert!(matches!(result, Err(DhtError::ChecksumError(_, _))));
     }
 
     #[test]
@@ -986,10 +959,10 @@ pub mod tests {
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [4, 205, 0, 245, 198];
 
-        assert_eq!(
+        assert!(matches!(
             Dht::calc_signals(stimuli),
-            Err(DhtError::HumidityOutOfRange)
-        );
+            Err(DhtError::HumidityOutOfRange(_, _, _))
+        ));
     }
 
     #[test]
@@ -1001,10 +974,10 @@ pub mod tests {
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 1, 245, 197];
 
-        assert_eq!(
+        assert!(matches!(
             Dht::calc_signals(stimuli),
-            Err(DhtError::TemperatureOutOfRange)
-        );
+            Err(DhtError::TemperatureOutOfRange(_, _, _))
+        ));
     }
 
     #[cfg(all(feature = "target_hw", target_os = "linux"))]

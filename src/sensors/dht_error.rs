@@ -12,18 +12,18 @@ use thiserror::Error;
 pub enum DhtError {
     /// Vcc pin acquisition failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Vcc pin acquisition failed")]
-    VccPinAcquisitionFailed,
+    #[error("Could not get pin {0} from GPIO interface for DHT power supply.")]
+    VccPinAcquisitionFailed(u8),
 
     /// Data pin acquisition for output failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Data pin acquisition for output failed")]
-    DataPinOutputAcquisitionFailed,
+    #[error("Failure to acquire pin {0} for triggering DHT sensor")]
+    DataPinOutputAcquisitionFailed(u8),
 
     /// Data pin acquisition for input failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Data pin acquisition for input failed")]
-    DataPinInputAcquisitionFailed,
+    #[error("Failure to acquire pin {0} for reading from DHT sensor")]
+    DataPinInputAcquisitionFailed(u8),
 
     /// Could not set interrupt
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -42,16 +42,16 @@ pub enum DhtError {
 
     // transmission yields a wrong number of valid bits
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Transmission yields a wrong number of valid bits")]
-    WrongNumberOfValidTicks,
+    #[error("Incorrect number of valid ticks received: target={0}, measured={1}.")]
+    WrongNumberOfValidTicks(usize, usize),
 
     /// the error occurred during the calculation of the checksum
     #[error("An error occurred during the calculation of the checksum")]
     ChecksumCalculationError,
 
     /// calculated checksum does not match the received value
-    #[error("Calculated checksum does not match the received value")]
-    ChecksumError,
+    #[error("Calculated checksum ({0}) does not match the received value ({1})")]
+    ChecksumError(u8, u8),
 
     /// timeout during transmission of data
     #[allow(unused)]
@@ -59,14 +59,23 @@ pub enum DhtError {
     Timeout,
 
     /// the temperature value is out of range
-    #[error("The temperature value is out of range")]
-    TemperatureOutOfRange,
+    #[error("The temperature value is out of range (measured {0}, limits are {1}, {2})")]
+    TemperatureOutOfRange(f32, f32, f32),
 
     /// humidity value is out of range
-    #[error("Humidity value is out of range")]
-    HumidityOutOfRange,
+    #[error("The humidity is out of range (measured {0}, limits are {1}, {2})")]
+    HumidityOutOfRange(f32, f32, f32),
 
     /// reported from low-level reading when called without gpio lib handle available
     #[error("This SW is not compiled for this platform.")]
     IncorrectPlatform,
+
+    /// The measurement has been repeated several times without success.
+    #[error("failed to read from DHT sensor (after {retry_counter} retries")]
+    FailedAfterRetries {
+        retry_counter: u64,
+
+        #[source]
+        source: Box<DhtError>,
+    },
 }

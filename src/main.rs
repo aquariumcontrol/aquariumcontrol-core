@@ -114,7 +114,7 @@ use crate::thermal::ventilation::{Ventilation, VentilationChannels};
 use crate::utilities::channel_content::InternalCommand;
 use crate::utilities::config::read_config_file;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
-use crate::utilities::logger::{setup_logger, LoggerConfig};
+use crate::utilities::logger::{log_error_chain, setup_logger, LoggerConfig};
 use crate::utilities::memory_config_check::memory_config_check;
 use crate::utilities::publish_pid::PublishPid;
 use crate::utilities::signal_handler::{handle_signals, SignalHandlerChannels};
@@ -129,7 +129,7 @@ use crate::water::water_injection::WaterInjection;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
-use std::{env, error::Error, panic, path::Path, thread::scope, time::Duration};
+use std::{env, panic, path::Path, thread::scope, time::Duration};
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
         use crate::sensors::gpio_handler::GpioHandler;
@@ -386,8 +386,7 @@ fn run() -> Result<(), StartupError> {
     let config = read_config_file(config_file_name)?;
 
     // setup logging to write to the log output file and stdout
-    setup_logger(config.logger)
-        .map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
+    setup_logger(config.logger).map_err(|e| StartupError::LoggingSetupFailure { source: e })?;
 
     // calculate hash of executable
     let version_information = VersionInformation::new()
@@ -1685,13 +1684,7 @@ fn main() {
     }
 
     if let Err(e) = run() {
-        error!("Application failed to start: {e}");
-        // Use a loop to walk the chain of source errors
-        let mut source = e.source();
-        while let Some(cause) = source {
-            error!("  Caused by: {cause}");
-            source = cause.source();
-        }
+        log_error_chain(module_path!(), "Application failed to start.", e);
         std::process::exit(1);
     }
 }

@@ -47,7 +47,7 @@ pub enum SqlInterfaceError {
     #[error("database responded with empty response to query: {0}")]
     SingleVersionRequestNotListed(String),
 
-    /// database responded with multiple responses to request.
+    /// The database responded with multiple responses to request.
     #[error("database responded with multiple responses to request to query: {0}")]
     SingleVersionRequestMultipleResults(String),
 
