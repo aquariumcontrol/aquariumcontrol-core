@@ -8,9 +8,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #[cfg(not(test))]
-use log::info;
-
-use log::{error, warn};
+use log::{info, warn};
 
 #[cfg(all(feature = "debug_feed", not(test)))]
 use log::debug;
@@ -28,6 +26,7 @@ use crate::database::sql_interface_feed::DatabaseInterfaceFeedTrait;
 use crate::food::feed_schedule_entry::FeedScheduleEntry;
 use crate::food::food_injection::FoodInjectionTrait;
 use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the feed control.
@@ -219,9 +218,10 @@ impl Feed {
         {
             Ok(pattern) => pattern,
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "Error occurred when trying to read feed pattern {profile_id} from database: {e:?}"
+                log_error_chain(
+                    module_path!(),
+                    "Error occurred when trying to read feed pattern {profile_id} from database.",
+                    e,
                 );
                 return (Err(()), false); // Return failure, no quit command received yet.
             }
@@ -240,7 +240,7 @@ impl Feed {
         // If errors occurred during injection, log each one.
         if let Err(errors) = &injection_result {
             for error in errors {
-                error!(target: module_path!(), "Food injection failed: {error}");
+                log_error_chain(module_path!(), "Food injection failed.", error);
             }
         }
 
@@ -248,9 +248,10 @@ impl Feed {
         let current_timestamp = match self.sql_interface_feed.get_current_timestamp() {
             Ok(c) => c,
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "could not get current timestamp from database ({e:?})"
+                log_error_chain(
+                    module_path!(),
+                    "Could not get current timestamp from database.",
+                    e,
                 );
                 // If we can't get a timestamp, we can't log the event.
                 // Return the original injection failure status and the quit status.
@@ -272,9 +273,10 @@ impl Feed {
         ) {
             Ok(_) => Ok(()),
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "Could not insert feed event into database ({e:?})"
+                log_error_chain(
+                    module_path!(),
+                    "Could not insert feed event into database.",
+                    e,
                 );
                 Err(())
             }
@@ -407,10 +409,7 @@ impl Feed {
             }
             #[cfg(not(test))]
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "Updating feed schedule entry failed ({e:?})"
-                );
+                log_error_chain(module_path!(), "Updating feed schedule entry failed.", e);
                 self.execution_blocked = true;
             }
             #[cfg(test)]
@@ -523,9 +522,10 @@ impl Feed {
                     Err(e) => {
                         #[cfg(not(test))]
                         if !self.lock_error_get_feedschedule_entry {
-                            error!(
-                                target: module_path!(),
-                                "could not retrieve feed schedule information from database ({e:?})"
+                            log_error_chain(
+                                module_path!(),
+                                "Could not retrieve feed schedule information from database.",
+                                e,
                             );
                             self.lock_error_get_feedschedule_entry = true;
                         }
@@ -646,9 +646,10 @@ impl Feed {
         match feed_channels.tx_feed_to_signal_handler.send(true) {
             Ok(()) => {}
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
+                log_error_chain(
+                    module_path!(),
+                    "Sending quit confirmation back to signal handler failed.",
+                    e,
                 );
             }
         };
@@ -680,10 +681,7 @@ impl Feed {
                 }
                 Err(e) => {
                     if !self.lock_error_channel_receive_termination_signal {
-                        error!(
-                            target: module_path!(),
-                            "receiving termination signal failed ({e:?})"
-                        );
+                        log_error_chain(module_path!(), "Receiving termination signal failed.", e);
                         self.lock_error_channel_receive_termination_signal = true;
                     }
                     false
