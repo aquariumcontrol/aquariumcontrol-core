@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-use log::{error, warn};
+use log::warn;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the schedule checker.
@@ -257,9 +258,10 @@ impl ScheduleCheck {
                     }
                     TryRecvError::Disconnected => {
                         if !*lock_error_channel_receive {
-                            error!(
-                                target: module_path!(),
-                                "receiving command from signal handler failed ({e:?})"
+                            log_error_chain(
+                                module_path!(),
+                                "receiving command from signal handler failed",
+                                e,
                             );
                             *lock_error_channel_receive = true;
                         }
@@ -274,10 +276,7 @@ impl ScheduleCheck {
             }
             Err(e) => {
                 if !*lock_error_channel_send {
-                    error!(
-                        target: module_path!(),
-                        "sending back message failed ({e:?})"
-                    );
+                    log_error_chain(module_path!(), "sending back message failed", e);
                     *lock_error_channel_send = true;
                 }
             }
@@ -310,7 +309,7 @@ impl ScheduleCheck {
                 if let Err(errors) = self.sql_interface_schedule.read_schedule() {
                     if !self.lock_error_database_read {
                         for e in errors {
-                            error!("Reading schedule failed ({e:?})");
+                            log_error_chain(module_path!(), "Reading schedule failed", e);
                         }
                         self.lock_error_database_read = true;
                     }
@@ -344,9 +343,10 @@ impl ScheduleCheck {
                 }
                 Err(e) => {
                     if !self.lock_error_find_ventilation_schedule {
-                        error!(
-                            target: module_path!(),
-                            "could not find schedule for ventilation ({e:?})"
+                        log_error_chain(
+                            module_path!(),
+                            "could not find schedule for ventilation",
+                            e,
                         );
                         self.lock_error_find_ventilation_schedule = true;
                     }
@@ -375,10 +375,7 @@ impl ScheduleCheck {
                 }
                 Err(e) => {
                     if !self.lock_error_find_heating_schedule {
-                        error!(
-                            target: module_path!(),
-                            "could not find schedule for heating ({e:?})"
-                        );
+                        log_error_chain(module_path!(), "could not find schedule for heating", e);
                         self.lock_error_find_heating_schedule = true;
                     }
                     None
@@ -406,10 +403,7 @@ impl ScheduleCheck {
                 }
                 Err(e) => {
                     if !self.lock_error_find_refill_schedule {
-                        error!(
-                            target: module_path!(),
-                            "could not find schedule for refill ({e:?})"
-                        );
+                        log_error_chain(module_path!(), "could not find schedule for refill", e);
                         self.lock_error_find_refill_schedule = true;
                     }
                     None
@@ -437,10 +431,7 @@ impl ScheduleCheck {
                 }
                 Err(e) => {
                     if !self.lock_error_find_balling_schedule {
-                        error!(
-                            target: module_path!(),
-                            "could not find schedule for balling ({e:?})"
-                        );
+                        log_error_chain(module_path!(), "could not find schedule for balling", e);
                         self.lock_error_find_balling_schedule = true;
                     }
                     None
@@ -487,9 +478,10 @@ impl ScheduleCheck {
                 );
             }
             Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending quit confirmation back to signal handler failed ({e:?})"
+                log_error_chain(
+                    module_path!(),
+                    "sending quit confirmation back to signal handler failed",
+                    e,
                 );
             }
         };

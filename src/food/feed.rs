@@ -8,7 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 #[cfg(not(test))]
-use log::{info, warn};
+use log::info;
+
+use log::warn;
 
 #[cfg(all(feature = "debug_feed", not(test)))]
 use log::debug;
