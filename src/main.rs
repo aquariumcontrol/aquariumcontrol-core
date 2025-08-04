@@ -1215,7 +1215,8 @@ fn run() -> Result<(), StartupError> {
         config.balling,
         sql_interface_balling,
         database_ping_duration,
-    );
+    )
+    .map_err(|e| StartupError::InvalidBallingConfiguration { source: e })?;
     let mut monitors = Monitors::new(config.monitors);
     let mut watchdog = Watchdog::new(config.watchdog);
 
