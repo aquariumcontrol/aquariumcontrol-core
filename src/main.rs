@@ -1050,6 +1050,8 @@ fn run() -> Result<(), StartupError> {
     let mut mineral_injection = MineralInjection::new();
     let mut water_injection = WaterInjection::new(&config.refill);
     let mut petting = Petting::new();
+    let mut actuate_controllino = ActuateControllino::new(config.controllino_relay.clone())
+        .map_err(|e| StartupError::ControllinoSetupFailure { source: e })?;
 
     // The following structs have a high amount of platform-specific code:
     let mut tank_level_switch: TankLevelSwitch;
@@ -1406,7 +1408,6 @@ fn run() -> Result<(), StartupError> {
                         &mut actuate_gpio_opt.expect("Internal error: Illegal configuration (unwrapping of GPIO actuator failed)")
                     );
                 } else {
-                    let mut actuate_controllino = ActuateControllino::new(config.controllino_relay);
                     relay_manager.execute(relay_manager_channels, &mut actuate_controllino);
                 }
 

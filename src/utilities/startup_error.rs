@@ -10,6 +10,7 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
+use crate::relays::actuate_controllino::ActuateControllinoError;
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -62,7 +63,7 @@ pub enum StartupError {
     #[error("Configuration error: GPIO handler not initialized.")]
     GpioHandlerMissing,
 
-    /// Configuration error: Memory configuration of operating system is invalid.
+    /// Configuration error: Memory configuration of the operating system is invalid.
     #[error("Configuration error: Memory configuration of operating system is invalid.")]
     InvalidMemoryConfig {
         #[source]
@@ -89,4 +90,10 @@ pub enum StartupError {
         #[source]
         source: DataLoggerError,
     },
+
+    #[error("Could not setup communication with Controllino.")]
+    ControllinoSetupFailure {
+        #[source]
+        source: ActuateControllinoError,
+    }
 }

@@ -16,6 +16,7 @@ use serialport::{ClearBuffer, SerialPort};
 use spin_sleep::SpinSleeper;
 use std::collections::HashSet;
 use std::time::Duration;
+use thiserror::Error;
 
 const CONTROLLINO_MAX_RELAY_ID: u8 = 64;
 const CONTROLLINO_MIN_RELAY_ID: u8 = 1;
@@ -158,6 +159,52 @@ pub struct ActuateControllinoConfig {
 
     /// Heartbeat interval
     pub heartbeat_interval_seconds: u64,
+}
+
+/// Contains error definitions for ActuateControllino
+#[derive(Error, Debug)]
+pub enum ActuateControllinoError {
+    /// Relay ID is outside the allowed range.
+    #[error("Relay ID for Controllino ({0}) is outside the allowed range ({1} ... {2}).")]
+    RelayIdOutsideRange(u8, u8, u8),
+
+    /// Found a duplicate value in definition of relay IDs.
+    #[error("Found a duplicate value ({0}) in definition of relay IDs.")]
+    RelayIdDuplicate(u8),
+
+    /// Port name for communication with Controllino is empty.
+    #[error("Port name for communication with Controllino is empty.")]
+    EmptyPortName,
+
+    /// Failed to open serial port for Controllino.
+    #[error("Failed to open serial port for Controllino.")]
+    SerialPortOpenFailed {
+        #[source]
+        source: serialport::Error,
+    },
+
+    /// Failed to set timeout for serial port communication.
+    #[error("Could not set timeout of {timeout_millis} milliseconds for serial port communication.")]
+    SetTimeoutFailed {
+        timeout_millis: u64,
+
+        #[source]
+        source: serialport::Error,
+    },
+
+    /// Failed to clear DTR of serial port communication.
+    #[error("Failed to clear DTR of serial port communication.")]
+    ClearDTRFailed {
+        #[source]
+        source: serialport::Error,
+    },
+
+    /// Failed to clear buffer of serial port communication.
+    #[error("Failed to clear buffer of serial port communication.")]
+    ClearBufferFailed {
+        #[source]
+        source: serialport::Error,
+    },
 }
 
 /// Contains relay configuration and trait implementation for actuation using Controllino hardware
@@ -582,47 +629,22 @@ impl RelayActuationTrait for ActuateControllino {
 /// * `timeout_millis` - The read/write timeout for serial port operations in milliseconds.
 ///
 /// # Returns
-/// A `Box<dyn SerialPort>` representing the opened and configured serial port.
-///
-/// # Panics
-/// This function will panic if:
-/// - It fails to open the serial port with the specified parameters.
-/// - It fails to set the read/write timeout on the serial port.
-/// - It encounters an error when clearing the Data Terminal Ready (DTR) signal.
-/// - It encounters an error when clearing the serial port buffers.
+/// In case of success, a `Box<dyn SerialPort>` representing the opened and configured serial port.
+/// In case of failure, an error of type `ActuateControllinoError` is returned.
 fn controllino_open_serial_port(
     port_name: String,
     baud_rate: u32,
     timeout_millis: u64,
-) -> Box<dyn SerialPort> {
+) -> Result<Box<dyn SerialPort>, ActuateControllinoError> {
     let spin_sleeper = SpinSleeper::default();
 
-    let mut serial_port = match serialport::new(port_name.clone(), baud_rate).open() {
-        Ok(c) => c,
-        Err(e) => {
-            panic!("{}: failed to open serial port ({e:?})", module_path!());
-        }
-    };
+    let mut serial_port = serialport::new(port_name.clone(), baud_rate).open().map_err(|e| ActuateControllinoError::SerialPortOpenFailed { source: e })?;
 
     let timeout_duration = Duration::from_millis(timeout_millis);
-    match serial_port.set_timeout(timeout_duration) {
-        Ok(()) => { /* do nothing */ }
-        Err(_) => {
-            panic!(
-                "{}: could not set timeout of {} milliseconds.",
-                module_path!(),
-                timeout_millis
-            );
-        }
-    }
+    serial_port.set_timeout(timeout_duration).map_err(|e| ActuateControllinoError::SetTimeoutFailed { timeout_millis, source: e })?;
 
     // write to Data Terminal Ready pin: clear the signal
-    match serial_port.write_data_terminal_ready(false) {
-        Ok(_) => { /* could reset DTR - do nothing */ }
-        Err(e) => {
-            panic!("{}: error when clearing DTR ({e:?})", module_path!());
-        }
-    }
+    serial_port.write_data_terminal_ready(false).map_err(|e| ActuateControllinoError::ClearDTRFailed { source: e })?;
 
     // wait for the device
     let sleep_duration_after_dtr_reset =
@@ -630,19 +652,14 @@ fn controllino_open_serial_port(
     spin_sleeper.sleep(sleep_duration_after_dtr_reset);
 
     // flush the buffer
-    match serial_port.clear(ClearBuffer::All) {
-        Ok(_) => { /* could clear buffer - do nothing */ }
-        Err(e) => {
-            panic!("{}: error when clearing buffer ({e:?})", module_path!());
-        }
-    }
+    serial_port.clear(ClearBuffer::All).map_err(|e| ActuateControllinoError::ClearBufferFailed {source: e})?;
 
     // wait for the device
     let sleep_duration_after_buffer_clear =
         Duration::from_millis(controllino_constants::SLEEP_AFTER_CLEAR_BUFFER_MILLIS);
     spin_sleeper.sleep(sleep_duration_after_buffer_clear);
 
-    serial_port
+    Ok(serial_port)
 }
 
 impl ActuateControllino {
@@ -662,8 +679,9 @@ impl ActuateControllino {
     ///   relay ID mappings for various aquarium devices.
     ///
     /// # Returns
-    /// `true` if all relay IDs are valid (within range and distinct); `false` otherwise.
-    pub fn check_valid_relay_id_config(config: &ActuateControllinoConfig) -> bool {
+    /// An error of type `ActuateControllinoError` if an error is found.
+    /// `((Ok))` otherwise.
+    pub fn check_valid_relay_id_config(config: &ActuateControllinoConfig) -> Result<(), ActuateControllinoError> {
         // check if relay ids are in valid range and if they are distinct
         let mut seen_values = HashSet::new();
 
@@ -684,28 +702,14 @@ impl ActuateControllino {
 
         for &value in &relay_id_values {
             if !(CONTROLLINO_MIN_RELAY_ID..=CONTROLLINO_MAX_RELAY_ID).contains(&value) {
-                #[cfg(not(test))]
-                error!(
-                    target: module_path!(),
-                    "Not all relay IDs are inside permissible range."
-                );
-                #[cfg(test)]
-                println!("Not all relay IDs are inside permissible range.");
-                return false; // Value is out of the allowed range
+                return Err(ActuateControllinoError::RelayIdOutsideRange(value, CONTROLLINO_MIN_RELAY_ID, CONTROLLINO_MAX_RELAY_ID));
             }
             if !seen_values.insert(value) {
-                #[cfg(not(test))]
-                error!(
-                    target: module_path!(),
-                    "Not all relay IDs are distinct - duplicate values found."
-                );
-                #[cfg(test)]
-                println!("Not all relay IDs are distinct - duplicate values found.");
-                return false; // Duplicate value found
+                return Err(ActuateControllinoError::RelayIdDuplicate(value));
             }
         }
 
-        true
+        Ok(())
     }
 
     /// Creates a new `ActuateControllino` instance, establishing communication with the Controllino hardware.
@@ -718,42 +722,32 @@ impl ActuateControllino {
     /// * `config` - Configuration data for the Controllino relays, including serial port settings and device-to-relay mappings.
     ///
     /// # Returns
-    /// A new `ActuateControllino` struct, ready for sending commands to the hardware.
-    ///
-    /// # Panics
-    /// This function will **panic** if:
-    /// - The provided `config` contains **invalid relay ID mappings** (e.g., IDs outside the permissible range or duplicate IDs).
-    /// - The `port_name` in the configuration is **empty**.
-    /// - It fails to **open or initialize the serial port** connection to the Controllino.
-    pub fn new(config: ActuateControllinoConfig) -> ActuateControllino {
+    /// In case of success, new `ActuateControllino` struct, ready for sending commands to the hardware.
+    /// In case of failure, an error of type `ActuateControllinoError` is returned.
+    pub fn new(config: ActuateControllinoConfig) -> Result<ActuateControllino, ActuateControllinoError> {
         let spin_sleeper = SpinSleeper::default();
 
         // check the validity of configuration
-        if !Self::check_valid_relay_id_config(&config) {
-            panic!("{}: Relay ID configuration is invalid.", module_path!());
-        }
+        Self::check_valid_relay_id_config(&config)?;
 
         if config.port_name.is_empty() {
-            panic!(
-                "{}: Port name for communication with Controllino is empty.",
-                module_path!()
-            );
+            return Err(ActuateControllinoError::EmptyPortName);
         }
 
         let serial_port = controllino_open_serial_port(
             config.port_name.clone(),
             config.baud_rate,
             config.timeout_millis,
-        );
+        )?;
         let controllino_processing_millis = config.controllino_processing_millis;
         let controllino_processing_duration = Duration::from_millis(controllino_processing_millis);
 
-        ActuateControllino {
+        Ok(ActuateControllino {
             config,
             spin_sleeper,
             controllino_processing_duration,
             serial_port,
-        }
+        })
     }
 }
 
@@ -777,34 +771,35 @@ pub mod tests {
     };
 
     use crate::relays::actuate_controllino::{
-        controllino_constants, create_command_message, ActuateControllino,
+        controllino_constants, create_command_message, ActuateControllino, ActuateControllinoError,
         CONTROLLINO_MAX_RELAY_ID, CONTROLLINO_MIN_RELAY_ID,
     };
     use crate::relays::relay_error::RelayError;
     use crate::utilities::channel_content::InternalCommand;
     use crate::utilities::config::{read_config_file, ConfigData};
+
     #[test]
-    #[should_panic]
     pub fn test_invalid_relay_id_config_low() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.controllino_relay.main_pump1_id = CONTROLLINO_MIN_RELAY_ID - 1;
 
-        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+        let test_result = ActuateControllino::new(config.controllino_relay);
+        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdOutsideRange(_,_,_))));
     }
     #[test]
-    #[should_panic]
     pub fn test_invalid_relay_id_config_high() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
         config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID + 1;
 
-        let _actuate_controllino = ActuateControllino::new(config.controllino_relay);
+        let test_result = ActuateControllino::new(config.controllino_relay);
+        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdOutsideRange(_,_,_))));
     }
+
     #[test]
-    #[should_panic]
     pub fn test_invalid_relay_config_duplicate() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
@@ -812,7 +807,8 @@ pub mod tests {
         config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID;
         config.controllino_relay.main_pump2_id = CONTROLLINO_MAX_RELAY_ID;
 
-        let _gpio_handler = ActuateControllino::new(config.controllino_relay);
+        let test_result = ActuateControllino::new(config.controllino_relay);
+        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdDuplicate(_))));
     }
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]
