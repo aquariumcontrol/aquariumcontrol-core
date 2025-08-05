@@ -14,14 +14,6 @@ use log::{error, warn};
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
 
-use mysql::PooledConn;
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::fs;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
 use crate::recorder::data_injection::DataInjectionTrait;
@@ -32,6 +24,14 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillStatus;
+use mysql::PooledConn;
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::fs;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use thiserror::Error;
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -142,6 +142,22 @@ pub struct DataLoggerMutexes {
     pub mutex_refill_status: Arc<Mutex<RefillStatus>>,
 }
 
+/// Contains the error definition for DataLogger
+#[derive(Error, Debug)]
+pub enum DataLoggerError {
+    #[error("One of the output file names for the data logging to filesystem is empty.")]
+    OutputFilenameEmpty,
+
+    #[error("Could not reset content of output file for {signal_name} ({output_file_name})")]
+    FileResetFailure {
+        signal_name: String,
+        output_file_name: String,
+
+        #[source]
+        source: std::io::Error,
+    },
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for regular data logging to SQL database
 /// and writing to the file (in RAM disk).
@@ -235,13 +251,12 @@ impl DataLogger {
     /// * `database_ping_interval` - A `Duration` instance, providing the interval to ping the database.
     ///
     /// # Returns
-    /// A new `DataLogger` struct, ready to collect, filter, and log sensor data.
-    ///
-    /// # Panics
-    /// This function will panic if:
-    /// - Any of the required output file names in the `config` are empty when `output_to_disk` is `true`.
-    /// - It fails to reset the content of any configured output file on disk (e.g., due to permissions issues).
-    pub fn new(config: DataLoggerConfig, database_ping_interval: Duration) -> DataLogger {
+    /// - In case of success, a new `DataLogger` struct, ready to collect, filter, and log sensor data.
+    /// - In case of failure, an error of type `DataLoggerError`.
+    pub fn new(
+        config: DataLoggerConfig,
+        database_ping_interval: Duration,
+    ) -> Result<DataLogger, DataLoggerError> {
         if config.output_to_disk {
             if config.output_file_name_timestamp.is_empty()
                 || config.output_file_name_water_temperature.is_empty()
@@ -265,53 +280,139 @@ impl DataLogger {
                 || config.output_file_name_humidity.is_empty()
                 || config.output_file_name_refill_in_progress.is_empty()
             {
-                panic!("{}: one of the output file names is empty.", module_path!());
+                return Err(DataLoggerError::OutputFilenameEmpty);
             } else {
-                fs::write(config.output_file_name_timestamp.clone(), "")
-                    .expect("DataLogger: Could not reset content of output file for timestamp.");
-                fs::write(config.output_file_name_water_temperature.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for water temperature.",
-                );
-                fs::write(config.output_file_name_water_temperature_filtered.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for filtered water temperature."
-                );
-                fs::write(config.output_file_name_pH.clone(), "")
-                    .expect("DataLogger: Could not reset content of output file for pH value.");
-                fs::write(config.output_file_name_pH_filtered.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for filtered pH value.",
-                );
-                fs::write(config.output_file_name_conductivity.clone(), "")
-                    .expect("DataLogger: Could not reset content of output file for conductivity.");
-                fs::write(config.output_file_name_conductivity_filtered.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for filtered conductivity.",
-                );
-                fs::write(config.output_file_name_tank_level_switch_position.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for tank level switch position."
-                );
-                fs::write(config.output_file_name_tank_level_switch_invalid.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for tank level switch invalid."
-                );
-                fs::write(config.output_file_name_tank_level_switch_position_stabilized.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for tank level switch position stabilized."
-                );
-                fs::write(config.output_file_name_ventilation_is_on.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for ventilation status.",
-                );
-                fs::write(config.output_file_name_heating_is_on.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for heating status.",
-                );
-                fs::write(config.output_file_name_ambient_temperature.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for ambient air temperature."
-                );
-                fs::write(config.output_file_name_humidity.clone(), "")
-                    .expect("DataLogger: Could not reset content of output file for humidity.");
-                fs::write(config.output_file_name_refill_in_progress.clone(), "").expect(
-                    "DataLogger: Could not reset content of output file for refill in progress.",
-                );
+                fs::write(config.output_file_name_timestamp.clone(), String::new()).map_err(
+                    |e| DataLoggerError::FileResetFailure {
+                        signal_name: "timestamp".to_string(),
+                        output_file_name: config.output_file_name_timestamp.clone(),
+                        source: e,
+                    },
+                )?;
+                fs::write(
+                    config.output_file_name_water_temperature.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "water temperature".to_string(),
+                    output_file_name: config.output_file_name_water_temperature.clone(),
+                    source: e,
+                })?;
+                fs::write(
+                    config.output_file_name_water_temperature_filtered.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "filtered water temperature".to_string(),
+                    output_file_name: config.output_file_name_water_temperature_filtered.clone(),
+                    source: e,
+                })?;
+                fs::write(config.output_file_name_pH.clone(), String::new()).map_err(|e| {
+                    DataLoggerError::FileResetFailure {
+                        signal_name: "pH value".to_string(),
+                        output_file_name: config.output_file_name_pH.clone(),
+                        source: e,
+                    }
+                })?;
+                fs::write(config.output_file_name_pH_filtered.clone(), String::new()).map_err(
+                    |e| DataLoggerError::FileResetFailure {
+                        signal_name: "filtered pH value".to_string(),
+                        output_file_name: config.output_file_name_pH_filtered.clone(),
+                        source: e,
+                    },
+                )?;
+                fs::write(config.output_file_name_conductivity.clone(), String::new()).map_err(
+                    |e| DataLoggerError::FileResetFailure {
+                        signal_name: "conductivity".to_string(),
+                        output_file_name: config.output_file_name_conductivity.clone(),
+                        source: e,
+                    },
+                )?;
+                fs::write(
+                    config.output_file_name_conductivity_filtered.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "filtered conductivity".to_string(),
+                    output_file_name: config.output_file_name_conductivity_filtered.clone(),
+                    source: e,
+                })?;
+                fs::write(
+                    config.output_file_name_tank_level_switch_position.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "tank level switch position".to_string(),
+                    output_file_name: config.output_file_name_tank_level_switch_position.clone(),
+                    source: e,
+                })?;
+                fs::write(
+                    config.output_file_name_tank_level_switch_invalid.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "tank level switch invalid".to_string(),
+                    output_file_name: config.output_file_name_tank_level_switch_invalid.clone(),
+                    source: e,
+                })?;
+                fs::write(
+                    config
+                        .output_file_name_tank_level_switch_position_stabilized
+                        .clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "tank level switch stabilized".to_string(),
+                    output_file_name: config
+                        .output_file_name_tank_level_switch_position_stabilized
+                        .clone(),
+                    source: e,
+                })?;
+                fs::write(
+                    config.output_file_name_ventilation_is_on.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "ventilation status".to_string(),
+                    output_file_name: config.output_file_name_ventilation_is_on.clone(),
+                    source: e,
+                })?;
+                fs::write(config.output_file_name_heating_is_on.clone(), String::new()).map_err(
+                    |e| DataLoggerError::FileResetFailure {
+                        signal_name: "heating status".to_string(),
+                        output_file_name: config.output_file_name_heating_is_on.clone(),
+                        source: e,
+                    },
+                )?;
+                fs::write(
+                    config.output_file_name_ambient_temperature.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "ambient temperature".to_string(),
+                    output_file_name: config.output_file_name_ambient_temperature.clone(),
+                    source: e,
+                })?;
+                fs::write(config.output_file_name_humidity.clone(), String::new()).map_err(
+                    |e| DataLoggerError::FileResetFailure {
+                        signal_name: "humidity".to_string(),
+                        output_file_name: config.output_file_name_humidity.clone(),
+                        source: e,
+                    },
+                )?;
+                fs::write(
+                    config.output_file_name_refill_in_progress.clone(),
+                    String::new(),
+                )
+                .map_err(|e| DataLoggerError::FileResetFailure {
+                    signal_name: "refill in progress".to_string(),
+                    output_file_name: config.output_file_name_refill_in_progress.clone(),
+                    source: e,
+                })?;
             }
         }
 
-        Self {
+        Ok(Self {
             config,
             lock_error_get_timestamp: false,
             lock_error_output_signal_water_temperature: false,
@@ -334,7 +435,7 @@ impl DataLogger {
             last_ping_instant: Instant::now(),
             database_ping_interval,
             lock_error_mutex_signal_manager: false,
-        }
+        })
     }
 
     /// Outputs a non-binary sensor signal to a specified file, typically located on a RAM disk.
@@ -1412,7 +1513,8 @@ pub mod tests {
         };
         let sql_interface_data =
             SqlInterfaceData::new(sql_interface.get_connection(), max_rows_data).unwrap();
-        let mut data_logger = DataLogger::new(config.data_logger, Duration::from_millis(1000));
+        let mut data_logger =
+            DataLogger::new(config.data_logger, Duration::from_millis(1000)).unwrap();
 
         // replacement values are used to initialize the mutex content
         config.sensor_manager.replacement_value_water_temperature = 10.0;

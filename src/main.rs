@@ -1190,7 +1190,8 @@ fn run() -> Result<(), StartupError> {
     );
 
     let mut data_injection = DataInjection;
-    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration);
+    let mut data_logger = DataLogger::new(config.data_logger, database_ping_duration)
+        .map_err(|e| StartupError::DataLoggerSetupFailure { source: e })?;
 
     let mut refill = Refill::new(config.refill, sql_interface_refill, database_ping_duration);
 

@@ -2,6 +2,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling::BallingError;
+use crate::recorder::data_logger::DataLoggerError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
@@ -80,5 +81,12 @@ pub enum StartupError {
     LoggingSetupFailure {
         #[source]
         source: LoggerSetupError,
+    },
+
+    /// Could not initialize the data recording system.
+    #[error("Could not setup data logger.")]
+    DataLoggerSetupFailure {
+        #[source]
+        source: DataLoggerError,
     },
 }

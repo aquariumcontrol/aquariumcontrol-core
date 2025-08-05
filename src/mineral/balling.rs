@@ -2170,7 +2170,8 @@ pub mod tests {
             sql_interface.get_connection(),
             max_rows_balling_set_values,
             max_rows_balling_dosing_log,
-            ).unwrap();
+        )
+        .unwrap();
 
         // create the test object
         let test_result = Balling::new(
