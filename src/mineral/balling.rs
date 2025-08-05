@@ -9,7 +9,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use chrono::Local;
 use log::{error, info, warn};
 use std::fmt;
-use std::num::TryFromIntError;
 
 #[cfg(feature = "debug_balling")]
 use log::debug;
@@ -19,10 +18,9 @@ use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use thiserror::Error;
 
 use crate::database::sql_interface_balling::{BallingSetVal, SqlInterfaceBalling};
-use crate::database::sql_interface_error::SqlInterfaceError;
+use crate::mineral::balling_error::BallingError;
 use crate::mineral::mineral_injection::MineralInjectionTrait;
 use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
@@ -87,53 +85,6 @@ pub struct BallingChannels {
 
     /// receiver part of the channel communication wrapped in Option from Messaging
     pub rx_balling_from_messaging_opt: Option<Receiver<InternalCommand>>,
-}
-
-/// Contains error definitions for Balling
-#[derive(Debug, Error)]
-pub enum BallingError {
-    /// Balling check interval is zero.
-    #[error("schedule check interval is zero - please assign a value > 0")]
-    BallingScheduleCheckIntervalZero,
-
-    /// Could not get set values for a pump from database.
-    #[error("Could not get set values for pump {pump_id} from database.")]
-    BallingSetValueRetrievalError {
-        pump_id: u64,
-
-        #[source]
-        source: SqlInterfaceError,
-    },
-
-    /// Invalid dosing interval in configuration file
-    #[error("Invalid dosing interval for pump {0} in configuration file: Dosing interval ({1}) is shorter than check interval ({2}).")]
-    BallingDosingIntervalShorterThanCheckInterval(u32, u32, u32),
-
-    /// Countdown calculation encountered invalid pump id.
-    #[error("Countdown calculation encountered invalid pump id {0}")]
-    BallingCountdownCalculationInvalidPumpId(i64),
-
-    /// Invalid dosing interval in configuration.
-    #[error("Invalid dosing interval for pump #{0} in configuration.")]
-    BallingInvalidDosingInterval(i64),
-
-    /// Calculating duration since the last dosing event failed.
-    #[error("Calculating duration since last dosing event for pump {pump_id} failed.")]
-    BallingCalculateDurationSinceLastDosingFailure {
-        pump_id: i64,
-
-        #[source]
-        source: TryFromIntError,
-    },
-
-    /// Reading duration since the last dosing event from the database failed.
-    #[error("Reading duration since last dosing event for pump {pump_id} from database failed.")]
-    BallingReadDurationSinceLastDosingFailure {
-        pump_id: i64,
-
-        #[source]
-        source: SqlInterfaceError,
-    },
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -234,7 +185,7 @@ impl Balling {
         database_ping_interval: Duration,
     ) -> Result<Balling, BallingError> {
         if config.schedule_check_interval == 0 {
-            return Err(BallingError::BallingScheduleCheckIntervalZero);
+            return Err(BallingError::ScheduleCheckIntervalZero);
         }
 
         Self::check_valid_dosing_intervals(&config)?;
@@ -281,32 +232,32 @@ impl Balling {
         for pump_id in 1..=4 {
             let target_dosing_interval = Self::get_target_dosing_interval(config, pump_id)?;
             if target_dosing_interval == 0 {
-                return Err(BallingError::BallingInvalidDosingInterval(pump_id));
+                return Err(BallingError::InvalidDosingInterval(pump_id));
             }
         }
         if config.pump1_active && config.dosing_interval_pump1 < config.schedule_check_interval {
-            return Err(BallingError::BallingDosingIntervalShorterThanCheckInterval(
+            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
                 1,
                 config.dosing_interval_pump1,
                 config.schedule_check_interval,
             ));
         }
         if config.pump2_active && config.dosing_interval_pump2 < config.schedule_check_interval {
-            return Err(BallingError::BallingDosingIntervalShorterThanCheckInterval(
+            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
                 1,
                 config.dosing_interval_pump2,
                 config.schedule_check_interval,
             ));
         }
         if config.pump3_active && config.dosing_interval_pump3 < config.schedule_check_interval {
-            return Err(BallingError::BallingDosingIntervalShorterThanCheckInterval(
+            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
                 1,
                 config.dosing_interval_pump3,
                 config.schedule_check_interval,
             ));
         }
         if config.pump4_active && config.dosing_interval_pump4 < config.schedule_check_interval {
-            return Err(BallingError::BallingDosingIntervalShorterThanCheckInterval(
+            return Err(BallingError::DosingIntervalShorterThanCheckInterval(
                 1,
                 config.dosing_interval_pump4,
                 config.schedule_check_interval,
@@ -336,7 +287,7 @@ impl Balling {
             match sql_interface_balling.get_single_balling_setval_from_database(1) {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
-                    return Err(BallingError::BallingSetValueRetrievalError {
+                    return Err(BallingError::SetValueRetrievalError {
                         pump_id: 1,
                         source: e,
                     });
@@ -347,7 +298,7 @@ impl Balling {
             match sql_interface_balling.get_single_balling_setval_from_database(2) {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
-                    return Err(BallingError::BallingSetValueRetrievalError {
+                    return Err(BallingError::SetValueRetrievalError {
                         pump_id: 2,
                         source: e,
                     });
@@ -358,7 +309,7 @@ impl Balling {
             match sql_interface_balling.get_single_balling_setval_from_database(3) {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
-                    return Err(BallingError::BallingSetValueRetrievalError {
+                    return Err(BallingError::SetValueRetrievalError {
                         pump_id: 3,
                         source: e,
                     });
@@ -369,7 +320,7 @@ impl Balling {
             match sql_interface_balling.get_single_balling_setval_from_database(4) {
                 Ok(_) => { /* do nothing */ }
                 Err(e) => {
-                    return Err(BallingError::BallingSetValueRetrievalError {
+                    return Err(BallingError::SetValueRetrievalError {
                         pump_id: 4,
                         source: e,
                     });
@@ -383,8 +334,9 @@ impl Balling {
     /// # Arguments
     /// * `config` - A reference to the `BallingConfig` containing the dosing intervals for each pump.
     /// * `pump_id` - The id of the pump for which the dosing interval shall be identified.
-    /// In case of success:
-    /// A `u64` representing the dosing interval in seconds
+    ///
+    /// # Returns
+    /// In case of success: A `u64` representing the dosing interval in seconds
     /// In case of failure, the function returns an error of type `BallingError`.
     fn get_target_dosing_interval(
         config: &BallingConfig,
@@ -395,9 +347,7 @@ impl Balling {
             2 => Ok(config.dosing_interval_pump2),
             3 => Ok(config.dosing_interval_pump3),
             4 => Ok(config.dosing_interval_pump4),
-            _ => Err(BallingError::BallingCountdownCalculationInvalidPumpId(
-                pump_id,
-            )),
+            _ => Err(BallingError::CountdownCalculationInvalidPumpId(pump_id)),
         }
     }
 
@@ -427,7 +377,7 @@ impl Balling {
     ) -> Result<u32, BallingError> {
         let target_dosing_interval = Self::get_target_dosing_interval(config, pump_id)?;
         if target_dosing_interval == 0 {
-            return Err(BallingError::BallingInvalidDosingInterval(pump_id));
+            return Err(BallingError::InvalidDosingInterval(pump_id));
         }
 
         let duration_since_balling_dosing: u32 =
@@ -436,18 +386,16 @@ impl Balling {
                     Some(duration) => match duration.try_into() {
                         Ok(c) => c,
                         Err(e) => {
-                            return Err(
-                                BallingError::BallingCalculateDurationSinceLastDosingFailure {
-                                    pump_id,
-                                    source: e,
-                                },
-                            );
+                            return Err(BallingError::CalculateDurationSinceLastDosingFailure {
+                                pump_id,
+                                source: e,
+                            });
                         }
                     },
                     None => target_dosing_interval,
                 },
                 Err(e) => {
-                    return Err(BallingError::BallingReadDurationSinceLastDosingFailure {
+                    return Err(BallingError::ReadDurationSinceLastDosingFailure {
                         pump_id,
                         source: e,
                     });
@@ -1052,7 +1000,7 @@ pub mod tests {
             }
             Err(e) => {
                 println!("Balling initialization correctly returned error: {e:?}. Checking if error type is correct...");
-                assert!(matches!(e, BallingError::BallingInvalidDosingInterval(_)));
+                assert!(matches!(e, BallingError::InvalidDosingInterval(_)));
             }
         }
     }
@@ -1936,7 +1884,7 @@ pub mod tests {
         );
         assert!(matches!(
             result,
-            Err(BallingError::BallingSetValueRetrievalError {
+            Err(BallingError::SetValueRetrievalError {
                 pump_id: _,
                 source: _
             })
@@ -2150,7 +2098,7 @@ pub mod tests {
                 println!("Balling initialization correctly returned error: {e:?}. Checking if error type is correct...");
                 assert!(matches!(
                     e,
-                    BallingError::BallingDosingIntervalShorterThanCheckInterval(_, _, _)
+                    BallingError::DosingIntervalShorterThanCheckInterval(_, _, _)
                 ));
             }
         }
@@ -2189,7 +2137,7 @@ pub mod tests {
             }
             Err(e) => {
                 println!("Balling initialization correctly returned error: {e:?}. Checking if error type is correct...");
-                assert!(matches!(e, BallingError::BallingScheduleCheckIntervalZero));
+                assert!(matches!(e, BallingError::ScheduleCheckIntervalZero));
             }
         }
     }

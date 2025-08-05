@@ -1,7 +1,7 @@
 use crate::database::sql_interface_error::SqlInterfaceError;
 #[cfg(target_os = "linux")]
 use crate::dispatch::messaging_error::MessagingError;
-use crate::mineral::balling::BallingError;
+use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger::DataLoggerError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
