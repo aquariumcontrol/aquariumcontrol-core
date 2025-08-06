@@ -21,6 +21,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
+use crate::utilities::logger::log_error_chain;
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -201,6 +202,9 @@ impl RelayManager {
     /// * `actuation_name` - A string slice providing a descriptive name for the
     ///   actuation being attempted (e.g., "refill pump", "heater"). This is
     ///   used in log messages to make them more informative.
+    /// # Returns
+    /// * `Ok(())` in case of success
+    /// * `RelayError::ActuationFailed` in case of failure
     fn actuate_with_retries(
         &mut self,
         actuator: &mut impl RelayActuationTrait,
@@ -208,9 +212,10 @@ impl RelayManager {
         actuation_name: &str, // Name for logging, e.g., "refill pump", "heater"
         spin_sleeper: &mut SpinSleeper,
         sleep_duration: Duration,
-    ) {
+    ) -> Result<(), RelayError> {
         let mut attempts = 0;
         let max_attempts = 1 + self.config.actuation_retries; // 1 initial attempt + `actuation_retries` retries
+        let mut error_to_be_reported = RelayError::InitialValue;
 
         while attempts < max_attempts {
             match actuator.actuate(command) {
@@ -226,7 +231,7 @@ impl RelayManager {
                             println!("Actuation with strange name: {}", actuation_name);
                         }
                     }
-                    break;
+                    return Ok(());
                 }
                 Err(e) => {
                     if e == RelayError::IncorrectChecksum {
@@ -235,15 +240,8 @@ impl RelayManager {
 
                     // Log error only after the final attempt
                     if attempts == max_attempts - 1 {
-                        #[cfg(not(test))]
-                        error!(
-                            target: module_path!(),
-                            "{}: actuation failed (attempt {}/{}) with error: {:?}",
-                            actuation_name,
-                            attempts + 1,
-                            max_attempts,
-                            e
-                        );
+                        error_to_be_reported = e;
+                        break;
                     } else {
                         // Wait a little before retrying
                         spin_sleeper.sleep(sleep_duration);
@@ -252,6 +250,12 @@ impl RelayManager {
                 }
             }
         }
+        Err(RelayError::ActuationFailed {
+            actuation_name: actuation_name.to_string(),
+            last_attempt_number: attempts + 1,
+            max_attempt_allowed: max_attempts,
+            source: Box::new(error_to_be_reported)
+        })
     }
 
     /// Executes the main control loop for the Relay Manager.
@@ -303,13 +307,15 @@ impl RelayManager {
                 Ok(command) => {
                     self.lock_error_channel_receive_refill = false;
                     if self.config.active {
-                        self.actuate_with_retries(
+                        if let Err(refill_actuation_error) = self.actuate_with_retries(
                             actuator,
                             &command,
                             "refill",
                             &mut spin_sleeper,
                             sleep_duration,
-                        );
+                        ) {
+                            log_error_chain(module_path!(), "Actuation of refill pump failed.", refill_actuation_error);
+                        }
                     }
                     match &relay_manager_channels.tx_relay_manager_to_refill.send(true) {
                         Ok(()) => {
@@ -353,13 +359,15 @@ impl RelayManager {
             {
                 Ok(command) => {
                     self.lock_error_channel_receive_heating = false;
-                    self.actuate_with_retries(
+                    if let Err(heating_actuation_error) = self.actuate_with_retries(
                         actuator,
                         &command,
                         "heating",
                         &mut spin_sleeper,
                         sleep_duration,
-                    );
+                    ) {
+                        log_error_chain(module_path!(), "Actuation of heater failed.", heating_actuation_error);
+                    }
                     match &relay_manager_channels
                         .tx_relay_manager_to_heating
                         .send(true)
@@ -405,13 +413,15 @@ impl RelayManager {
             {
                 Ok(command) => {
                     self.lock_error_channel_receive_ventilation = false;
-                    self.actuate_with_retries(
+                    if let Err(ventilation_actuation_error) = self.actuate_with_retries(
                         actuator,
                         &command,
                         "ventilation",
                         &mut spin_sleeper,
                         sleep_duration,
-                    );
+                    ) {
+                        log_error_chain(module_path!(), "Actuation of ventilation failed.", ventilation_actuation_error);
+                    }
                     match &relay_manager_channels
                         .tx_relay_manager_to_ventilation
                         .send(true)
@@ -457,13 +467,15 @@ impl RelayManager {
             {
                 Ok(command) => {
                     self.lock_error_channel_receive_balling = false;
-                    self.actuate_with_retries(
+                    if let Err(balling_actuation_error) = self.actuate_with_retries(
                         actuator,
                         &command,
                         "balling",
                         &mut spin_sleeper,
                         sleep_duration,
-                    );
+                    ) {
+                        log_error_chain(module_path!(), "Actuation of Balling dosing failed.", balling_actuation_error);
+                    }
                     match &relay_manager_channels
                         .tx_relay_manager_to_balling
                         .send(true)
@@ -506,13 +518,15 @@ impl RelayManager {
             match relay_manager_channels.rx_relay_manager_from_feed.try_recv() {
                 Ok(command) => {
                     self.lock_error_channel_receive_feed = false;
-                    self.actuate_with_retries(
+                    if let Err(feed_actuation_error) = self.actuate_with_retries(
                         actuator,
                         &command,
                         "feed",
                         &mut spin_sleeper,
                         sleep_duration,
-                    );
+                    ) {
+                        log_error_chain(module_path!(), "Actuation of feed failed.", feed_actuation_error);
+                    }
                     match &relay_manager_channels.tx_relay_manager_to_feed.send(true) {
                         Ok(()) => {
                             self.lock_error_channel_send_feed = false;

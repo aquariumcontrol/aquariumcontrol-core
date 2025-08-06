@@ -35,4 +35,19 @@ pub enum RelayError {
     /// The pulse-command is not allowed for the device.
     #[error("The pulse-command is not allowed for the device {0}")]
     PulseNotAllowedForDevice(AquariumDevice),
+
+    /// The actuation failed after several retries.
+    #[error("Actuation failed (attempt {last_attempt_number}/{max_attempt_allowed}).")]
+    ActuationFailed {
+        actuation_name: String,
+        last_attempt_number: u64,
+        max_attempt_allowed: u64,
+        
+        #[source]
+        source: Box<RelayError>
+    },
+    
+    /// Used to initialize variable. Value is overwritten with real error.
+    #[error("Initial value")]
+    InitialValue,
 }
