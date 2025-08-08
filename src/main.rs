@@ -1068,7 +1068,8 @@ fn run() -> Result<(), StartupError> {
             let gpio_tank_level_switch = config.gpio_handler.tank_level_switch;
             let actuate_gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
             let use_simulator_for_gpio = config.gpio_handler.use_simulator;
-            let gpio_handler_opt = GpioHandler::new(config.gpio_handler);
+            let gpio_handler_opt = GpioHandler::new(config.gpio_handler).
+                map_err(|e| StartupError::GpioHandler { source: e })?;
 
             if use_simulator_for_gpio {
                 // use the simulator-version for TankLevelSwitch

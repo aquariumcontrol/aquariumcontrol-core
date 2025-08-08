@@ -11,6 +11,8 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -91,9 +93,18 @@ pub enum StartupError {
         source: DataLoggerError,
     },
 
+    /// Could not initialize communication with Controllino.
     #[error("Could not setup communication with Controllino.")]
     ControllinoSetupFailure {
         #[source]
         source: ActuateControllinoError,
     },
+
+    /// Could not initialize the interface to the GPIO.
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[error("Could not setup the interface to the GPIO.")]
+    GpioHandlerSetupFailure {
+        #[source]
+        source: GpioHandlerError,
+    }
 }

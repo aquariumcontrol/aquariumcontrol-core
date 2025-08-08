@@ -11,6 +11,7 @@ use log::error;
 use std::collections::HashSet;
 
 use serde_derive::Deserialize;
+use thiserror::Error;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -21,6 +22,13 @@ cfg_if::cfg_if! {
 // create a stub version of the type to allow build on non-target platforms
 #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
 pub type Gpio = u64;
+
+
+/// Minimum permissible GPIO value. The configuration is checked against this value.
+pub const GPIO_MIN: u8 = 3;
+
+/// Maximum permissible GPIO value. The configuration is checked against this value.
+pub const GPIO_MAX: u8 = 28;
 
 /// Holds the configuration data for the GPIO handler.
 /// The configuration is loaded from the .toml configuration file.
@@ -79,6 +87,25 @@ pub struct GpioHandlerConfig {
     pub peristaltic_pump4: u8,
 }
 
+/// Contains error definition for GpioHandler
+#[derive(Error, Debug)]
+pub enum GpioHandlerError {
+    #[error("Configuration contains invalid GPIO pin mapping: {0} is out of range")]
+    GpioOutsideRange(u8),
+
+    #[error("Found duplicate GPIO values in configuration: {0} is not unique.")]
+    GpioDuplicateValue(u8),
+
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Could not open interface to GPIO.")]
+    GpioOpenInterfaceFailed {
+        #[source]
+        source: rppal::gpio::Error,
+    },
+
+    #[error("Usage of hardware not supported on this platform.")]
+    PlatformNotSupported,
+}
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Contains the configuration and the implementation for the GPIO handler.
 pub struct GpioHandler {
@@ -101,8 +128,8 @@ impl GpioHandler {
     /// * `config` - The `GpioHandlerConfig` struct containing the GPIO pin assignments for various aquarium devices.
     ///
     /// # Returns
-    /// `true` if all GPIO pin IDs are valid (within range and distinct); `false` otherwise.
-    pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> bool {
+    /// `Ok(())` if all GPIO pin IDs are valid (within range and distinct), an error of type `GpioHandlerError` otherwise.
+    pub fn check_valid_gpio_pin_config(config: &GpioHandlerConfig) -> Result<(), GpioHandlerError> {
         // check if pin ids are in valid range and if they are distinct
         let mut seen_values = HashSet::new();
 
@@ -126,29 +153,15 @@ impl GpioHandler {
         ];
 
         for &value in &gpio_values {
-            if value <= 3 || value >= 28 {
-                #[cfg(not(test))]
-                error!(
-                    target: module_path!(),
-                    "Not all GPIOs are inside permissible range. GPIO {value} is not valid."
-                );
-                #[cfg(test)]
-                println!("Not all GPIOs are inside permissible range.");
-                return false; // Value is out of the allowed range
+            if value <= GPIO_MIN || value >= GPIO_MAX {
+                return Err(GpioHandlerError::GpioOutsideRange(value));
             }
             if !seen_values.insert(value) {
-                #[cfg(not(test))]
-                error!(
-                    target: module_path!(),
-                    "Not all GPIOs are distinct - duplicate values found."
-                );
-                #[cfg(test)]
-                println!("Not all GPIOs are distinct - duplicate values found.");
-                return false; // Duplicate value found
+                return Err(GpioHandlerError::GpioDuplicateValue(value));
             }
         }
 
-        true
+        Ok(())
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -171,33 +184,24 @@ impl GpioHandler {
     /// This function will panic if:
     /// - The `config` contains invalid GPIO pin mappings (e.g., out-of-range or duplicate IDs).
     /// - `use_simulator` is false, and it fails to open the underlying GPIO interface.
-    pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
+    pub fn new(config: GpioHandlerConfig) -> Result<Option<GpioHandler>, GpioHandlerError> {
         let use_simulator = config.use_simulator; // create copy because the struct is moved
 
         // check if GPIO pin configuration is valid
-        if !Self::check_valid_gpio_pin_config(&config) {
-            panic!("{}: GPIO pin configuration is invalid", module_path!(),);
-        }
+        Self::check_valid_gpio_pin_config(&config)?;
 
         if !use_simulator {
             // open interface to the GPIO library
-            let gpio_lib_handle = match Gpio::new() {
-                Ok(c) => c,
-                Err(e) => {
-                    panic!(
-                        "{}: could not open interface to GPIO ({e:?})",
-                        module_path!(),
-                    );
-                }
-            };
+            let gpio_lib_handle = Gpio::new().
+                map_err(|e| GpioHandlerError::GpioOpenInterfaceFailed { source: e})?;
 
-            Some(GpioHandler {
+            Ok(Some(GpioHandler {
                 gpio_lib_handle_opt: Some(gpio_lib_handle),
-            })
+            }))
         } else {
-            Some(GpioHandler {
+           Ok( Some(GpioHandler {
                 gpio_lib_handle_opt: None,
-            })
+            }))
         }
     }
 
@@ -221,24 +225,20 @@ impl GpioHandler {
     /// This function will panic if:
     /// - `use_simulator` in the `config` is `false` (meaning a hardware setup is attempted on an unsupported platform).
     /// - The `config` contains **invalid GPIO pin mappings** (e.g., out-of-range or duplicate IDs).
-    pub fn new(config: GpioHandlerConfig) -> Option<GpioHandler> {
+    pub fn new(config: GpioHandlerConfig) -> Result<Option<GpioHandler>, GpioHandlerError> {
         if !config.use_simulator {
-            panic!(
-                "{}: Usage of hardware not supported on this platform.",
-                module_path!()
-            );
+            return Err(GpioHandlerError::PlatformNotSupported);
         }
 
-        if !Self::check_valid_gpio_pin_config(&config) {
-            panic!("{}: GPIO pin configuration is invalid", module_path!(),);
-        }
-        None
+        Self::check_valid_gpio_pin_config(&config)?;
+
+        Ok(None)
     }
 }
 
 pub mod tests {
     #[allow(unused_imports)]
-    use crate::sensors::gpio_handler::GpioHandler;
+    use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
     #[allow(unused_imports)]
     use crate::utilities::config::{read_config_file, ConfigData};
 
@@ -246,41 +246,50 @@ pub mod tests {
     pub fn test_valid_gpio_config() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
-        let _gpio_handler = GpioHandler::new(config.gpio_handler);
+        // The `new` function should succeed for a valid configuration.
+        assert!(GpioHandler::new(config.gpio_handler).is_ok());
     }
 
     #[test]
-    #[should_panic]
     pub fn test_invalid_gpio_config_low() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
-        config.gpio_handler.dht22_io = 3;
+        config.gpio_handler.dht22_io = 3; // Value is at the boundary, which is invalid.
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler);
+        let result = GpioHandler::new(config.gpio_handler);
+        assert!(result.is_err());
+        // Check that we get the specific error we expect.
+        assert!(matches!(result, Err(GpioHandlerError::GpioOutsideRange(3))));
     }
     #[test]
-    #[should_panic]
     pub fn test_invalid_gpio_config_duplicate() {
         let mut config: ConfigData =
             read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
-        config.gpio_handler.dht22_io = 5;
-        config.gpio_handler.tank_level_switch = 5;
+        let duplicate_pin = 5;
+        config.gpio_handler.dht22_io = duplicate_pin;
+        config.gpio_handler.tank_level_switch = duplicate_pin;
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler);
+        let result = GpioHandler::new(config.gpio_handler);
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(GpioHandlerError::GpioDuplicateValue(_))
+        ));
     }
 
     #[test]
-    #[cfg(all(feature = "target_hw", target_os = "linux"))]
-    #[should_panic]
+    // This check is platform-agnostic, so the cfg attribute isn't needed.
     pub fn test_invalid_gpio_config_high() {
         let mut config: ConfigData =
-            read_config_file("/config/aquarium_control_test_generic.toml".to_string());
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
 
-        config.gpio_handler.dht22_io = 40;
+        config.gpio_handler.dht22_io = 40; // Value is outside the valid range.
 
-        let _gpio_handler = GpioHandler::new(config.gpio_handler);
+        let result = GpioHandler::new(config.gpio_handler);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(GpioHandlerError::GpioOutsideRange(40))));
     }
 
     mod commissioning_prep {
