@@ -184,7 +184,9 @@ pub enum ActuateControllinoError {
     },
 
     /// Failed to set timeout for serial port communication.
-    #[error("Could not set timeout of {timeout_millis} milliseconds for serial port communication.")]
+    #[error(
+        "Could not set timeout of {timeout_millis} milliseconds for serial port communication."
+    )]
     SetTimeoutFailed {
         timeout_millis: u64,
 
@@ -638,13 +640,22 @@ fn controllino_open_serial_port(
 ) -> Result<Box<dyn SerialPort>, ActuateControllinoError> {
     let spin_sleeper = SpinSleeper::default();
 
-    let mut serial_port = serialport::new(port_name.clone(), baud_rate).open().map_err(|e| ActuateControllinoError::SerialPortOpenFailed { source: e })?;
+    let mut serial_port = serialport::new(port_name.clone(), baud_rate)
+        .open()
+        .map_err(|e| ActuateControllinoError::SerialPortOpenFailed { source: e })?;
 
     let timeout_duration = Duration::from_millis(timeout_millis);
-    serial_port.set_timeout(timeout_duration).map_err(|e| ActuateControllinoError::SetTimeoutFailed { timeout_millis, source: e })?;
+    serial_port.set_timeout(timeout_duration).map_err(|e| {
+        ActuateControllinoError::SetTimeoutFailed {
+            timeout_millis,
+            source: e,
+        }
+    })?;
 
     // write to Data Terminal Ready pin: clear the signal
-    serial_port.write_data_terminal_ready(false).map_err(|e| ActuateControllinoError::ClearDTRFailed { source: e })?;
+    serial_port
+        .write_data_terminal_ready(false)
+        .map_err(|e| ActuateControllinoError::ClearDTRFailed { source: e })?;
 
     // wait for the device
     let sleep_duration_after_dtr_reset =
@@ -652,7 +663,9 @@ fn controllino_open_serial_port(
     spin_sleeper.sleep(sleep_duration_after_dtr_reset);
 
     // flush the buffer
-    serial_port.clear(ClearBuffer::All).map_err(|e| ActuateControllinoError::ClearBufferFailed {source: e})?;
+    serial_port
+        .clear(ClearBuffer::All)
+        .map_err(|e| ActuateControllinoError::ClearBufferFailed { source: e })?;
 
     // wait for the device
     let sleep_duration_after_buffer_clear =
@@ -681,7 +694,9 @@ impl ActuateControllino {
     /// # Returns
     /// An error of type `ActuateControllinoError` if an error is found.
     /// `((Ok))` otherwise.
-    pub fn check_valid_relay_id_config(config: &ActuateControllinoConfig) -> Result<(), ActuateControllinoError> {
+    pub fn check_valid_relay_id_config(
+        config: &ActuateControllinoConfig,
+    ) -> Result<(), ActuateControllinoError> {
         // check if relay ids are in valid range and if they are distinct
         let mut seen_values = HashSet::new();
 
@@ -702,7 +717,11 @@ impl ActuateControllino {
 
         for &value in &relay_id_values {
             if !(CONTROLLINO_MIN_RELAY_ID..=CONTROLLINO_MAX_RELAY_ID).contains(&value) {
-                return Err(ActuateControllinoError::RelayIdOutsideRange(value, CONTROLLINO_MIN_RELAY_ID, CONTROLLINO_MAX_RELAY_ID));
+                return Err(ActuateControllinoError::RelayIdOutsideRange(
+                    value,
+                    CONTROLLINO_MIN_RELAY_ID,
+                    CONTROLLINO_MAX_RELAY_ID,
+                ));
             }
             if !seen_values.insert(value) {
                 return Err(ActuateControllinoError::RelayIdDuplicate(value));
@@ -724,7 +743,9 @@ impl ActuateControllino {
     /// # Returns
     /// In case of success, new `ActuateControllino` struct, ready for sending commands to the hardware.
     /// In case of failure, an error of type `ActuateControllinoError` is returned.
-    pub fn new(config: ActuateControllinoConfig) -> Result<ActuateControllino, ActuateControllinoError> {
+    pub fn new(
+        config: ActuateControllinoConfig,
+    ) -> Result<ActuateControllino, ActuateControllinoError> {
         let spin_sleeper = SpinSleeper::default();
 
         // check the validity of configuration
@@ -786,7 +807,10 @@ pub mod tests {
         config.controllino_relay.main_pump1_id = CONTROLLINO_MIN_RELAY_ID - 1;
 
         let test_result = ActuateControllino::new(config.controllino_relay);
-        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdOutsideRange(_,_,_))));
+        assert!(matches!(
+            test_result,
+            Err(ActuateControllinoError::RelayIdOutsideRange(_, _, _))
+        ));
     }
     #[test]
     pub fn test_invalid_relay_id_config_high() {
@@ -796,7 +820,10 @@ pub mod tests {
         config.controllino_relay.main_pump1_id = CONTROLLINO_MAX_RELAY_ID + 1;
 
         let test_result = ActuateControllino::new(config.controllino_relay);
-        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdOutsideRange(_,_,_))));
+        assert!(matches!(
+            test_result,
+            Err(ActuateControllinoError::RelayIdOutsideRange(_, _, _))
+        ));
     }
 
     #[test]
@@ -808,7 +835,10 @@ pub mod tests {
         config.controllino_relay.main_pump2_id = CONTROLLINO_MAX_RELAY_ID;
 
         let test_result = ActuateControllino::new(config.controllino_relay);
-        assert!(matches!(test_result, Err(ActuateControllinoError::RelayIdDuplicate(_))));
+        assert!(matches!(
+            test_result,
+            Err(ActuateControllinoError::RelayIdDuplicate(_))
+        ));
     }
 
     #[cfg(all(target_os = "macos", feature = "controllino_hw"))]

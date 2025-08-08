@@ -6,6 +6,11 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use crate::sensors::i2c_error::I2cError;
+use crate::utilities::channel_content::AquariumSignal;
+use std::num::ParseFloatError;
+use std::str::Utf8Error;
+use std::sync::mpsc::TryRecvError;
 use thiserror::Error;
 
 /// error codes for evaluation of sensor unit response
@@ -26,13 +31,54 @@ pub enum AtlasScientificError {
 
     /// The error is masked by other checks. Still, the signature of the function to convert from u8 array slice to String throws an error.
     #[error("An invalid UTF8 sequence occurred.")]
-    InvalidUtf8Sequence,
+    InvalidUtf8Sequence {
+        #[source]
+        source: Utf8Error,
+    },
 
     /// Conversion from String to f32 failed.
     #[error("Conversion from String to f32 failed.")]
-    ConversionFailure,
+    ConversionFailure {
+        #[source]
+        source: ParseFloatError,
+    },
 
     /// Incorrect buffer length
-    #[error("The buffer has incorrect length.")]
-    IncorrectBufferLength,
+    #[error("The response from {0} has incorrect length ({1}).")]
+    IncorrectBufferLength(AquariumSignal, usize),
+
+    /// Mutex poisoned
+    #[error("Could not lock mutex for {signal}")]
+    CouldNotLockMutex { signal: AquariumSignal },
+
+    #[error("Error in sensor unit response for {signal}.")]
+    ResponseCheckFailed {
+        signal: AquariumSignal,
+        #[source]
+        source: Box<AtlasScientificError>,
+    },
+
+    /// Initial value, is overwritten
+    #[error("Initial value")]
+    Initial,
+
+    /// Error in I2C communication for a specific signal.
+    #[error("Error in I2C communication for {signal}.")]
+    I2cCommunicationFailure {
+        signal: AquariumSignal,
+
+        #[source]
+        source: I2cError,
+    },
+
+    /// Error is used to communicate to caller that receiving needs to be repeated.
+    #[error("Channel for receiving from I2CInterface thread is empty.")]
+    ChannelIsEmpty,
+
+    /// The channel is disconnected.
+    #[error("Channel for receiving from I2CInterface is disconnected.")]
+    ChannelIsDisconnected {
+        #[source]
+        source: TryRecvError,
+    },
 }

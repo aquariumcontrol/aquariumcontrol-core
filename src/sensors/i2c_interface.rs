@@ -49,15 +49,15 @@ pub struct I2cRequest {
 
     #[allow(unused)]
     /// input sequence to be sent to the bus participant
-    send_buf: Vec<u8>,
+    pub(crate) send_buf: Vec<u8>,
 
     #[allow(unused)]
     /// sleep time in milliseconds before retrieving an answer from the bus participant
-    sleep_time_millis: u64,
+    pub(crate) sleep_time_millis: u64,
 
     #[allow(unused)]
     /// length of the expected response in byte
-    expected_response_length: usize,
+    pub(crate) expected_response_length: usize,
 }
 
 impl I2cRequest {

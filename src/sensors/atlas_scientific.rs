@@ -12,6 +12,7 @@ use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use log::{error, warn};
 use serde_derive::Deserialize;
@@ -83,13 +84,16 @@ pub struct AtlasScientificConfig {
     measurement_interval_millis: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AtlasScientificResultData {
+    /// The measurement value
     pub value: f32,
 
+    /// Bit indicating if the value is valid or not
     #[allow(unused)]
     invalid: bool,
 
+    /// The instant when the measurement result was recorded
     #[allow(unused)]
     measurement_instant: Instant,
 }
@@ -179,7 +183,7 @@ pub struct AtlasScientificChannels {
 ///     atlas_scientific -.-> data_logger[DataLogger]
 /// ```
 pub struct AtlasScientific {
-    // configuration data for AtlasScientific
+    /// configuration data for AtlasScientific
     config: AtlasScientificConfig,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive termination signal via the channel
@@ -190,9 +194,6 @@ pub struct AtlasScientific {
 
     /// inhibition flag to avoid flooding the log file with repeated messages about to send request via the channel to I2cInterface thread
     lock_error_channel_send_i2c_interface: bool,
-
-    /// inhibition flag to avoid flooding the log file with repeated messages about failure to receive via the channel from I2cInterface thread
-    lock_error_channel_receive_i2c_interface: bool,
 
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex for water temperature
     lock_warn_max_mutex_access_duration_temperature: bool,
@@ -211,8 +212,10 @@ pub struct AtlasScientific {
     #[cfg(test)]
     mutex_conductivity_access_duration_exceeded: bool,
 
+    /// instant when the last measurement took place
     pub last_measurement_instant: Instant,
 
+    /// duration of the measurement interval calculated from the configuration data
     pub measurement_interval: Duration,
 }
 impl ProcessExternalRequestTrait for AtlasScientific {}
@@ -222,17 +225,17 @@ impl GetResponseFromSimulatorTrait for AtlasScientific {}
 impl AtlasScientific {
     /// Creates a new `AtlasScientific` control instance.
     ///
-    /// This constructor initializes the Atlas Scientific sensor module. It sets initial
-    /// sensor values to a default `0.0` and marks them as invalid until actual readings
-    /// are obtained. All internal "lock" flags are also initialized to `false` to
-    /// prevent log flooding from recurring errors or warnings.
+    /// This constructor initializes the Atlas Scientific sensor module. It takes the
+    /// configuration, calculates the measurement interval, and sets up internal
+    /// state, including lock flags used to prevent log flooding from recurring
+    /// errors or warnings.
     ///
     /// # Arguments
-    /// * `config` - Configuration data for the Atlas Scientific module, specifying behavior
-    ///   like the use of a simulator versus hardware, and replacement values for sensor readings.
+    /// * `config` - Configuration data for the Atlas Scientific module, specifying I2C
+    ///   addresses, sleep times, and the measurement interval.
     ///
     /// # Returns
-    /// A new `AtlasScientific` struct, ready to collect and provide sensor data.
+    /// A new `AtlasScientific` struct, ready to manage sensor data acquisition.
     pub fn new(config: AtlasScientificConfig) -> AtlasScientific {
         let measurement_interval = Duration::from_millis(config.measurement_interval_millis);
 
@@ -241,7 +244,6 @@ impl AtlasScientific {
             lock_error_channel_receive_termination: false,
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_send_i2c_interface: false,
-            lock_error_channel_receive_i2c_interface: false,
             lock_warn_max_mutex_access_duration_temperature: false,
             lock_warn_max_mutex_access_duration_ph: false,
             lock_warn_max_mutex_access_duration_conductivity: false,
@@ -260,7 +262,6 @@ impl AtlasScientific {
         }
     }
 
-    #[allow(dead_code)]
     /// Checks if a given character is a valid part of a numeric string, considering optional negative signs.
     ///
     /// This private helper function is used during the parsing of sensor responses to validate
@@ -282,28 +283,6 @@ impl AtlasScientific {
             atlas_scientific_constants::NEGATIVE_SIGN => negative_allowed,
             _ => false,
         }
-    }
-
-    /// Outputs the ASCII (byte) values of a `[u8]` slice to the console.
-    ///
-    /// Each byte's integer value, representing its ASCII code, is printed,
-    /// separated by spaces.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - A slice of `u8` (bytes) whose ASCII values are to be printed.
-    pub fn print_ascii_values(data: &[u8]) {
-        // Iterate over each byte in the input slice.
-        for (i, &byte) in data.iter().enumerate() {
-            // Print the byte's integer value (its ASCII value).
-            // Use space as a separator for all but the last byte.
-            if i > 0 {
-                print!(" ");
-            }
-            print!("{byte}");
-        }
-        // Print a newline character at the end to ensure the next output appears on a new line.
-        println!();
     }
 
     /// Evaluates a raw byte array response from an Atlas Scientific sensor unit, validating its format and converting it to `f32`.
@@ -356,8 +335,6 @@ impl AtlasScientific {
         // third check: all characters in between belong to a number
         for character in numeric_content {
             if !Self::is_numeric(*character, !is_ph) {
-                println!("Encountered non-numeric character {character} in sequence: ");
-                Self::print_ascii_values(numeric_content);
                 return Err(AtlasScientificError::ContainsInvalidCharacter(*character));
             }
         }
@@ -365,31 +342,34 @@ impl AtlasScientific {
         // conversion to String
         let numeric_string = match str::from_utf8(numeric_content) {
             Ok(c) => c,
-            Err(_) => return Err(AtlasScientificError::InvalidUtf8Sequence),
+            Err(e) => return Err(AtlasScientificError::InvalidUtf8Sequence { source: e }),
         };
 
         // conversion to f32
         match &numeric_string.parse::<f32>() {
             Ok(c) => Ok(*c),
-            Err(_) => Err(AtlasScientificError::ConversionFailure),
+            Err(e) => Err(AtlasScientificError::ConversionFailure { source: e.clone() }),
         }
     }
 
-    /// Sends a request to the I2C interface thread to perform a new measurement from Atlas Scientific sensors.
+    /// Constructs and sends a measurement request to the I2C interface thread.
     ///
-    /// It sends an `InternalCommand::RequestSignal`
-    /// for `AquariumSignal::WaterTemperature` (which implicitly triggers the reading of
-    /// temperature, pH, and conductivity from Atlas Scientific sensors) to the I2CInterface thread.
+    /// This function creates an `I2cRequest` based on the specified `signal`. It
+    /// retrieves the correct I2C address and sleep time from the configuration
+    /// for the given sensor (pH, conductivity, or temperature). The request is then
+    /// sent over the provided channel to the I2C thread for execution.
     ///
-    /// It updates an internal lock flag (`lock_error_channel_send_i2c_interface`) to prevent
-    /// repeated error logging if the channel operation fails.
+    /// It also manages an internal lock flag (`lock_error_channel_send_i2c_interface`)
+    /// to prevent flooding the logs with repeated errors if the channel send operation fails.
     ///
     /// # Arguments
-    /// * `tx_atlas_scientific_to_i2c_interface` - A reference to the sender part of the channel, used to
-    ///   send commands to the I2CInterface thread.
+    /// * `signal` - The `AquariumSignal` identifying which sensor to request a reading from.
+    /// * `tx_atlas_scientific_to_i2c_interface` - The sender channel for sending `I2cRequest`
+    ///   messages to the I2C thread.
     ///
     /// # Returns
-    /// `true` if the measurement request was successfully sent; `false` if the channel operation failed.
+    /// `true` if the measurement request was successfully sent; `false` if the channel
+    /// operation failed or if an unsupported signal was provided.
     fn send_request_to_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -444,24 +424,207 @@ impl AtlasScientific {
         }
     }
 
-    /// Receives and processes measurement responses from the I2C interface thread for Atlas Scientific sensors.
+    /// Logs a warning if acquiring a sensor's mutex takes longer than the configured maximum.
     ///
-    /// It attempts to receive a `Result` without blocking containing
-    /// water temperature, pH, and conductivity data from the `I2CInterface` thread.
+    /// This helper function is invoked when the time spent waiting to lock a mutex for a
+    /// specific sensor signal (temperature, pH, or conductivity) exceeds a predefined
+    /// threshold. To avoid flooding the log files with repetitive warnings for a
+    /// persistent issue, it uses an internal lock flag for each signal.
     ///
-    /// If successful, it updates the module's internal sensor fields (`water_temperature`, `pH`, `conductivity`)
-    /// and resets their `_invalid` flags to `false`. It manages various lock flags (`lock_error_i2c_interface`,
-    /// `lock_error_channel_receive_i2c_interface`) to prevent log flooding from sensor reading errors
-    /// or channel disconnections.
+    /// The warning is logged only the first time the condition is detected. The lock
+    /// is reset when later mutex access for the same signal completes within
+    /// the allowed time outside of this function.
     ///
     /// # Arguments
-    /// * `rx_atlas_scientific_from_i2c_interface` - A reference to the receiver part of the channel,
-    ///   used to get measurement results from the `I2CInterface` thread.
+    /// * `signal` - The `AquariumSignal` identifying which sensor's mutex was slow to acquire.
+    /// * `measured_mutex_access_duration` - The `Duration` that was actually measured for the lock acquisition.
+    /// * `max_mutex_access_duration` - The maximum `Duration` allowed before a warning is triggered.
+    #[allow(unused)]
+    fn warn_about_long_mutex_wait(
+        &mut self,
+        signal: &AquariumSignal,
+        measured_mutex_access_duration: Duration,
+        max_mutex_access_duration: Duration,
+    ) {
+        match signal {
+            AquariumSignal::WaterTemperature => {
+                if !self.lock_warn_max_mutex_access_duration_temperature {
+                    self.lock_warn_max_mutex_access_duration_temperature = true;
+                    #[cfg(not(test))]
+                    warn!(
+                        target: module_path!(),
+                        "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
+                        max_mutex_access_duration.as_millis(),
+                        measured_mutex_access_duration.as_millis(),
+                    );
+                    // record for testing purposes only
+                    cfg_if::cfg_if! {
+                        if #[cfg(test)] {
+                            self.mutex_temperature_access_duration_exceeded = true;
+                        }
+                    }
+                }
+            }
+            AquariumSignal::pH => {
+                if !self.lock_warn_max_mutex_access_duration_ph {
+                    self.lock_warn_max_mutex_access_duration_ph = true;
+                    #[cfg(not(test))]
+                    warn!(
+                        target: module_path!(),
+                        "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
+                        max_mutex_access_duration.as_millis(),
+                        measured_mutex_access_duration.as_millis(),
+                    );
+                    // record for testing purposes only
+                    cfg_if::cfg_if! {
+                        if #[cfg(test)] {
+                            self.mutex_ph_access_duration_exceeded = true;
+                        }
+                    }
+                }
+            }
+            AquariumSignal::Conductivity => {
+                if !self.lock_warn_max_mutex_access_duration_conductivity {
+                    self.lock_warn_max_mutex_access_duration_conductivity = true;
+                    #[cfg(not(test))]
+                    warn!(
+                        target: module_path!(),
+                        "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
+                        max_mutex_access_duration.as_millis(),
+                        measured_mutex_access_duration.as_millis(),
+                    );
+                    // record for testing purposes only
+                    cfg_if::cfg_if! {
+                        if #[cfg(test)] {
+                            self.mutex_conductivity_access_duration_exceeded = true;
+                        }
+                    }
+                }
+            }
+            _ => { /* do nothing */ }
+        }
+    }
+
+    /// Resets the warning lock flag for a given sensor's mutex.
+    ///
+    /// This function is called after a mutex has been successfully and quickly acquired,
+    /// indicating that a potential previous condition of a slow mutex lock has resolved.
+    ///
+    /// By setting the corresponding internal lock flag back to `false`, it re-enables
+    /// the `warn_about_long_mutex_wait` function to log a new warning if the mutex
+    /// becomes slow to acquire again in the future.
+    ///
+    /// # Arguments
+    /// * `signal` - The `AquariumSignal` identifying which sensor's warning lock to reset.
+    fn reset_warning_flag(&mut self, signal: &AquariumSignal) {
+        match signal {
+            AquariumSignal::WaterTemperature => {
+                self.lock_warn_max_mutex_access_duration_temperature = false;
+            }
+            AquariumSignal::Conductivity => {
+                self.lock_warn_max_mutex_access_duration_conductivity = false;
+            }
+            AquariumSignal::pH => {
+                self.lock_warn_max_mutex_access_duration_ph = false;
+            }
+            _ => { /* do nothing */ }
+        }
+    }
+
+    /// Atomically writes a sensor measurement result to the appropriate shared mutex.
+    ///
+    /// This helper function directs an `AtlasScientificResult` to its corresponding
+    /// shared `Mutex` based on the provided `signal`. It handles the logic for
+    /// selecting the correct mutex (temperature, pH, or conductivity), locking it,
+    /// and updating its value.
+    ///
+    /// This encapsulation simplifies the calling code by centralizing the
+    /// mutex selection and locking logic.
+    ///
+    /// # Arguments
+    /// * `signal` - The `AquariumSignal` that determines which mutex to update.
+    /// * `result` - The `AtlasScientificResult` (containing either sensor data or an error) to be written.
+    /// * `mutex_water_temperature` - The shared mutex for the water temperature sensor result.
+    /// * `mutex_ph` - The shared mutex for the pH sensor result.
+    /// * `mutex_conductivity` - The shared mutex for the conductivity sensor result.
     ///
     /// # Returns
-    /// `true` if a response was expected but not yet received (meaning `receive_response_from_i2c_interface`
-    /// should be called again soon, e.g., on the next loop iteration); `false` if a response
-    /// was successfully received and processed, or if a non-empty error occurred.
+    /// A `Result` which is:
+    /// - `Ok(Instant)`: On successful write, returns the `Instant` at which the lock was released.
+    ///   The caller can use this to measure total lock duration.
+    /// - `Err(AtlasScientificError::CouldNotLockMutex)`: If the target mutex is poisoned and
+    ///   cannot be locked.
+    fn write_result_to_mutex(
+        &self,
+        signal: &AquariumSignal,
+        result: AtlasScientificResult,
+        mutex_water_temperature: &Arc<Mutex<AtlasScientificResult>>,
+        mutex_ph: &Arc<Mutex<AtlasScientificResult>>,
+        mutex_conductivity: &Arc<Mutex<AtlasScientificResult>>,
+    ) -> Result<Instant, AtlasScientificError> {
+        match signal {
+            AquariumSignal::WaterTemperature => match mutex_water_temperature.lock() {
+                Ok(mut water_temperature) => *water_temperature = result,
+                Err(_) => {
+                    return Err(AtlasScientificError::CouldNotLockMutex {
+                        signal: signal.clone(),
+                    });
+                }
+            },
+            AquariumSignal::pH => match mutex_ph.lock() {
+                Ok(mut ph) => *ph = result,
+                Err(_) => {
+                    return Err(AtlasScientificError::CouldNotLockMutex {
+                        signal: signal.clone(),
+                    });
+                }
+            },
+            AquariumSignal::Conductivity => match mutex_conductivity.lock() {
+                Ok(mut conductivity) => *conductivity = result,
+                Err(_) => {
+                    return Err(AtlasScientificError::CouldNotLockMutex {
+                        signal: signal.clone(),
+                    });
+                }
+            },
+            _ => { /* do nothing */ }
+        }
+        Ok(Instant::now())
+    }
+
+    /// Receives and processes a measurement response from the I2C interface thread.
+    ///
+    /// This function orchestrates the full cycle of handling a sensor reading. It performs a
+    /// non-blocking receive on the I2C channel. If a message is available, it processes
+    /// the result, which can be either a successful data payload or an I2C-level error.
+    ///
+    /// For a successful payload, the function:
+    /// 1. Parses the raw byte buffer using `check_response`.
+    /// 2. Converts the valid data into an `AtlasScientificResultData` struct.
+    /// 3. Atomically writes this result to the correct shared `Mutex` (identified by `signal`)
+    ///    using the `write_result_to_mutex` helper.
+    /// 4. Monitors the duration of the mutex lock, issuing a warning via
+    ///    `warn_about_long_mutex_wait` if it exceeds the configured threshold.
+    ///
+    /// The function also handles all error conditions, wrapping them in the appropriate
+    /// `AtlasScientificError` variant for the caller to handle.
+    ///
+    /// # Arguments
+    /// * `signal` - The `AquariumSignal` indicating which sensor's data is expected (e.g., Temperature, pH).
+    /// * `rx_atlas_scientific_from_i2c_interface` - The receiver channel for `I2cResult` messages from the I2C thread.
+    /// * `mutex_water_temperature` - The shared `Mutex` for storing the water temperature result.
+    /// * `mutex_ph` - The shared `Mutex` for storing the pH result.
+    /// * `mutex_conductivity` - The shared `Mutex` for storing the conductivity result.
+    ///
+    /// # Returns
+    /// An `AtlasScientificResult` which is:
+    /// - `Ok(AtlasScientificResultData)`: If a valid sensor reading was successfully received, parsed, and stored in its mutex.
+    /// - `Err(AtlasScientificError)`: If any error occurred. This includes:
+    ///   - `ChannelIsEmpty`: A recoverable error indicating no message was available. The caller should try again.
+    ///   - `ChannelIsDisconnected`: A critical error indicating the I2C thread has terminated.
+    ///   - `I2cCommunicationFailure`: The I2C thread reported a hardware-level communication error.
+    ///   - `ResponseCheckFailed` / `IncorrectBufferLength`: The received data payload was malformed.
+    ///   - `CouldNotLockMutex`: The target mutex was poisoned and could not be updated.
     fn receive_response_from_i2c_interface(
         &mut self,
         signal: &AquariumSignal,
@@ -469,198 +632,94 @@ impl AtlasScientific {
         mutex_water_temperature: &Arc<Mutex<AtlasScientificResult>>,
         mutex_ph: &Arc<Mutex<AtlasScientificResult>>,
         mutex_conductivity: &Arc<Mutex<AtlasScientificResult>>,
-    ) -> bool {
+    ) -> AtlasScientificResult {
         let max_mutex_access_duration =
             Duration::from_millis(atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let is_ph = matches!(signal, AquariumSignal::pH);
+        let result: AtlasScientificResult;
 
         match rx_atlas_scientific_from_i2c_interface.try_recv() {
             Ok(i2c_result) => match i2c_result {
                 // Result from channel is available
                 Ok(i2c_response) => {
-                    let result: AtlasScientificResult = match i2c_response.read_buf.try_into() {
+                    result = match i2c_response.read_buf.try_into() {
                         Ok(response_buffer) =>
                         // type for result is defined by parameter definition of check_response
                         {
                             match Self::check_response(response_buffer, is_ph) {
                                 Ok(value) => Ok(AtlasScientificResultData::new(value)),
-                                Err(e) => {
-                                    error!(
-                                        target: module_path!(),
-                                        "error in sensor unit response for {signal}: {e:?}"
-                                    );
-                                    Err(e)
-                                }
+                                Err(e) => Err(AtlasScientificError::ResponseCheckFailed {
+                                    signal: signal.clone(),
+                                    source: Box::new(e),
+                                }),
                             }
                         }
-                        Err(_) => {
-                            error!(target: module_path!(), "Could not convert response buffer.");
-                            Err(AtlasScientificError::IncorrectBufferLength)
-                        }
+                        Err(e) => Err(AtlasScientificError::IncorrectBufferLength(
+                            signal.clone(),
+                            e.len(),
+                        )),
                     };
 
                     let instant_before_locking_mutex = Instant::now();
-                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
-                    match signal {
-                        AquariumSignal::WaterTemperature => match mutex_water_temperature.lock() {
-                            Ok(mut water_temperature) => {
-                                instant_after_locking_mutex = Instant::now();
-                                *water_temperature = result
-                            }
-                            Err(_) => {
-                                error!("Could not lock mutex_water_temperature.");
-                                return false;
-                            }
-                        },
-                        AquariumSignal::pH => match mutex_ph.lock() {
-                            Ok(mut ph) => {
-                                instant_after_locking_mutex = Instant::now();
-                                *ph = result
-                            }
-                            Err(_) => {
-                                error!("Could not lock mutex_ph.");
-                                return false;
-                            }
-                        },
-                        AquariumSignal::Conductivity => match mutex_conductivity.lock() {
-                            Ok(mut conductivity) => {
-                                instant_after_locking_mutex = Instant::now();
-                                *conductivity = result
-                            }
-                            Err(_) => {
-                                error!("Could not lock mutex_conductivity.");
-                                return false;
-                            }
-                        },
-                        _ => { /* do nothing */ }
-                    }
+                    let instant_after_locking_mutex = self.write_result_to_mutex(
+                        signal,
+                        result.clone(),
+                        mutex_water_temperature,
+                        mutex_ph,
+                        mutex_conductivity,
+                    )?;
 
                     // check if access to mutex took too long
                     let measured_mutex_access_duration =
                         instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
                     if measured_mutex_access_duration > max_mutex_access_duration {
-                        match signal {
-                            AquariumSignal::WaterTemperature => {
-                                if !self.lock_warn_max_mutex_access_duration_temperature {
-                                    self.lock_warn_max_mutex_access_duration_temperature = true;
-                                    #[cfg(not(test))]
-                                    warn!(
-                                        target: module_path!(),
-                                        "Access to temperature mutex took too long. Allowed={}ms, Measured={}ms",
-                                        max_mutex_access_duration.as_millis(),
-                                        measured_mutex_access_duration.as_millis(),
-                                    );
-                                    // record for testing purposes only
-                                    cfg_if::cfg_if! {
-                                        if #[cfg(test)] {
-                                            self.mutex_temperature_access_duration_exceeded = true;
-                                        }
-                                    }
-                                }
-                            }
-                            AquariumSignal::pH => {
-                                if !self.lock_warn_max_mutex_access_duration_ph {
-                                    self.lock_warn_max_mutex_access_duration_ph = true;
-                                    #[cfg(not(test))]
-                                    warn!(
-                                        target: module_path!(),
-                                        "Access to pH mutex took too long. Allowed={}ms, Measured={}ms",
-                                        max_mutex_access_duration.as_millis(),
-                                        measured_mutex_access_duration.as_millis(),
-                                    );
-                                    // record for testing purposes only
-                                    cfg_if::cfg_if! {
-                                        if #[cfg(test)] {
-                                            self.mutex_ph_access_duration_exceeded = true;
-                                        }
-                                    }
-                                }
-                            }
-                            AquariumSignal::Conductivity => {
-                                if !self.lock_warn_max_mutex_access_duration_conductivity {
-                                    self.lock_warn_max_mutex_access_duration_conductivity = true;
-                                    #[cfg(not(test))]
-                                    warn!(
-                                        target: module_path!(),
-                                        "Access to conductivity mutex took too long. Allowed={}ms, Measured={}ms",
-                                        max_mutex_access_duration.as_millis(),
-                                        measured_mutex_access_duration.as_millis(),
-                                    );
-                                    // record for testing purposes only
-                                    cfg_if::cfg_if! {
-                                        if #[cfg(test)] {
-                                            self.mutex_conductivity_access_duration_exceeded = true;
-                                        }
-                                    }
-                                }
-                            }
-                            _ => { /* do nothing */ }
-                        }
+                        self.warn_about_long_mutex_wait(
+                            signal,
+                            measured_mutex_access_duration,
+                            max_mutex_access_duration,
+                        );
                     } else {
-                        match signal {
-                            AquariumSignal::WaterTemperature => {
-                                self.lock_warn_max_mutex_access_duration_temperature = false;
-                            }
-                            AquariumSignal::Conductivity => {
-                                self.lock_warn_max_mutex_access_duration_conductivity = false;
-                            }
-                            AquariumSignal::pH => {
-                                self.lock_warn_max_mutex_access_duration_ph = false;
-                            }
-                            _ => { /* do nothing */ }
-                        }
+                        self.reset_warning_flag(signal);
                     }
-
-                    false // allow for the next request to be sent
                 }
-                Err(_) => false,
+                Err(e) => {
+                    result = Err(AtlasScientificError::I2cCommunicationFailure {
+                        signal: signal.clone(),
+                        source: e,
+                    })
+                }
             },
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => {
-                        /* empty buffer - no action required */
-                        self.lock_error_channel_receive_i2c_interface = false;
-                    }
-                    TryRecvError::Disconnected => {
-                        if !self.lock_error_channel_receive_i2c_interface {
-                            error!(
-                                target: module_path!(),
-                                "error occurred when trying to receive response from I2cInterface ({e:?})"
-                            );
-                            self.lock_error_channel_receive_i2c_interface = true;
-                        }
-                    }
+            Err(e) => match e {
+                TryRecvError::Empty => {
+                    result = Err(AtlasScientificError::ChannelIsEmpty);
                 }
-                true // repeat receiving
-            }
+                TryRecvError::Disconnected => {
+                    result = Err(AtlasScientificError::ChannelIsDisconnected { source: e });
+                }
+            },
         }
+        result
     }
 
     /// Executes the main control loop for the Atlas Scientific sensor module.
     ///
-    /// This function runs continuously, managing the periodic measurement of
-    /// water temperature, pH, and conductivity data from the AtlasScientific sensor unit.
-    /// It interacts directly with an I2C interface thread, sending requests and receiving actual sensor readings.
+    /// This function runs continuously, managing the periodic and sequential measurement of
+    /// water temperature, pH, and conductivity. It interacts with an I2C interface
+    /// thread by sending requests for one sensor at a time and then processing the response.
     ///
-    /// The collected data is then written to shared mutexes, making it available to other
-    /// application threads. The loop maintains a measurement interval and remains
-    /// responsive to `Quit` and `Terminate` commands from the signal handler for graceful shutdown.
+    /// The collected data (or any resulting error) is written to a shared `Mutex`,
+    /// making it available to other application threads. The loop respects the configured
+    /// `measurement_interval` between cycles and remains responsive to `Quit` and
+    /// `Terminate` commands from the signal handler for a graceful shutdown.
     ///
     /// # Arguments
-    /// * `atlas_scientific_channels` - A struct containing all `mpsc` channels necessary for inter-thread
-    ///   communication with the `I2CInterface` and the `SignalHandler`.
-    /// * `mutex_atlas_scientific_water_temperature` - An `Arc<Mutex<f32>>` into which the latest water temperature
-    ///   reading will be written, ensuring thread-safe access for other modules.
-    /// * `mutex_atlas_scientific_ph` - An `Arc<Mutex<f32>>` into which the latest pH reading will be written,
-    ///   ensuring thread-safe access for other modules.
-    /// * `mutex_atlas_scientific_conductivity` - An `Arc<Mutex<f32>>` into which the latest conductivity reading
-    ///   will be written, ensuring thread-safe access for other modules.
-    ///
-    /// # Panics
-    /// This function will panic if:
-    /// - It's configured to use the simulator, but essential TCP communication channels are missing.
-    /// - During hardware mode, a fatal error occurs while trying to receive a response from the I2C thread (e.g., a channel disconnected permanently).
+    /// * `atlas_scientific_channels` - A struct containing all `mpsc` channels necessary for
+    ///   inter-thread communication with the `I2CInterface` and the `SignalHandler`.
+    /// * `mutex_atlas_scientific_water_temperature` - The shared `Mutex` for storing the water
+    ///   temperature result.
+    /// * `mutex_atlas_scientific_ph` - The shared `Mutex` for storing the pH result.
+    /// * `mutex_atlas_scientific_conductivity` - The shared `Mutex` for storing the conductivity result.
     pub fn execute(
         &mut self,
         atlas_scientific_channels: AtlasScientificChannels,
@@ -673,6 +732,7 @@ impl AtlasScientific {
         let spin_sleeper = SpinSleeper::default();
 
         let mut state_send_receive: bool = false;
+        let mut channel_is_disconnected: bool = false;
         let mut receive_counter: u32 = 0;
 
         let mut signal = AquariumSignal::WaterTemperature;
@@ -698,7 +758,7 @@ impl AtlasScientific {
             }
 
             // Check if data acquisition is enabled.
-            if self.config.active {
+            if self.config.active && !channel_is_disconnected {
                 let duration_since_last_measurement =
                     Instant::now().duration_since(self.last_measurement_instant);
                 //#[cfg(test)]
@@ -730,13 +790,34 @@ impl AtlasScientific {
                     );
                 } else if state_send_receive {
                     // read from the channel if the measurement result is available from I2cInterface thread
-                    state_send_receive = self.receive_response_from_i2c_interface(
+                    match self.receive_response_from_i2c_interface(
                         &signal,
                         &atlas_scientific_channels.rx_atlas_scientific_from_i2c_interface,
                         &mutex_atlas_scientific_water_temperature,
                         &mutex_atlas_scientific_ph,
                         &mutex_atlas_scientific_conductivity,
-                    );
+                    ) {
+                        Ok(_) => {
+                            state_send_receive = false; // allow sending again
+                        }
+                        Err(e) => {
+                            if matches!(e, AtlasScientificError::ChannelIsEmpty) {
+                                state_send_receive = true; // receive again
+                            } else if matches!(
+                                e,
+                                AtlasScientificError::ChannelIsDisconnected { source: _ }
+                            ) {
+                                channel_is_disconnected = true;
+                            } else {
+                                log_error_chain(
+                                    module_path!(),
+                                    "Encountered error trying to receive from I2C",
+                                    e,
+                                );
+                                state_send_receive = false; // allow sending again
+                            }
+                        }
+                    }
 
                     if !state_send_receive {
                         // data could be received successfully
@@ -811,7 +892,7 @@ pub mod tests {
     use crate::mocks::mock_i2c_interface::tests::MockI2cInterface;
     use crate::sensors::atlas_scientific::{
         atlas_scientific_constants, AtlasScientific, AtlasScientificChannels, AtlasScientificError,
-        AtlasScientificResultData,
+        AtlasScientificResult, AtlasScientificResultData,
     };
     use crate::sensors::i2c_interface::{I2cError, I2cRequest, I2cResponse, I2cResult};
     use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -821,7 +902,7 @@ pub mod tests {
     use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     #[test]
     // happy case for evaluating response from pH sensor unit
@@ -973,9 +1054,29 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
+        assert!(matches!(
+            AtlasScientific::check_response(stimuli, false),
+            Err(AtlasScientificError::ConversionFailure { source: _ })
+        ));
+    }
+
+    #[test]
+    // Test case checks if the check_response function correctly identifies an
+    // invalid non-numeric character (like an alphabet letter) in the data payload.
+    fn test_atlas_scientific_check_response_invalid_character_in_payload() {
+        let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
+            atlas_scientific_constants::MESSAGE_START_MAGIC,
+            b'2',
+            b'5',
+            atlas_scientific_constants::DECIMAL_POINT,
+            b'A', // Invalid character
+            b'0',
+            b'0',
+            atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
+        ];
         assert_eq!(
             AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::ConversionFailure)
+            Err(AtlasScientificError::ContainsInvalidCharacter(b'A'))
         );
     }
 
@@ -1083,7 +1184,7 @@ pub mod tests {
         // Sending stimuli for water temperature before triggering try_recv from the test object
         _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_temperature));
 
-        atlas_scientific.receive_response_from_i2c_interface(
+        _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::WaterTemperature,
             &rx_atlas_scientific_from_i2c_interface,
             &mutex_atlas_scientific_temperature,
@@ -1104,7 +1205,7 @@ pub mod tests {
         // Sending stimuli for pH before triggering try_recv from the test object
         _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_ph));
 
-        atlas_scientific.receive_response_from_i2c_interface(
+        _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::pH,
             &rx_atlas_scientific_from_i2c_interface,
             &mutex_atlas_scientific_temperature,
@@ -1125,7 +1226,7 @@ pub mod tests {
         // Sending stimuli for conductivity before triggering try_recv from the test object
         _ = tx_i2c_interface_to_atlas_scientific.send(Ok(stimuli_i2c_response_conductivity));
 
-        atlas_scientific.receive_response_from_i2c_interface(
+        _ = atlas_scientific.receive_response_from_i2c_interface(
             &AquariumSignal::Conductivity,
             &rx_atlas_scientific_from_i2c_interface,
             &mutex_atlas_scientific_temperature,
@@ -1597,6 +1698,800 @@ pub mod tests {
                 panic!("mutex_atlas_scientific_conductivity lock poisoned: {:?}", e);
             }
         };
+    }
+
+    #[test]
+    // Test case checks if the is_numeric function correctly identifies valid digits.
+    fn test_is_numeric_with_valid_digits() {
+        // Test with '0'
+        assert!(AtlasScientific::is_numeric(b'0', false));
+        assert!(AtlasScientific::is_numeric(b'0', true));
+
+        // Test with '5'
+        assert!(AtlasScientific::is_numeric(b'5', false));
+        assert!(AtlasScientific::is_numeric(b'5', true));
+
+        // Test with '9'
+        assert!(AtlasScientific::is_numeric(b'9', false));
+        assert!(AtlasScientific::is_numeric(b'9', true));
+    }
+
+    #[test]
+    // Test case checks if the is_numeric function correctly identifies the decimal point.
+    fn test_is_numeric_with_decimal_point() {
+        assert!(AtlasScientific::is_numeric(b'.', false));
+        assert!(AtlasScientific::is_numeric(b'.', true));
+    }
+
+    #[test]
+    // Test case checks if the is_numeric function correctly handles the negative sign
+    // when negative values are allowed.
+    fn test_is_numeric_with_negative_sign_allowed() {
+        assert!(AtlasScientific::is_numeric(b'-', true));
+    }
+
+    #[test]
+    // Test case checks if the is_numeric function correctly handles the negative sign
+    // when negative values are not allowed (e.g., for pH values).
+    fn test_is_numeric_with_negative_sign_not_allowed() {
+        assert!(!AtlasScientific::is_numeric(b'-', false));
+    }
+
+    #[test]
+    // Test case checks if the is_numeric function correctly identifies various
+    // invalid characters that are not part of a number.
+    fn test_is_numeric_with_invalid_characters() {
+        // Test with an alphabet character
+        assert!(!AtlasScientific::is_numeric(b'a', false));
+        assert!(!AtlasScientific::is_numeric(b'X', true));
+
+        // Test with a special symbol
+        assert!(!AtlasScientific::is_numeric(b'?', false));
+        assert!(!AtlasScientific::is_numeric(b'#', true));
+
+        // Test with a space
+        assert!(!AtlasScientific::is_numeric(b' ', false));
+        assert!(!AtlasScientific::is_numeric(b' ', true));
+
+        // Test with a newline character
+        assert!(!AtlasScientific::is_numeric(b'\n', false));
+        assert!(!AtlasScientific::is_numeric(b'\n', true));
+    }
+
+    #[test]
+    // Test case checks if send_request_to_i2c_interface correctly sends a request for pH.
+    fn test_send_request_to_i2c_interface_ph_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let sleep_time_millis_ph = config.atlas_scientific.sleep_time_millis_ph;
+        let address_atlas_scientific_ph = config.atlas_scientific.address_atlas_scientific_ph;
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx): (Sender<I2cRequest>, Receiver<I2cRequest>) = mpsc::channel();
+
+        let result = atlas_scientific.send_request_to_i2c_interface(&AquariumSignal::pH, &tx);
+
+        // Assert that the sending was successful
+        assert!(result);
+
+        // Assert that a message was received and it's the correct one
+        let received_request = rx.try_recv().unwrap();
+        assert_eq!(received_request.i2c_address, address_atlas_scientific_ph);
+        assert_eq!(received_request.sleep_time_millis, sleep_time_millis_ph);
+        assert_eq!(
+            received_request.send_buf,
+            vec![atlas_scientific_constants::COMMAND_READ]
+        );
+        assert_eq!(
+            received_request.expected_response_length,
+            atlas_scientific_constants::MESSAGE_SIZE
+        );
+    }
+
+    #[test]
+    // Test case checks if send_request_to_i2c_interface correctly sends a request for conductivity.
+    fn test_send_request_to_i2c_interface_conductivity_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let sleep_time_millis_conductivity = config.atlas_scientific.sleep_time_millis_conductivity;
+        let address_atlas_scientific_conductivity = config
+            .atlas_scientific
+            .address_atlas_scientific_conductivity;
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx): (Sender<I2cRequest>, Receiver<I2cRequest>) = mpsc::channel();
+
+        let result =
+            atlas_scientific.send_request_to_i2c_interface(&AquariumSignal::Conductivity, &tx);
+
+        // Assert that the sending was successful
+        assert!(result);
+
+        // Assert that a message was received and it's the correct one
+        let received_request = rx.try_recv().unwrap();
+        assert_eq!(
+            received_request.i2c_address,
+            address_atlas_scientific_conductivity
+        );
+        assert_eq!(
+            received_request.sleep_time_millis,
+            sleep_time_millis_conductivity
+        );
+        assert_eq!(
+            received_request.send_buf,
+            vec![atlas_scientific_constants::COMMAND_READ]
+        );
+        assert_eq!(
+            received_request.expected_response_length,
+            atlas_scientific_constants::MESSAGE_SIZE
+        );
+    }
+
+    #[test]
+    // Test case checks if send_request_to_i2c_interface correctly sends a request for water temperature.
+    fn test_send_request_to_i2c_interface_temperature_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let sleep_time_millis_temperature = config.atlas_scientific.sleep_time_millis_temperature;
+        let address_atlas_scientific_temperature =
+            config.atlas_scientific.address_atlas_scientific_temperature;
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx): (Sender<I2cRequest>, Receiver<I2cRequest>) = mpsc::channel();
+
+        let result =
+            atlas_scientific.send_request_to_i2c_interface(&AquariumSignal::WaterTemperature, &tx);
+
+        // Assert that the sending was successful
+        assert!(result);
+
+        // Assert that a message was received and it's the correct one
+        let received_request = rx.try_recv().unwrap();
+        assert_eq!(
+            received_request.i2c_address,
+            address_atlas_scientific_temperature
+        );
+        assert_eq!(
+            received_request.sleep_time_millis,
+            sleep_time_millis_temperature
+        );
+        assert_eq!(
+            received_request.send_buf,
+            vec![atlas_scientific_constants::COMMAND_READ]
+        );
+        assert_eq!(
+            received_request.expected_response_length,
+            atlas_scientific_constants::MESSAGE_SIZE
+        );
+    }
+
+    #[test]
+    // Test case checks that send_request_to_i2c_interface handles an invalid signal gracefully.
+    fn test_send_request_to_i2c_interface_invalid_signal() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx): (Sender<I2cRequest>, Receiver<I2cRequest>) = mpsc::channel();
+
+        // Use a signal not handled by the function's match arms
+        let result =
+            atlas_scientific.send_request_to_i2c_interface(&AquariumSignal::MockInvalidSignal, &tx);
+
+        // Assert that the function returns false, indicating failure
+        assert!(!result);
+
+        // Assert that no message was sent over the channel
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    // Test case checks that send_request_to_i2c_interface handles a disconnected channel.
+    fn test_send_request_to_i2c_interface_channel_disconnected() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let mut atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx): (Sender<I2cRequest>, Receiver<I2cRequest>) = mpsc::channel();
+
+        // Drop the receiver to simulate a disconnected channel
+        drop(rx);
+
+        // Attempt to send a request
+        let result = atlas_scientific.send_request_to_i2c_interface(&AquariumSignal::pH, &tx);
+
+        // Assert that the function returns false, indicating failure
+        assert!(!result);
+
+        // Assert that the internal lock flag is set to prevent log spam
+        assert!(atlas_scientific.lock_error_channel_send_i2c_interface);
+    }
+
+    #[test]
+    // Test case checks if write_result_to_mutex correctly writes a successful
+    // temperature result to the correct mutex.
+    fn test_write_result_to_mutex_temperature_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let initial_temp = Ok(AtlasScientificResultData::new(0.0));
+        let initial_ph = Ok(AtlasScientificResultData::new(0.0));
+        let initial_cond = Ok(AtlasScientificResultData::new(0.0));
+
+        let mutex_temp = Arc::new(Mutex::new(initial_temp.clone()));
+        let mutex_ph = Arc::new(Mutex::new(initial_ph.clone()));
+        let mutex_cond = Arc::new(Mutex::new(initial_cond.clone()));
+
+        let new_temp_value = 25.5;
+        let new_temp_result = Ok(AtlasScientificResultData::new(new_temp_value));
+
+        let before = Instant::now();
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::WaterTemperature,
+            new_temp_result.clone(),
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        let after = Instant::now();
+
+        assert!(result.is_ok());
+        let result_instant = result.unwrap();
+        assert!(result_instant >= before);
+        assert!(result_instant <= after);
+
+        // Check that the temperature mutex was updated
+        let temp_lock = mutex_temp.lock().unwrap();
+        assert_eq!(temp_lock.as_ref().unwrap().value, new_temp_value);
+
+        // Check that other mutexes were not changed
+        let ph_lock = mutex_ph.lock().unwrap();
+        assert_eq!(ph_lock.as_ref().unwrap().value, initial_ph.unwrap().value);
+        let cond_lock = mutex_cond.lock().unwrap();
+        assert_eq!(
+            cond_lock.as_ref().unwrap().value,
+            initial_cond.unwrap().value
+        );
+    }
+
+    #[test]
+    // Test case checks if write_result_to_mutex correctly writes a successful
+    // pH result to the correct mutex.
+    fn test_write_result_to_mutex_ph_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let mutex_temp = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_cond = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+
+        let new_ph_value = 8.2;
+        let new_ph_result = Ok(AtlasScientificResultData::new(new_ph_value));
+
+        let before = Instant::now();
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::pH,
+            new_ph_result.clone(),
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        let after = Instant::now();
+
+        assert!(result.is_ok());
+        let result_instant = result.unwrap();
+        assert!(result_instant >= before);
+        assert!(result_instant <= after);
+
+        // Check that the pH mutex was updated
+        let ph_lock = mutex_ph.lock().unwrap();
+        assert_eq!(ph_lock.as_ref().unwrap().value, new_ph_value);
+    }
+
+    #[test]
+    // Test case checks if write_result_to_mutex correctly writes a successful
+    // conductivity result to the correct mutex.
+    fn test_write_result_to_mutex_conductivity_success() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let mutex_temp = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_cond = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+
+        let new_cond_value = 50000.0;
+        let new_cond_result = Ok(AtlasScientificResultData::new(new_cond_value));
+
+        let before = Instant::now();
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::Conductivity,
+            new_cond_result.clone(),
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        let after = Instant::now();
+
+        assert!(result.is_ok());
+        let result_instant = result.unwrap();
+        assert!(result_instant >= before);
+        assert!(result_instant <= after);
+
+        // Check that the conductivity mutex was updated
+        let cond_lock = mutex_cond.lock().unwrap();
+        assert_eq!(cond_lock.as_ref().unwrap().value, new_cond_value);
+    }
+
+    #[test]
+    // Test case checks if write_result_to_mutex correctly writes an error
+    // result to the correct mutex.
+    fn test_write_result_to_mutex_error_result() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let mutex_temp = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_cond = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+
+        let error_result = Err(AtlasScientificError::Initial);
+
+        let before = Instant::now();
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::pH,
+            error_result.clone(),
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        let after = Instant::now();
+
+        assert!(result.is_ok());
+        let result_instant = result.unwrap();
+        assert!(result_instant >= before);
+        assert!(result_instant <= after);
+
+        // Check that the pH mutex was updated with the error
+        let ph_lock = mutex_ph.lock().unwrap();
+        assert!(ph_lock.is_err());
+        assert_eq!(
+            *ph_lock.as_ref().err().unwrap(),
+            error_result.err().unwrap()
+        );
+    }
+
+    #[test]
+    // Test case checks that write_result_to_mutex handles an invalid signal
+    // by doing nothing and not changing any mutex values.
+    fn test_write_result_to_mutex_invalid_signal() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let initial_temp = Ok(AtlasScientificResultData::new(1.0));
+        let initial_ph = Ok(AtlasScientificResultData::new(2.0));
+        let initial_cond = Ok(AtlasScientificResultData::new(3.0));
+
+        let mutex_temp = Arc::new(Mutex::new(initial_temp.clone()));
+        let mutex_ph = Arc::new(Mutex::new(initial_ph.clone()));
+        let mutex_cond = Arc::new(Mutex::new(initial_cond.clone()));
+
+        let new_result = Ok(AtlasScientificResultData::new(99.0));
+
+        let before = Instant::now();
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::MockInvalidSignal,
+            new_result,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+        let after = Instant::now();
+
+        assert!(result.is_ok());
+        let result_instant = result.unwrap();
+        assert!(result_instant >= before);
+        assert!(result_instant <= after);
+
+        // Check that no mutex values were changed
+        let temp_lock = mutex_temp.lock().unwrap();
+        assert_eq!(
+            temp_lock.as_ref().unwrap().value,
+            initial_temp.unwrap().value
+        );
+        let ph_lock = mutex_ph.lock().unwrap();
+        assert_eq!(ph_lock.as_ref().unwrap().value, initial_ph.unwrap().value);
+        let cond_lock = mutex_cond.lock().unwrap();
+        assert_eq!(
+            cond_lock.as_ref().unwrap().value,
+            initial_cond.unwrap().value
+        );
+    }
+
+    #[test]
+    // Test case checks that write_result_to_mutex correctly returns an error
+    // when trying to write to a poisoned mutex.
+    fn test_write_result_to_mutex_poisoned() {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let mutex_temp = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_cond = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+
+        // Poison the pH mutex by panicking while holding the lock in another thread
+        let mutex_ph_clone = mutex_ph.clone();
+        let handle = thread::spawn(move || {
+            let _lock = mutex_ph_clone.lock().unwrap();
+            panic!("Poisoning the mutex for the test");
+        });
+        assert!(handle.join().is_err()); // The join will return an Err because the thread panicked
+
+        let new_result = Ok(AtlasScientificResultData::new(8.0));
+
+        // Attempt to write to the now-poisoned mutex
+        let result = atlas_scientific.write_result_to_mutex(
+            &AquariumSignal::pH,
+            new_result,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        // Assert that the correct error is returned
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::CouldNotLockMutex { .. })
+        ));
+        if let Err(AtlasScientificError::CouldNotLockMutex { signal }) = result {
+            assert_eq!(signal, AquariumSignal::pH);
+        }
+    }
+
+    /// Helper function to set up a standard test environment for receive tests.
+    fn setup_receive_test() -> (
+        AtlasScientific,
+        Sender<I2cResult>,
+        Receiver<I2cResult>,
+        Arc<Mutex<AtlasScientificResult>>,
+        Arc<Mutex<AtlasScientificResult>>,
+        Arc<Mutex<AtlasScientificResult>>,
+    ) {
+        let config: ConfigData =
+            read_config_file("/config/aquarium_control_test_generic.toml".to_string()).unwrap();
+        let atlas_scientific = AtlasScientific::new(config.atlas_scientific);
+
+        let (tx, rx) = mpsc::channel();
+
+        // Initialize mutexes with a known default value (0.0)
+        let mutex_temp = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+        let mutex_cond = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(0.0))));
+
+        (atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond)
+    }
+
+    /// Helper function to run a successful receive-and-parse test for a given signal.
+    fn run_receive_success_test(signal: AquariumSignal, value: f32) {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Create a valid I2C response buffer without spaces, as per the requirement.
+        // The current `check_response` implementation expects a 5-character numeric string
+        // from its slice of the buffer. We create a 6-byte payload that satisfies this.
+        let mut value_str = value.to_string();
+        if value_str.len() > 5 {
+            // Truncate if the string representation is too long for the 5-char slice.
+            value_str.truncate(5);
+        }
+        // Right-pad with '0' to a total of 6 characters. The parsing logic will slice the
+        // first 5 characters, which will form a valid, non-space-padded float string.
+        while value_str.len() < 6 {
+            value_str.push('0');
+        }
+        let response_string = value_str;
+
+        let mut buffer = vec![atlas_scientific_constants::MESSAGE_START_MAGIC];
+        buffer.extend_from_slice(response_string.as_bytes());
+        buffer.push(atlas_scientific_constants::MESSAGE_FINISH_MAGIC);
+        assert_eq!(buffer.len(), 8);
+
+        let i2c_response = I2cResponse {
+            read_buf: buffer,
+            length: 8,
+        };
+
+        // Send the valid response
+        tx.send(Ok(i2c_response)).unwrap();
+
+        // Execute the function under test
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &signal,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        // Assert the outcome
+        assert!(
+            result.is_ok(),
+            "Test failed for signal {:?} with value {}. Error: {:?}",
+            signal,
+            value,
+            result.err()
+        );
+        assert_float_absolute_eq!(result.unwrap().value, value, 0.001);
+
+        // Check that the correct mutex was updated and others were not
+        let (target_mutex, other1, other2) = match signal {
+            AquariumSignal::WaterTemperature => (&mutex_temp, &mutex_ph, &mutex_cond),
+            AquariumSignal::pH => (&mutex_ph, &mutex_temp, &mutex_cond),
+            AquariumSignal::Conductivity => (&mutex_cond, &mutex_temp, &mutex_ph),
+            _ => panic!("Invalid signal for this test"),
+        };
+
+        let lock = target_mutex.lock().unwrap();
+        assert_float_absolute_eq!(lock.as_ref().unwrap().value, value, 0.001);
+
+        let lock1 = other1.lock().unwrap();
+        assert_float_absolute_eq!(lock1.as_ref().unwrap().value, 0.0, 0.001);
+        let lock2 = other2.lock().unwrap();
+        assert_float_absolute_eq!(lock2.as_ref().unwrap().value, 0.0, 0.001);
+    }
+
+    #[test]
+    /// Tests the happy path for all three Atlas Scientific signals.
+    fn test_receive_response_success_all_signals() {
+        run_receive_success_test(AquariumSignal::WaterTemperature, 25.5);
+        run_receive_success_test(AquariumSignal::pH, 8.2);
+        run_receive_success_test(AquariumSignal::Conductivity, 51000.0);
+    }
+
+    #[test]
+    /// Tests that the function correctly handles an I2C communication failure from the channel.
+    fn test_receive_response_i2c_failure() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Send an I2C error over the channel
+        tx.send(Err(I2cError::WriteFailure)).unwrap();
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::I2cCommunicationFailure { .. })
+        ));
+    }
+
+    #[test]
+    /// Tests that the function correctly handles a response with an incorrect buffer length.
+    fn test_receive_response_incorrect_buffer_length() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        let i2c_response = I2cResponse {
+            read_buf: vec![1, 2, 3], // Too short
+            length: 3,
+        };
+        tx.send(Ok(i2c_response)).unwrap();
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(result.is_err());
+        if let Err(AtlasScientificError::IncorrectBufferLength(signal, len)) = result {
+            assert_eq!(signal, AquariumSignal::pH);
+            assert_eq!(len, 3);
+        } else {
+            panic!("Expected IncorrectBufferLength error, got {:?}", result);
+        }
+    }
+
+    #[test]
+    /// Tests that the function correctly handles a malformed payload that fails `check_response`.
+    fn test_receive_response_malformed_payload() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Correct length, but bad start magic number
+        let buffer = [99, b'2', b'5', b'.', b'5', b' ', b' ', 0];
+        let i2c_response = I2cResponse {
+            read_buf: buffer.to_vec(),
+            length: 8,
+        };
+        tx.send(Ok(i2c_response)).unwrap();
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(result.is_err());
+        if let Err(AtlasScientificError::ResponseCheckFailed { source, .. }) = result {
+            assert!(matches!(
+                *source,
+                AtlasScientificError::FirstCharacterNotMagic(..)
+            ));
+        } else {
+            panic!("Expected ResponseCheckFailed error, got {:?}", result);
+        }
+    }
+
+    #[test]
+    /// Tests that the function returns the correct error when the channel is empty.
+    fn test_receive_response_channel_empty() {
+        let (mut atlas_scientific, _tx, rx, mutex_temp, mutex_ph, mutex_cond) =
+            setup_receive_test();
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(matches!(result, Err(AtlasScientificError::ChannelIsEmpty)));
+    }
+
+    #[test]
+    /// Tests that the function returns the correct error when the channel is disconnected.
+    fn test_receive_response_channel_disconnected() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        drop(tx); // Disconnect the channel
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::ChannelIsDisconnected { .. })
+        ));
+    }
+
+    #[test]
+    /// Tests that the function correctly returns an error when the target mutex is poisoned.
+    fn test_receive_response_poisoned_mutex() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Poison the pH mutex
+        let mutex_ph_clone = mutex_ph.clone();
+        let handle = thread::spawn(move || {
+            let _lock = mutex_ph_clone.lock().unwrap();
+            panic!("Poisoning the mutex for the test");
+        });
+        assert!(handle.join().is_err());
+
+        // Send a valid pH response
+        let i2c_response = I2cResponse {
+            read_buf: vec![1, b'8', b'.', b'2', b' ', b' ', b' ', 0],
+            length: 8,
+        };
+        tx.send(Ok(i2c_response)).unwrap();
+
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::pH,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(AtlasScientificError::CouldNotLockMutex { .. })
+        ));
+    }
+    #[test]
+    /// Tests that a long wait for a mutex lock triggers the internal warning flag.
+    fn test_receive_response_long_mutex_wait_triggers_warning() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Spawn a thread that will hold the lock for a while, simulating a slow consumer.
+        let mutex_temp_clone = mutex_temp.clone();
+        let handle = thread::spawn(move || {
+            let _lock = mutex_temp_clone.lock().unwrap();
+            let spin_sleeper = SpinSleeper::default();
+            spin_sleeper.sleep(Duration::from_millis(
+                atlas_scientific_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS + 5,
+            ));
+            // Lock is released when the thread finishes.
+        });
+
+        // Give the spawned thread a moment to acquire the lock.
+        let spin_sleeper = SpinSleeper::default();
+        spin_sleeper.sleep(Duration::from_millis(5));
+
+        // Send a valid response that will be processed.
+        let i2c_response = I2cResponse {
+            read_buf: vec![1, b'2', b'5', b'.', b'0', b'0', b'0', 0],
+            length: 8,
+        };
+        tx.send(Ok(i2c_response)).unwrap();
+
+        // This call will now block until the spawned thread releases the lock.
+        // The duration of this block will be longer than the threshold.
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::WaterTemperature,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        // Wait for the spawned thread to complete.
+        handle.join().unwrap();
+
+        // Assert that the operation was ultimately successful.
+        assert!(result.is_ok());
+
+        // Assert that the warning flag was set because of the long wait.
+        assert!(atlas_scientific.mutex_temperature_access_duration_exceeded);
+    }
+
+    #[test]
+    /// Tests that the function handles an unsupported signal without altering any state.
+    fn test_receive_response_with_unsupported_signal() {
+        let (mut atlas_scientific, tx, rx, mutex_temp, mutex_ph, mutex_cond) = setup_receive_test();
+
+        // Store initial values of the mutexes.
+        let initial_temp_val = mutex_temp.lock().unwrap().as_ref().unwrap().value;
+        let initial_ph_val = mutex_ph.lock().unwrap().as_ref().unwrap().value;
+        let initial_cond_val = mutex_cond.lock().unwrap().as_ref().unwrap().value;
+
+        // Send a valid response.
+        let i2c_response = I2cResponse {
+            read_buf: vec![1, b'9', b'9', b'.', b'0', b'0', b'0', 0],
+            length: 8,
+        };
+        tx.send(Ok(i2c_response)).unwrap();
+
+        // Execute the function with a signal that is not handled by `write_result_to_mutex`.
+        let result = atlas_scientific.receive_response_from_i2c_interface(
+            &AquariumSignal::MockInvalidSignal,
+            &rx,
+            &mutex_temp,
+            &mutex_ph,
+            &mutex_cond,
+        );
+
+        // The function should still "succeed" in processing the message.
+        assert!(result.is_ok());
+        assert_float_absolute_eq!(result.unwrap().value, 99.0, 0.001);
+
+        // Assert that none of the mutexes were updated.
+        let final_temp_val = mutex_temp.lock().unwrap().as_ref().unwrap().value;
+        let final_ph_val = mutex_ph.lock().unwrap().as_ref().unwrap().value;
+        let final_cond_val = mutex_cond.lock().unwrap().as_ref().unwrap().value;
+
+        assert_eq!(initial_temp_val, final_temp_val);
+        assert_eq!(initial_ph_val, final_ph_val);
+        assert_eq!(initial_cond_val, final_cond_val);
     }
 
     #[test]

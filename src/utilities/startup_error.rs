@@ -3,6 +3,7 @@ use crate::database::sql_interface_error::SqlInterfaceError;
 use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger::DataLoggerError;
+use crate::relays::actuate_controllino::ActuateControllinoError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
@@ -10,7 +11,6 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
-use crate::relays::actuate_controllino::ActuateControllinoError;
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -95,5 +95,5 @@ pub enum StartupError {
     ControllinoSetupFailure {
         #[source]
         source: ActuateControllinoError,
-    }
+    },
 }

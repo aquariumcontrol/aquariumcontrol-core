@@ -42,11 +42,11 @@ pub enum RelayError {
         actuation_name: String,
         last_attempt_number: u64,
         max_attempt_allowed: u64,
-        
+
         #[source]
-        source: Box<RelayError>
+        source: Box<RelayError>,
     },
-    
+
     /// Used to initialize variable. Value is overwritten with real error.
     #[error("Initial value")]
     InitialValue,

@@ -6,27 +6,33 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+use thiserror::Error;
 
 /// Communication of errors occurring in communication via I2C
-#[derive(Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Clone)]
 pub enum I2cError {
-    /// the message could not be sent
+    /// The message could not be sent.
     #[allow(unused)]
+    #[error("I2C write operation failed")]
     WriteFailure,
 
-    /// command could not be sent completely to the sensor unit
+    /// Command could not be sent completely to the sensor unit.
     #[allow(unused)]
+    #[error("I2C write operation was incomplete")]
     InsufficientWrite,
 
-    /// response from the sensor unit could not be received completely
+    /// Response from the sensor unit could not be received completely.
     #[allow(unused)]
+    #[error("I2C read operation was incomplete")]
     InsufficientRead,
 
-    /// Represents a failure to set the address (encoded in `.0`) of the I2C sensor that would later have data requested from it.
+    /// Represents a failure to set the address of the I2C sensor.
     #[allow(unused)]
+    #[error("Failed to set I2C slave address to {0}")]
     SetAddressError(u16),
 
-    /// Response length from bus participant does not match the expected value
+    /// Response length from bus participant does not match the expected value.
     #[allow(unused)]
+    #[error("I2C response has incorrect length: {0}")]
     IncorrectResponseLength(usize),
 }

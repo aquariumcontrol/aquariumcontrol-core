@@ -16,12 +16,12 @@ use log::debug;
 
 use crate::relays::relay_error::RelayError;
 use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
-use crate::utilities::logger::log_error_chain;
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -254,7 +254,7 @@ impl RelayManager {
             actuation_name: actuation_name.to_string(),
             last_attempt_number: attempts + 1,
             max_attempt_allowed: max_attempts,
-            source: Box::new(error_to_be_reported)
+            source: Box::new(error_to_be_reported),
         })
     }
 
@@ -314,7 +314,11 @@ impl RelayManager {
                             &mut spin_sleeper,
                             sleep_duration,
                         ) {
-                            log_error_chain(module_path!(), "Actuation of refill pump failed.", refill_actuation_error);
+                            log_error_chain(
+                                module_path!(),
+                                "Actuation of refill pump failed.",
+                                refill_actuation_error,
+                            );
                         }
                     }
                     match &relay_manager_channels.tx_relay_manager_to_refill.send(true) {
@@ -366,7 +370,11 @@ impl RelayManager {
                         &mut spin_sleeper,
                         sleep_duration,
                     ) {
-                        log_error_chain(module_path!(), "Actuation of heater failed.", heating_actuation_error);
+                        log_error_chain(
+                            module_path!(),
+                            "Actuation of heater failed.",
+                            heating_actuation_error,
+                        );
                     }
                     match &relay_manager_channels
                         .tx_relay_manager_to_heating
@@ -420,7 +428,11 @@ impl RelayManager {
                         &mut spin_sleeper,
                         sleep_duration,
                     ) {
-                        log_error_chain(module_path!(), "Actuation of ventilation failed.", ventilation_actuation_error);
+                        log_error_chain(
+                            module_path!(),
+                            "Actuation of ventilation failed.",
+                            ventilation_actuation_error,
+                        );
                     }
                     match &relay_manager_channels
                         .tx_relay_manager_to_ventilation
@@ -474,7 +486,11 @@ impl RelayManager {
                         &mut spin_sleeper,
                         sleep_duration,
                     ) {
-                        log_error_chain(module_path!(), "Actuation of Balling dosing failed.", balling_actuation_error);
+                        log_error_chain(
+                            module_path!(),
+                            "Actuation of Balling dosing failed.",
+                            balling_actuation_error,
+                        );
                     }
                     match &relay_manager_channels
                         .tx_relay_manager_to_balling
@@ -525,7 +541,11 @@ impl RelayManager {
                         &mut spin_sleeper,
                         sleep_duration,
                     ) {
-                        log_error_chain(module_path!(), "Actuation of feed failed.", feed_actuation_error);
+                        log_error_chain(
+                            module_path!(),
+                            "Actuation of feed failed.",
+                            feed_actuation_error,
+                        );
                     }
                     match &relay_manager_channels.tx_relay_manager_to_feed.send(true) {
                         Ok(()) => {
