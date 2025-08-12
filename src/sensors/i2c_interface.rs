@@ -7,7 +7,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-pub(crate) use crate::sensors::i2c_error::I2cError;
+use crate::sensors::i2c_error::I2cError;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::{fmt, str};
@@ -24,6 +24,8 @@ cfg_if::cfg_if! {
         use std::time::Duration;
         use crate::utilities::channel_content::InternalCommand;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+        use crate::sensors::i2c_error::I2cError;
+        use crate::sensors::i2c_error::I2cError::{InitializationFailure, SetTimeoutError};
     }
 }
 
@@ -153,39 +155,18 @@ impl I2cInterface {
     /// * `config` - **Configuration data** for the I2C interface
     ///
     /// # Returns
-    /// A new **`I2cInterface` struct**, ready to communicate with the I2C bus participants.
-    ///
-    /// # Panics
-    /// This function will **panic** if:
-    /// - It **fails to open the I2C bus** (e.g., I2C is not enabled, permissions issues).
-    /// - It **fails to set the global transaction timeout** for the I2C bus.
-    pub fn new(config: I2cInterfaceConfig) -> I2cInterface {
-        I2cInterface {
-            i2c: {
-                let i2c = match I2c::new() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        panic!(
-                            "{}: initialization of I2C interface failed ({e:?})",
-                            module_path!()
-                        );
-                    }
-                };
-                match i2c.set_timeout(config.timeout_transaction) {
-                    Ok(_) => i2c,
-                    Err(_) => {
-                        panic!(
-                            "{}: could not set timeout for transactions.",
-                            module_path!()
-                        );
-                    }
-                }
-            },
+    /// In case of success, a new `I2cInterface` struct, ready to communicate with the I2C bus participants.
+    /// An `I2cError` otherwise.
+    pub fn new(config: I2cInterfaceConfig) -> Result<I2cInterface, I2cError> {
+        let i2c = I2c::new().map_err(|e| InitializationFailure { source: e })?;
+        i2c.set_timeout(config.timeout_transaction)
+            .map_err(|e| SetTimeoutError { source: e })?;
 
+        Ok(I2cInterface {
+            i2c,
             spin_sleeper: SpinSleeper::default(),
-
             config,
-        }
+        })
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -215,37 +196,22 @@ impl I2cInterface {
     pub fn get_response_from_i2c(&mut self, i2c_request: I2cRequest) -> I2cResult {
         let sleep_duration = Duration::from_millis(i2c_request.sleep_time_millis);
 
-        match self.i2c.set_slave_address(i2c_request.i2c_address) {
-            Ok(_) => { /* do nothing */ }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "could not set {} as address of device ({e:?})",
-                    i2c_request.i2c_address
-                );
-                return Err(I2cError::SetAddressError(i2c_request.i2c_address));
-            }
-        }
+        self.i2c
+            .set_slave_address(i2c_request.i2c_address)
+            .map_err(|e| I2cError::SetAddressError {
+                adress: i2c_request.i2c_address,
+                source: e,
+            })?;
 
-        match self.i2c.write(&i2c_request.send_buf) {
-            Ok(realized_write_len) => {
-                if realized_write_len != i2c_request.send_buf.len() {
-                    error!(
-                        target: module_path!(),
-                        "could not write complete request to I2C (target: {}, realized: {})",
-                        i2c_request.send_buf.len(),
-                        realized_write_len
-                    );
-                    return Err(I2cError::InsufficientWrite);
-                }
-            }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "writing to I2C device failed {e:?}",
-                );
-                return Err(I2cError::WriteFailure);
-            }
+        let realized_write_len = &self
+            .i2c
+            .write(&i2c_request.send_buf)
+            .map_err(|e| I2cError::WriteFailure { source: e })?;
+        if realized_write_len != i2c_request.send_buf.len() {
+            return Err(I2cError::InsufficientWrite(
+                i2c_request.send_buf.len(),
+                realized_write_len,
+            ));
         }
 
         // give the I2C bus participant time to process the request
@@ -253,27 +219,17 @@ impl I2cInterface {
 
         let mut read_buffer = vec![0u8; i2c_request.expected_response_length];
 
-        match self.i2c.read(&mut read_buffer) {
-            Ok(received_message_length) => {
-                if received_message_length != i2c_request.expected_response_length {
-                    error!(
-                        target: module_path!(),
-                        "did not receive full response from I2C bus participant. Expected {}, got {}",
-                        i2c_request.expected_response_length,
-                        received_message_length
-                    );
-                    Err(I2cError::IncorrectResponseLength(received_message_length))
-                } else {
-                    Ok(I2cResponse::new(read_buffer, received_message_length))
-                }
-            }
-            Err(_) => {
-                error!(
-                    target: module_path!(),
-                    "did not receive response from I2C bus participant",
-                );
-                Err(I2cError::InsufficientRead)
-            }
+        let received_message_length = self
+            .i2c
+            .read(&mut read_buffer)
+            .map_err(|e| I2cError::InsufficientRead { source: e })?;
+        if received_message_length != i2c_request.expected_response_length {
+            Err(I2cError::IncorrectResponseLength(
+                i2c_request.expected_response_length,
+                received_message_length,
+            ))
+        } else {
+            Ok(I2cResponse::new(read_buffer, received_message_length))
         }
     }
 
@@ -291,6 +247,8 @@ impl I2cInterface {
     ///
     /// The loop also handles `Quit` commands for graceful shutdown and logs errors or warnings
     /// for invalid commands or channel communication issues, using internal lock flags to prevent log flooding.
+    ///
+    /// This function does not log error. Error logging is done by the `AtlasScientific` module.
     ///
     /// # Arguments
     /// * `tx_to_atlas_scientific` - The sender channel for sending `Result<(f32, f32, f32), I2cError>`

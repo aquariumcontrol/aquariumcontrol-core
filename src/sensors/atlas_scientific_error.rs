@@ -15,7 +15,7 @@ use thiserror::Error;
 
 /// error codes for evaluation of sensor unit response
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Clone, Error)]
+#[derive(Debug, PartialEq, Error)]
 pub enum AtlasScientificError {
     /// The first character in the message sent from the sensor does not match the required magic number.
     #[error("The first character in the message sent from the sensor ({1}) does not match the required magic number ({0}).")]
@@ -81,4 +81,7 @@ pub enum AtlasScientificError {
         #[source]
         source: TryRecvError,
     },
+
+    #[error("Initialization value - result has not been set yet")]
+    NotInitialized,
 }

@@ -18,7 +18,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 
-use crate::sensors::atlas_scientific::AtlasScientificResult;
+use crate::sensors::atlas_scientific::AtlasScientificResultData;
 use crate::sensors::dht::DhtResult;
 use crate::sensors::ds18b20::Ds18b20Result;
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
@@ -104,13 +104,13 @@ pub struct SensorManagerMutexes {
     pub mutex_dht: Arc<Mutex<DhtResult>>,
 
     /// Mutex for temperature from Atlas Scientific sensor unit
-    pub mutex_atlas_scientific_temperature: Arc<Mutex<AtlasScientificResult>>,
+    pub mutex_atlas_scientific_temperature: Arc<Mutex<AtlasScientificResultData>>,
 
     /// Mutex for pH value from Atlas Scientific sensor unit
-    pub mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResult>>,
+    pub mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResultData>>,
 
     /// Mutex for conductivity from Atlas Scientific sensor unit
-    pub mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResult>>,
+    pub mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResultData>>,
 
     /// Mutex for output of sensor manager
     pub mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
@@ -520,16 +520,9 @@ impl SensorManager {
                     //*** Atlas Scientific **********************************************************
                     {
                         match mutexes.mutex_atlas_scientific_temperature.lock() {
-                            Ok(atlas_scientific_temperature_result) => {
-                                match &*atlas_scientific_temperature_result {
-                                    Ok(atlas_scientific_temperature_data) => {
-                                        if self.config.source_water_temperature == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC {
-                                            self.water_temperature = atlas_scientific_temperature_data.value;
-                                        }
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
+                            Ok(atlas_scientific_temperature) => {
+                                if self.config.source_water_temperature == sensor_manager_constants::SOURCE_WATER_TEMPERATURE_ATLAS_SCIENTIFIC {
+                                    self.water_temperature = atlas_scientific_temperature.value;
                                 }
                             }
                             Err(e) => {
@@ -543,15 +536,8 @@ impl SensorManager {
 
                     {
                         match mutexes.mutex_atlas_scientific_ph.lock() {
-                            Ok(atlas_scientific_ph_result) => {
-                                match &*atlas_scientific_ph_result {
-                                    Ok(atlas_scientific_ph_data) => {
-                                        self.pH = atlas_scientific_ph_data.value;
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
-                                }
+                            Ok(atlas_scientific_ph) => {
+                                self.pH = atlas_scientific_ph.value;
                             }
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_ph_mutex {
@@ -564,16 +550,8 @@ impl SensorManager {
 
                     {
                         match mutexes.mutex_atlas_scientific_conductivity.lock() {
-                            Ok(atlas_scientific_conductivity_result) => {
-                                match &*atlas_scientific_conductivity_result {
-                                    Ok(atlas_scientific_conductivity_data) => {
-                                        self.conductivity =
-                                            atlas_scientific_conductivity_data.value;
-                                    }
-                                    Err(_) => {
-                                        // keep the values from previous measurement
-                                    }
-                                }
+                            Ok(atlas_scientific_conductivity) => {
+                                self.conductivity = atlas_scientific_conductivity.value;
                             }
                             Err(e) => {
                                 if !self.lock_error_atlas_scientific_conductivity_mutex {
@@ -824,15 +802,15 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
             target_value_ambient_temperature,
         ))));
-        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
             AtlasScientificResultData::new(target_value_water_temperature + 1.0),
-        )));
-        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+        ));
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
             AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-        )));
-        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+        ));
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
             config.sensor_manager.replacement_value_ph,
-        ))));
+        )));
         let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
             &config.sensor_manager,
         )));
@@ -901,15 +879,15 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
             target_value_ambient_temperature + 1.0,
         ))));
-        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
             AtlasScientificResultData::new(target_value_water_temperature),
-        )));
-        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+        ));
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
             AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-        )));
-        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+        ));
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
             config.sensor_manager.replacement_value_ph,
-        ))));
+        )));
         let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
             &config.sensor_manager,
         )));
@@ -978,15 +956,15 @@ pub mod tests {
         let mutex_ds18b20_ambient_temperature = Arc::new(Mutex::new(Ok(Ds18b20ResultData::new(
             target_value_ambient_temperature,
         ))));
-        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
+        let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(
             AtlasScientificResultData::new(target_value_water_temperature + 1.0),
-        )));
-        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
+        ));
+        let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(
             AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
-        )));
-        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+        ));
+        let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
             config.sensor_manager.replacement_value_ph,
-        ))));
+        )));
         let mutex_sensor_manager_signals = Arc::new(Mutex::new(SensorManagerSignals::new(
             &config.sensor_manager,
         )));

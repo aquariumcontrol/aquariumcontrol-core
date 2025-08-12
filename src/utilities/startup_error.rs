@@ -4,6 +4,8 @@ use crate::dispatch::messaging_error::MessagingError;
 use crate::mineral::balling_error::BallingError;
 use crate::recorder::data_logger::DataLoggerError;
 use crate::relays::actuate_controllino::ActuateControllinoError;
+#[cfg(all(feature = "target_hw", target_os = "linux"))]
+use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
@@ -11,8 +13,6 @@ use crate::utilities::logger::LoggerSetupError;
 use crate::utilities::memory_config_check::MemoryConfigError;
 use crate::utilities::version_information::VersionInformationError;
 use thiserror::Error;
-#[cfg(all(feature = "target_hw", target_os = "linux"))]
-use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -106,5 +106,13 @@ pub enum StartupError {
     GpioHandlerSetupFailure {
         #[source]
         source: GpioHandlerError,
-    }
+    },
+
+    /// Could not initialize the interface to the I2c.
+    #[cfg(all(feature = "target_hw", target_os = "linux"))]
+    #[error("Could not setup the interface to the I2C.")]
+    I2cSetupFailure {
+        #[source]
+        source: I2cError,
+    },
 }

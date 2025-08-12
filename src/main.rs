@@ -1129,17 +1129,17 @@ fn run() -> Result<(), StartupError> {
         mutex_ds18b20_ambient_temperature.clone();
 
     // Mutexes for Atlas Scientific signals
-    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(Ok(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_water_temperature),
+    let mutex_atlas_scientific_temperature = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_water_temperature,
     )));
     let mutex_atlas_scientific_temperature_clone_for_sensor_manager =
         mutex_atlas_scientific_temperature.clone();
-    let mutex_atlas_scientific_ph = Arc::new(Mutex::new(Ok(AtlasScientificResultData::new(
+    let mutex_atlas_scientific_ph = Arc::new(Mutex::new(AtlasScientificResultData::new(
         config.sensor_manager.replacement_value_ph,
-    ))));
+    )));
     let mutex_atlas_scientific_ph_clone_for_sensor_manager = mutex_atlas_scientific_ph.clone();
-    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(Ok(
-        AtlasScientificResultData::new(config.sensor_manager.replacement_value_conductivity),
+    let mutex_atlas_scientific_conductivity = Arc::new(Mutex::new(AtlasScientificResultData::new(
+        config.sensor_manager.replacement_value_conductivity,
     )));
     let mutex_atlas_scientific_conductivity_clone_for_sensor_manager =
         mutex_atlas_scientific_conductivity.clone();
@@ -1435,7 +1435,8 @@ fn run() -> Result<(), StartupError> {
 
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
-            let mut i2c_interface = I2cInterface::new(config.i2c_interface);
+            let mut i2c_interface = I2cInterface::new(config.i2c_interface)
+                .map_err(|e| StartupError::I2cInterface { source: e })?;
 
             scope.spawn(move || {
                 i2c_interface.execute(

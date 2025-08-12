@@ -6,33 +6,65 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use rppal::i2c::I2c;
 use thiserror::Error;
 
 /// Communication of errors occurring in communication via I2C
-#[derive(Error, Debug, PartialEq, Clone)]
+#[derive(Error, Debug, PartialEq)]
 pub enum I2cError {
+    /// Initialization of the I2C interface failed.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Initialization of I2C interface failed.")]
+    InitializationFailure {
+        #[source]
+        source: rppal::i2c::Error,
+    },
+
+    /// Initialization of the I2C interface failed.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Setting timeout for transactions failed.")]
+    SetTimeoutError {
+        #[source]
+        source: rppal::i2c::Error,
+    },
+
     /// The message could not be sent.
-    #[allow(unused)]
-    #[error("I2C write operation failed")]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("I2C write operation failed.")]
+    WriteFailure {
+        #[source]
+        source: rppal::i2c::Error,
+    },
+    #[cfg(all(test, not(any(target_os = "linux", feature = "target_hw"))))]
+    #[error("I2C write operation failed.")]
     WriteFailure,
 
     /// Command could not be sent completely to the sensor unit.
-    #[allow(unused)]
-    #[error("I2C write operation was incomplete")]
-    InsufficientWrite,
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("I2C write operation was incomplete: Target={0}, Realized={1}")]
+    InsufficientWrite(usize, usize),
 
     /// Response from the sensor unit could not be received completely.
-    #[allow(unused)]
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     #[error("I2C read operation was incomplete")]
-    InsufficientRead,
+    InsufficientRead {
+        #[source]
+        source: rppal::i2c::Error,
+    },
 
     /// Represents a failure to set the address of the I2C sensor.
-    #[allow(unused)]
-    #[error("Failed to set I2C slave address to {0}")]
-    SetAddressError(u16),
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Failed to set I2C slave address to {address}")]
+    SetAddressError {
+        address: u16,
+
+        #[source]
+        source: rppal::i2c::Error,
+    },
 
     /// Response length from bus participant does not match the expected value.
-    #[allow(unused)]
-    #[error("I2C response has incorrect length: {0}")]
-    IncorrectResponseLength(usize),
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("I2C response has incorrect length: Expected: {0} Received: {1}")]
+    IncorrectResponseLength(usize, usize),
 }

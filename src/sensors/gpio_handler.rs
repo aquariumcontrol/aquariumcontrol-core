@@ -23,7 +23,6 @@ cfg_if::cfg_if! {
 #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
 pub type Gpio = u64;
 
-
 /// Minimum permissible GPIO value. The configuration is checked against this value.
 pub const GPIO_MIN: u8 = 3;
 
@@ -192,14 +191,14 @@ impl GpioHandler {
 
         if !use_simulator {
             // open interface to the GPIO library
-            let gpio_lib_handle = Gpio::new().
-                map_err(|e| GpioHandlerError::GpioOpenInterfaceFailed { source: e})?;
+            let gpio_lib_handle =
+                Gpio::new().map_err(|e| GpioHandlerError::GpioOpenInterfaceFailed { source: e })?;
 
             Ok(Some(GpioHandler {
                 gpio_lib_handle_opt: Some(gpio_lib_handle),
             }))
         } else {
-           Ok( Some(GpioHandler {
+            Ok(Some(GpioHandler {
                 gpio_lib_handle_opt: None,
             }))
         }
@@ -289,7 +288,10 @@ pub mod tests {
 
         let result = GpioHandler::new(config.gpio_handler);
         assert!(result.is_err());
-        assert!(matches!(result, Err(GpioHandlerError::GpioOutsideRange(40))));
+        assert!(matches!(
+            result,
+            Err(GpioHandlerError::GpioOutsideRange(40))
+        ));
     }
 
     mod commissioning_prep {
