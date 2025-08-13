@@ -15,6 +15,7 @@ use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
+use thiserror::Error;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -94,6 +95,29 @@ impl TankLevelSwitchSignals {
     }
 }
 
+/// Contains error definitions for TankLevelSwitch
+#[derive(Error, Debug)]
+pub enum TankLevelSwitchError {
+    /// Application shall use real HW, but GPIO lib interface was not provided.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Application shall use real HW, but GPIO lib interface was not provided.")]
+    GPIOInterfaceNotProvided,
+
+    /// Could not get pin from GPIO interface for tank level monitoring.
+    #[cfg(all(target_os = "linux", feature = "target_hw"))]
+    #[error("Could not get pin {pin_number} from GPIO interface for tank level monitoring.")]
+    GpioPinRetrievalError {
+        pin_number: u8,
+
+        #[source]
+        source: Gpio::Error,
+    },
+
+    /// Application shall use simulator, but the channel to TCP thread was not provided.
+    #[error("Configured to run with simulator, but no channel to TCP thread provided.")]
+    SimulatorChannelNotProvided,
+}
+
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
 /// Tank level position is measured by accessing the state of a dedicated GPIO pin.
 /// Alternatively, TCP communication is used when configured to run with the simulator.
@@ -139,6 +163,9 @@ pub struct TankLevelSwitch {
     /// inhibition flag to avoid flooding the log file with repeated messages about excessive access time to mutex
     lock_warn_max_mutex_access_duration: bool,
 
+    /// inhibition flag to avoid flooding the log file with repeated messages about mutex not being accessible.
+    lock_error_mutex_poisoned: bool,
+
     // for testing purposes: record when mutex access time is exceeded without resetting it
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
@@ -174,12 +201,12 @@ impl TankLevelSwitch {
     ///   tank level (`true` for high water, `false` for low) before any actual measurements.
     ///
     /// # Returns
-    /// A new **`TankLevelSwitch` struct**, configured for simulated or non-hardware operation.
+    /// A new **`TankLevelSwitch` struct**, configured for simulated or non-hardware operation, wrapped in Ok().
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
-    ) -> TankLevelSwitch {
-        TankLevelSwitch {
+    ) -> Result<TankLevelSwitch, TankLevelSwitchError> {
+        Ok(TankLevelSwitch {
             config,
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
@@ -188,9 +215,10 @@ impl TankLevelSwitch {
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_warn_max_mutex_access_duration: false,
+            lock_error_mutex_poisoned: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
-        }
+        })
     }
 
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
@@ -211,38 +239,28 @@ impl TankLevelSwitch {
     /// * `gpio_tank_level` - The **GPIO pin** (as `u8`) connected to the tank level switch sensor.
     ///
     /// # Returns
-    /// A new **`TankLevelSwitch` struct**, configured for hardware-based operation.
-    ///
-    /// # Panics
-    /// This function will **panic** if:
-    /// - `config.use_simulator` is `false` (hardware mode), but `gpio_lib_handle_opt` is `None`.
-    /// - It **fails to acquire or configure** the specified `gpio_tank_level` pin as an input.
+    /// In case of success, a new `TankLevelSwitch` struct wrapped in Ok,
+    /// configured for hardware-based operation.
+    /// Otherwise, an error of type `TankLevelSwitchError`.
     pub fn new(
         config: TankLevelSwitchConfig,
         initial_position_stabilized: bool,
         gpio_lib_handle_opt: Option<Gpio>,
         gpio_tank_level: u8,
-    ) -> TankLevelSwitch {
+    ) -> Result<TankLevelSwitch, TankLevelSwitchError> {
         if !config.use_simulator && gpio_lib_handle_opt.is_none() {
-            panic!(
-                "{}: application shall use real HW, but GPIO lib interface not provided.",
-                module_path!()
-            );
+            return Err(TankLevelSwitchError::GPIOInterfaceNotProvided);
         }
 
         let gpio_lib_handle = gpio_lib_handle_opt.unwrap();
 
         // get pin for tank level monitoring
-        let tank_level_pin = match gpio_lib_handle.get(gpio_tank_level) {
-            Ok(c) => c,
-            Err(e) => {
-                panic!(
-                    "{}: could not get pin {} from GPIO interface for tank level monitoring ({e:?})",
-                    module_path!(),
-                    gpio_tank_level
-                );
+        let tank_level_pin = gpio_lib_handle.get(gpio_tank_level).map_err(|e| {
+            TankLevelSwitchError::GpioPinRetrievalError {
+                pin_number: gpio_tank_level,
+                source: e,
             }
-        };
+        })?;
 
         TankLevelSwitch {
             config,
@@ -253,6 +271,7 @@ impl TankLevelSwitch {
             lock_warn_inapplicable_command_signal_handler: false,
             lock_error_channel_receive_termination: false,
             lock_error_input_pin_none: false,
+            lock_error_mutex_poisoned: false,
             input_pin_opt: Some(tank_level_pin.into_input_pullup()),
             lock_warn_max_mutex_access_duration: false,
         }
@@ -399,17 +418,14 @@ impl TankLevelSwitch {
         tx_to_signal_handler: &Sender<bool>,
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
-    ) {
+    ) -> Result<(), TankLevelSwitchError> {
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_TANK_LEVEL_SWITCH_MILLIS);
 
         if (self.config.use_simulator) && (tx_to_tcp_opt.is_none() | rx_from_tcp_opt.is_none()) {
-            panic!(
-                "{}: configured to run with simulator, but no channel to TCP thread provided.",
-                module_path!()
-            );
+            return Err(TankLevelSwitchError::SimulatorChannelNotProvided);
         }
 
         let mut start_time = Instant::now();
@@ -442,9 +458,13 @@ impl TankLevelSwitch {
                                 self.tank_level_switch_position_stabilized;
                             c.tank_level_switch_invalid = self.tank_level_switch_invalid;
                             c.tank_level_switch_position = self.tank_level_switch_position;
+                            self.lock_error_mutex_poisoned = false;
                         }
-                        Err(_) => {
-                            // Do nothing
+                        Err(e) => {
+                            if !self.lock_error_mutex_poisoned {
+                                error!(target: module_path!(), "Could not lock mutex ({e:?}).");
+                            }
+                            self.lock_error_mutex_poisoned = true;
                         }
                     }
                 }
@@ -547,14 +567,17 @@ impl TankLevelSwitch {
             };
             spin_sleeper.sleep(sleep_duration_one_millis);
         }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use spin_sleep::SpinSleeper;
+    use std::sync::mpsc::{Receiver, Sender};
     use std::sync::{mpsc, Arc, Mutex};
     use std::thread;
+    use std::thread::JoinHandle;
     use std::time::Duration;
 
     use crate::mocks::mock_signal::tests::MockSignal;
@@ -596,7 +619,7 @@ pub mod tests {
             config.gpio_handler.tank_level_switch,
         );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
 
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(false, false, true)));
@@ -642,7 +665,7 @@ pub mod tests {
 
                 let mutex_tank_level_switch_signals_for_assert =
                     mutex_tank_level_switch_signals.clone();
-                tank_level_switch.execute(
+                let _ = tank_level_switch.execute(
                     &tx_tank_level_switch_to_tcp_opt,
                     &rx_tank_level_switch_from_tcp_opt,
                     &tx_tank_level_switch_to_signal_handler,
@@ -677,6 +700,33 @@ pub mod tests {
         println!("* [TankLevelSwitch] testing if stabilized tank level position is high when invalid bit is true succeeded.");
     }
 
+    // helper function for creating the test object
+    fn create_test_object(
+        tx_tank_level_switch_to_tcp: Sender<InternalCommand>,
+        rx_tank_level_switch_from_tcp: Receiver<f32>,
+        mut tank_level_switch: TankLevelSwitch,
+        tx_tank_level_switch_to_signal_handler: Sender<bool>,
+        rx_tank_level_switch_from_signal_handler: Receiver<InternalCommand>,
+        mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
+    ) -> JoinHandle<()> {
+        thread::Builder::new()
+            .name("test_object".to_string())
+            .spawn(move || {
+                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
+                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
+                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
+
+                let _ = tank_level_switch.execute(
+                    &tx_tank_level_switch_to_tcp_opt,
+                    &rx_tank_level_switch_from_tcp_opt,
+                    &tx_tank_level_switch_to_signal_handler,
+                    &rx_tank_level_switch_from_signal_handler,
+                    mutex_tank_level_switch_signals,
+                );
+            })
+            .unwrap()
+    }
+
     #[test]
     pub fn test_refill_calc_tank_level_switch_position_stabilized_false_true() {
         // test if the position signal is updating without delay when the invalid signal is false
@@ -706,7 +756,7 @@ pub mod tests {
             config.gpio_handler.tank_level_switch,
         );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
+        let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
@@ -752,22 +802,14 @@ pub mod tests {
             .unwrap();
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                tank_level_switch.execute(
-                    &tx_tank_level_switch_to_tcp_opt,
-                    &rx_tank_level_switch_from_tcp_opt,
-                    &tx_tank_level_switch_to_signal_handler,
-                    &rx_tank_level_switch_from_signal_handler,
-                    mutex_tank_level_switch_signals,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_tank_level_switch_to_tcp,
+            rx_tank_level_switch_from_tcp,
+            tank_level_switch,
+            tx_tank_level_switch_to_signal_handler,
+            rx_tank_level_switch_from_signal_handler,
+            mutex_tank_level_switch_signals,
+        );
 
         join_handle_test_object
             .join()
@@ -807,7 +849,7 @@ pub mod tests {
             config.gpio_handler.tank_level_switch,
         );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
@@ -853,22 +895,14 @@ pub mod tests {
             .unwrap();
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                tank_level_switch.execute(
-                    &tx_tank_level_switch_to_tcp_opt,
-                    &rx_tank_level_switch_from_tcp_opt,
-                    &tx_tank_level_switch_to_signal_handler,
-                    &rx_tank_level_switch_from_signal_handler,
-                    mutex_tank_level_switch_signals,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_tank_level_switch_to_tcp,
+            rx_tank_level_switch_from_tcp,
+            tank_level_switch,
+            tx_tank_level_switch_to_signal_handler,
+            rx_tank_level_switch_from_signal_handler,
+            mutex_tank_level_switch_signals,
+        );
 
         join_handle_test_object
             .join()
@@ -908,7 +942,7 @@ pub mod tests {
             config.gpio_handler.tank_level_switch,
         );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true);
+        let tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, true).unwrap();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
 
@@ -958,22 +992,14 @@ pub mod tests {
             .unwrap();
 
         // thread for the test object
-        let join_handle_test_object = thread::Builder::new()
-            .name("test_object".to_string())
-            .spawn(move || {
-                // clone sender part of channels to mock threads so that we can terminate them after execution of the test object
-                let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
-                let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
-
-                tank_level_switch.execute(
-                    &tx_tank_level_switch_to_tcp_opt,
-                    &rx_tank_level_switch_from_tcp_opt,
-                    &tx_tank_level_switch_to_signal_handler,
-                    &rx_tank_level_switch_from_signal_handler,
-                    mutex_tank_level_switch_signals,
-                );
-            })
-            .unwrap();
+        let join_handle_test_object = create_test_object(
+            tx_tank_level_switch_to_tcp,
+            rx_tank_level_switch_from_tcp,
+            tank_level_switch,
+            tx_tank_level_switch_to_signal_handler,
+            rx_tank_level_switch_from_signal_handler,
+            mutex_tank_level_switch_signals,
+        );
 
         join_handle_test_object
             .join()
@@ -1158,7 +1184,7 @@ pub mod tests {
             config.gpio_handler.tank_level_switch,
         );
         #[cfg(any(not(target_os = "linux"), not(feature = "target_hw")))]
-        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false);
+        let mut tank_level_switch = TankLevelSwitch::new(config.tank_level_switch, false).unwrap();
         let mutex_tank_level_switch_signals =
             Arc::new(Mutex::new(TankLevelSwitchSignals::new(true, true, false)));
         let mutex_tank_level_switch_signals_clone_for_test_environment =
@@ -1217,7 +1243,7 @@ pub mod tests {
                 let tx_tank_level_switch_to_tcp_opt = Some(tx_tank_level_switch_to_tcp);
                 let rx_tank_level_switch_from_tcp_opt = Some(rx_tank_level_switch_from_tcp);
 
-                tank_level_switch.execute(
+                let _ = tank_level_switch.execute(
                     &tx_tank_level_switch_to_tcp_opt,
                     &rx_tank_level_switch_from_tcp_opt,
                     &tx_tank_level_switch_to_signal_handler,

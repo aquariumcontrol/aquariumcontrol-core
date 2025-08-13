@@ -6,6 +6,7 @@ use crate::recorder::data_logger::DataLoggerError;
 use crate::relays::actuate_controllino::ActuateControllinoError;
 #[cfg(all(feature = "target_hw", target_os = "linux"))]
 use crate::sensors::gpio_handler::{GpioHandler, GpioHandlerError};
+use crate::sensors::tank_level_switch::TankLevelSwitchError;
 use crate::simulator::tcp_communication::TcpCommunicationError;
 use crate::utilities::config_error::ConfigError;
 use crate::utilities::config_file_definition_error::ConfigFileDefinitionError;
@@ -114,5 +115,12 @@ pub enum StartupError {
     I2cSetupFailure {
         #[source]
         source: I2cError,
+    },
+
+    /// Could not initialize the tank level switch measurement and calculation.
+    #[error("Could not initialize the tank level switch measurement and calculation.")]
+    TankLevelSwitchSetupFailure {
+        #[source]
+        source: TankLevelSwitchError,
     },
 }

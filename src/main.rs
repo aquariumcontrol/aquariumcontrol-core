@@ -1078,13 +1078,13 @@ fn run() -> Result<(), StartupError> {
                     true,
                     None,
                     gpio_tank_level_switch
-                );
+                ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
                 // Actual DHT sensor reading is not required in this case. Use a stub version.
                 dht = Dht::new(config.dht, None, gpio_dht22_io, gpio_dht22_vcc);
             }
             else if gpio_handler_opt.is_none() {
-                    // defensive programming - this case should not occur
-                    return Err(StartupError::GpioHandlerMissing);
+                // defensive programming - this case should not occur
+                return Err(StartupError::GpioHandlerMissing);
             }
             else {
                 let gpio_handler = gpio_handler_opt.unwrap();
@@ -1097,7 +1097,7 @@ fn run() -> Result<(), StartupError> {
                      true,
                      Some(gpio_lib_handle_cloned_for_tank_level_switch),
                      gpio_tank_level_switch
-                );
+                ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
                 dht = Dht::new(config.dht, Some(gpio_lib_handle.clone()), gpio_dht22_io, gpio_dht22_vcc);
                 actuate_gpio_opt = Some(ActuateGpio::new(gpio_lib_handle_cloned_for_relay_manager, actuate_gpio_config));
             }
@@ -1106,7 +1106,7 @@ fn run() -> Result<(), StartupError> {
             tank_level_switch = TankLevelSwitch::new(
                 config.tank_level_switch,
                 true,
-            );
+            ).map_err(|e| StartupError::TankLevelSwitchSetupFailure { source: e })?;
 
             // Actual DHT sensor reading is not required in this case. Use a stub version.
             dht = Dht::new(config.dht, None, gpio_dht22_io, gpio_dht22_vcc);
@@ -1535,7 +1535,7 @@ fn run() -> Result<(), StartupError> {
         });
 
         scope.spawn(move || {
-            tank_level_switch.execute(
+            let _ = tank_level_switch.execute(
                 &tx_tank_level_switch_to_tcp_opt,
                 &rx_tank_level_switch_from_tcp_opt,
                 &tx_tank_level_switch_to_signal_handler,
