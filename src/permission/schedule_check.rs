@@ -10,10 +10,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 
 use log::warn;
+#[cfg(target_os = "linux")]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;
@@ -300,6 +305,9 @@ impl ScheduleCheck {
     ///   necessary `mpsc` sender and receiver channels for communication with
     ///   other application modules and the signal handler.
     pub fn execute(&mut self, schedule_check_channels: ScheduleCheckChannels) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;

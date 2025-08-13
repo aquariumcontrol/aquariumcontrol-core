@@ -24,6 +24,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;
 
 const TIME_INCREMENT_VENTILATION_SECS: f32 = CYCLE_TIME_VENTILATION_MILLIS as f32 / 1000.0;
@@ -369,6 +372,9 @@ impl Ventilation {
         mutex_sensor_manager_signals: Arc<Mutex<SensorManagerSignals>>,
         mutex_ventilation_status: Arc<Mutex<bool>>,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let cycle_time_duration = Duration::from_millis(CYCLE_TIME_VENTILATION_MILLIS);
         let sleep_duration_hundred_millis = Duration::from_millis(100);

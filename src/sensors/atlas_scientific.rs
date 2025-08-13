@@ -8,18 +8,24 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
+use log::{error, warn};
+#[cfg(target_os = "linux")]
+use log::info;
+
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
 use crate::simulator::get_resp_sim::GetResponseFromSimulatorTrait;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::logger::log_error_chain;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-use log::{error, warn};
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 // max loops for receiving when the quit command has been received
 pub const RECEIVE_COUNTER_MAX: u32 = 10;
@@ -732,6 +738,9 @@ impl AtlasScientific {
         mutex_atlas_scientific_ph: Arc<Mutex<AtlasScientificResultData>>,
         mutex_atlas_scientific_conductivity: Arc<Mutex<AtlasScientificResultData>>,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_ten_millis = Duration::from_millis(10);
         let sleep_duration_one_millis = Duration::from_millis(1);
         let spin_sleeper = SpinSleeper::default();

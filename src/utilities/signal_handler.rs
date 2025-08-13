@@ -14,11 +14,15 @@ use log::info;
 #[cfg(feature = "debug_signal_handler")]
 use log::debug;
 
-use crate::utilities::channel_content::InternalCommand;
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use spin_sleep::SpinSleeper;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::{sync::Arc, time::Duration};
+
+use crate::utilities::channel_content::InternalCommand;
 
 /// Sends a specified `InternalCommand` to a target thread's channel and optionally waits for an acknowledgment.
 ///
@@ -237,6 +241,9 @@ pub struct SignalHandlerChannels {
 ///     watchdog --> signal_handler
 /// ```
 pub fn handle_signals(term: Arc<AtomicBool>, signal_handler_channels: SignalHandlerChannels) {
+    #[cfg(target_os = "linux")]
+    info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
     if signal_handler_channels
         .tx_signal_handler_to_tcp_opt
         .is_some()

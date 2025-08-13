@@ -8,6 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::{debug, error, warn};
+#[cfg(target_os = "linux")]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -18,6 +21,9 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
+
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 
 use crate::simulator::tcp_data::*;
 use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
@@ -488,6 +494,9 @@ impl TcpCommunication {
     /// - Underlying functions called (like `get_signal` or `change_relay`) panic due to
     ///   TCP communication errors or invalid requests.
     pub fn execute(&mut self, tcp_communication_channels: TcpCommunicationChannels) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let spin_sleeper = SpinSleeper::default();
         let sleep_interval_millis = 10;
         let sleep_duration_ten_milli_sec = Duration::from_millis(sleep_interval_millis);

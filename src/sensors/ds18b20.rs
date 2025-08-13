@@ -6,13 +6,13 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 
 use std::fs;
 use std::path::PathBuf;
@@ -20,10 +20,14 @@ use std::thread::sleep;
 
 #[cfg(feature = "debug_ds18b20")]
 use log::debug;
-
-use crate::sensors::ds18b20_error::Ds18b20Error;
+#[cfg(target_os = "linux")]
+use log::info;
 #[cfg(not(test))]
 use log::warn;
+
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+use crate::sensors::ds18b20_error::Ds18b20Error;
 
 mod ds18b20_constants {
     /// minimum viable temperature used for health check of sensor signal
@@ -271,6 +275,9 @@ impl Ds18b20 {
         mutex_water_temperature: Arc<Mutex<Ds18b20Result>>,
         mutex_ambient_temperature: Arc<Mutex<Ds18b20Result>>,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let max_mutex_access_duration =

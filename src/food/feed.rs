@@ -18,6 +18,9 @@ use log::debug;
 #[cfg(all(feature = "debug_signal_handler", not(test)))]
 use log::debug;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -449,6 +452,9 @@ impl Feed {
         feed_channels: FeedChannels,
         food_injection: &mut impl FoodInjectionTrait,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut loop_counter = 0;

@@ -10,7 +10,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 use log::debug;
 use std::sync::{Arc, Mutex};
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use log::{error, warn};
+#[cfg(target_os = "linux")]
+use log::info;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -419,6 +425,9 @@ impl TankLevelSwitch {
         rx_from_signal_handler: &Receiver<InternalCommand>,
         mutex_tank_level_switch_signals: Arc<Mutex<TankLevelSwitchSignals>>,
     ) -> Result<(), TankLevelSwitchError> {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let spin_sleeper = SpinSleeper::default();
         let mut lock_warn_cycle_time_exceeded: bool = false;

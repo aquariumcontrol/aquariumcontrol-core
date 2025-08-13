@@ -9,10 +9,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #![allow(non_snake_case)]
 
 use log::{error, warn};
+#[cfg(target_os = "linux")]
+use log::info;
+
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "debug_sensor_manager")]
 use log::debug;
+
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -395,6 +401,9 @@ impl SensorManager {
         sensor_manager_channels: SensorManagerChannels,
         mutexes: SensorManagerMutexes,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let max_mutex_access_duration =
             Duration::from_millis(sensor_manager_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         if (self.config.use_simulator)

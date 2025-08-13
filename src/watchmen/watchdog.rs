@@ -6,15 +6,21 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-
 use crate::watchmen::petting::PettingTrait;
 use log::error;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
+
+#[cfg(target_os = "linux")]
+use log::info;
+
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Holds the configuration data for the watchdog communication.
 /// The configuration is loaded from the .toml configuration file.
@@ -135,6 +141,9 @@ impl Watchdog {
         rx_from_messaging_opt: Option<Receiver<InternalCommand>>,
         petting: &mut impl PettingTrait,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(self.config.heartbeat_duration_millis);
         let mut quit_command_received: bool; // the request to end the application has been received

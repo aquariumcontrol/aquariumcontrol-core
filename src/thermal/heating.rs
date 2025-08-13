@@ -8,6 +8,14 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 
 use log::{error, warn};
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 
 #[cfg(not(test))]
 use log::info;
@@ -21,11 +29,6 @@ use crate::utilities::channel_content::{ActuatorState, AquariumDevice, InternalC
 use crate::utilities::common::check_if_mutex_is_blocked;
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::utilities::sawtooth_profile::{SawToothProfile, SawToothProfileConfig};
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 const CYCLE_TIME_HEATING_MILLIS: u64 = 500;
 
@@ -421,6 +424,9 @@ impl Heating {
         heating_set_val_updater: &mut impl HeatingSetValueUpdaterTrait,
         heating_mutexes: HeatingMutexes,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let max_mutex_access_duration = Duration::from_millis(MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let _refill_error = false;
         let spin_sleeper = SpinSleeper::default();

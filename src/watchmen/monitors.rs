@@ -12,6 +12,9 @@ use log::{error, info};
 #[cfg(test)]
 use log::debug;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::TryRecvError;
@@ -155,6 +158,9 @@ impl Monitors {
         _mutex_device_scheduler_monitors: Arc<Mutex<i32>>,
         monitors_channels: MonitorsChannels,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_hundred_millis = Duration::from_millis(100);
         let spin_sleeper = SpinSleeper::default();
         let mut quit_command_received: bool;

@@ -13,6 +13,9 @@ use std::fmt;
 #[cfg(feature = "debug_balling")]
 use log::debug;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender};
@@ -609,6 +612,9 @@ impl Balling {
         balling_channels: BallingChannels,
         mineral_injection: &mut impl MineralInjectionTrait,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let sleep_duration_hundred_millis = Duration::from_millis(100); // used to reduce the frequency of channel polling
         let sleep_duration_pump_switch =
             Duration::from_millis(self.config.pump_switch_delay_millis.into()); // wait between actuation of pumps

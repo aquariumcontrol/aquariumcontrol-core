@@ -10,9 +10,23 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #![allow(non_snake_case)]
 use chrono::{Local, NaiveDateTime};
 use log::{error, warn};
+#[cfg(target_os = "linux")]
+use log::info;
 
 #[cfg(feature = "debug_data_logger")]
 use log::debug;
+
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
+use mysql::PooledConn;
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::fs;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use thiserror::Error;
 
 use crate::database::sql_interface::SqlInterface;
 use crate::database::sql_interface_data::SqlInterfaceData;
@@ -24,14 +38,6 @@ use crate::utilities::channel_content::{AquariumSignal, InternalCommand};
 use crate::utilities::iir_filter::{IIRFilter, IIRFilterConfig};
 use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 use crate::water::refill::RefillStatus;
-use mysql::PooledConn;
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::fs;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use thiserror::Error;
 
 const MILLIS_PER_SEC: u64 = 1000;
 
@@ -1045,6 +1051,9 @@ impl DataLogger {
         data_logger_channels: DataLoggerChannels,
         data_logger_mutexes: DataLoggerMutexes,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let cycle_time_duration =
             Duration::from_millis(self.config.logging_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);

@@ -7,21 +7,28 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use log::error;
+use log::{error};
+#[cfg(target_os = "linux")]
+use log::info;
+
 #[cfg(not(test))]
 use log::warn;
 
 #[cfg(feature = "debug_relay_manager")]
 use log::debug;
 
-use crate::relays::relay_error::RelayError;
-use crate::utilities::channel_content::InternalCommand;
-use crate::utilities::logger::log_error_chain;
-use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
+
+use crate::relays::relay_error::RelayError;
+use crate::utilities::channel_content::InternalCommand;
+use crate::utilities::logger::log_error_chain;
+use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
 
 /// Trait for the execution of relay actuation on either simulator or real hardware.
 /// This trait allows running the main control with a mock implementation for testing.
@@ -280,6 +287,9 @@ impl RelayManager {
         relay_manager_channels: RelayManagerChannels,
         actuator: &mut impl RelayActuationTrait,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let mut last_heartbeat_time = Instant::now();
         let mut spin_sleeper = SpinSleeper::default();
         let sleep_duration = Duration::from_millis(self.config.pause_between_retries_millis);

@@ -8,17 +8,22 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use log::error;
+#[cfg(target_os = "linux")]
+use log::info;
 
 #[cfg(not(test))]
 use log::warn;
 
-use crate::sensors::dht_error::DhtError;
-use crate::utilities::logger::log_error_chain;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
+use crate::sensors::dht_error::DhtError;
+use crate::utilities::logger::log_error_chain;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_os = "linux", feature = "target_hw"))] {
@@ -722,6 +727,9 @@ impl Dht {
         mutex_dht: Arc<Mutex<DhtResult>>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let max_mutex_access_duration =
             Duration::from_millis(dht22_constants::MAX_MUTEX_ACCESS_DURATION_MILLIS);
         let mut lock_error_invalid_command: bool = false;

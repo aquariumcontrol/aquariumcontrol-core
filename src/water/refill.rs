@@ -14,6 +14,15 @@ use log::warn;
 #[cfg(not(test))]
 use log::info;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
+
+use serde_derive::Deserialize;
+use spin_sleep::SpinSleeper;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
 use crate::database::sql_interface_refill::DatabaseInterfaceRefillTrait;
 use crate::log_error_chain;
 use crate::sensors::tank_level_switch::TankLevelSwitchSignals;
@@ -23,11 +32,6 @@ use crate::water::refill_errors::RefillErrorStates;
 use crate::water::refill_monitor_view::RefillMonitorView;
 use crate::water::refill_stats_data::RefillStatsData;
 use crate::water::water_injection::{WaterInjectionChannels, WaterInjectionTrait};
-use serde_derive::Deserialize;
-use spin_sleep::SpinSleeper;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 /// Holds the configuration data for the refill control.
 /// The configuration is loaded from the .toml configuration file.
@@ -769,6 +773,9 @@ impl Refill {
         mutex_tank_level_switch_signals_clone_for_refill: Arc<Mutex<TankLevelSwitchSignals>>,
         mutex_refill_status: Arc<Mutex<RefillStatus>>,
     ) {
+        #[cfg(target_os = "linux")]
+        info!(target: module_path!(), "Thread started with TID: {}", gettid());
+
         let cycle_time_duration =
             Duration::from_millis(self.config.check_interval * MILLIS_PER_SEC);
         let sleep_duration_hundred_millis = Duration::from_millis(100);
