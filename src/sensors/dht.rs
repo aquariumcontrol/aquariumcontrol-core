@@ -14,13 +14,13 @@ use log::info;
 #[cfg(not(test))]
 use log::warn;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-#[cfg(target_os = "linux")]
-use nix::unistd::gettid;
 
 use crate::sensors::dht_error::DhtError;
 use crate::utilities::logger::log_error_chain;
@@ -389,6 +389,7 @@ impl Dht {
     /// # Arguments
     /// * `byte_vals` - A fixed-size array of `u8` (5 bytes) containing the sensor's raw data,
     ///   where the last byte is the received checksum.
+    /// * `try_again` - A mutable reference to a boolean flag. Set to `true` when the top-level calling function may try again.    
     ///
     /// # Returns
     /// A `Result<u8, DhtError>`:
@@ -396,7 +397,10 @@ impl Dht {
     /// - `Err(DhtError::ChecksumCalculationError)`: If an unexpected error occurs during the checksum calculation process.
     /// - `Err(DhtError::ChecksumError)`: If the calculated checksum does not match the received checksum,
     ///   indicating invalid sensor data.
-    pub fn calc_checksum(byte_vals: [u8; dht22_constants::DHT22_DATA_LEN]) -> Result<u8, DhtError> {
+    pub fn calc_checksum(
+        byte_vals: [u8; dht22_constants::DHT22_DATA_LEN],
+        try_again: &mut bool,
+    ) -> Result<u8, DhtError> {
         // calculate and compare checksum
         let mut checksum_intermediate: u16 =
             byte_vals[0] as u16 + byte_vals[1] as u16 + byte_vals[2] as u16 + byte_vals[3] as u16;
@@ -408,6 +412,7 @@ impl Dht {
 
         let checksum_received: u8 = byte_vals[4];
         if checksum_calculated != checksum_received {
+            *try_again = true;
             return Err(DhtError::ChecksumError(
                 checksum_calculated,
                 checksum_received,
@@ -483,6 +488,7 @@ impl Dht {
     /// * `reset_sensor` - A boolean flag. If `true`, the sensor's power supply (VCC) will be briefly
     ///   interrupted and restored before measurement, which can act as a hardware reset.
     ///   If `false`, a pause duration is observed instead.
+    /// * `try_again` - A mutable reference to a boolean flag. Set to `true` when the top-level calling function may try again.    
     ///
     /// # Returns
     /// A `Result<(f32, f32), DhtError>`:
@@ -499,7 +505,7 @@ impl Dht {
     /// - `Err(DhtError::TemperatureOutOfRange)`: If the measured temperature is outside the sensor's specified range.
     /// - `Err(DhtError::HumidityOutOfRange)`: If the measured humidity is outside the sensor's specified range.
     /// - `Err(DhtError::IncorrectPlatform)`: If called with no gpio lib handle available.
-    pub fn read(&mut self, reset_sensor: bool) -> DhtResult {
+    pub fn read(&mut self, reset_sensor: bool, try_again: &mut bool) -> DhtResult {
         let mut ticks = [0u64; dht22_constants::DHT22_TRANSMISSION_END_IDX];
 
         let gpio: &mut Gpio = if self.gpio_opt.is_some() {
@@ -512,7 +518,10 @@ impl Dht {
         let mut dht_vcc_pin = match gpio.get(self.gpio_dht22_vcc) {
             Ok(c) => c.into_output(),
             Err(e) => {
-                return Err(DhtError::VccPinAcquisitionFailed(self.gpio_dht22_vcc));
+                return Err(DhtError::VccPinAcquisitionFailed {
+                    vcc_pin_nr: self.gpio_dht22_vcc,
+                    source: e,
+                });
             }
         };
 
@@ -522,7 +531,10 @@ impl Dht {
             let mut data_pin = match gpio.get(self.gpio_dht22_io) {
                 Ok(c) => c.into_output(),
                 Err(e) => {
-                    return Err(DhtError::DataPinOutputAcquisitionFailed(self.gpio_dht22_io));
+                    return Err(DhtError::DataPinOutputAcquisitionFailed {
+                        data_pin_nr: self.gpio_dht22_io,
+                        source: e,
+                    });
                 }
             };
 
@@ -559,7 +571,10 @@ impl Dht {
         let mut data_pin = match gpio.get(self.gpio_dht22_io) {
             Ok(c) => c.into_input_pullup(),
             Err(e) => {
-                return Err(DhtError::DataPinInputAcquisitionFailed(self.gpio_dht22_io));
+                return Err(DhtError::DataPinInputAcquisitionFailed {
+                    input_pin_nr: self.gpio_dht22_io,
+                    source: e,
+                });
             }
         };
 
@@ -625,6 +640,7 @@ impl Dht {
         }
 
         if timeout_occurred {
+            *try_again = true;
             return Err(DhtError::Timeout);
         }
 
@@ -641,7 +657,7 @@ impl Dht {
         let byte_vals = Self::calc_byte_array(data_bits);
 
         // checksum calculation
-        match Self::calc_checksum(byte_vals) {
+        match Self::calc_checksum(byte_vals, try_again) {
             Ok(_) => { /* do nothing */ }
             Err(e) => return Err(e),
         }
@@ -652,7 +668,7 @@ impl Dht {
 
     #[cfg(not(all(target_os = "linux", feature = "target_hw")))]
     /// Stub function to allow build on a non-target platform
-    pub fn read(&self, _reset_sensor: bool) -> DhtResult {
+    pub fn read(&self, _reset_sensor: bool, _try_again: &mut bool) -> DhtResult {
         Err(DhtError::IncorrectPlatform)
     }
 
@@ -671,11 +687,11 @@ impl Dht {
     pub fn get_data(&mut self) -> DhtResult {
         // read one sample from DHT sensor to verify SW and HW are working ok
         let mut retry_counter = 0;
+        let mut try_again = false;
 
         loop {
-            match self.read(
-                retry_counter == 0, /* reset power supply for the first read */
-            ) {
+            let read_result = self.read(retry_counter == 0, &mut try_again); // reset power supply for the first read
+            match read_result {
                 Ok((temperature, humidity)) => {
                     #[cfg(feature = "debug_dht")]
                     debug!(
@@ -688,7 +704,8 @@ impl Dht {
                     return Ok((temperature, humidity));
                 }
                 Err(e) => {
-                    if (e == DhtError::Timeout) || matches!(e, DhtError::ChecksumError(_, _)) {
+                    if try_again {
+                        // for errors DhtError::Timeout and DhtError::ChecksumError
                         // These two errors shall not be reported directly.
                         // Instead, the application will try to read again for multiple times.
                         retry_counter += 1;

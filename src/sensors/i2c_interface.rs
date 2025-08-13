@@ -7,11 +7,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#[cfg(all(target_os = "linux", feature = "target_hw"))]
+use log::info;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::{fmt, str};
-#[cfg(target_os = "linux")]
-use log::info;
 
 use crate::sensors::i2c_error::I2cError;
 
@@ -27,7 +27,6 @@ cfg_if::cfg_if! {
         use std::time::Duration;
         use crate::utilities::channel_content::InternalCommand;
         use crate::utilities::proc_ext_req::ProcessExternalRequestTrait;
-        use crate::sensors::i2c_error::I2cError;
         use crate::sensors::i2c_error::I2cError::{InitializationFailure, SetTimeoutError};
         use nix::unistd::gettid;
     }
@@ -203,11 +202,11 @@ impl I2cInterface {
         self.i2c
             .set_slave_address(i2c_request.i2c_address)
             .map_err(|e| I2cError::SetAddressError {
-                adress: i2c_request.i2c_address,
+                address: i2c_request.i2c_address,
                 source: e,
             })?;
 
-        let realized_write_len = &self
+        let realized_write_len = self
             .i2c
             .write(&i2c_request.send_buf)
             .map_err(|e| I2cError::WriteFailure { source: e })?;
@@ -265,7 +264,6 @@ impl I2cInterface {
         rx_from_atlas_scientific: Receiver<I2cRequest>,
         rx_from_signal_handler: Receiver<InternalCommand>,
     ) {
-        #[cfg(target_os = "linux")]
         info!(target: module_path!(), "Thread started with TID: {}", gettid());
 
         let mut lock_error_receive_atlas_scientific = false;

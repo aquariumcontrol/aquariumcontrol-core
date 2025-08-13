@@ -13,9 +13,9 @@ use std::sync::{Arc, Mutex};
 #[cfg(target_os = "linux")]
 use nix::unistd::gettid;
 
-use log::{error, warn};
 #[cfg(target_os = "linux")]
 use log::info;
+use log::{error, warn};
 
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -116,7 +116,7 @@ pub enum TankLevelSwitchError {
         pin_number: u8,
 
         #[source]
-        source: Gpio::Error,
+        source: rppal::gpio::Error,
     },
 
     /// Application shall use simulator, but the channel to TCP thread was not provided.
@@ -268,7 +268,7 @@ impl TankLevelSwitch {
             }
         })?;
 
-        TankLevelSwitch {
+        Ok(TankLevelSwitch {
             config,
             tank_level_switch_position: true, // initialization value assuming no error
             tank_level_switch_invalid: false, // initialization value assuming no error
@@ -280,7 +280,7 @@ impl TankLevelSwitch {
             lock_error_mutex_poisoned: false,
             input_pin_opt: Some(tank_level_pin.into_input_pullup()),
             lock_warn_max_mutex_access_duration: false,
-        }
+        })
     }
 
     /// Updates the measured tank level switch signals, either by reading a physical GPIO pin or communicating with a simulator.

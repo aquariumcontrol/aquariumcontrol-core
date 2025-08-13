@@ -1069,7 +1069,7 @@ fn run() -> Result<(), StartupError> {
             let actuate_gpio_config = ActuateGpioConfig::new(&config.gpio_handler);
             let use_simulator_for_gpio = config.gpio_handler.use_simulator;
             let gpio_handler_opt = GpioHandler::new(config.gpio_handler).
-                map_err(|e| StartupError::GpioHandler { source: e })?;
+                map_err(|e| StartupError::GpioHandlerSetupFailure { source: e })?;
 
             if use_simulator_for_gpio {
                 // use the simulator-version for TankLevelSwitch
@@ -1436,7 +1436,7 @@ fn run() -> Result<(), StartupError> {
         #[cfg(all(target_os = "linux", feature = "target_hw"))]
         if !use_simulator {
             let mut i2c_interface = I2cInterface::new(config.i2c_interface)
-                .map_err(|e| StartupError::I2cInterface { source: e })?;
+                .map_err(|e| StartupError::I2cSetupFailure { source: e })?;
 
             scope.spawn(move || {
                 i2c_interface.execute(

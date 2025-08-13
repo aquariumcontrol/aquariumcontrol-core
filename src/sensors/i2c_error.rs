@@ -6,12 +6,10 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#[cfg(all(target_os = "linux", feature = "target_hw"))]
-use rppal::i2c::I2c;
 use thiserror::Error;
 
 /// Communication of errors occurring in communication via I2C
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug)]
 pub enum I2cError {
     /// Initialization of the I2C interface failed.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]

@@ -9,16 +9,16 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #[cfg(feature = "debug_schedule_check")]
 use log::debug;
 
-use log::warn;
 #[cfg(target_os = "linux")]
 use log::info;
+use log::warn;
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
-#[cfg(target_os = "linux")]
-use nix::unistd::gettid;
 
 use crate::database::sql_interface_schedule::{ScheduleEntry, ScheduleType, SqlInterfaceSchedule};
 use crate::utilities::channel_content::InternalCommand;

@@ -265,7 +265,6 @@ impl Messaging {
     /// This function will panic in the following scenarios:
     /// - If it fails to open the message queue with the specified `mq_filename`.
     /// - If it fails to retrieve the attributes (like max message length) of the opened message queue.
-
     pub fn new(config: MessagingConfig) -> Result<Messaging, MessagingError> {
         let mq_file_name_clone_for_error = config.mq_filename.clone();
 

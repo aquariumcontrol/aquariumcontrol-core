@@ -7,23 +7,38 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 use thiserror::Error;
-#[derive(Debug, PartialEq, Error)]
+#[derive(Debug, Error)]
 /// Enum codifies the errors the program may encounter in communication with DHT sensor.
 pub enum DhtError {
     /// Vcc pin acquisition failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Could not get pin {0} from GPIO interface for DHT power supply.")]
-    VccPinAcquisitionFailed(u8),
+    #[error("Could not get pin {vcc_pin_nr} from GPIO interface for DHT power supply.")]
+    VccPinAcquisitionFailed {
+        vcc_pin_nr: u8,
+
+        #[source]
+        source: rppal::gpio::Error,
+    },
 
     /// Data pin acquisition for output failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Failure to acquire pin {0} for triggering DHT sensor")]
-    DataPinOutputAcquisitionFailed(u8),
+    #[error("Failure to acquire pin {data_pin_nr} for triggering DHT sensor")]
+    DataPinOutputAcquisitionFailed {
+        data_pin_nr: u8,
+
+        #[source]
+        source: rppal::gpio::Error,
+    },
 
     /// Data pin acquisition for input failed
     #[cfg(all(target_os = "linux", feature = "target_hw"))]
-    #[error("Failure to acquire pin {0} for reading from DHT sensor")]
-    DataPinInputAcquisitionFailed(u8),
+    #[error("Failure to acquire pin {input_pin_nr} for reading from DHT sensor")]
+    DataPinInputAcquisitionFailed {
+        input_pin_nr: u8,
+
+        #[source]
+        source: rppal::gpio::Error,
+    },
 
     /// Could not set interrupt
     #[cfg(all(target_os = "linux", feature = "target_hw"))]

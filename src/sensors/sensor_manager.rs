@@ -8,9 +8,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use log::{error, warn};
 #[cfg(target_os = "linux")]
 use log::info;
+use log::{error, warn};
 
 use std::sync::{Arc, Mutex};
 

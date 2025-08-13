@@ -8,17 +8,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-use log::{error, warn};
 #[cfg(target_os = "linux")]
 use log::info;
+use log::{error, warn};
 
+#[cfg(target_os = "linux")]
+use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-#[cfg(target_os = "linux")]
-use nix::unistd::gettid;
 
 use crate::sensors::atlas_scientific_error::AtlasScientificError;
 use crate::sensors::i2c_interface::{I2cRequest, I2cResult};
