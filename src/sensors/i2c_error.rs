@@ -37,6 +37,9 @@ pub enum I2cError {
     #[cfg(all(test, not(any(target_os = "linux", feature = "target_hw"))))]
     #[error("I2C write operation failed.")]
     WriteFailure,
+    #[cfg(all(test, not(feature = "target_hw"), target_os = "linux"))]
+    #[error("I2C write operation failed.")]
+    WriteFailure,
 
     /// Command could not be sent completely to the sensor unit.
     #[cfg(all(target_os = "linux", feature = "target_hw"))]

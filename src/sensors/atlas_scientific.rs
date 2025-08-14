@@ -946,9 +946,11 @@ pub mod tests {
     // evaluating response from pH sensor unit
     // checking if negative values are correctly identified
     pub fn test_atlas_scientific_check_response_invalid_ph_negative() {
+        let sign = '-' as u8;
+
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
-            '-' as u8,
+            sign,
             '8' as u8,
             atlas_scientific_constants::DECIMAL_POINT,
             '0' as u8,
@@ -956,10 +958,15 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_eq!(
-            AtlasScientific::check_response(stimuli, true),
-            Err(AtlasScientificError::ContainsInvalidCharacter('-' as u8))
-        );
+
+        let result = AtlasScientific::check_response(stimuli, true);
+
+        let error_result = result.unwrap_err();
+
+        assert!(matches!(
+            error_result,
+            AtlasScientificError::ContainsInvalidCharacter(_sign)
+        ));
     }
 
     #[test]
@@ -1015,8 +1022,10 @@ pub mod tests {
     #[test]
     // checking if an incorrect magic number in the front of the message is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_magic_front() {
+        let incorrect_magic_front = atlas_scientific_constants::MESSAGE_START_MAGIC - 1;
+
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
-            atlas_scientific_constants::MESSAGE_START_MAGIC - 1,
+            incorrect_magic_front,
             '2' as u8,
             '5' as u8,
             atlas_scientific_constants::DECIMAL_POINT,
@@ -1025,18 +1034,25 @@ pub mod tests {
             '0' as u8,
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_eq!(
-            AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::FirstCharacterNotMagic(
+
+        let result = AtlasScientific::check_response(stimuli, false);
+
+        let error_result = result.unwrap_err();
+
+        assert!(matches!(
+            error_result,
+            AtlasScientificError::FirstCharacterNotMagic(
                 atlas_scientific_constants::MESSAGE_START_MAGIC,
-                stimuli[0]
-            ))
-        );
+                _incorrect_magic_front
+            )
+        ));
     }
 
     #[test]
     // checking if an incorrect magic number in the rear part of the message is identified correctly
     pub fn test_atlas_scientific_check_response_invalid_magic_rear() {
+        let incorrect_magic_rear = atlas_scientific_constants::MESSAGE_FINISH_MAGIC + 1;
+
         let stimuli: [u8; atlas_scientific_constants::MESSAGE_SIZE] = [
             atlas_scientific_constants::MESSAGE_START_MAGIC,
             '2' as u8,
@@ -1045,15 +1061,20 @@ pub mod tests {
             '0' as u8,
             '0' as u8,
             '0' as u8,
-            atlas_scientific_constants::MESSAGE_FINISH_MAGIC + 1,
+            incorrect_magic_rear,
         ];
-        assert_eq!(
-            AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::LastCharacterNotMagic(
+
+        let result = AtlasScientific::check_response(stimuli, false);
+
+        let error_result = result.unwrap_err();
+
+        assert!(matches!(
+            error_result,
+            AtlasScientificError::LastCharacterNotMagic(
                 atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
-                stimuli[0]
-            ))
-        );
+                _incorrect_magic_rear
+            )
+        ));
     }
 
     #[test]
@@ -1089,10 +1110,14 @@ pub mod tests {
             b'0',
             atlas_scientific_constants::MESSAGE_FINISH_MAGIC,
         ];
-        assert_eq!(
-            AtlasScientific::check_response(stimuli, false),
-            Err(AtlasScientificError::ContainsInvalidCharacter(b'A'))
-        );
+        let result = AtlasScientific::check_response(stimuli, false);
+
+        let error_result = result.unwrap_err();
+
+        assert!(matches!(
+            error_result,
+            AtlasScientificError::ContainsInvalidCharacter(b'A')
+        ));
     }
 
     #[test]
@@ -2211,7 +2236,7 @@ pub mod tests {
         let lock2 = other2.lock().unwrap();
         assert_float_absolute_eq!(lock2.value, 0.0, 0.001);
     }
-
+    
     #[test]
     /// Tests the happy path for all three Atlas Scientific signals.
     fn test_receive_response_success_all_signals() {
@@ -2219,7 +2244,7 @@ pub mod tests {
         run_receive_success_test(AquariumSignal::pH, 8.2);
         run_receive_success_test(AquariumSignal::Conductivity, 51000.0);
     }
-
+    
     #[test]
     /// Tests that the function correctly handles an I2C communication failure from the channel.
     fn test_receive_response_i2c_failure() {
@@ -2243,6 +2268,10 @@ pub mod tests {
         #[cfg(not(any(target_os = "linux", feature = "target_hw")))]
         let mock_error = I2cError::WriteFailure;
 
+        // for testing on Linux server (without target hardware)
+        #[cfg(all(target_os = "linux", not(feature = "target_hw")))]
+        let mock_error = I2cError::WriteFailure;
+        
         let _ = tx.send(Err(mock_error)).unwrap();
 
         let result = atlas_scientific.receive_response_from_i2c_interface(
@@ -2259,7 +2288,7 @@ pub mod tests {
             Err(AtlasScientificError::I2cCommunicationFailure { .. })
         ));
     }
-
+    
     #[test]
     /// Tests that the function returns the correct error when the channel is empty.
     fn test_receive_response_channel_empty() {

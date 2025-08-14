@@ -932,26 +932,35 @@ pub mod tests {
     // Test case checks if the implementation correctly calculates a valid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_valid() {
+        let mut try_again: bool = false;
+
         setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [2, 205, 0, 245, 196];
 
-        let result = Dht::calc_checksum(stimuli);
+        let result = Dht::calc_checksum(stimuli, &mut try_again);
 
-        assert_eq!(result, Ok(196));
+        let ok_result = result.unwrap();
+
+        assert_eq!(ok_result, 196);
+
+        assert!(!try_again);
     }
 
     #[test]
     // Test case checks if the implementation correctly calculates an invalid checksum.
     // Test case does not require any communication with the database.
     pub fn test_dht_calc_checksum_error() {
+        let mut try_again: bool = false;
+
         setup_logger(LoggerConfig::default()).unwrap();
 
         let stimuli: [u8; dht22_constants::DHT22_DATA_LEN] = [255, 255, 255, 255, 10];
 
-        let result = Dht::calc_checksum(stimuli);
+        let result = Dht::calc_checksum(stimuli, &mut try_again);
 
         assert!(matches!(result, Err(DhtError::ChecksumError(_, _))));
+        assert!(try_again);
     }
 
     #[test]

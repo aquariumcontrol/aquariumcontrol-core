@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 #[cfg(target_os = "linux")]
 use nix::unistd::gettid;
 
-#[cfg(not(test))]
+#[cfg(any(target_os = "linux", not(test)))]
 use log::info;
 
 use crate::database::sql_interface_error::SqlInterfaceError;
