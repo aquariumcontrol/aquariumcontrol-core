@@ -11,7 +11,7 @@ use log::debug;
 
 use log::warn;
 
-#[cfg(any(target_os = "linux", not(test)))]
+#[cfg(not(test))]
 use log::info;
 
 #[cfg(all(not(test),target_os = "linux"))]
