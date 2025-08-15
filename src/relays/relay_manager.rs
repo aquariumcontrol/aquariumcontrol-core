@@ -193,7 +193,7 @@ impl RelayManager {
     /// and communicate with other modules.    
     pub fn new(config: RelayManagerConfig) -> RelayManager {
         #[cfg(not(test))]
-        println!("{}", config);
+        println!("{config}");
 
         RelayManager {
             config,

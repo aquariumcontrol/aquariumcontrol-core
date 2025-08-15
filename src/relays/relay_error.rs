@@ -50,4 +50,8 @@ pub enum RelayError {
     /// Used to initialize variable. Value is overwritten with real error.
     #[error("Initial value")]
     InitialValue,
+
+    /// Serial port has not been initialized. This is a configuration error.
+    #[error("Serial port has not been initialized. This is a configuration error.")]
+    SerialPortNotConfigured,
 }

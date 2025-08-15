@@ -6,6 +6,7 @@ actuation_retries = 3                                   # number of retries to w
 pause_between_retries_millis = 500                      # time in milliseconds to wait between retries
 
 [controllino_relay]
+active = true                                           # used for testing purposes only
 baud_rate = 9600                                        # baud rate for communication via serial port
 port_name = "/dev/cu.usbmodem112401"                    # port name for communication via serial port (for testing on macOS)
 timeout_millis = 10                                     # timeout in milliseconds for serial port communication

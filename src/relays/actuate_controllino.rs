@@ -101,6 +101,9 @@ fn check_controllino_checksums(data: &[u8]) -> bool {
 /// with the Controllino (e.g., serial port settings) and maps application-level
 /// devices to their specific relay IDs on the Controllino board.
 pub struct ActuateControllinoConfig {
+    /// Disables the functionality - required for certain testing scenarios
+    active: bool,
+
     /// Baud rate for communication via serial port
     baud_rate: u32,
 
@@ -224,7 +227,7 @@ pub struct ActuateControllino {
 
     /// Interface to serial port for communication via USB
     /// Attribute is public because access from within test cases.
-    pub serial_port: Box<dyn SerialPort>,
+    pub serial_port_opt: Option<Box<dyn SerialPort>>,
 }
 
 /// Creates the message to be sent to Controllino
@@ -486,61 +489,66 @@ impl RelayActuationTrait for ActuateControllino {
                 };
 
                 // write a message to Controllino
-                match self.serial_port.write(&message.data) {
-                    Ok(amount_byte_written) => {
-                        if amount_byte_written != message.data.len() {
-                            warn!(
-                                    "{}: Writing to Controllino device failed. Amount of bytes written: {}. Expected: {}",
-                                    module_path!(),
-                                    amount_byte_written,
-                                    message.data.len()
-                                );
+                if let Some(serial_port) = self.serial_port_opt.as_mut() {
+                    match serial_port.write(&message.data) {
+                        Ok(amount_byte_written) => {
+                            if amount_byte_written != message.data.len() {
+                                warn!(
+                                        "{}: Writing to Controllino device failed. Amount of bytes written: {}. Expected: {}",
+                                        module_path!(),
+                                        amount_byte_written,
+                                        message.data.len()
+                                    );
+                            }
                         }
-                    }
-                    Err(e) => {
-                        error!(
-                            target: module_path!(),
-                            "sending command to Controllino failed ({e:?})"
-                        );
-                        return Err(RelayError::WriteError);
-                    }
-                }
-
-                // give Controllino some time to process the command
-                self.spin_sleeper
-                    .sleep(self.controllino_processing_duration);
-
-                // for pulse command, also wait the pulse duration
-                match internal_command {
-                    InternalCommand::Pulse(_, t) => {
-                        let pulse_duration_millis = *t;
-                        let pulse_duration = Duration::from_millis(pulse_duration_millis as u64);
-                        self.spin_sleeper.sleep(pulse_duration);
-                    }
-                    _ => { /* do nothing */ }
-                }
-
-                // read response from Controllino
-                let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
-                match self.serial_port.read_exact(serial_buf.as_mut_slice()) {
-                    Ok(()) => {
-                        if !check_controllino_checksums(serial_buf.as_slice()) {
-                            warn!(
+                        Err(e) => {
+                            error!(
                                 target: module_path!(),
-                                "Received response from device with incorrect checksums"
+                                "sending command to Controllino failed ({e:?})"
                             );
-                            Err(RelayError::IncorrectChecksum)
-                        } else {
-                            Ok(())
+                            return Err(RelayError::WriteError);
                         }
                     }
-                    Err(_) => {
-                        error!(
-                            target: module_path!(),
-                            "receiving response from device failed."
-                        );
-                        Err(RelayError::ReadError)
+
+                    // give Controllino some time to process the command
+                    self.spin_sleeper
+                        .sleep(self.controllino_processing_duration);
+
+                    // for pulse command, also wait the pulse duration
+                    match internal_command {
+                        InternalCommand::Pulse(_, t) => {
+                            let pulse_duration_millis = *t;
+                            let pulse_duration = Duration::from_millis(pulse_duration_millis as u64);
+                            self.spin_sleeper.sleep(pulse_duration);
+                        }
+                        _ => { /* do nothing */ }
                     }
+
+                    // read response from Controllino
+                    let mut serial_buf: Vec<u8> = vec![0; controllino_constants::MESSAGE_SIZE];
+                    match serial_port.read_exact(serial_buf.as_mut_slice()) {
+                        Ok(()) => {
+                            if !check_controllino_checksums(serial_buf.as_slice()) {
+                                warn!(
+                                    target: module_path!(),
+                                    "Received response from device with incorrect checksums"
+                                );
+                                Err(RelayError::IncorrectChecksum)
+                            } else {
+                                Ok(())
+                            }
+                        }
+                        Err(_) => {
+                            error!(
+                                target: module_path!(),
+                                "receiving response from device failed."
+                            );
+                            Err(RelayError::ReadError)
+                        }
+                    }
+                }
+                else {
+                    Err(RelayError::SerialPortNotConfigured)
                 }
             }
             _ => {
@@ -563,34 +571,36 @@ impl RelayActuationTrait for ActuateControllino {
 
     /// Executes the heartbeat: Sending a signal to the actuator
     fn heartbeat(&mut self) {
-        // create a message to be sent to Controllino
-        let message = create_heartbeat_message();
+        if let Some(serial_port) = self.serial_port_opt.as_mut() {
+            // create a message to be sent to Controllino
+            let message = create_heartbeat_message();
 
-        self.spin_sleeper
-            .sleep(self.controllino_processing_duration);
+            self.spin_sleeper
+                .sleep(self.controllino_processing_duration);
 
-        // write a message to Controllino
-        match self.serial_port.write(&message.data) {
-            Ok(amount_byte_written) => {
-                if amount_byte_written != message.data.len() {
-                    warn!(
-                        "{}: Writing heartbeat message to Controllino device failed. Amount of bytes written: {}. Expected: {}",
-                        module_path!(),
-                        amount_byte_written,
-                        message.data.len()
+            // write a message to Controllino
+            match serial_port.write(&message.data) {
+                Ok(amount_byte_written) => {
+                    if amount_byte_written != message.data.len() {
+                        warn!(
+                            "{}: Writing heartbeat message to Controllino device failed. Amount of bytes written: {}. Expected: {}",
+                            module_path!(),
+                            amount_byte_written,
+                            message.data.len()
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        target: module_path!(),
+                        "sending heartbeat command to Controllino failed ({e:?})"
                     );
                 }
             }
-            Err(e) => {
-                error!(
-                    target: module_path!(),
-                    "sending heartbeat command to Controllino failed ({e:?})"
-                );
-            }
-        }
 
-        self.spin_sleeper
-            .sleep(self.controllino_processing_duration);
+            self.spin_sleeper
+                .sleep(self.controllino_processing_duration);
+        }
     }
 
     /// For communication with Controllino it may be necessary to flush the communication buffer
@@ -601,20 +611,23 @@ impl RelayActuationTrait for ActuateControllino {
     /// - Timing issues: The Pi's read might start too early or too late relative to when the Controllino actually begins sending data.
     /// - Buffer state: Leftover bytes from a previous, incomplete, or corrupted transmission can throw off further reads.
     fn flush_buffer(&mut self) {
-        match self.serial_port.clear(ClearBuffer::All) {
-            Ok(_) => {
-                warn!(
-                    "{}: flushed Controllino communication buffer.",
-                    module_path!()
-                );
+        if let Some(serial_port) = self.serial_port_opt.as_mut() {
+            match serial_port.clear(ClearBuffer::All) {
+                Ok(_) => {
+                    warn!(
+                        "{}: flushed Controllino communication buffer.",
+                        module_path!()
+                    );
+                }
+                Err(e) => {
+                    error!("{}: error when clearing buffer ({e:?})", module_path!());
+                }
             }
-            Err(e) => {
-                error!("{}: error when clearing buffer ({e:?})", module_path!());
-            }
+
+            self.spin_sleeper
+                .sleep(self.controllino_processing_duration);
         }
 
-        self.spin_sleeper
-            .sleep(self.controllino_processing_duration);
     }
 }
 
@@ -755,11 +768,14 @@ impl ActuateControllino {
             return Err(ActuateControllinoError::EmptyPortName);
         }
 
-        let serial_port = controllino_open_serial_port(
-            config.port_name.clone(),
-            config.baud_rate,
-            config.timeout_millis,
-        )?;
+        let mut serial_port_opt: Option<Box<dyn SerialPort>> = None;
+        if config.active {
+            serial_port_opt = Some(controllino_open_serial_port(
+                config.port_name.clone(),
+                config.baud_rate,
+                config.timeout_millis,
+            )?);
+        }
         let controllino_processing_millis = config.controllino_processing_millis;
         let controllino_processing_duration = Duration::from_millis(controllino_processing_millis);
 
@@ -767,7 +783,7 @@ impl ActuateControllino {
             config,
             spin_sleeper,
             controllino_processing_duration,
-            serial_port,
+            serial_port_opt,
         })
     }
 }
