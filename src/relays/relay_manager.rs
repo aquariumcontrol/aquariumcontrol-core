@@ -6,7 +6,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-
+use std::fmt;
 use log::error;
 #[cfg(all(not(test),target_os = "linux"))]
 use log::info;
@@ -62,6 +62,26 @@ pub struct RelayManagerConfig {
 
     /// Pause time in milliseconds between retries
     pub pause_between_retries_millis: u64,
+}
+
+impl fmt::Display for RelayManagerConfig {
+    /// Formats the `RelayManagerConfig` for display purposes.
+    ///
+    /// This implementation provides a clean, multi-line string representation of the
+    /// relay manager's configuration, which is ideal for logging at startup or
+    /// for debugging purposes.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Relay Manager Configuration:")?;
+        writeln!(f, "  Active: {}", self.active)?;
+        writeln!(f, "  Use Simulator: {}", self.use_simulator)?;
+        writeln!(f, "  Use GPIO: {}", self.use_gpio)?;
+        writeln!(f, "  Actuation Retries: {}", self.actuation_retries)?;
+        write!(
+            f,
+            "  Pause Between Retries: {} ms",
+            self.pause_between_retries_millis
+        )
+    }
 }
 
 /// Container for channels used by relay manager
@@ -172,6 +192,9 @@ impl RelayManager {
     /// A new `RelayManager` struct, ready to handle relay actuation commands
     /// and communicate with other modules.    
     pub fn new(config: RelayManagerConfig) -> RelayManager {
+        #[cfg(not(test))]
+        println!("{}", config);
+
         RelayManager {
             config,
             lock_error_channel_send_refill: false,
