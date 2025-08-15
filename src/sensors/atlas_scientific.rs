@@ -8,11 +8,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 #![allow(non_snake_case)]
 
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 use log::{error, warn};
 
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
@@ -2236,7 +2236,7 @@ pub mod tests {
         let lock2 = other2.lock().unwrap();
         assert_float_absolute_eq!(lock2.value, 0.0, 0.001);
     }
-    
+
     #[test]
     /// Tests the happy path for all three Atlas Scientific signals.
     fn test_receive_response_success_all_signals() {
@@ -2244,7 +2244,7 @@ pub mod tests {
         run_receive_success_test(AquariumSignal::pH, 8.2);
         run_receive_success_test(AquariumSignal::Conductivity, 51000.0);
     }
-    
+
     #[test]
     /// Tests that the function correctly handles an I2C communication failure from the channel.
     fn test_receive_response_i2c_failure() {
@@ -2271,7 +2271,7 @@ pub mod tests {
         // for testing on Linux server (without target hardware)
         #[cfg(all(target_os = "linux", not(feature = "target_hw")))]
         let mock_error = I2cError::WriteFailure;
-        
+
         let _ = tx.send(Err(mock_error)).unwrap();
 
         let result = atlas_scientific.receive_response_from_i2c_interface(
@@ -2288,7 +2288,7 @@ pub mod tests {
             Err(AtlasScientificError::I2cCommunicationFailure { .. })
         ));
     }
-    
+
     #[test]
     /// Tests that the function returns the correct error when the channel is empty.
     fn test_receive_response_channel_empty() {

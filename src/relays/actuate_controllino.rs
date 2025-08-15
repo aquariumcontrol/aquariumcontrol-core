@@ -518,7 +518,8 @@ impl RelayActuationTrait for ActuateControllino {
                     match internal_command {
                         InternalCommand::Pulse(_, t) => {
                             let pulse_duration_millis = *t;
-                            let pulse_duration = Duration::from_millis(pulse_duration_millis as u64);
+                            let pulse_duration =
+                                Duration::from_millis(pulse_duration_millis as u64);
                             self.spin_sleeper.sleep(pulse_duration);
                         }
                         _ => { /* do nothing */ }
@@ -546,8 +547,7 @@ impl RelayActuationTrait for ActuateControllino {
                             Err(RelayError::ReadError)
                         }
                     }
-                }
-                else {
+                } else {
                     Err(RelayError::SerialPortNotConfigured)
                 }
             }
@@ -627,7 +627,6 @@ impl RelayActuationTrait for ActuateControllino {
             self.spin_sleeper
                 .sleep(self.controllino_processing_duration);
         }
-
     }
 }
 

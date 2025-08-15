@@ -1008,8 +1008,7 @@ pub mod tests {
         let result_check_required_tables_existing = sql_interface.check_required_tables_existing();
         if let Err(e) = result_check_required_tables_existing {
             panic!("* checking required tables failed: {e:?}")
-        }
-        else {
+        } else {
             println!("* checking required tables succeeded.");
         }
         // *****************************************************************************************

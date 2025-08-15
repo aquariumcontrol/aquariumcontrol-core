@@ -24,7 +24,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
 const CYCLE_TIME_VENTILATION_MILLIS: u64 = 500;

@@ -122,6 +122,11 @@ pub enum TankLevelSwitchError {
     /// Application shall use simulator, but the channel to TCP thread was not provided.
     #[error("Configured to run with simulator, but no channel to TCP thread provided.")]
     SimulatorChannelNotProvided,
+
+    /// Input pin has not been provided. This is a configuration error.
+    #[allow(unused)] // variant is constructed in platform-specific code and evaluated in generic code.
+    #[error("Input pin has not been provided. This is a configuration error.")]
+    InputPinNotProvided,
 }
 
 /// Contains the measurement of tank level position and calculation of stabilized tank level position signal.
@@ -176,7 +181,6 @@ pub struct TankLevelSwitch {
     #[cfg(test)]
     mutex_access_duration_exceeded: bool,
 
-    #[cfg(all(target_os = "linux", feature = "target_hw"))]
     /// inhibition flag to avoid flooding the log file with repeated messages about not having received an input pin
     lock_error_input_pin_none: bool,
 
@@ -224,6 +228,7 @@ impl TankLevelSwitch {
             lock_error_mutex_poisoned: false,
             #[cfg(test)]
             mutex_access_duration_exceeded: false,
+            lock_error_input_pin_none: false,
         })
     }
 
@@ -298,11 +303,15 @@ impl TankLevelSwitch {
     ///   This is used in simulator mode to request sensor data.
     /// * `rx_from_tcp_opt` - An `Option` containing the receiver channel for communication from the TCP simulator.
     ///   This is used in simulator mode to receive sensor data.
+    ///
+    /// # Returns
+    /// * `Ok(())` in case of success.
+    /// * `TankLevelSwitchError::InputPinNotProvided` in case configuration of struct is faulty.
     pub fn update_tank_level_switch_signals(
         &mut self,
         tx_to_tcp_opt: &Option<Sender<InternalCommand>>,
         rx_from_tcp_opt: &Option<Receiver<f32>>,
-    ) {
+    ) -> Result<(), TankLevelSwitchError> {
         if self.config.use_simulator {
             let tx_to_tcp = tx_to_tcp_opt.as_ref().unwrap();
             let rx_from_tcp = rx_from_tcp_opt.as_ref().unwrap();
@@ -328,17 +337,12 @@ impl TankLevelSwitch {
                         self.lock_error_input_pin_none = false;
                     }
                     None => {
-                        if !self.lock_error_input_pin_none {
-                            error!(
-                                target: module_path!(),
-                                "Input pin not provided"
-                            );
-                            self.lock_error_input_pin_none = true;
-                        }
+                        return Err(TankLevelSwitchError::InputPinNotProvided);
                     }
                 }
             }
         }
+        Ok(())
     }
 
     /// Calculates a **stabilized tank level switch position signal**, applying asymmetric delay and handling invalid inputs.
@@ -451,7 +455,18 @@ impl TankLevelSwitch {
 
             if self.config.active {
                 // either communicate with real HW or with the simulator to get updated signal information
-                self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt);
+                if let Err(e) =
+                    self.update_tank_level_switch_signals(tx_to_tcp_opt, rx_from_tcp_opt)
+                {
+                    if matches!(e, TankLevelSwitchError::InputPinNotProvided)
+                        && !self.lock_error_input_pin_none
+                    {
+                        error!(target: module_path!(),"Tank level switch signal could not be read (e:?).");
+                        self.lock_error_input_pin_none = true;
+                    }
+                } else {
+                    self.lock_error_input_pin_none = false;
+                }
 
                 self.calc_tank_level_switch_position_stabilized();
 

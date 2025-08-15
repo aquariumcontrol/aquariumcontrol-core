@@ -14,7 +14,7 @@ use log::warn;
 #[cfg(not(test))]
 use log::info;
 
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 
 use serde_derive::Deserialize;

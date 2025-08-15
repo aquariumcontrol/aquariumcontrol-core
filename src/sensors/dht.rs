@@ -8,13 +8,13 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 */
 use crate::utilities::channel_content::InternalCommand;
 use log::error;
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use log::info;
 
 #[cfg(not(test))]
 use log::warn;
 
-#[cfg(all(not(test),target_os = "linux"))]
+#[cfg(all(not(test), target_os = "linux"))]
 use nix::unistd::gettid;
 use serde_derive::Deserialize;
 use spin_sleep::SpinSleeper;
