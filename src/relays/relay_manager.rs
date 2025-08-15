@@ -315,7 +315,8 @@ impl RelayManager {
 
         let mut last_heartbeat_time = Instant::now();
         let mut spin_sleeper = SpinSleeper::default();
-        let sleep_duration = Duration::from_millis(self.config.pause_between_retries_millis);
+        let sleep_duration_between_retries = Duration::from_millis(self.config.pause_between_retries_millis);
+        let sleep_duration_main_cycle = Duration::from_millis(10);
 
         loop {
             let (quit_command_received, _, _) = self.process_external_request(
@@ -345,7 +346,7 @@ impl RelayManager {
                             &command,
                             "refill",
                             &mut spin_sleeper,
-                            sleep_duration,
+                            sleep_duration_between_retries,
                         ) {
                             log_error_chain(
                                 module_path!(),
@@ -401,7 +402,7 @@ impl RelayManager {
                         &command,
                         "heating",
                         &mut spin_sleeper,
-                        sleep_duration,
+                        sleep_duration_between_retries,
                     ) {
                         log_error_chain(
                             module_path!(),
@@ -459,7 +460,7 @@ impl RelayManager {
                         &command,
                         "ventilation",
                         &mut spin_sleeper,
-                        sleep_duration,
+                        sleep_duration_between_retries,
                     ) {
                         log_error_chain(
                             module_path!(),
@@ -517,7 +518,7 @@ impl RelayManager {
                         &command,
                         "balling",
                         &mut spin_sleeper,
-                        sleep_duration,
+                        sleep_duration_between_retries,
                     ) {
                         log_error_chain(
                             module_path!(),
@@ -572,7 +573,7 @@ impl RelayManager {
                         &command,
                         "feed",
                         &mut spin_sleeper,
-                        sleep_duration,
+                        sleep_duration_between_retries,
                     ) {
                         log_error_chain(
                             module_path!(),
@@ -625,6 +626,9 @@ impl RelayManager {
                     last_heartbeat_time = Instant::now();
                 }
             }
+
+            // have a minimum of sleep time in between checking channels
+            spin_sleeper.sleep(sleep_duration_main_cycle);
         }
 
         #[cfg(feature = "debug_relay_manager")]
