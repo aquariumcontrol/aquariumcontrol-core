@@ -14,10 +14,10 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(test)))]
 use nix::unistd::gettid;
 
-#[cfg(any(target_os = "linux", not(test)))]
+#[cfg(not(test))]
 use log::info;
 
 use crate::database::sql_interface_error::SqlInterfaceError;

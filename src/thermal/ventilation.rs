@@ -9,7 +9,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 
 use log::{error, warn};
 
-#[cfg(any(target_os = "linux", not(test)))]
+#[cfg(not(test))]
 use log::info;
 
 use crate::database::sql_interface_ventilation_setvals::VentilationSetValueUpdaterTrait;
