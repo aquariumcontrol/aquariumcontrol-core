@@ -37,9 +37,9 @@ pub trait RelayActuationTrait {
 
     fn get_heartbeat_interval_seconds(&self) -> Option<u64>;
 
-    fn heartbeat(&mut self);
+    fn heartbeat(&mut self) -> Result<(), RelayError>;
 
-    fn flush_buffer(&mut self);
+    fn flush_buffer(&mut self) -> Result<(), RelayError>;
 }
 
 /// Holds the configuration data for the relay manager.
@@ -264,8 +264,12 @@ impl RelayManager {
                     return Ok(());
                 }
                 Err(e) => {
-                    if e == RelayError::IncorrectChecksum {
-                        actuator.flush_buffer();
+                    if matches!(e, RelayError::IncorrectChecksum) {
+                        if let Err(f) = actuator.flush_buffer() {
+                            // if we cannot flush the buffer, mission abort
+                            error_to_be_reported = f;
+                            break;
+                        }
                     }
 
                     // Log error only after the final attempt
@@ -623,7 +627,7 @@ impl RelayManager {
                 // This block is only executed if heartbeat_interval is Some(value),
                 // and 'value' is bound to 'interval_secs'.
                 if Instant::now().duration_since(last_heartbeat_time).as_secs() >= interval_secs {
-                    actuator.heartbeat();
+                    _ = actuator.heartbeat();
                     last_heartbeat_time = Instant::now();
                 }
             }
@@ -704,7 +708,9 @@ pub mod tests {
                 Err(self.onetime_error_result.take().unwrap())
             } else {
                 if self.permanent_error_result.is_some() {
-                    Err(self.permanent_error_result.clone().unwrap())
+                    // Workaround: RelayError does not implement the Clone trait.
+                    // WriteError is the only error variant used by the test cases.
+                    Err(RelayError::WriteError)
                 } else {
                     Ok(())
                 }
@@ -715,12 +721,14 @@ pub mod tests {
             Some(1)
         }
 
-        fn heartbeat(&mut self) {
+        fn heartbeat(&mut self) -> Result<(), RelayError> {
             self.heartbeat_counter += 1;
+            Ok(())
         }
 
-        fn flush_buffer(&mut self) {
+        fn flush_buffer(&mut self) -> Result<(), RelayError> {
             self.flush_counter += 1;
+            Ok(())
         }
     }
 

@@ -10,7 +10,7 @@ use crate::utilities::channel_content::{AquariumDevice, InternalCommand};
 use thiserror::Error;
 
 /// Enum codifies the errors which the program may encounter in preparation or execution of communication with the relay manager
-#[derive(Debug, PartialEq, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum RelayError {
     /// Received an irrelevant command.
     #[error("Received an irrelevant command {0}")]
@@ -54,4 +54,18 @@ pub enum RelayError {
     /// Serial port has not been initialized. This is a configuration error.
     #[error("Serial port has not been initialized. This is a configuration error.")]
     SerialPortNotConfigured,
+
+    /// Sending to the serial port failed
+    #[error("Sending to serial port failed.")]
+    SendToSerialPortFailed {
+        #[source]
+        source: std::io::Error
+    },
+
+    /// Flushing the serial port buffer failed.
+    #[error("Flushing serial port buffer failed.")]
+    SerialPortFlushFailed {
+        #[source]
+        source: serialport::Error
+    }
 }

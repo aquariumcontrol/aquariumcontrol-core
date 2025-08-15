@@ -570,7 +570,7 @@ impl RelayActuationTrait for ActuateControllino {
     }
 
     /// Executes the heartbeat: Sending a signal to the actuator
-    fn heartbeat(&mut self) {
+    fn heartbeat(&mut self) -> Result<(), RelayError> {
         if let Some(serial_port) = self.serial_port_opt.as_mut() {
             // create a message to be sent to Controllino
             let message = create_heartbeat_message();
@@ -591,16 +591,14 @@ impl RelayActuationTrait for ActuateControllino {
                     }
                 }
                 Err(e) => {
-                    error!(
-                        target: module_path!(),
-                        "sending heartbeat command to Controllino failed ({e:?})"
-                    );
+                    return Err(RelayError::SendToSerialPortFailed { source: e });
                 }
             }
 
             self.spin_sleeper
                 .sleep(self.controllino_processing_duration);
         }
+        Ok(())
     }
 
     /// For communication with Controllino it may be necessary to flush the communication buffer
@@ -610,7 +608,11 @@ impl RelayActuationTrait for ActuateControllino {
     /// - Noise on the line: A stray bit flip could make the Pi misinterpret the start of a message.
     /// - Timing issues: The Pi's read might start too early or too late relative to when the Controllino actually begins sending data.
     /// - Buffer state: Leftover bytes from a previous, incomplete, or corrupted transmission can throw off further reads.
-    fn flush_buffer(&mut self) {
+    ///
+    /// # Returns
+    /// In case of success, a `Ok(())`
+    /// In case of failure, an error of type `RelayError` is returned.
+    fn flush_buffer(&mut self) -> Result <(), RelayError> {
         if let Some(serial_port) = self.serial_port_opt.as_mut() {
             match serial_port.clear(ClearBuffer::All) {
                 Ok(_) => {
@@ -620,13 +622,14 @@ impl RelayActuationTrait for ActuateControllino {
                     );
                 }
                 Err(e) => {
-                    error!("{}: error when clearing buffer ({e:?})", module_path!());
+                    return Err(RelayError::SerialPortFlushFailed { source: e });
                 }
             }
 
             self.spin_sleeper
                 .sleep(self.controllino_processing_duration);
         }
+        Ok(())
     }
 }
 
@@ -1035,11 +1038,16 @@ pub mod tests {
     pub fn test_create_message_invalid_command() {
         let config: ConfigData =
             read_config_file("/config/aquarium_control_test_simulator.toml".to_string()).unwrap();
-        assert_eq!(
-            create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay),
-            Err(RelayError::IrrelevantCommand(
-                InternalCommand::ResetAllErrors
-            )),
+        let test_result = create_command_message(InternalCommand::ResetAllErrors, &config.controllino_relay);
+
+        assert!(
+            matches!(
+                test_result,
+                Err(RelayError::IrrelevantCommand(
+                        InternalCommand::ResetAllErrors
+                    )
+                ),
+            )
         );
     }
 
@@ -1349,64 +1357,64 @@ pub mod tests {
             InternalCommand::Pulse(Skimmer, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(Skimmer))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(Ventilation, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(Ventilation))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(Heater, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(Heater))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(MainPump1, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(MainPump1))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(MainPump2, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(MainPump2))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(AuxPump1, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(AuxPump1))
-        );
+        ));
 
         error_message = create_command_message(
             InternalCommand::Pulse(AuxPump2, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(AuxPump2))
-        );
+        ));
 
         let mut message = create_command_message(
             InternalCommand::Pulse(PeristalticPump1, 1000),
@@ -1469,10 +1477,10 @@ pub mod tests {
             InternalCommand::Pulse(Feeder, 1000),
             &config.controllino_relay,
         );
-        assert_eq!(
+        assert!(matches!(
             error_message,
             Err(RelayError::PulseNotAllowedForDevice(Feeder))
-        );
+        ));
     }
 
     #[cfg(feature = "controllino_hw")]
