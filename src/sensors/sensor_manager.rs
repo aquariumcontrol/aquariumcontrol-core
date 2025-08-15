@@ -570,51 +570,51 @@ impl SensorManager {
                             }
                         }
                     }
+                }
 
-                    let instant_before_locking_mutex = Instant::now();
-                    let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
+                let instant_before_locking_mutex = Instant::now();
+                let mut instant_after_locking_mutex = Instant::now(); // initialization is overwritten
 
-                    // write the measurement result to Mutex
-                    {
-                        match mutexes.mutex_sensor_manager_signals.lock() {
-                            Ok(mut sensor_manager_signals) => {
-                                instant_after_locking_mutex = Instant::now();
-                                sensor_manager_signals.ambient_humidity = self.ambient_humidity;
-                                sensor_manager_signals.ambient_temperature =
-                                    self.ambient_temperature;
-                                sensor_manager_signals.water_temperature = self.water_temperature;
-                                sensor_manager_signals.conductivity = self.conductivity;
-                                sensor_manager_signals.ph = self.pH;
-                                sensor_manager_signals.instant_last_recording = Instant::now();
-                            }
-                            Err(_) => {
-                                // do nothing
+                // write the measurement result to Mutex
+                {
+                    match mutexes.mutex_sensor_manager_signals.lock() {
+                        Ok(mut sensor_manager_signals) => {
+                            instant_after_locking_mutex = Instant::now();
+                            sensor_manager_signals.ambient_humidity = self.ambient_humidity;
+                            sensor_manager_signals.ambient_temperature =
+                                self.ambient_temperature;
+                            sensor_manager_signals.water_temperature = self.water_temperature;
+                            sensor_manager_signals.conductivity = self.conductivity;
+                            sensor_manager_signals.ph = self.pH;
+                            sensor_manager_signals.instant_last_recording = Instant::now();
+                        }
+                        Err(_) => {
+                            // do nothing
+                        }
+                    }
+                }
+
+                // check if access to mutex took too long
+                let measured_mutex_access_duration =
+                    instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
+                if measured_mutex_access_duration > max_mutex_access_duration {
+                    if !self.lock_warn_max_mutex_access_duration {
+                        self.lock_warn_max_mutex_access_duration = true;
+                        #[cfg(not(test))]
+                        warn!(target: module_path!(),
+                            "Access to mutex took too long. Allowed={}ms, Measured={}ms",
+                            max_mutex_access_duration.as_millis(),
+                            measured_mutex_access_duration.as_millis(),
+                        );
+                        // record for testing purposes only
+                        cfg_if::cfg_if! {
+                            if #[cfg(test)] {
+                                self.mutex_access_duration_exceeded = true;
                             }
                         }
                     }
-
-                    // check if access to mutex took too long
-                    let measured_mutex_access_duration =
-                        instant_after_locking_mutex.duration_since(instant_before_locking_mutex);
-                    if measured_mutex_access_duration > max_mutex_access_duration {
-                        if !self.lock_warn_max_mutex_access_duration {
-                            self.lock_warn_max_mutex_access_duration = true;
-                            #[cfg(not(test))]
-                            warn!(target: module_path!(),
-                                "Access to mutex took too long. Allowed={}ms, Measured={}ms",
-                                max_mutex_access_duration.as_millis(),
-                                measured_mutex_access_duration.as_millis(),
-                            );
-                            // record for testing purposes only
-                            cfg_if::cfg_if! {
-                                if #[cfg(test)] {
-                                    self.mutex_access_duration_exceeded = true;
-                                }
-                            }
-                        }
-                    } else {
-                        self.lock_warn_max_mutex_access_duration = false;
-                    }
+                } else {
+                    self.lock_warn_max_mutex_access_duration = false;
                 }
             }
 
